@@ -949,10 +949,11 @@ function Materials() {
   );
 }
 
-function AIAssistant({ brand }) {
-  const [messages, setMessages] = useState([{ role: "assistant", content: "Hi! I'm your trades admin assistant.\n\nType or hold 🎙 to voice note — a new job, enquiry, invoice update, or ask me to draft a message.\n\nTry: \"Just finished at Sarah's, leak was a dodgy valve, charge her £95\"" }]);
+function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, onAddReminder, setView }) {
+  const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName}.\n\nI can actually do things — not just chat. Try:\n• "Book in John Smith, 14 Park Road Guildford, boiler service, Friday 10am, £120"\n• "Add invoice for Sarah Chen, £85, leak repair"\n• "Log new enquiry from Kevin Nash, wants boiler fixed, WhatsApp"\n• "Remind me to call Emma Taylor at 3pm"\n\nOr hold 🎙 and speak naturally.` }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [lastAction, setLastAction] = useState(null);
   const bottomRef = useRef(null);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -960,40 +961,244 @@ function AIAssistant({ brand }) {
     if (text) setInput(text);
   });
 
-  const SYSTEM = `You are a smart admin assistant for ${brand.tradingName}, a UK sole trader trades business.
-Outstanding invoices: INV-041 James Oliver £480 (3 days overdue), INV-039 Rachel Green £120 (due today).
-This week: Mon boiler service + leak repair, Tue new radiator, Thu annual service, Fri bathroom fit (£2400 quote pending).
-Open enquiries: Kevin Nash WhatsApp (urgent boiler cutting out), Emma Taylor (bathroom reno quote), Chris Ball (gas cert GU11).
-Keep responses concise and practical. Use £ not $. When drafting messages, label them clearly.`;
+  // ── Tool definitions ──────────────────────────────────────────────────────
+  const TOOLS = [
+    {
+      name: "create_job",
+      description: "Create a new job in the schedule. Use when the user mentions booking in a customer, scheduling work, or adding a job.",
+      input_schema: {
+        type: "object",
+        properties: {
+          customer: { type: "string", description: "Customer full name" },
+          address: { type: "string", description: "Job address" },
+          type: { type: "string", description: "Type of job e.g. Boiler Service, Leak Repair" },
+          date_iso: { type: "string", description: "ISO date string for the job e.g. 2026-03-30" },
+          time: { type: "string", description: "Time in HH:MM format e.g. 09:00" },
+          value: { type: "number", description: "Job value in pounds" },
+          status: { type: "string", enum: ["confirmed", "pending", "quote_sent"], description: "Job status" },
+        },
+        required: ["customer", "type", "date_iso", "time"],
+      },
+    },
+    {
+      name: "create_invoice",
+      description: "Create a new invoice. Use when the user mentions invoicing a customer, charging for completed work, or sending a bill.",
+      input_schema: {
+        type: "object",
+        properties: {
+          customer: { type: "string", description: "Customer full name" },
+          amount: { type: "number", description: "Invoice amount in pounds" },
+          description: { type: "string", description: "What the work was" },
+          due_days: { type: "number", description: "Days until payment due, default 30" },
+        },
+        required: ["customer", "amount", "description"],
+      },
+    },
+    {
+      name: "log_enquiry",
+      description: "Log a new customer enquiry. Use when someone has contacted the tradesperson asking about work.",
+      input_schema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Customer name" },
+          source: { type: "string", description: "How they got in touch e.g. WhatsApp, Phone, Email, Facebook" },
+          message: { type: "string", description: "What they want" },
+          urgent: { type: "boolean", description: "Whether this is urgent" },
+        },
+        required: ["name", "source", "message"],
+      },
+    },
+    {
+      name: "set_reminder",
+      description: "Set a reminder. Use when the user asks to be reminded about something at a specific time.",
+      input_schema: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "What to remind them about" },
+          minutes_from_now: { type: "number", description: "How many minutes from now to fire the reminder" },
+          time_label: { type: "string", description: "Human readable time e.g. 3:00 PM today" },
+        },
+        required: ["text", "minutes_from_now"],
+      },
+    },
+    {
+      name: "create_material",
+      description: "Add a material or item to the materials list to order or track.",
+      input_schema: {
+        type: "object",
+        properties: {
+          item: { type: "string", description: "Material or item name" },
+          qty: { type: "number", description: "Quantity needed" },
+          supplier: { type: "string", description: "Preferred supplier" },
+          job: { type: "string", description: "Which job this is for" },
+        },
+        required: ["item", "qty"],
+      },
+    },
+  ];
+
+  // ── Execute tool calls ────────────────────────────────────────────────────
+  const executeTool = (name, input) => {
+    switch (name) {
+      case "create_job": {
+        const dateObj = new Date(`${input.date_iso}T${input.time || "09:00"}`);
+        const job = {
+          id: Date.now(),
+          customer: input.customer,
+          address: input.address || "",
+          type: input.type,
+          date: dateObj.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + " " + input.time,
+          dateObj: dateObj.toISOString(),
+          status: input.status || "confirmed",
+          value: input.value || 0,
+        };
+        setJobs(prev => [...prev, job]);
+        setLastAction({ type: "job", label: `${input.type} — ${input.customer}`, view: "Schedule" });
+        return `Job created: ${input.type} for ${input.customer} on ${dateObj.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} at ${input.time}.`;
+      }
+      case "create_invoice": {
+        const id = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+        const inv = {
+          id,
+          customer: input.customer,
+          amount: input.amount,
+          due: `Due in ${input.due_days || 30} days`,
+          status: "sent",
+          description: input.description,
+        };
+        setInvoices(prev => [inv, ...prev]);
+        setLastAction({ type: "invoice", label: `${id} — £${input.amount} — ${input.customer}`, view: "Payments" });
+        return `Invoice ${id} created for ${input.customer} — £${input.amount} for ${input.description}.`;
+      }
+      case "log_enquiry": {
+        const enq = {
+          name: input.name,
+          source: input.source,
+          msg: input.message,
+          time: "Just now",
+          urgent: input.urgent || false,
+        };
+        setEnquiries(prev => [enq, ...prev]);
+        setLastAction({ type: "enquiry", label: `${input.name} via ${input.source}`, view: "Dashboard" });
+        return `Enquiry logged from ${input.name} via ${input.source}.`;
+      }
+      case "set_reminder": {
+        const reminder = {
+          id: `r${Date.now()}`,
+          text: input.text,
+          time: Date.now() + (input.minutes_from_now * 60000),
+          timeLabel: input.time_label || "",
+          done: false,
+        };
+        onAddReminder(reminder);
+        setLastAction({ type: "reminder", label: input.text, view: "Reminders" });
+        return `Reminder set: "${input.text}" — ${input.time_label || `in ${input.minutes_from_now} minutes`}.`;
+      }
+      case "create_material": {
+        setLastAction({ type: "material", label: `${input.item} x${input.qty}`, view: "Materials" });
+        return `Material added: ${input.item} x${input.qty}${input.supplier ? ` from ${input.supplier}` : ""}.`;
+      }
+      default:
+        return "Action completed.";
+    }
+  };
+
+  const SYSTEM = `You are a smart admin assistant for ${brand.tradingName}, a UK sole trader trades business. Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.
+
+When the user asks you to do something actionable — book a job, create an invoice, log an enquiry, set a reminder, add materials — USE THE APPROPRIATE TOOL. Don't just describe what you would do, actually do it.
+
+For jobs: if no year is specified assume ${new Date().getFullYear()}. If they say "Friday" calculate the actual date.
+For reminders: calculate minutes from now based on the time they mention.
+For everything: extract the details confidently from natural language, even if vague.
+
+After using a tool, confirm what you did in 1-2 sentences. Be concise. Use £ not $.`;
 
   const send = async (text) => {
     if (!text.trim() || loading) return;
-    const updated = [...messages, { role: "user", content: text }];
+    const userMsg = { role: "user", content: text };
+    const updated = [...messages, userMsg];
     setMessages(updated);
     setInput("");
     setLoading(true);
+    setLastAction(null);
+
     try {
+      const apiMessages = updated
+        .filter(m => m.role === "user" || m.role === "assistant")
+        .filter(m => typeof m.content === "string")
+        .map(m => ({ role: m.role, content: m.content }));
+
       const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system: SYSTEM, messages: updated.map(m => ({ role: m.role, content: m.content })) }),
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: SYSTEM,
+          tools: TOOLS,
+          messages: apiMessages,
+        }),
       });
+
       const data = await res.json();
-      setMessages(prev => [...prev, { role: "assistant", content: data.content?.[0]?.text || "Sorry, something went wrong." }]);
-    } catch { setMessages(prev => [...prev, { role: "assistant", content: "Connection error — please try again." }]); }
+      let replyText = "";
+      const toolResults = [];
+
+      // Process response — may contain text and/or tool use blocks
+      for (const block of (data.content || [])) {
+        if (block.type === "text") {
+          replyText += block.text;
+        } else if (block.type === "tool_use") {
+          const result = executeTool(block.name, block.input);
+          toolResults.push(result);
+        }
+      }
+
+      // If tool was used but no text, use tool result as reply
+      const finalReply = replyText || toolResults.join("\n") || "Done.";
+      setMessages(prev => [...prev, { role: "assistant", content: finalReply }]);
+
+    } catch (e) {
+      setMessages(prev => [...prev, { role: "assistant", content: "Connection error — please try again." }]);
+    }
     setLoading(false);
   };
 
   const micLabel = transcribing ? "⏳" : recording ? "⏹" : "🎙";
   const micStyle = transcribing ? "ghost" : recording ? "danger" : "ghost";
-  const micTitle = recording ? "Release to transcribe" : "Hold to record";
 
-  const quick = ["Chase James Oliver — 3 days overdue", "Draft reply to Kevin Nash re boiler", "What's on this week?", "Log new job: John Smith, 5 High St Guildford, tap replacement, £65, Wednesday 2pm"];
+  const quick = [
+    "Book in John Smith, 14 Park Road Guildford, boiler service, Friday 10am, £120",
+    "Invoice Sarah Chen £85 for leak repair",
+    "Log enquiry from Kevin Nash, WhatsApp, wants boiler fixed urgently",
+    "Remind me to call Emma Taylor at 3pm today",
+  ];
+
+  const actionIcons = { job: "📅", invoice: "💰", enquiry: "📩", reminder: "🔔", material: "🔧" };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 140px)", gap: 12 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {quick.map((q, i) => (<button key={i} onClick={() => send(q)} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, color: C.textDim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>{q}</button>))}
+        {quick.map((q, i) => (
+          <button key={i} onClick={() => send(q)} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, color: C.textDim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>{q}</button>
+        ))}
       </div>
+
+      {/* Last action confirmation banner */}
+      {lastAction && (
+        <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
+          <span style={{ fontSize: 16 }}>{actionIcons[lastAction.type]}</span>
+          <span style={{ color: C.green, fontWeight: 600 }}>{lastAction.label}</span>
+          <span style={{ color: C.muted }}>saved successfully</span>
+          <button onClick={() => setView(lastAction.view)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "3px 10px", marginLeft: "auto" }}>View →</button>
+        </div>
+      )}
+
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
         {messages.map((m, i) => (
           <div key={i} style={S.aiMsg(m.role)}>
@@ -1001,20 +1206,27 @@ Keep responses concise and practical. Use £ not $. When drafting messages, labe
             <div style={S.aiBubble(m.role)}>{m.content}</div>
           </div>
         ))}
-        {loading && (<div style={S.aiMsg("assistant")}><div style={S.avatar("assistant")}>⚡</div><div style={{ ...S.aiBubble("assistant"), color: C.muted }}>Thinking...</div></div>)}
+        {loading && (
+          <div style={S.aiMsg("assistant")}>
+            <div style={S.avatar("assistant")}>⚡</div>
+            <div style={{ ...S.aiBubble("assistant"), color: C.muted }}>Working on it...</div>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
-      {transcribing && (
-        <div style={{ textAlign: "center", fontSize: 12, color: C.amber, padding: "4px 0" }}>Transcribing your voice note...</div>
-      )}
+
+      {transcribing && <div style={{ textAlign: "center", fontSize: 12, color: C.amber }}>Transcribing...</div>}
+
       <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-        <textarea style={{ ...S.input, flex: 1, minHeight: 44, maxHeight: 120, resize: "none" }} placeholder="Type or hold 🎙 to speak..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }} rows={2} />
-        <button
-          onMouseDown={start} onMouseUp={stop} onTouchStart={start} onTouchEnd={stop}
-          title={micTitle}
-          style={{ ...S.btn(micStyle), padding: "10px 14px", fontSize: 18, userSelect: "none" }}
-          disabled={transcribing}
-        >{micLabel}</button>
+        <textarea
+          style={{ ...S.input, flex: 1, minHeight: 44, maxHeight: 120, resize: "none" }}
+          placeholder="Type or hold 🎙 — book a job, send an invoice, log an enquiry..."
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
+          rows={2}
+        />
+        <button onMouseDown={start} onMouseUp={stop} onTouchStart={start} onTouchEnd={stop} style={{ ...S.btn(micStyle), padding: "10px 14px", fontSize: 18, userSelect: "none" }} disabled={transcribing}>{micLabel}</button>
         <button onClick={() => send(input)} style={{ ...S.btn("primary"), padding: "10px 16px" }} disabled={loading || !input.trim()}>Send</button>
       </div>
     </div>
@@ -1633,7 +1845,6 @@ export default function App() {
 
   // Jobs with real dates
   const [jobs, setJobs] = useState(() => JOBS.map(j => {
-    // Convert old static date strings to real dateObj
     const today = new Date(); today.setHours(0,0,0,0);
     const map = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4 };
     const dayKey = j.date.split(" ")[0];
@@ -1646,6 +1857,10 @@ export default function App() {
     d.setHours(parseInt(h) || 9, parseInt(m) || 0);
     return { ...j, dateObj: d.toISOString() };
   }));
+
+  // Invoices and enquiries lifted to root so AI can write to them
+  const [invoices, setInvoices] = useState(INVOICES_INIT);
+  const [enquiries, setEnquiries] = useState(ENQUIRIES);
 
   // Watch for reminders that just became due
   useEffect(() => {
@@ -1713,12 +1928,12 @@ export default function App() {
         </div>
       </header>
       <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24 }}>
-        {view === "Dashboard" && <Dashboard setView={setView} />}
+        {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} />}
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} />}
         {view === "Materials" && <Materials />}
-        {view === "AI Assistant" && <AIAssistant brand={brand} />}
+        {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} onAddReminder={add} setView={setView} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
-        {view === "Payments" && <Payments brand={brand} />}
+        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} />}
         {view === "Settings" && <Settings brand={brand} setBrand={setBrand} />}
       </main>
     </div>
