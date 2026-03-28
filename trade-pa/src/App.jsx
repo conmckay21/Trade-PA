@@ -148,124 +148,51 @@ function AuthScreen({ onAuth }) {
   );
 }
 // ─── Whisper Voice Recording Hook ─────────────────────────────────────────────
-// Works on ALL browsers including iPhone Safari.
-// Hold to record, release to transcribe via OpenAI Whisper.
 function useWhisper(onTranscript) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
 
-  // Detect best supported MIME type — iOS Safari only supports mp4/m4a
-  const getSupportedMimeType = () => {
-    const types = [
-      "audio/webm;codecs=opus",
-      "audio/webm",
-      "audio/mp4;codecs=mp4a.40.2",
-      "audio/mp4",
-      "audio/mpeg",
-      "",  // let browser decide as last resort
-    ];
-    for (const type of types) {
-      if (type === "" || MediaRecorder.isTypeSupported(type)) return type;
-    }
-    return "";
-  };
-
-  const getFileExtension = (mimeType) => {
-    if (mimeType.includes("webm")) return "webm";
-    if (mimeType.includes("mpeg")) return "mp3";
-    return "mp4"; // default for iOS mp4/m4a
-  };
-
   const start = async () => {
     try {
-      // iOS Safari requires specific audio constraints
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 16000,
-        }
-      });
-
-      const mimeType = getSupportedMimeType();
-      let recorder;
-
-      try {
-        recorder = mimeType
-          ? new MediaRecorder(stream, { mimeType })
-          : new MediaRecorder(stream);
-      } catch {
-        // Fallback — let browser pick format entirely
-        recorder = new MediaRecorder(stream);
-      }
-
-      const actualMime = recorder.mimeType || mimeType || "audio/mp4";
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // iOS Safari only supports mp4, everything else supports webm
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      const recorder = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
+      // timeslice of 250ms is required for iOS Safari to fire ondataavailable
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-
-        if (chunksRef.current.length === 0) {
-          setTranscribing(false);
-          return;
-        }
-
-        const blob = new Blob(chunksRef.current, { type: actualMime });
-
-        if (blob.size < 500) {
-          setTranscribing(false);
-          return;
-        }
-
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        if (blob.size < 500) { setTranscribing(false); return; }
         setTranscribing(true);
         try {
-          const ext = getFileExtension(actualMime);
+          const ext = mimeType.includes("webm") ? "webm" : "mp4";
           const formData = new FormData();
-          formData.append("file", blob, `audio.${ext}`);
+          formData.append("file", blob, `recording.${ext}`);
           formData.append("model", "whisper-1");
           formData.append("language", "en");
-
           const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
             method: "POST",
             headers: { "Authorization": `Bearer ${import.meta.env.VITE_OPENAI_KEY}` },
             body: formData,
           });
-
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            console.error("Whisper error:", err);
-            onTranscript("");
-          } else {
-            const data = await res.json();
-            if (data.text) onTranscript(data.text.trim());
-            else onTranscript("");
-          }
-        } catch (e) {
-          console.error("Whisper fetch error:", e);
-          onTranscript("");
-        }
+          const data = await res.json();
+          if (data.text) onTranscript(data.text.trim());
+          else onTranscript("");
+        } catch (e) { console.error("Whisper error:", e); onTranscript(""); }
         setTranscribing(false);
       };
-
-      // iOS Safari needs timeslice on start to fire ondataavailable
-      recorder.start(100);
+      recorder.start(250); // timeslice needed for iOS
       mediaRecorderRef.current = recorder;
       setRecording(true);
-
     } catch (err) {
-      console.error("Mic error:", err);
-      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        alert("Microphone access denied.\n\nOn iPhone: go to Settings → Safari → Microphone and set to Allow. Then reload the page and try again.");
-      } else if (err.name === "NotFoundError") {
-        alert("No microphone found on this device.");
+      if (err.name === "NotAllowedError") {
+        alert("Microphone blocked.\n\niPhone: Settings → Safari → Microphone → Allow\n\nThen reload and try again.");
       } else {
-        alert("Could not start recording. Please check microphone permissions and try again.");
+        alert("Could not access microphone. Please check your browser permissions.");
       }
     }
   };
@@ -2175,36 +2102,34 @@ export default function App() {
         ::-webkit-scrollbar{width:5px;}
         ::-webkit-scrollbar-track{background:#1a1a1a;}
         ::-webkit-scrollbar-thumb{background:#333;border-radius:3px;}
-        nav::-webkit-scrollbar{display:none;}
+        .nav-scroll::-webkit-scrollbar{display:none;}
         button:hover:not(:disabled){opacity:0.82;}
         input:focus,textarea:focus{border-color:#f59e0b !important;outline:none;}
-        @keyframes bellPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.3)} }
+        @keyframes bellPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
         img{max-width:100%;}
-        table{width:100%;}
       `}</style>
-      <header style={S.header}>
-        <div style={S.logo}>
-          <div style={S.logoIcon}>TP</div>
-          TRADE PA
-        </div>
-        <nav style={S.nav}>
-          {VIEWS.map(v => <button key={v} style={S.navBtn(view === v)} onClick={() => setView(v)}>{v}</button>)}
-        </nav>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div onClick={() => setView("Reminders")} style={{ position: "relative", cursor: "pointer", padding: "4px 6px" }}>
-            <span style={{ fontSize: 18, display: "block", animation: bellFlash ? "bellPulse 0.4s ease 3" : "none" }}>🔔</span>
-            {alertCount > 0 && (
-              <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.red, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{alertCount}</div>
-            )}
-            {alertCount === 0 && upcomingCount > 0 && (
-              <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.amber, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{upcomingCount}</div>
-            )}
+      <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100, width: "100%" }}>
+        {/* Top row — logo and right icons */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", height: 48 }}>
+          <div style={S.logo}>
+            <div style={S.logoIcon}>TP</div>
+            TRADE PA
           </div>
-          {brand.logo
-            ? <img src={brand.logo} alt="logo" style={{ height: 28, objectFit: "contain", borderRadius: 4 }} />
-            : <div style={{ fontSize: 12, color: C.muted }}>{brand.tradingName}</div>}
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
-          <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.muted }}>Sign out</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div onClick={() => setView("Reminders")} style={{ position: "relative", cursor: "pointer", padding: "4px 6px" }}>
+              <span style={{ fontSize: 18, display: "block", animation: bellFlash ? "bellPulse 0.4s ease 3" : "none" }}>🔔</span>
+              {alertCount > 0 && <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.red, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{alertCount}</div>}
+              {alertCount === 0 && upcomingCount > 0 && <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.amber, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{upcomingCount}</div>}
+            </div>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
+            <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
+          </div>
+        </div>
+        {/* Nav row — scrolls independently */}
+        <div className="nav-scroll" style={{ display: "flex", overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "0 12px 8px", gap: 2, scrollbarWidth: "none" }}>
+          {VIEWS.map(v => (
+            <button key={v} onClick={() => setView(v)} style={{ ...S.navBtn(view === v), flexShrink: 0 }}>{v}</button>
+          ))}
         </div>
       </header>
       <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24 }}>
