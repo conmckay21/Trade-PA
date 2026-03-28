@@ -153,58 +153,75 @@ function useWhisper(onTranscript) {
   const [transcribing, setTranscribing] = useState(false);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
+  const streamRef = useRef(null);
 
-  const start = async () => {
+  const startRecording = async () => {
     try {
+      // Must be called directly from user gesture — no await before getUserMedia
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // iOS Safari only supports mp4, everything else supports webm
+      streamRef.current = stream;
+
+      // iOS Safari only supports mp4, Chrome/Firefox support webm
       const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       const recorder = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
-      // timeslice of 250ms is required for iOS Safari to fire ondataavailable
-      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
       recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(t => t.stop());
+          streamRef.current = null;
+        }
         const blob = new Blob(chunksRef.current, { type: mimeType });
         if (blob.size < 500) { setTranscribing(false); return; }
         setTranscribing(true);
         try {
           const ext = mimeType.includes("webm") ? "webm" : "mp4";
-          const formData = new FormData();
-          formData.append("file", blob, `recording.${ext}`);
-          formData.append("model", "whisper-1");
-          formData.append("language", "en");
+          const fd = new FormData();
+          fd.append("file", blob, `rec.${ext}`);
+          fd.append("model", "whisper-1");
+          fd.append("language", "en");
           const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
             method: "POST",
             headers: { "Authorization": `Bearer ${import.meta.env.VITE_OPENAI_KEY}` },
-            body: formData,
+            body: fd,
           });
           const data = await res.json();
           if (data.text) onTranscript(data.text.trim());
-          else onTranscript("");
-        } catch (e) { console.error("Whisper error:", e); onTranscript(""); }
+        } catch (e) { console.error("Whisper:", e); }
         setTranscribing(false);
       };
-      recorder.start(250); // timeslice needed for iOS
+
+      recorder.start(250);
       mediaRecorderRef.current = recorder;
       setRecording(true);
     } catch (err) {
+      console.error("Mic:", err);
       if (err.name === "NotAllowedError") {
-        alert("Microphone blocked.\n\niPhone: Settings → Safari → Microphone → Allow\n\nThen reload and try again.");
+        alert("Microphone blocked.\n\nOn iPhone: Settings → Safari → Microphone → Allow your site.\n\nThen reload and try again.");
       } else {
-        alert("Could not access microphone. Please check your browser permissions.");
+        alert(`Mic error: ${err.message}`);
       }
     }
   };
 
-  const stop = () => {
+  const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
     setRecording(false);
   };
 
-  return { recording, transcribing, start, stop };
+  // Tap toggle — tap once to start, tap again to stop and transcribe
+  const toggle = () => {
+    if (recording) stopRecording();
+    else startRecording();
+  };
+
+  return { recording, transcribing, toggle };
 }
 
 const C = {
@@ -1050,7 +1067,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
   const bottomRef = useRef(null);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  const { recording, transcribing, start, stop } = useWhisper((text) => {
+  const { recording, transcribing, toggle } = useWhisper((text) => {
     if (text) setInput(text);
   });
 
@@ -1332,8 +1349,7 @@ After using a tool, confirm what you did in 1-2 sentences. Be concise. Use £ no
     setLoading(false);
   };
 
-  const micLabel = transcribing ? "⏳" : recording ? "⏹" : "🎙";
-  const micStyle = transcribing ? "ghost" : recording ? "danger" : "ghost";
+  const micLabel = transcribing ? "⏳ Transcribing..." : recording ? "⏹ Tap to stop" : "🎙 Voice note";
 
   const quick = [
     "Book in John Smith, 14 Park Road Guildford, boiler service, Friday 10am, £120",
@@ -1389,7 +1405,11 @@ After using a tool, confirm what you did in 1-2 sentences. Be concise. Use £ no
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
           rows={2}
         />
-        <button onMouseDown={start} onMouseUp={stop} onTouchStart={start} onTouchEnd={stop} style={{ ...S.btn(micStyle), padding: "10px 14px", fontSize: 18, userSelect: "none" }} disabled={transcribing}>{micLabel}</button>
+        <button
+          onClick={toggle}
+          disabled={transcribing}
+          style={{ ...S.btn("ghost"), padding: "10px 14px", fontSize: 14, background: recording ? C.red + "33" : C.surfaceHigh, border: `1px solid ${recording ? C.red : C.border}`, color: recording ? C.red : C.textDim, whiteSpace: "nowrap" }}
+        >{micLabel}</button>
         <button onClick={() => send(input)} style={{ ...S.btn("primary"), padding: "10px 16px" }} disabled={loading || !input.trim()}>Send</button>
       </div>
     </div>
@@ -1851,7 +1871,7 @@ Rules:
     setParsing(false);
   };
 
-  const { recording: recRecording, transcribing: recTranscribing, start: recStart, stop: recStop } = useWhisper((text) => {
+  const { recording: recRecording, transcribing: recTranscribing, toggle: recToggle } = useWhisper((text) => {
     if (text) setInput(text);
   });
 
@@ -1927,11 +1947,10 @@ Rules:
             onKeyDown={e => { if (e.key === "Enter") parseReminder(input); }}
           />
           <button
-            onMouseDown={recStart} onMouseUp={recStop} onTouchStart={recStart} onTouchEnd={recStop}
-            title={recRecording ? "Release to transcribe" : "Hold to record"}
-            style={{ ...S.btn(recTranscribing ? "ghost" : recRecording ? "danger" : "ghost"), padding: "10px 14px", fontSize: 18, userSelect: "none" }}
+            onClick={recToggle}
             disabled={recTranscribing}
-          >{recTranscribing ? "⏳" : recRecording ? "⏹" : "🎙"}</button>
+            style={{ ...S.btn("ghost"), padding: "10px 14px", fontSize: 14, background: recRecording ? C.red + "33" : C.surfaceHigh, border: `1px solid ${recRecording ? C.red : C.border}`, color: recRecording ? C.red : C.textDim, whiteSpace: "nowrap" }}
+          >{recTranscribing ? "⏳" : recRecording ? "⏹ Stop" : "🎙 Record"}</button>
           <button onClick={() => parseReminder(input)} style={{ ...S.btn("primary"), padding: "10px 20px" }} disabled={parsing || !input.trim()}>
             {parsing ? "Parsing..." : "Set →"}
           </button>
