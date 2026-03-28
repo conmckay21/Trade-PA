@@ -234,54 +234,33 @@ const S = {
   avatar: (r) => ({ width: 30, height: 30, borderRadius: "50%", background: r === "user" ? C.amber : C.surface, border: `1px solid ${r === "user" ? C.amber : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: r === "user" ? "#000" : C.amber, flexShrink: 0 }),
 };
 
-const JOBS = [
-  { id: 1, customer: "Mike Patterson", address: "14 Elm Close, Guildford", type: "Boiler Service", date: "Mon 09:00", status: "confirmed", value: 120 },
-  { id: 2, customer: "Sarah Chen", address: "7 Brook Lane, Woking", type: "Leak Repair", date: "Mon 13:30", status: "confirmed", value: 85 },
-  { id: 3, customer: "David Marsh", address: "3 Oak Avenue, Farnham", type: "New Radiator", date: "Tue 10:00", status: "pending", value: 340 },
-  { id: 4, customer: "Lisa Fox", address: "22 Cedar Rd, Guildford", type: "Annual Service", date: "Thu 09:00", status: "confirmed", value: 120 },
-  { id: 5, customer: "Tom Harris", address: "9 Pine Way, Woking", type: "Bathroom Fit", date: "Fri 08:00", status: "quote_sent", value: 2400 },
-];
-const INVOICES_INIT = [
-  { id: "INV-041", customer: "James Oliver", amount: 480, due: "3 days overdue", status: "overdue" },
-  { id: "INV-039", customer: "Rachel Green", amount: 120, due: "Due today", status: "due" },
-  { id: "INV-038", customer: "Paul Wright", amount: 650, due: "Due in 5 days", status: "pending" },
-  { id: "INV-036", customer: "Anna Black", amount: 280, due: "Paid 2 days ago", status: "paid" },
-];
-const ENQUIRIES = [
-  { name: "Kevin Nash", source: "WhatsApp", msg: "Hi mate, need someone to look at my boiler, been cutting out. Any chance this week?", time: "2m ago", urgent: true },
-  { name: "Emma Taylor", source: "Email", msg: "Could you provide a quote for a full bathroom renovation? Looking to start in about 6 weeks.", time: "1hr ago", urgent: false },
-  { name: "Chris Ball", source: "Facebook", msg: "Do you cover the GU11 area? Need a gas certificate done.", time: "3hr ago", urgent: false },
-];
-const MATERIALS = [
-  { item: "Copper pipe 22mm x 3m", qty: 10, supplier: "City Plumbing", status: "to_order", job: "Bathroom Fit - Harris" },
-  { item: "Thermostatic rad valve pair", qty: 4, supplier: "Screwfix", status: "ordered", job: "New Radiator - Marsh" },
-  { item: "Fernox filter + inhibitor", qty: 2, supplier: "Wolseley", status: "collected", job: "Boiler Service" },
-];
+const JOBS = [];
+const INVOICES_INIT = [];
+const ENQUIRIES = [];
+const MATERIALS = [];
 const statusColor = { confirmed: C.green, pending: C.amber, quote_sent: C.blue, overdue: C.red, due: C.amber, paid: C.green, to_order: C.red, ordered: C.amber, collected: C.green, sent: C.amber, draft: C.muted };
 const statusLabel = { confirmed: "Confirmed", pending: "Pending", quote_sent: "Quote Sent", overdue: "Overdue", due: "Due Today", paid: "Paid", to_order: "To Order", ordered: "Ordered", collected: "Collected", sent: "Sent", draft: "Draft" };
 
 const DEFAULT_BRAND = {
   logo: null,
-  tradingName: "Dave's Plumbing & Heating",
-  tagline: "Gas Safe Registered · Fully Insured",
-  phone: "07700 900123",
-  email: "dave@davesplumbing.co.uk",
-  website: "www.davesplumbing.co.uk",
-  address: "14 Station Road\nGuildford, GU1 4AH",
-  gasSafeNumber: "123456",
+  tradingName: "",
+  tagline: "",
+  phone: "",
+  email: "",
+  website: "",
+  address: "",
+  gasSafeNumber: "",
   vatNumber: "",
-  bankName: "Barclays",
-  sortCode: "40-47-84",
-  accountNumber: "12345678",
-  accountName: "D Hughes",
+  bankName: "",
+  sortCode: "",
+  accountNumber: "",
+  accountName: "",
   accentColor: "#f59e0b",
   paymentTerms: "30",
   invoiceNote: "Thank you for your business. Payment due within 30 days.",
-  // Payment reference
-  refFormat: "invoice_number",   // invoice_number | surname_invoice | custom_prefix | number_only
-  refPrefix: "DPH",              // used when refFormat === "custom_prefix"
-  // Default payment method shown on invoices
-  defaultPaymentMethod: "both",  // bacs | card | both
+  refFormat: "invoice_number",
+  refPrefix: "",
+  defaultPaymentMethod: "both",
 };
 
 // Helper: build the payment reference string for a given invoice
@@ -298,12 +277,19 @@ function buildRef(brand, inv) {
 
 // ─── Invoice Preview ──────────────────────────────────────────────────────────
 function InvoicePreview({ brand, invoice }) {
-  const inv = invoice || { id: "INV-042", customer: "John Smith", address: "5 High Street\nGuildford GU1 3AA", desc: "Annual boiler service\nFlue check and clean\nPressure test", amount: 120, date: new Date().toLocaleDateString("en-GB"), due: "30 days", paymentMethod: brand.defaultPaymentMethod || "both" };
+  const inv = invoice || { id: "INV-042", customer: "John Smith", address: "5 High Street\nGuildford GU1 3AA", desc: "Annual boiler service\nFlue check and clean\nPressure test", amount: 120, date: new Date().toLocaleDateString("en-GB"), due: "30 days", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false };
   const accent = brand.accentColor || "#f59e0b";
   const ref = buildRef(brand, inv);
   const payMethod = inv.paymentMethod || brand.defaultPaymentMethod || "both";
   const showBacs = payMethod === "bacs" || payMethod === "both";
   const showCard = payMethod === "card" || payMethod === "both";
+
+  // VAT calculations — only if VAT number is set AND invoice has VAT enabled
+  const vatEnabled = inv.vatEnabled && brand.vatNumber;
+  const vatRate = inv.vatRate || 20;
+  const netAmount = vatEnabled ? parseFloat((inv.amount / (1 + vatRate / 100)).toFixed(2)) : inv.amount;
+  const vatAmount = vatEnabled ? parseFloat((inv.amount - netAmount).toFixed(2)) : 0;
+  const grossAmount = inv.amount;
 
   return (
     <div style={{ background: "#fff", borderRadius: 8, overflow: "hidden", fontFamily: "Georgia, serif", color: "#1a1a1a", boxShadow: "0 4px 24px #0008", maxWidth: 560, width: "100%" }}>
@@ -359,24 +345,47 @@ function InvoicePreview({ brand, invoice }) {
           <thead>
             <tr style={{ borderBottom: `2px solid ${accent}` }}>
               <th style={{ textAlign: "left", padding: "12px 0 8px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888" }}>Description</th>
-              <th style={{ textAlign: "right", padding: "12px 0 8px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888" }}>Amount</th>
+              {vatEnabled && <th style={{ textAlign: "right", padding: "12px 0 8px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888" }}>Net</th>}
+              {vatEnabled && <th style={{ textAlign: "right", padding: "12px 0 8px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888" }}>VAT {vatRate}%</th>}
+              <th style={{ textAlign: "right", padding: "12px 0 8px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888" }}>{vatEnabled ? "Gross" : "Amount"}</th>
             </tr>
           </thead>
           <tbody>
             {(inv.desc || "").split("\n").filter(Boolean).map((line, i) => (
               <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
                 <td style={{ padding: "10px 0", fontSize: 13 }}>{line}</td>
-                <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: i === 0 ? "#1a1a1a" : "#888" }}>{i === 0 ? `£${inv.amount}` : "—"}</td>
+                {vatEnabled && <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: i === 0 ? "#1a1a1a" : "#888" }}>{i === 0 ? `£${netAmount.toFixed(2)}` : "—"}</td>}
+                {vatEnabled && <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: i === 0 ? "#1a1a1a" : "#888" }}>{i === 0 ? `£${vatAmount.toFixed(2)}` : "—"}</td>}
+                <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: i === 0 ? "#1a1a1a" : "#888" }}>{i === 0 ? `£${parseFloat(grossAmount).toFixed(2)}` : "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Total */}
-      <div style={{ margin: "0 28px", borderTop: `2px solid ${accent}`, padding: "14px 0", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 20 }}>
-        <div style={{ fontFamily: "Arial,sans-serif", fontSize: 13, color: "#888" }}>Total Due</div>
-        <div style={{ fontFamily: "Arial,sans-serif", fontSize: 22, fontWeight: 900, color: accent }}>£{inv.amount}</div>
+      {/* Totals */}
+      <div style={{ margin: "0 28px", borderTop: `2px solid ${accent}`, padding: "14px 0" }}>
+        {vatEnabled ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, fontFamily: "Arial,sans-serif" }}>
+            <div style={{ display: "flex", gap: 32, fontSize: 12, color: "#888" }}>
+              <span>Net amount</span>
+              <span style={{ minWidth: 80, textAlign: "right" }}>£{netAmount.toFixed(2)}</span>
+            </div>
+            <div style={{ display: "flex", gap: 32, fontSize: 12, color: "#888" }}>
+              <span>VAT @ {vatRate}%</span>
+              <span style={{ minWidth: 80, textAlign: "right" }}>£{vatAmount.toFixed(2)}</span>
+            </div>
+            <div style={{ display: "flex", gap: 32, fontSize: 16, fontWeight: 700, color: accent, borderTop: `1px solid #eee`, paddingTop: 8, marginTop: 4 }}>
+              <span>Total due (inc. VAT)</span>
+              <span style={{ minWidth: 80, textAlign: "right" }}>£{parseFloat(grossAmount).toFixed(2)}</span>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 20 }}>
+            <div style={{ fontFamily: "Arial,sans-serif", fontSize: 13, color: "#888" }}>Total Due</div>
+            <div style={{ fontFamily: "Arial,sans-serif", fontSize: 22, fontWeight: 900, color: accent }}>£{parseFloat(grossAmount).toFixed(2)}</div>
+          </div>
+        )}
       </div>
 
       {/* Payment section */}
@@ -666,14 +675,20 @@ function Settings({ brand, setBrand }) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ setView }) {
+function Dashboard({ setView, jobs, invoices, enquiries }) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayJobs = jobs.filter(j => j.dateObj && isSameDay(new Date(j.dateObj), today));
+  const weekRevenue = jobs.reduce((sum, j) => sum + (j.value || 0), 0);
+  const outstanding = invoices.filter(i => i.status !== "paid").reduce((sum, i) => sum + (i.amount || 0), 0);
+  const overdueInvoices = invoices.filter(i => i.status === "overdue" || i.status === "due");
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={S.grid3}>
         {[
-          { label: "This Week Revenue", value: "£3,065", sub: "5 jobs scheduled", color: C.amber },
-          { label: "Outstanding Invoices", value: "£1,250", sub: "3 invoices — 1 overdue", color: C.red },
-          { label: "Open Quotes", value: "£3,180", sub: "2 quotes awaiting reply", color: C.green },
+          { label: "This Week Revenue", value: `£${weekRevenue.toLocaleString()}`, sub: `${jobs.length} job${jobs.length !== 1 ? "s" : ""} scheduled`, color: C.amber },
+          { label: "Outstanding Invoices", value: `£${outstanding.toLocaleString()}`, sub: `${overdueInvoices.length} overdue`, color: C.red },
+          { label: "New Enquiries", value: enquiries.length, sub: `${enquiries.filter(e => e.urgent).length} urgent`, color: C.green },
         ].map((stat, i) => (
           <div key={i} style={S.statCard(stat.color)}>
             <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>{stat.label}</div>
@@ -685,33 +700,40 @@ function Dashboard({ setView }) {
       <div style={S.grid2}>
         <div style={S.card}>
           <div style={S.sectionTitle}>Today's Jobs</div>
-          {JOBS.filter(j => j.date.startsWith("Mon")).map(job => (
-            <div key={job.id} style={S.row}>
-              <div style={{ width: 4, height: 36, borderRadius: 2, background: statusColor[job.status], flexShrink: 0 }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{job.customer}</div>
-                <div style={{ fontSize: 11, color: C.muted }}>{job.type} · {job.date}</div>
+          {todayJobs.length === 0
+            ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No jobs today — add one in Schedule or via the AI Assistant.</div>
+            : todayJobs.map(job => (
+              <div key={job.id} style={S.row}>
+                <div style={{ width: 4, height: 36, borderRadius: 2, background: statusColor[job.status] || C.muted, flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{job.customer}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{job.type} · {new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
+                </div>
+                {job.value > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{job.value}</div>}
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{job.value}</div>
-            </div>
-          ))}
+            ))
+          }
+          <div style={{ marginTop: 12 }}><button style={S.btn("ghost")} onClick={() => setView("Schedule")}>View Schedule →</button></div>
         </div>
         <div style={S.card}>
           <div style={S.sectionTitle}>New Enquiries</div>
-          {ENQUIRIES.map((e, i) => (
-            <div key={i} style={{ ...S.row, alignItems: "flex-start" }}>
-              <div style={{ width: 4, height: 36, borderRadius: 2, background: e.urgent ? C.red : C.blue, flexShrink: 0, marginTop: 4 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{e.name}</span>
-                  <span style={S.badge(C.muted)}>{e.source}</span>
-                  {e.urgent && <span style={S.badge(C.red)}>Urgent</span>}
+          {enquiries.length === 0
+            ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No enquiries yet — log one via the AI Assistant.</div>
+            : enquiries.slice(0, 3).map((e, i) => (
+              <div key={i} style={{ ...S.row, alignItems: "flex-start" }}>
+                <div style={{ width: 4, height: 36, borderRadius: 2, background: e.urgent ? C.red : C.blue, flexShrink: 0, marginTop: 4 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{e.name}</span>
+                    <span style={S.badge(C.muted)}>{e.source}</span>
+                    {e.urgent && <span style={S.badge(C.red)}>Urgent</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.msg}</div>
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.msg}</div>
+                <div style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>{e.time}</div>
               </div>
-              <div style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>{e.time}</div>
-            </div>
-          ))}
+            ))
+          }
           <div style={{ marginTop: 12 }}><button style={S.btn("ghost")} onClick={() => setView("AI Assistant")}>Reply with AI →</button></div>
         </div>
       </div>
@@ -720,18 +742,37 @@ function Dashboard({ setView }) {
           <div style={S.sectionTitle}>Invoice Pipeline</div>
           <button style={S.btn("ghost")} onClick={() => setView("Payments")}>Manage →</button>
         </div>
-        {INVOICES_INIT.map(inv => (
-          <div key={inv.id} style={S.row}>
-            <div style={{ fontSize: 12, color: C.muted, width: 70 }}>{inv.id}</div>
-            <div style={{ flex: 1 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</span></div>
-            <div style={{ fontSize: 13, fontWeight: 700, marginRight: 16 }}>£{inv.amount}</div>
-            <div style={{ width: 130, textAlign: "right" }}>
-              <div style={S.badge(statusColor[inv.status])}>{statusLabel[inv.status]}</div>
-              <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{inv.due}</div>
+        {invoices.length === 0
+          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No invoices yet — create one in Payments or via the AI Assistant.</div>
+          : invoices.slice(0, 5).map(inv => (
+            <div key={inv.id} style={S.row}>
+              <div style={{ fontSize: 12, color: C.muted, width: 70 }}>{inv.id}</div>
+              <div style={{ flex: 1 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</span></div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 16 }}>£{inv.amount}</div>
+              <div style={{ width: 130, textAlign: "right" }}>
+                <div style={S.badge(statusColor[inv.status] || C.muted)}>{statusLabel[inv.status] || inv.status}</div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{inv.due}</div>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        }
       </div>
+
+      {/* Empty state call to action */}
+      {jobs.length === 0 && invoices.length === 0 && enquiries.length === 0 && (
+        <div style={{ ...S.card, textAlign: "center", padding: 40, borderColor: C.amber + "44", background: C.amber + "08" }}>
+          <div style={{ fontSize: 36, marginBottom: 16 }}>⚡</div>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Welcome to Trade PA</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 24, lineHeight: 1.7 }}>
+            Get started by heading to <strong style={{ color: C.text }}>Settings</strong> to add your business details,<br />
+            then try the <strong style={{ color: C.text }}>AI Assistant</strong> to book your first job.
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+            <button style={S.btn("primary")} onClick={() => setView("Settings")}>Set up my business →</button>
+            <button style={S.btn("ghost")} onClick={() => setView("AI Assistant")}>Try AI Assistant</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -913,27 +954,46 @@ function Schedule({ jobs, setJobs }) {
 
 // ─── Materials ────────────────────────────────────────────────────────────────
 function Materials() {
+  const [materials, setMaterials] = useState([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ item: "", qty: 1, supplier: "", job: "", status: "to_order" });
+
+  const save = () => {
+    if (!form.item) return;
+    setMaterials(prev => [...prev, { ...form, qty: parseInt(form.qty) || 1 }]);
+    setForm({ item: "", qty: 1, supplier: "", job: "", status: "to_order" });
+    setShowAdd(false);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>Materials & Orders</div>
-        <button style={S.btn("primary")}>+ Add Material</button>
+        <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Material</button>
       </div>
       <div style={S.card}>
-        <div style={S.sectionTitle}>Current Material List</div>
-        {MATERIALS.map((m, i) => (
-          <div key={i} style={S.row}>
-            <div style={{ width: 4, height: 40, borderRadius: 2, background: statusColor[m.status], flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
-              <div style={{ fontSize: 11, color: C.muted }}>For: {m.job}</div>
+        <div style={S.sectionTitle}>Material List</div>
+        {materials.length === 0
+          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials yet — add one above or via the AI Assistant.</div>
+          : materials.map((m, i) => (
+            <div key={i} style={S.row}>
+              <div style={{ width: 4, height: 40, borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
+                {m.job && <div style={{ fontSize: 11, color: C.muted }}>For: {m.job}</div>}
+              </div>
+              <div style={{ fontSize: 12, color: C.textDim, marginRight: 16 }}>Qty: {m.qty}</div>
+              {m.supplier && <div style={{ fontSize: 12, color: C.textDim, marginRight: 16 }}>{m.supplier}</div>}
+              <div style={S.badge(statusColor[m.status] || C.muted)}>{statusLabel[m.status] || m.status}</div>
+              <button onClick={() => setMaterials(prev => prev.map((x, j) => j === i ? { ...x, status: x.status === "to_order" ? "ordered" : x.status === "ordered" ? "collected" : "to_order" } : x))}
+                style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", marginLeft: 8 }}>
+                {m.status === "to_order" ? "Mark Ordered" : m.status === "ordered" ? "Mark Collected" : "Reset"}
+              </button>
             </div>
-            <div style={{ fontSize: 12, color: C.textDim, marginRight: 16 }}>Qty: {m.qty}</div>
-            <div style={{ fontSize: 12, color: C.textDim, marginRight: 16 }}>{m.supplier}</div>
-            <div style={S.badge(statusColor[m.status])}>{statusLabel[m.status]}</div>
-          </div>
-        ))}
+          ))
+        }
       </div>
+
       <div style={S.card}>
         <div style={S.sectionTitle}>Supplier Quick Dial</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
@@ -945,12 +1005,40 @@ function Materials() {
           ))}
         </div>
       </div>
+
+      {showAdd && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
+          <div style={{ ...S.card, maxWidth: 420, width: "90%" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Material</div>
+              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[{ k: "item", l: "Item", p: "e.g. Copper pipe 22mm x 3m" }, { k: "qty", l: "Quantity", p: "1" }, { k: "supplier", l: "Supplier", p: "e.g. Screwfix" }, { k: "job", l: "For Job (optional)", p: "e.g. Boiler service — Smith" }].map(({ k, l, p }) => (
+                <div key={k}>
+                  <label style={S.label}>{l}</label>
+                  <input style={S.input} placeholder={p} value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} />
+                </div>
+              ))}
+              <div>
+                <label style={S.label}>Status</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {["to_order", "ordered", "collected"].map(st => (
+                    <button key={st} onClick={() => setForm(f => ({ ...f, status: st }))} style={S.pill(statusColor[st], form.status === st)}>{statusLabel[st]}</button>
+                  ))}
+                </div>
+              </div>
+              <button style={S.btn("primary", !form.item)} disabled={!form.item} onClick={save}>Save →</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, onAddReminder, setView }) {
-  const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName}.\n\nI can actually do things — not just chat. Try:\n• "Book in John Smith, 14 Park Road Guildford, boiler service, Friday 10am, £120"\n• "Add invoice for Sarah Chen, £85, leak repair"\n• "Log new enquiry from Kevin Nash, wants boiler fixed, WhatsApp"\n• "Remind me to call Emma Taylor at 3pm"\n\nOr hold 🎙 and speak naturally.` }]);
+  const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can create and delete data across the whole app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Invoice Sarah Chen £85 for leak repair"\n• "Delete the job for John Smith"\n• "Remove the invoice for Sarah Chen"\n• "Log enquiry from Kevin Nash, WhatsApp, wants boiler fixed"\n• "Remind me to call Emma at 3pm"\n\nOr hold 🎙 and speak naturally.` }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState(null);
@@ -1035,6 +1123,41 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         required: ["item", "qty"],
       },
     },
+    {
+      name: "delete_job",
+      description: "Delete or cancel a job. Use when the user says to remove, cancel, or delete a job. Match by customer name or job type.",
+      input_schema: {
+        type: "object",
+        properties: {
+          customer: { type: "string", description: "Customer name to match" },
+          job_type: { type: "string", description: "Job type to help identify it" },
+        },
+        required: ["customer"],
+      },
+    },
+    {
+      name: "delete_invoice",
+      description: "Delete an invoice. Use when the user says to remove or delete an invoice. Match by invoice ID or customer name.",
+      input_schema: {
+        type: "object",
+        properties: {
+          invoice_id: { type: "string", description: "Invoice ID e.g. INV-042" },
+          customer: { type: "string", description: "Customer name if no ID given" },
+        },
+        required: [],
+      },
+    },
+    {
+      name: "delete_enquiry",
+      description: "Delete or dismiss an enquiry. Use when the user says to remove, dismiss, or delete an enquiry.",
+      input_schema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Customer name to match" },
+        },
+        required: ["name"],
+      },
+    },
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
@@ -1098,6 +1221,35 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         setLastAction({ type: "material", label: `${input.item} x${input.qty}`, view: "Materials" });
         return `Material added: ${input.item} x${input.qty}${input.supplier ? ` from ${input.supplier}` : ""}.`;
       }
+      case "delete_job": {
+        const match = jobs.find(j =>
+          j.customer.toLowerCase().includes(input.customer.toLowerCase()) &&
+          (!input.job_type || j.type.toLowerCase().includes(input.job_type.toLowerCase()))
+        );
+        if (!match) return `Couldn't find a job for "${input.customer}". Check the Schedule tab for exact details.`;
+        setJobs(prev => prev.filter(j => j.id !== match.id));
+        setLastAction({ type: "job", label: `Deleted: ${match.type} — ${match.customer}`, view: "Schedule" });
+        return `Job deleted: ${match.type} for ${match.customer}.`;
+      }
+      case "delete_invoice": {
+        const match = invoices.find(i =>
+          (input.invoice_id && i.id.toLowerCase() === input.invoice_id.toLowerCase()) ||
+          (input.customer && i.customer.toLowerCase().includes(input.customer.toLowerCase()))
+        );
+        if (!match) return `Couldn't find that invoice. Check the Payments tab for exact details.`;
+        setInvoices(prev => prev.filter(i => i.id !== match.id));
+        setLastAction({ type: "invoice", label: `Deleted: ${match.id} — ${match.customer}`, view: "Payments" });
+        return `Invoice ${match.id} for ${match.customer} (£${match.amount}) deleted.`;
+      }
+      case "delete_enquiry": {
+        const match = enquiries.find(e =>
+          e.name.toLowerCase().includes(input.name.toLowerCase())
+        );
+        if (!match) return `Couldn't find an enquiry from "${input.name}". Check the Dashboard for exact details.`;
+        setEnquiries(prev => prev.filter(e => e !== match));
+        setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Dashboard" });
+        return `Enquiry from ${match.name} deleted.`;
+      }
       default:
         return "Action completed.";
     }
@@ -1105,11 +1257,17 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
 
   const SYSTEM = `You are a smart admin assistant for ${brand.tradingName}, a UK sole trader trades business. Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.
 
-When the user asks you to do something actionable — book a job, create an invoice, log an enquiry, set a reminder, add materials — USE THE APPROPRIATE TOOL. Don't just describe what you would do, actually do it.
+Current data you can act on:
+- Jobs: ${jobs.length === 0 ? "none" : jobs.map(j => `${j.customer} (${j.type})`).join(", ")}
+- Invoices: ${invoices.length === 0 ? "none" : invoices.map(i => `${i.id} ${i.customer} £${i.amount}`).join(", ")}
+- Enquiries: ${enquiries.length === 0 ? "none" : enquiries.map(e => e.name).join(", ")}
+
+When the user asks you to do something actionable — book a job, create an invoice, log an enquiry, set a reminder, add materials, OR delete/remove/cancel any of these — USE THE APPROPRIATE TOOL.
 
 For jobs: if no year is specified assume ${new Date().getFullYear()}. If they say "Friday" calculate the actual date.
 For reminders: calculate minutes from now based on the time they mention.
-For everything: extract the details confidently from natural language, even if vague.
+For deletions: match by name or ID, confirm what was deleted. If no match found, say so clearly.
+For everything: extract details confidently from natural language.
 
 After using a tool, confirm what you did in 1-2 sentences. Be concise. Use £ not $.`;
 
@@ -1175,8 +1333,8 @@ After using a tool, confirm what you did in 1-2 sentences. Be concise. Use £ no
   const quick = [
     "Book in John Smith, 14 Park Road Guildford, boiler service, Friday 10am, £120",
     "Invoice Sarah Chen £85 for leak repair",
-    "Log enquiry from Kevin Nash, WhatsApp, wants boiler fixed urgently",
-    "Remind me to call Emma Taylor at 3pm today",
+    "Delete the job for John Smith",
+    "Remove invoice for Sarah Chen",
   ];
 
   const actionIcons = { job: "📅", invoice: "💰", enquiry: "📩", reminder: "🔔", material: "🔧" };
@@ -1404,18 +1562,23 @@ function Payments({ brand }) {
 
 // ─── Invoice Modal ────────────────────────────────────────────────────────────
 function InvoiceModal({ brand, onClose, onSent }) {
-  const [form, setForm] = useState({ customer: "", email: "", address: "", amount: "", desc: "", due: brand.paymentTerms || "30", paymentMethod: brand.defaultPaymentMethod || "both" });
+  const [form, setForm] = useState({ customer: "", email: "", address: "", amount: "", desc: "", due: brand.paymentTerms || "30", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20 });
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const valid = form.customer && form.email && form.amount;
+  const isVatRegistered = !!brand.vatNumber;
+
+  const grossAmount = parseFloat(form.amount) || 0;
+  const netAmount = form.vatEnabled ? parseFloat((grossAmount / (1 + form.vatRate / 100)).toFixed(2)) : grossAmount;
+  const vatAmount = form.vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
 
   const previewRef = buildRef(brand, { id: "INV-043", customer: form.customer || "Customer Name" });
 
   const send = () => {
     setSent(true);
     setTimeout(() => {
-      onSent({ id: `INV-0${43 + Math.floor(Math.random() * 10)}`, customer: form.customer, amount: parseInt(form.amount) || 0, due: `Due in ${form.due} days`, status: "sent" });
+      onSent({ id: `INV-0${43 + Math.floor(Math.random() * 10)}`, customer: form.customer, amount: grossAmount, due: `Due in ${form.due} days`, status: "sent", vatEnabled: form.vatEnabled, vatRate: form.vatRate });
     }, 1500);
   };
 
@@ -1429,6 +1592,12 @@ function InvoiceModal({ brand, onClose, onSent }) {
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>
               {(form.paymentMethod === "card" || form.paymentMethod === "both") ? `Payment link sent to ${form.email}` : `BACS details sent to ${form.email}`}
             </div>
+            {form.vatEnabled && (
+              <div style={{ ...S.card, background: C.surfaceHigh, padding: 14, display: "inline-block", textAlign: "left", marginBottom: 16 }}>
+                <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>VAT BREAKDOWN</div>
+                <div style={{ fontSize: 12, color: C.textDim }}>Net: £{netAmount.toFixed(2)} · VAT @ {form.vatRate}%: £{vatAmount.toFixed(2)} · Gross: £{grossAmount.toFixed(2)}</div>
+              </div>
+            )}
             <div style={{ ...S.card, background: C.surfaceHigh, textAlign: "left", marginBottom: 16, padding: 14, display: "inline-block" }}>
               <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>PAYMENT REFERENCE</div>
               <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.06em", color: C.amber }}>{previewRef}</div>
@@ -1449,16 +1618,51 @@ function InvoiceModal({ brand, onClose, onSent }) {
             {tab === "form" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div style={S.grid2}>
-                  {[{ k: "customer", l: "Customer Name", p: "e.g. James Oliver" }, { k: "email", l: "Customer Email", p: "james@email.com" }, { k: "address", l: "Customer Address", p: "5 High Street\nGuildford GU1 3AA" }, { k: "amount", l: "Amount (£)", p: "e.g. 480" }].map(({ k, l, p }) => (
+                  {[
+                    { k: "customer", l: "Customer Name", p: "e.g. James Oliver" },
+                    { k: "email", l: "Customer Email", p: "james@email.com" },
+                    { k: "address", l: "Customer Address", p: "5 High Street\nGuildford GU1 3AA" },
+                    { k: "amount", l: form.vatEnabled ? `Amount inc. VAT @ ${form.vatRate}% (£)` : "Amount (£)", p: "e.g. 480" },
+                  ].map(({ k, l, p }) => (
                     <div key={k}><label style={S.label}>{l}</label>
                       {k === "address" ? <textarea style={{ ...S.input, resize: "none", height: 60 }} placeholder={p} value={form[k]} onChange={set(k)} />
                         : <input style={S.input} placeholder={p} value={form[k]} onChange={set(k)} />}
                     </div>
                   ))}
                 </div>
+
                 <div><label style={S.label}>Description (one line per item)</label>
                   <textarea style={{ ...S.input, resize: "vertical", minHeight: 80 }} placeholder={"Annual boiler service\nFlue check and clean\nPressure test"} value={form.desc} onChange={set("desc")} />
                 </div>
+
+                {/* VAT toggle */}
+                {isVatRegistered ? (
+                  <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${form.vatEnabled ? C.amber + "66" : C.border}`, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 180 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3 }}>VAT Invoice</div>
+                      {form.vatEnabled && grossAmount > 0
+                        ? <div style={{ fontSize: 11, color: C.muted }}>Net: £{netAmount.toFixed(2)} + VAT £{vatAmount.toFixed(2)} = Gross £{grossAmount.toFixed(2)}</div>
+                        : <div style={{ fontSize: 11, color: C.muted }}>VAT No: {brand.vatNumber} — toggle to show VAT breakdown</div>
+                      }
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                      {form.vatEnabled && (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {[20, 5, 0].map(r => (
+                            <button key={r} onClick={() => setForm(f => ({ ...f, vatRate: r }))} style={{ ...S.pill(C.amber, form.vatRate === r), fontSize: 11, padding: "4px 10px" }}>{r}%</button>
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: !f.vatEnabled }))} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, background: form.vatEnabled ? C.amber : C.border, color: form.vatEnabled ? "#000" : C.muted, transition: "all 0.2s" }}>
+                        {form.vatEnabled ? "VAT On ✓" : "Add VAT"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 11, color: C.muted }}>
+                    VAT registered? Add your VAT number in Settings to enable VAT invoices.
+                  </div>
+                )}
 
                 <div style={S.grid2}>
                   <div>
@@ -1468,7 +1672,7 @@ function InvoiceModal({ brand, onClose, onSent }) {
                     </div>
                   </div>
                   <div>
-                    <label style={S.label}>Payment Method for this Invoice</label>
+                    <label style={S.label}>Payment Method</label>
                     <div style={{ display: "flex", gap: 8 }}>
                       {[{ v: "bacs", label: "🏦 BACS" }, { v: "card", label: "💳 Card" }, { v: "both", label: "🏦💳 Both" }].map(({ v, label }) => (
                         <button key={v} onClick={() => setForm(f => ({ ...f, paymentMethod: v }))} style={S.pill(brand.accentColor, form.paymentMethod === v)}>{label}</button>
@@ -1477,7 +1681,6 @@ function InvoiceModal({ brand, onClose, onSent }) {
                   </div>
                 </div>
 
-                {/* Reference preview */}
                 <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>PAYMENT REFERENCE CUSTOMER MUST USE</div>
@@ -1499,7 +1702,7 @@ function InvoiceModal({ brand, onClose, onSent }) {
               </div>
             ) : (
               <div style={{ display: "flex", justifyContent: "center" }}>
-                <InvoicePreview brand={brand} invoice={{ id: "INV-043", customer: form.customer || "Customer Name", address: form.address || "Customer Address", desc: form.desc || "Service description", amount: form.amount || "0", date: new Date().toLocaleDateString("en-GB"), due: form.due, paymentMethod: form.paymentMethod }} />
+                <InvoicePreview brand={brand} invoice={{ id: "INV-043", customer: form.customer || "Customer Name", address: form.address || "Customer Address", desc: form.desc || "Service description", amount: form.amount || "0", date: new Date().toLocaleDateString("en-GB"), due: form.due, paymentMethod: form.paymentMethod, vatEnabled: form.vatEnabled, vatRate: form.vatRate }} />
               </div>
             )}
           </>
@@ -1511,12 +1714,7 @@ function InvoiceModal({ brand, onClose, onSent }) {
 
 // ─── Reminders ────────────────────────────────────────────────────────────────
 function useReminders() {
-  const [reminders, setReminders] = useState([
-    { id: "r1", text: "Chase James Oliver invoice", time: Date.now() + 1000 * 60 * 8, done: false },
-    { id: "r2", text: "Call Emma Taylor back re: bathroom quote", time: Date.now() + 1000 * 60 * 60 * 2, done: false },
-    { id: "r3", text: "Order copper pipe from City Plumbing", time: Date.now() + 1000 * 60 * 60 * 5, done: false },
-    { id: "r4", text: "Confirm Friday job with Tom Harris", time: Date.now() - 1000 * 60 * 30, done: true },
-  ]);
+  const [reminders, setReminders] = useState([]);
 
   const add = (reminder) => setReminders(prev => [reminder, ...prev]);
   const dismiss = (id) => setReminders(prev => prev.map(r => r.id === id ? { ...r, done: true } : r));
