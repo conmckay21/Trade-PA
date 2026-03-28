@@ -147,6 +147,7 @@ function AuthScreen({ onAuth }) {
     </div>
   );
 }
+// ─── Whisper Voice Recording Hook ─────────────────────────────────────────────
 // Works on ALL browsers including iPhone Safari.
 // Hold to record, release to transcribe via OpenAI Whisper.
 function useWhisper(onTranscript) {
@@ -155,40 +156,117 @@ function useWhisper(onTranscript) {
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
 
+  // Detect best supported MIME type — iOS Safari only supports mp4/m4a
+  const getSupportedMimeType = () => {
+    const types = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4;codecs=mp4a.40.2",
+      "audio/mp4",
+      "audio/mpeg",
+      "",  // let browser decide as last resort
+    ];
+    for (const type of types) {
+      if (type === "" || MediaRecorder.isTypeSupported(type)) return type;
+    }
+    return "";
+  };
+
+  const getFileExtension = (mimeType) => {
+    if (mimeType.includes("webm")) return "webm";
+    if (mimeType.includes("mpeg")) return "mp3";
+    return "mp4"; // default for iOS mp4/m4a
+  };
+
   const start = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
-      const recorder = new MediaRecorder(stream, { mimeType });
+      // iOS Safari requires specific audio constraints
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000,
+        }
+      });
+
+      const mimeType = getSupportedMimeType();
+      let recorder;
+
+      try {
+        recorder = mimeType
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream);
+      } catch {
+        // Fallback — let browser pick format entirely
+        recorder = new MediaRecorder(stream);
+      }
+
+      const actualMime = recorder.mimeType || mimeType || "audio/mp4";
       chunksRef.current = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        if (blob.size < 1000) return; // too short, ignore
+
+        if (chunksRef.current.length === 0) {
+          setTranscribing(false);
+          return;
+        }
+
+        const blob = new Blob(chunksRef.current, { type: actualMime });
+
+        if (blob.size < 500) {
+          setTranscribing(false);
+          return;
+        }
+
         setTranscribing(true);
         try {
+          const ext = getFileExtension(actualMime);
           const formData = new FormData();
-          const ext = mimeType.includes("webm") ? "webm" : "mp4";
           formData.append("file", blob, `audio.${ext}`);
           formData.append("model", "whisper-1");
           formData.append("language", "en");
+
           const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
             method: "POST",
             headers: { "Authorization": `Bearer ${import.meta.env.VITE_OPENAI_KEY}` },
             body: formData,
           });
-          const data = await res.json();
-          if (data.text) onTranscript(data.text.trim());
-          else onTranscript(""); 
-        } catch { onTranscript(""); }
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            console.error("Whisper error:", err);
+            onTranscript("");
+          } else {
+            const data = await res.json();
+            if (data.text) onTranscript(data.text.trim());
+            else onTranscript("");
+          }
+        } catch (e) {
+          console.error("Whisper fetch error:", e);
+          onTranscript("");
+        }
         setTranscribing(false);
       };
-      recorder.start();
+
+      // iOS Safari needs timeslice on start to fire ondataavailable
+      recorder.start(100);
       mediaRecorderRef.current = recorder;
       setRecording(true);
+
     } catch (err) {
-      alert("Microphone access denied. Please allow microphone permission in your browser settings and try again.");
+      console.error("Mic error:", err);
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        alert("Microphone access denied.\n\nOn iPhone: go to Settings → Safari → Microphone and set to Allow. Then reload the page and try again.");
+      } else if (err.name === "NotFoundError") {
+        alert("No microphone found on this device.");
+      } else {
+        alert("Could not start recording. Please check microphone permissions and try again.");
+      }
     }
   };
 
@@ -210,17 +288,17 @@ const C = {
 };
 
 const S = {
-  app: { fontFamily: "'DM Mono','Courier New',monospace", background: C.bg, minHeight: "100vh", color: C.text },
-  header: { background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, position: "sticky", top: 0, zIndex: 100 },
+  app: { fontFamily: "'DM Mono','Courier New',monospace", background: C.bg, minHeight: "100vh", minHeight: "-webkit-fill-available", color: C.text, width: "100%", overflowX: "hidden" },
+  header: { background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, position: "sticky", top: 0, zIndex: 100, width: "100%" },
   logo: { display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 16, letterSpacing: "0.05em", color: C.amber },
   logoIcon: { width: 32, height: 28, background: C.amber, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontSize: 11, fontWeight: 900, letterSpacing: "-0.02em" },
-  nav: { display: "flex", gap: 4 },
-  navBtn: (a) => ({ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: a ? 700 : 400, letterSpacing: "0.04em", background: a ? C.amber : "transparent", color: a ? "#000" : C.textDim, transition: "all 0.15s" }),
-  main: { flex: 1, padding: 24, maxWidth: 1200, width: "100%", margin: "0 auto" },
-  card: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20 },
-  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 },
-  grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 },
-  grid4: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12 },
+  nav: { display: "flex", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", flexShrink: 0 },
+  navBtn: (a) => ({ padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: a ? 700 : 400, letterSpacing: "0.04em", background: a ? C.amber : "transparent", color: a ? "#000" : C.textDim, transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }),
+  main: { flex: 1, padding: "16px", maxWidth: 1200, width: "100%", margin: "0 auto", boxSizing: "border-box", overflowX: "hidden" },
+  card: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, minWidth: 0 },
+  grid2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 },
+  grid3: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 },
+  grid4: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 },
   sectionTitle: { fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: 16 },
   badge: (color) => ({ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", background: color + "22", color, border: `1px solid ${color}44` }),
   pill: (color, active) => ({ padding: "6px 14px", borderRadius: 6, border: `1px solid ${active ? color : C.border}`, background: active ? color + "22" : C.surfaceHigh, color: active ? color : C.textDim, cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600 }),
@@ -2093,12 +2171,16 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500;700&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
+        html,body{width:100%;overflow-x:hidden;background:#0f0f0f;}
         ::-webkit-scrollbar{width:5px;}
         ::-webkit-scrollbar-track{background:#1a1a1a;}
         ::-webkit-scrollbar-thumb{background:#333;border-radius:3px;}
+        nav::-webkit-scrollbar{display:none;}
         button:hover:not(:disabled){opacity:0.82;}
         input:focus,textarea:focus{border-color:#f59e0b !important;outline:none;}
         @keyframes bellPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.3)} }
+        img{max-width:100%;}
+        table{width:100%;}
       `}</style>
       <header style={S.header}>
         <div style={S.logo}>
