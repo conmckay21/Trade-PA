@@ -1,5 +1,61 @@
 import { useState, useRef, useEffect } from "react";
 
+// ─── Whisper Voice Recording Hook ─────────────────────────────────────────────
+// Works on ALL browsers including iPhone Safari.
+// Hold to record, release to transcribe via OpenAI Whisper.
+function useWhisper(onTranscript) {
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+
+  const start = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      const recorder = new MediaRecorder(stream, { mimeType });
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        if (blob.size < 1000) return; // too short, ignore
+        setTranscribing(true);
+        try {
+          const formData = new FormData();
+          const ext = mimeType.includes("webm") ? "webm" : "mp4";
+          formData.append("file", blob, `audio.${ext}`);
+          formData.append("model", "whisper-1");
+          formData.append("language", "en");
+          const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${import.meta.env.VITE_OPENAI_KEY}` },
+            body: formData,
+          });
+          const data = await res.json();
+          if (data.text) onTranscript(data.text.trim());
+          else onTranscript(""); 
+        } catch { onTranscript(""); }
+        setTranscribing(false);
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setRecording(true);
+    } catch (err) {
+      alert("Microphone access denied. Please allow microphone permission in your browser settings and try again.");
+    }
+  };
+
+  const stop = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setRecording(false);
+  };
+
+  return { recording, transcribing, start, stop };
+}
+
 const C = {
   bg: "#0f0f0f", surface: "#1a1a1a", surfaceHigh: "#242424",
   border: "#2a2a2a", amber: "#f59e0b", amberDim: "#92400e",
@@ -535,49 +591,176 @@ function Dashboard({ setView }) {
 }
 
 // ─── Schedule ─────────────────────────────────────────────────────────────────
-function Schedule() {
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  const dates = { Mon: "24", Tue: "25", Wed: "26", Thu: "27", Fri: "28" };
-  const dayJobs = { Mon: JOBS.filter(j => j.date.startsWith("Mon")), Tue: JOBS.filter(j => j.date.startsWith("Tue")), Wed: [], Thu: JOBS.filter(j => j.date.startsWith("Thu")), Fri: JOBS.filter(j => j.date.startsWith("Fri")) };
+function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatDayLabel(date) {
+  return date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function isSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function Schedule({ jobs, setJobs }) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [showAddJob, setShowAddJob] = useState(false);
+  const [addJobDate, setAddJobDate] = useState(null);
+  const [form, setForm] = useState({ customer: "", address: "", type: "", time: "09:00", value: "", status: "confirmed" });
+
+  const weekStart = new Date(getWeekStart(new Date()));
+  weekStart.setDate(weekStart.getDate() + weekOffset * 7);
+
+  const weekDays = Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const isThisWeek = weekOffset === 0;
+
+  const jobsForDay = (day) => jobs.filter(j => j.dateObj && isSameDay(new Date(j.dateObj), day));
+
+  const weekLabel = () => {
+    const end = new Date(weekStart); end.setDate(end.getDate() + 4);
+    return `${weekStart.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
+  };
+
+  const openAdd = (day) => {
+    setAddJobDate(day);
+    setForm({ customer: "", address: "", type: "", time: "09:00", value: "", status: "confirmed" });
+    setShowAddJob(true);
+  };
+
+  const saveJob = () => {
+    if (!form.customer || !form.type) return;
+    const dateObj = new Date(addJobDate);
+    const [h, m] = form.time.split(":");
+    dateObj.setHours(parseInt(h), parseInt(m));
+    const newJob = {
+      id: Date.now(),
+      customer: form.customer,
+      address: form.address,
+      type: form.type,
+      date: `${formatDayLabel(addJobDate)} ${form.time}`,
+      dateObj: dateObj.toISOString(),
+      status: form.status,
+      value: parseInt(form.value) || 0,
+    };
+    setJobs(prev => [...prev, newJob]);
+    setShowAddJob(false);
+  };
+
+  const allWeekJobs = jobs.filter(j => {
+    if (!j.dateObj) return false;
+    const d = new Date(j.dateObj); d.setHours(0,0,0,0);
+    return weekDays.some(wd => isSameDay(wd, d));
+  }).sort((a, b) => new Date(a.dateObj) - new Date(b.dateObj));
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Week nav */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Week of 24 March 2026</div>
-        <button style={S.btn("primary")}>+ Add Job</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => setWeekOffset(o => o - 1)} style={{ ...S.btn("ghost"), padding: "6px 12px" }}>← Prev</button>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>{weekLabel()}</div>
+          <button onClick={() => setWeekOffset(o => o + 1)} style={{ ...S.btn("ghost"), padding: "6px 12px" }}>Next →</button>
+          {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} style={{ ...S.btn("ghost"), padding: "6px 10px", fontSize: 11 }}>Today</button>}
+        </div>
+        <button style={S.btn("primary")} onClick={() => openAdd(weekDays[0])}>+ Add Job</button>
       </div>
+
+      {/* Calendar grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
-        {days.map(day => (
-          <div key={day} style={{ ...S.card, padding: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", color: C.muted, marginBottom: 12, textTransform: "uppercase" }}>{day} {dates[day]}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {dayJobs[day].length === 0 && <div style={{ fontSize: 11, color: C.border, fontStyle: "italic" }}>Free</div>}
-              {dayJobs[day].map(job => (
-                <div key={job.id} style={{ padding: "8px 10px", background: C.surfaceHigh, borderRadius: 6, borderLeft: `2px solid ${statusColor[job.status]}` }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 2 }}>{job.customer.split(" ")[0]}</div>
-                  <div style={{ fontSize: 10, color: C.muted }}>{job.type}</div>
-                  <div style={{ fontSize: 10, color: C.amber, marginTop: 4 }}>£{job.value}</div>
+        {weekDays.map((day, i) => {
+          const dayJobs = jobsForDay(day);
+          const isToday = isSameDay(day, today);
+          return (
+            <div key={i} style={{ ...S.card, padding: 14, borderColor: isToday ? C.amber + "66" : C.border, background: isToday ? C.amber + "08" : C.surface }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: isToday ? C.amber : C.muted, textTransform: "uppercase" }}>
+                  {day.toLocaleDateString("en-GB", { weekday: "short" })} {day.getDate()}
                 </div>
-              ))}
+                <button onClick={() => openAdd(day)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px" }} title="Add job">+</button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {dayJobs.length === 0 && <div style={{ fontSize: 10, color: C.border, fontStyle: "italic" }}>Free</div>}
+                {dayJobs.map(job => (
+                  <div key={job.id} style={{ padding: "7px 9px", background: C.surfaceHigh, borderRadius: 6, borderLeft: `2px solid ${statusColor[job.status] || C.muted}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 1 }}>{job.customer.split(" ")[0]}</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>{job.type}</div>
+                    {job.value > 0 && <div style={{ fontSize: 10, color: C.amber, marginTop: 3 }}>£{job.value}</div>}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {/* Jobs list this week */}
       <div style={S.card}>
-        <div style={S.sectionTitle}>All Jobs This Week</div>
-        {JOBS.map(job => (
+        <div style={S.sectionTitle}>Jobs This Week ({allWeekJobs.length})</div>
+        {allWeekJobs.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No jobs scheduled this week. Hit + to add one.</div>}
+        {allWeekJobs.map(job => (
           <div key={job.id} style={S.row}>
-            <div style={{ width: 4, height: 40, borderRadius: 2, background: statusColor[job.status], flexShrink: 0 }} />
+            <div style={{ width: 4, height: 40, borderRadius: 2, background: statusColor[job.status] || C.muted, flexShrink: 0 }} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{job.customer}</div>
               <div style={{ fontSize: 11, color: C.muted }}>{job.address}</div>
             </div>
             <div style={{ fontSize: 12, color: C.textDim, marginRight: 12 }}>{job.type}</div>
             <div style={{ fontSize: 12, color: C.textDim, marginRight: 12 }}>{job.date}</div>
-            <div style={S.badge(statusColor[job.status])}>{statusLabel[job.status]}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, marginLeft: 16 }}>£{job.value}</div>
+            <div style={S.badge(statusColor[job.status] || C.muted)}>{statusLabel[job.status] || job.status}</div>
+            {job.value > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, marginLeft: 16 }}>£{job.value}</div>}
           </div>
         ))}
       </div>
+
+      {/* Add Job Modal */}
+      {showAddJob && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
+          <div style={{ ...S.card, maxWidth: 440, width: "90%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Job — {addJobDate?.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
+              <button onClick={() => setShowAddJob(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {[
+                { k: "customer", l: "Customer Name", p: "e.g. John Smith" },
+                { k: "address", l: "Address", p: "e.g. 5 High Street, Guildford" },
+                { k: "type", l: "Job Type", p: "e.g. Boiler Service" },
+                { k: "value", l: "Value (£)", p: "e.g. 120" },
+              ].map(({ k, l, p }) => (
+                <div key={k}>
+                  <label style={S.label}>{l}</label>
+                  <input style={S.input} placeholder={p} value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} />
+                </div>
+              ))}
+              <div>
+                <label style={S.label}>Time</label>
+                <input type="time" style={S.input} value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
+              </div>
+              <div>
+                <label style={S.label}>Status</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {["confirmed", "pending", "quote_sent"].map(st => (
+                    <button key={st} onClick={() => setForm(f => ({ ...f, status: st }))} style={S.pill(statusColor[st], form.status === st)}>{statusLabel[st]}</button>
+                  ))}
+                </div>
+              </div>
+              <button style={S.btn("primary", !form.customer || !form.type)} disabled={!form.customer || !form.type} onClick={saveJob}>Save Job →</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -620,14 +803,16 @@ function Materials() {
   );
 }
 
-// ─── AI Assistant ─────────────────────────────────────────────────────────────
 function AIAssistant({ brand }) {
-  const [messages, setMessages] = useState([{ role: "assistant", content: "Hi! I'm your trades admin assistant.\n\nType or use 🎙 voice note — a new job, enquiry, invoice update, or ask me to draft a message.\n\nTry: \"Just finished at Sarah's, leak was a dodgy valve, charge her £95\"" }]);
+  const [messages, setMessages] = useState([{ role: "assistant", content: "Hi! I'm your trades admin assistant.\n\nType or hold 🎙 to voice note — a new job, enquiry, invoice update, or ask me to draft a message.\n\nTry: \"Just finished at Sarah's, leak was a dodgy valve, charge her £95\"" }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [listening, setListening] = useState(false);
   const bottomRef = useRef(null);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  const { recording, transcribing, start, stop } = useWhisper((text) => {
+    if (text) setInput(text);
+  });
 
   const SYSTEM = `You are a smart admin assistant for ${brand.tradingName}, a UK sole trader trades business.
 Outstanding invoices: INV-041 James Oliver £480 (3 days overdue), INV-039 Rachel Green £120 (due today).
@@ -652,24 +837,9 @@ Keep responses concise and practical. Use £ not $. When drafting messages, labe
     setLoading(false);
   };
 
-  const startListening = () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      alert("Speech recognition isn't available here.\n\nThis is a sandbox limitation of the preview environment. When deployed to your own URL (e.g. on Vercel), the 🎙 voice note button will work fully in Chrome and Edge.\n\nFor now, just type your message instead.");
-      return;
-    }
-    const r = new SR();
-    r.continuous = false; r.interimResults = false; r.lang = "en-GB";
-    r.onresult = (e) => { setInput(e.results[0][0].transcript); setListening(false); };
-    r.onerror = (e) => {
-      setListening(false);
-      if (e.error === "not-allowed") {
-        alert("Microphone access was blocked.\n\nThis preview runs in a sandboxed iframe which restricts microphone access. The voice note will work fully once deployed to your own URL.");
-      }
-    };
-    r.onend = () => setListening(false);
-    r.start(); setListening(true);
-  };
+  const micLabel = transcribing ? "⏳" : recording ? "⏹" : "🎙";
+  const micStyle = transcribing ? "ghost" : recording ? "danger" : "ghost";
+  const micTitle = recording ? "Release to transcribe" : "Hold to record";
 
   const quick = ["Chase James Oliver — 3 days overdue", "Draft reply to Kevin Nash re boiler", "What's on this week?", "Log new job: John Smith, 5 High St Guildford, tap replacement, £65, Wednesday 2pm"];
 
@@ -688,9 +858,17 @@ Keep responses concise and practical. Use £ not $. When drafting messages, labe
         {loading && (<div style={S.aiMsg("assistant")}><div style={S.avatar("assistant")}>⚡</div><div style={{ ...S.aiBubble("assistant"), color: C.muted }}>Thinking...</div></div>)}
         <div ref={bottomRef} />
       </div>
+      {transcribing && (
+        <div style={{ textAlign: "center", fontSize: 12, color: C.amber, padding: "4px 0" }}>Transcribing your voice note...</div>
+      )}
       <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-        <textarea style={{ ...S.input, flex: 1, minHeight: 44, maxHeight: 120, resize: "none" }} placeholder="Type or use voice note..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }} rows={2} />
-        <button onClick={startListening} style={{ ...S.btn(listening ? "danger" : "ghost"), padding: "10px 14px", fontSize: 18 }}>🎙</button>
+        <textarea style={{ ...S.input, flex: 1, minHeight: 44, maxHeight: 120, resize: "none" }} placeholder="Type or hold 🎙 to speak..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }} rows={2} />
+        <button
+          onMouseDown={start} onMouseUp={stop} onTouchStart={start} onTouchEnd={stop}
+          title={micTitle}
+          style={{ ...S.btn(micStyle), padding: "10px 14px", fontSize: 18, userSelect: "none" }}
+          disabled={transcribing}
+        >{micLabel}</button>
         <button onClick={() => send(input)} style={{ ...S.btn("primary"), padding: "10px 16px" }} disabled={loading || !input.trim()}>Send</button>
       </div>
     </div>
@@ -1014,7 +1192,6 @@ function formatDate(ts) {
 
 function Reminders({ reminders, onAdd, onDismiss, onRemove, dueNow, onClearDue }) {
   const [input, setInput] = useState("");
-  const [listening, setListening] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState("");
   const [now, setNow] = useState(Date.now());
@@ -1113,19 +1290,9 @@ Rules:
     setParsing(false);
   };
 
-  const startListening = () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      alert("Voice note isn't available in this preview sandbox.\n\nWhen deployed to your own URL it will work fully. For now, type your reminder below.");
-      return;
-    }
-    const r = new SR();
-    r.continuous = false; r.interimResults = false; r.lang = "en-GB";
-    r.onresult = (e) => { const t = e.results[0][0].transcript; setInput(t); setListening(false); };
-    r.onerror = () => { setListening(false); alert("Microphone blocked in sandbox — type instead."); };
-    r.onend = () => setListening(false);
-    r.start(); setListening(true);
-  };
+  const { recording: recRecording, transcribing: recTranscribing, start: recStart, stop: recStop } = useWhisper((text) => {
+    if (text) setInput(text);
+  });
 
   const upcoming = reminders.filter(r => !r.done && !r._due).sort((a, b) => a.time - b.time);
   const overdue = reminders.filter(r => !r.done && !r._due && r.time < now);
@@ -1198,7 +1365,12 @@ Rules:
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") parseReminder(input); }}
           />
-          <button onClick={startListening} style={{ ...S.btn(listening ? "danger" : "ghost"), padding: "10px 14px", fontSize: 18 }} title="Voice note">🎙</button>
+          <button
+            onMouseDown={recStart} onMouseUp={recStop} onTouchStart={recStart} onTouchEnd={recStop}
+            title={recRecording ? "Release to transcribe" : "Hold to record"}
+            style={{ ...S.btn(recTranscribing ? "ghost" : recRecording ? "danger" : "ghost"), padding: "10px 14px", fontSize: 18, userSelect: "none" }}
+            disabled={recTranscribing}
+          >{recTranscribing ? "⏳" : recRecording ? "⏹" : "🎙"}</button>
           <button onClick={() => parseReminder(input)} style={{ ...S.btn("primary"), padding: "10px 20px" }} disabled={parsing || !input.trim()}>
             {parsing ? "Parsing..." : "Set →"}
           </button>
@@ -1256,7 +1428,7 @@ Rules:
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
           <div style={{ fontSize: 20 }}>ℹ️</div>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.7 }}>
-            <strong style={{ color: C.textDim }}>Sandbox note:</strong> Voice notes and push notifications are blocked in this preview iframe. Both work fully when deployed to your own URL. In the meantime — type a reminder, hit Set, and the in-app alert above will fire when the time comes (keep the tab open). Try one now: type "remind me in 1 minute" to test it.
+            <strong style={{ color: C.textDim }}>Voice notes:</strong> Hold the 🎙 button, speak, then release. Works on iPhone, Android, and all browsers. Transcription takes about 2 seconds via Whisper AI. Try it now — type "remind me in 1 minute" to test the reminder system.
           </div>
         </div>
       </div>
@@ -1274,6 +1446,22 @@ export default function App() {
   const [dueNow, setDueNow] = useState([]);
   const [bellFlash, setBellFlash] = useState(false);
   const now = Date.now();
+
+  // Jobs with real dates
+  const [jobs, setJobs] = useState(() => JOBS.map(j => {
+    // Convert old static date strings to real dateObj
+    const today = new Date(); today.setHours(0,0,0,0);
+    const map = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4 };
+    const dayKey = j.date.split(" ")[0];
+    const timeStr = j.date.split(" ")[1] || "09:00";
+    const offset = map[dayKey] ?? 0;
+    const weekStart = getWeekStart(today);
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + offset);
+    const [h, m] = timeStr.split(":");
+    d.setHours(parseInt(h) || 9, parseInt(m) || 0);
+    return { ...j, dateObj: d.toISOString() };
+  }));
 
   // Watch for reminders that just became due
   useEffect(() => {
@@ -1332,7 +1520,7 @@ export default function App() {
       </header>
       <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24 }}>
         {view === "Dashboard" && <Dashboard setView={setView} />}
-        {view === "Schedule" && <Schedule />}
+        {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} />}
         {view === "Materials" && <Materials />}
         {view === "AI Assistant" && <AIAssistant brand={brand} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
