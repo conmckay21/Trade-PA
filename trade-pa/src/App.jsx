@@ -1665,13 +1665,13 @@ function Materials({ materials, setMaterials }) {
 }
 
 function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView }) {
-  const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can create and delete data across the whole app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Quote Sarah Chen £450 for a new bathroom"\n• "Invoice Kevin Nash £85 for leak repair"\n• "Save John's number as 07700 900123"\n• "Remind me to call Emma at 3pm"\n• "Add 10 lengths of 22mm copper pipe to materials"\n\nOr tap 🎙 and speak naturally.` }]);
-  
+  const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can handle everything in the app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Quote Sarah Chen £450 for new bathroom"\n• "Invoice Kevin Nash £85 for leak repair"\n• "Mark the invoice for Kevin as paid"\n• "Convert Sarah's quote to an invoice"\n• "Confirm the boiler service for John"\n• "Mark copper pipe as ordered"\n• "Delete the enquiry from Dave"\n• "Save Emma Taylor, 07700 900123, emma@email.com"\n\nOr tap 🎙 and speak naturally.` }]);
+
   const quick = [
-    "Quote Sarah Chen £450 for new bathroom — supply and fit",
-    "Invoice John Smith £120 for boiler service",
-    "Book in Dave, 5 Park Road, boiler repair, Friday 9am",
-    "Remind me to chase Sarah Chen quote in 3 days",
+    "Mark the invoice for John Smith as paid",
+    "Convert Sarah Chen's quote to an invoice",
+    "Mark copper pipe as ordered",
+    "Confirm the boiler service for Dave",
   ];
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1820,6 +1820,77 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         required: ["name"],
       },
     },
+    {
+      name: "delete_customer",
+      description: "Delete a customer record. Use when the user says to remove or delete a customer.",
+      input_schema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Customer name to match" },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      name: "delete_material",
+      description: "Delete a material from the materials list. Use when the user says to remove or delete a material.",
+      input_schema: {
+        type: "object",
+        properties: {
+          item: { type: "string", description: "Material item name to match" },
+        },
+        required: ["item"],
+      },
+    },
+    {
+      name: "mark_invoice_paid",
+      description: "Mark an invoice as paid. Use when the user says a customer has paid, money has arrived, or to mark something as paid.",
+      input_schema: {
+        type: "object",
+        properties: {
+          invoice_id: { type: "string", description: "Invoice ID e.g. INV-042" },
+          customer: { type: "string", description: "Customer name if no ID given" },
+        },
+        required: [],
+      },
+    },
+    {
+      name: "update_job_status",
+      description: "Update the status of a job. Use when the user wants to confirm, mark as pending, or update a job's status.",
+      input_schema: {
+        type: "object",
+        properties: {
+          customer: { type: "string", description: "Customer name to identify the job" },
+          job_type: { type: "string", description: "Job type to help identify it" },
+          status: { type: "string", enum: ["confirmed", "pending", "quote_sent"], description: "New status for the job" },
+        },
+        required: ["customer", "status"],
+      },
+    },
+    {
+      name: "convert_quote_to_invoice",
+      description: "Convert a quote into an invoice. Use when the user says a customer has accepted a quote, or wants to raise an invoice from a quote.",
+      input_schema: {
+        type: "object",
+        properties: {
+          quote_id: { type: "string", description: "Quote ID e.g. QTE-042" },
+          customer: { type: "string", description: "Customer name if no ID given" },
+        },
+        required: [],
+      },
+    },
+    {
+      name: "update_material_status",
+      description: "Update the status of a material — mark as ordered or collected. Use when the user says materials have been ordered or collected/arrived.",
+      input_schema: {
+        type: "object",
+        properties: {
+          item: { type: "string", description: "Material item name to match" },
+          status: { type: "string", enum: ["to_order", "ordered", "collected"], description: "New status" },
+        },
+        required: ["item", "status"],
+      },
+    },
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
@@ -1948,6 +2019,63 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Dashboard" });
         return `Enquiry from ${match.name} deleted.`;
       }
+      case "delete_customer": {
+        const match = customers.find(c => c.name.toLowerCase().includes(input.name.toLowerCase()));
+        if (!match) return `Couldn't find a customer named "${input.name}". Check the Customers tab.`;
+        setCustomers(prev => prev.filter(c => c.id !== match.id));
+        setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Customers" });
+        return `Customer ${match.name} deleted.`;
+      }
+      case "delete_material": {
+        const match = materials.find(m => m.item.toLowerCase().includes(input.item.toLowerCase()));
+        if (!match) return `Couldn't find a material matching "${input.item}". Check the Materials tab.`;
+        setMaterials(prev => prev.filter(m => m !== match));
+        setLastAction({ type: "material", label: `Deleted: ${match.item}`, view: "Materials" });
+        return `Material "${match.item}" deleted.`;
+      }
+      case "mark_invoice_paid": {
+        const match = invoices.find(i =>
+          !i.isQuote && (
+            (input.invoice_id && i.id.toLowerCase() === input.invoice_id.toLowerCase()) ||
+            (input.customer && i.customer.toLowerCase().includes(input.customer.toLowerCase()) && i.status !== "paid")
+          )
+        );
+        if (!match) return `Couldn't find an unpaid invoice matching that. Check the Payments tab.`;
+        setInvoices(prev => prev.map(i => i.id === match.id ? { ...i, status: "paid", due: "Paid" } : i));
+        setLastAction({ type: "invoice", label: `Paid: ${match.id} — ${match.customer}`, view: "Payments" });
+        return `Invoice ${match.id} for ${match.customer} (£${match.amount}) marked as paid.`;
+      }
+      case "update_job_status": {
+        const match = jobs.find(j =>
+          j.customer.toLowerCase().includes(input.customer.toLowerCase()) &&
+          (!input.job_type || j.type.toLowerCase().includes(input.job_type.toLowerCase()))
+        );
+        if (!match) return `Couldn't find a job for "${input.customer}". Check the Schedule tab.`;
+        setJobs(prev => prev.map(j => j.id === match.id ? { ...j, status: input.status } : j));
+        setLastAction({ type: "job", label: `${input.status}: ${match.type} — ${match.customer}`, view: "Schedule" });
+        return `Job "${match.type}" for ${match.customer} updated to ${input.status}.`;
+      }
+      case "convert_quote_to_invoice": {
+        const match = invoices.find(i =>
+          i.isQuote && (
+            (input.quote_id && i.id.toLowerCase() === input.quote_id.toLowerCase()) ||
+            (input.customer && i.customer.toLowerCase().includes(input.customer.toLowerCase()))
+          )
+        );
+        if (!match) return `Couldn't find a quote matching that. Check the Payments → Quotes tab.`;
+        const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+        const inv = { ...match, id: newId, isQuote: false, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
+        setInvoices(prev => [inv, ...prev.filter(i => i.id !== match.id)]);
+        setLastAction({ type: "invoice", label: `Converted: ${newId} — ${match.customer}`, view: "Payments" });
+        return `Quote ${match.id} converted to invoice ${newId} for ${match.customer} — £${match.amount}.`;
+      }
+      case "update_material_status": {
+        const match = materials.find(m => m.item.toLowerCase().includes(input.item.toLowerCase()));
+        if (!match) return `Couldn't find a material matching "${input.item}". Check the Materials tab.`;
+        setMaterials(prev => prev.map(m => m === match ? { ...m, status: input.status } : m));
+        setLastAction({ type: "material", label: `${input.status}: ${match.item}`, view: "Materials" });
+        return `Material "${match.item}" marked as ${input.status}.`;
+      }
       default:
         return "Action completed.";
     }
@@ -1956,20 +2084,24 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
   const SYSTEM = `You are a smart admin assistant for ${brand.tradingName}, a UK sole trader trades business. Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.
 
 Current data you can act on:
-- Jobs: ${jobs.length === 0 ? "none" : jobs.map(j => `${j.customer} (${j.type})`).join(", ")}
-- Invoices: ${invoices.length === 0 ? "none" : invoices.map(i => `${i.id} ${i.customer} £${i.amount}`).join(", ")}
+- Jobs: ${jobs.length === 0 ? "none" : jobs.map(j => `${j.customer} (${j.type}, ${j.status})`).join(", ")}
+- Invoices: ${invoices.filter(i => !i.isQuote).length === 0 ? "none" : invoices.filter(i => !i.isQuote).map(i => `${i.id} ${i.customer} £${i.amount} (${i.status})`).join(", ")}
+- Quotes: ${invoices.filter(i => i.isQuote).length === 0 ? "none" : invoices.filter(i => i.isQuote).map(i => `${i.id} ${i.customer} £${i.amount} (${i.status})`).join(", ")}
 - Enquiries: ${enquiries.length === 0 ? "none" : enquiries.map(e => e.name).join(", ")}
-- Materials: ${materials.length === 0 ? "none" : materials.map(m => `${m.item} x${m.qty}`).join(", ")}
+- Materials: ${materials.length === 0 ? "none" : materials.map(m => `${m.item} x${m.qty} (${m.status})`).join(", ")}
 - Customers: ${customers.length === 0 ? "none" : customers.map(c => `${c.name}${c.phone ? ` (${c.phone})` : ""}${c.email ? ` <${c.email}>` : ""}`).join(", ")}
 
-When the user asks you to do something actionable — book a job, create an invoice, log an enquiry, set a reminder, add materials, OR delete/remove/cancel any of these — USE THE APPROPRIATE TOOL.
+You can perform ALL of the following actions — always use a tool, never just describe what you'd do:
 
-For jobs: if no year is specified assume ${new Date().getFullYear()}. If they say "Friday" calculate the actual date.
-For reminders: calculate minutes from now based on the time they mention.
-For deletions: match by name or ID, confirm what was deleted. If no match found, say so clearly.
-For everything: extract details confidently from natural language.
+CREATE: create_job, create_invoice, create_quote, log_enquiry, set_reminder, create_material, create_customer
+DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material
+UPDATE: mark_invoice_paid, update_job_status, update_material_status, convert_quote_to_invoice
 
-After using a tool, confirm what you did in 1-2 sentences. Be concise. Use £ not $.`;
+Rules:
+- For jobs: if no year given assume ${new Date().getFullYear()}. Calculate actual dates from "Friday", "next Monday" etc.
+- For reminders: calculate minutes_from_now from the time mentioned.
+- For updates/deletes: match by name or ID. If no match, say so clearly.
+- After every tool use: confirm in 1-2 sentences what you did. Use £ not $. Be concise.`;
 
   const send = async (text) => {
     if (!text.trim() || loading) return;
