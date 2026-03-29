@@ -1784,6 +1784,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
       },
     },
     {
+      name: "log_enquiry",
       description: "Log a new customer enquiry. Use when someone has contacted the tradesperson asking about work.",
       input_schema: {
         type: "object",
