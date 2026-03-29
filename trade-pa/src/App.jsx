@@ -5,19 +5,27 @@ import { supabase } from "./supabase.js";
 async function syncInvoiceToAccounting(userId, invoice) {
   if (!userId || !invoice) return;
   try {
-    // Try Xero
-    await fetch("/api/xero/create-invoice", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, invoice }),
-    }).catch(() => {}); // Silently fail if not connected
+    if (invoice.status === "paid") {
+      // Mark as paid in Xero
+      fetch("/api/xero/mark-paid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, invoiceId: invoice.id }),
+      }).catch(() => {});
+    } else {
+      // Create invoice in both systems
+      fetch("/api/xero/create-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, invoice }),
+      }).catch(() => {});
 
-    // Try QuickBooks
-    await fetch("/api/quickbooks/create-invoice", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, invoice }),
-    }).catch(() => {}); // Silently fail if not connected
+      fetch("/api/quickbooks/create-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, invoice }),
+      }).catch(() => {});
+    }
   } catch (e) {
     console.log("Accounting sync skipped:", e.message);
   }
@@ -2067,6 +2075,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           const id = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
           const inv = { id, customer: input.customer, amount: input.amount, due: `Due in ${input.due_days || 30} days`, status: "sent", description: input.description, isQuote: false };
           setInvoices(prev => [inv, ...(prev || [])]);
+          syncInvoiceToAccounting(user?.id, inv);
           setLastAction({ type: "invoice", label: `${id} — £${input.amount} — ${input.customer}`, view: "Invoices" });
           return `Invoice ${id} created for ${input.customer} — £${input.amount} for ${input.description}.`;
         }
@@ -2142,6 +2151,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           );
           if (!match) return `Couldn't find an unpaid invoice matching that. Check the Invoices tab.`;
           setInvoices(prev => (prev || []).map(i => i.id === match.id ? { ...i, status: "paid", due: "Paid" } : i));
+          syncInvoiceToAccounting(user?.id, { ...match, status: "paid" });
           setLastAction({ type: "invoice", label: `Paid: ${match.id} — ${match.customer}`, view: "Invoices" });
           return `Invoice ${match.id} for ${match.customer} (£${match.amount}) marked as paid.`;
         }
@@ -2346,7 +2356,7 @@ Rules:
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
-function Payments({ brand, invoices, setInvoices, customers }) {
+function Payments({ brand, invoices, setInvoices, customers, user }) {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [docType, setDocType] = useState("invoices");
@@ -2367,11 +2377,11 @@ function Payments({ brand, invoices, setInvoices, customers }) {
   const declinedQuotes = allQuotes.filter(q => q.status === "declined");
 
   const updateStatus = (id, status) => {
+    const inv = (invoices || []).find(i => i.id === id);
     setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status, due: status === "paid" ? "Paid" : i.due } : i));
     if (selected && selected.id === id) setSelected(s => ({ ...s, status, due: status === "paid" ? "Paid" : s.due }));
+    if (status === "paid" && inv) syncInvoiceToAccounting(user?.id, { ...inv, status: "paid" });
   };
-
-  const convertToInvoice = (quote) => {
     const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
     const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
     setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== quote.id)]);
@@ -2599,7 +2609,7 @@ function Payments({ brand, invoices, setInvoices, customers }) {
         </div>
       )}
 
-      {showInvoiceModal && <InvoiceModal brand={brand} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...(prev || [])]); setShowInvoiceModal(false); }} />}
+      {showInvoiceModal && <InvoiceModal brand={brand} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...(prev || [])]); setShowInvoiceModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
       {showQuoteModal && <QuoteModal brand={brand} onClose={() => setShowQuoteModal(false)} onSent={(q) => { setInvoices(prev => [q, ...(prev || [])]); setShowQuoteModal(false); setDocType("quotes"); }} />}
     </div>
   );
@@ -3400,7 +3410,7 @@ function CustomerForm({ form, set, onSave, onCancel }) {
 }
 
 // ─── Invoices View ────────────────────────────────────────────────────────────
-function InvoicesView({ brand, invoices, setInvoices }) {
+function InvoicesView({ brand, invoices, setInvoices, user }) {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
@@ -3410,8 +3420,13 @@ function InvoicesView({ brand, invoices, setInvoices }) {
   const overdue = allInvoices.filter(i => i.status === "overdue");
 
   const updateStatus = (id, status) => {
+    const inv = (invoices || []).find(i => i.id === id);
     setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status, due: status === "paid" ? "Paid" : i.due } : i));
     if (selected && selected.id === id) setSelected(s => ({ ...s, status, due: status === "paid" ? "Paid" : s.due }));
+    // Sync paid status to accounting software
+    if (status === "paid" && inv && user?.id) {
+      syncInvoiceToAccounting(user.id, { ...inv, status: "paid" });
+    }
   };
 
   const deleteInvoice = (id) => {
@@ -3540,7 +3555,7 @@ function InvoicesView({ brand, invoices, setInvoices }) {
         </div>
       )}
 
-      {showModal && <InvoiceModal brand={brand} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); }} />}
+      {showModal && <InvoiceModal brand={brand} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
     </div>
   );
 }
@@ -4097,12 +4112,12 @@ export default function App() {
         {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} />}
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} />}
-        {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} />}
-        {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
+        {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} />}
+        {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} />}
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} />}
         {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
-        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} />}
+        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} />}
         {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} />}
       </main>
     </div>
