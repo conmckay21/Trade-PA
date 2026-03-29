@@ -297,6 +297,194 @@ function buildRef(brand, inv) {
   }
 }
 
+// ─── PDF Generator ────────────────────────────────────────────────────────────
+function downloadInvoicePDF(brand, inv) {
+  const accent = brand.accentColor || "#f59e0b";
+  const ref = buildRef(brand, inv);
+  const payMethod = inv.paymentMethod || brand.defaultPaymentMethod || "both";
+  const showBacs = payMethod === "bacs" || payMethod === "both";
+  const showCard = payMethod === "card" || payMethod === "both";
+  const vatEnabled = inv.vatEnabled && brand.vatNumber;
+  const vatRate = inv.vatRate || 20;
+  const grossAmount = parseFloat(inv.amount) || 0;
+  const netAmount = vatEnabled ? parseFloat((grossAmount / (1 + vatRate / 100)).toFixed(2)) : grossAmount;
+  const vatAmount = vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
+  const date = inv.date || new Date().toLocaleDateString("en-GB");
+  const isQuote = inv.isQuote;
+
+  const lineItems = (inv.desc || inv.description || "Service").split("\n").filter(Boolean);
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>${isQuote ? "Quote" : "Invoice"} ${inv.id} — ${inv.customer}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,sans-serif;color:#1a1a1a;background:#fff;padding:0;}
+  .page{max-width:800px;margin:0 auto;padding:0;}
+  .header{background:${accent};padding:28px 36px;display:flex;justify-content:space-between;align-items:flex-start;}
+  .header-left .biz-name{font-size:22px;font-weight:700;color:#fff;margin-bottom:4px;}
+  .header-left .tagline{font-size:12px;color:rgba(255,255,255,0.8);}
+  .header-right{text-align:right;}
+  .header-right .doc-type{font-size:24px;font-weight:700;color:#fff;letter-spacing:0.05em;}
+  .header-right .doc-id{font-size:14px;color:rgba(255,255,255,0.8);margin-top:4px;}
+  .logo{max-height:60px;max-width:180px;object-fit:contain;margin-bottom:6px;display:block;}
+  .infobar{background:#f8f8f8;padding:12px 36px;display:flex;justify-content:space-between;border-bottom:1px solid #eee;font-size:12px;}
+  .infobar span{color:#999;margin-right:4px;}
+  .addresses{padding:24px 36px;display:grid;grid-template-columns:1fr 1fr;gap:28px;border-bottom:1px solid #eee;}
+  .addr-label{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px;}
+  .addr-name{font-size:14px;font-weight:700;margin-bottom:4px;}
+  .addr-detail{font-size:12px;color:#555;line-height:1.7;}
+  .addr-accent{color:${accent};}
+  .items{padding:0 36px;}
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;padding:12px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#999;font-weight:400;border-bottom:2px solid ${accent};}
+  th.right,td.right{text-align:right;}
+  td{padding:11px 0;font-size:13px;border-bottom:1px solid #f0f0f0;}
+  td.muted{color:#999;}
+  .totals{padding:12px 36px 0;display:flex;flex-direction:column;align-items:flex-end;gap:5px;border-top:2px solid ${accent};margin:0 36px;}
+  .total-row{display:flex;gap:40px;font-size:13px;color:#888;}
+  .total-row.grand{font-size:20px;font-weight:700;color:${accent};border-top:1px solid #eee;padding-top:8px;margin-top:4px;}
+  .payment{margin:16px 36px 0;display:flex;flex-direction:column;gap:10px;}
+  .pay-block{background:#f8f8f8;border-radius:6px;padding:14px 16px;border:1px solid #eee;}
+  .pay-block.stripe{background:rgba(99,91,255,0.06);border-color:rgba(99,91,255,0.2);}
+  .pay-title{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:10px;}
+  .pay-title.stripe-title{color:#635bff;}
+  .pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 20px;font-size:12px;color:#555;}
+  .pay-grid strong{color:#1a1a1a;}
+  .ref-box{margin-top:10px;padding:8px 12px;background:${accent}18;border-radius:4px;border:1px solid ${accent}44;font-size:12px;}
+  .ref-box span{color:#999;}
+  .ref-box strong{letter-spacing:0.04em;}
+  .ref-box small{color:#bbb;margin-left:8px;}
+  .stripe-btn{display:inline-block;padding:8px 20px;background:#635bff;border-radius:5px;font-size:12px;font-weight:700;color:#fff;margin-top:10px;}
+  .stripe-url{font-size:10px;color:#bbb;margin-top:6px;}
+  .note{font-size:11px;color:#999;margin-top:4px;}
+  .footer{background:${accent}18;padding:10px 36px;display:flex;justify-content:space-between;border-top:1px solid ${accent}44;font-size:11px;color:#888;margin-top:20px;}
+  .validity{background:#fff8e8;border:1px solid ${accent}44;border-radius:6px;padding:10px 16px;margin:0 36px;font-size:12px;color:#888;}
+  @media print{
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .no-print{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="header-left">
+      ${brand.logo ? `<img src="${brand.logo}" class="logo" alt="logo"/>` : `<div class="biz-name">${brand.tradingName}</div>`}
+      ${brand.tagline ? `<div class="tagline">${brand.tagline}</div>` : ""}
+    </div>
+    <div class="header-right">
+      <div class="doc-type">${isQuote ? "QUOTE" : "INVOICE"}</div>
+      <div class="doc-id">${inv.id}</div>
+    </div>
+  </div>
+
+  <div class="infobar">
+    <div><span>Date:</span>${date}</div>
+    <div><span>${isQuote ? "Valid for:" : "Payment due:"}</span>${isQuote ? "30 days" : `${brand.paymentTerms || 30} days`}</div>
+    ${brand.vatNumber ? `<div><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
+    <div><span>Ref:</span>${ref}</div>
+  </div>
+
+  <div class="addresses">
+    <div>
+      <div class="addr-label">From</div>
+      <div class="addr-name">${brand.tradingName}</div>
+      <div class="addr-detail" style="white-space:pre-line">${brand.address || ""}</div>
+      ${brand.phone ? `<div class="addr-detail">${brand.phone}</div>` : ""}
+      ${brand.email ? `<div class="addr-detail addr-accent">${brand.email}</div>` : ""}
+      ${brand.gasSafeNumber ? `<div class="addr-detail" style="font-size:11px;color:#999;margin-top:6px">Gas Safe: ${brand.gasSafeNumber}</div>` : ""}
+    </div>
+    <div>
+      <div class="addr-label">To</div>
+      <div class="addr-name">${inv.customer}</div>
+      <div class="addr-detail" style="white-space:pre-line">${inv.address || ""}</div>
+    </div>
+  </div>
+
+  <div class="items">
+    <table>
+      <thead>
+        <tr>
+          <th>Description</th>
+          ${vatEnabled ? `<th class="right">Net</th><th class="right">VAT ${vatRate}%</th>` : ""}
+          <th class="right">${vatEnabled ? "Gross" : "Amount"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lineItems.map((line, i) => `
+        <tr>
+          <td>${line}</td>
+          ${vatEnabled ? `<td class="right${i > 0 ? " muted" : ""}">${i === 0 ? "£" + netAmount.toFixed(2) : "—"}</td><td class="right${i > 0 ? " muted" : ""}">${i === 0 ? "£" + vatAmount.toFixed(2) : "—"}</td>` : ""}
+          <td class="right${i > 0 ? " muted" : ""}">${i === 0 ? "£" + grossAmount.toFixed(2) : "—"}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="totals">
+    ${vatEnabled ? `
+    <div class="total-row"><span>Net amount</span><span>£${netAmount.toFixed(2)}</span></div>
+    <div class="total-row"><span>VAT @ ${vatRate}%</span><span>£${vatAmount.toFixed(2)}</span></div>
+    <div class="total-row grand"><span>${isQuote ? "Quote Total (inc. VAT)" : "Total Due (inc. VAT)"}</span><span>£${grossAmount.toFixed(2)}</span></div>
+    ` : `
+    <div class="total-row grand"><span>${isQuote ? "Quote Total" : "Total Due"}</span><span>£${grossAmount.toFixed(2)}</span></div>
+    `}
+  </div>
+
+  ${isQuote ? `
+  <div class="validity">
+    This quote is valid for 30 days from the date above. Prices may be subject to change after this period. Please contact us to proceed or if you have any questions.
+  </div>` : ""}
+
+  <div class="payment">
+    ${!isQuote && showBacs && brand.bankName ? `
+    <div class="pay-block">
+      <div class="pay-title">${showCard ? "Option 1 — Pay by Bank Transfer (BACS)" : "Pay by Bank Transfer (BACS)"}</div>
+      <div class="pay-grid">
+        <div><span style="color:#999">Bank: </span><strong>${brand.bankName}</strong></div>
+        <div><span style="color:#999">Account name: </span><strong>${brand.accountName}</strong></div>
+        <div><span style="color:#999">Sort code: </span><strong>${brand.sortCode}</strong></div>
+        <div><span style="color:#999">Account no: </span><strong>${brand.accountNumber}</strong></div>
+      </div>
+      <div class="ref-box">
+        <span>Payment reference: </span><strong>${ref}</strong><small>(please use exactly as shown)</small>
+      </div>
+    </div>` : ""}
+
+    ${!isQuote && showCard ? `
+    <div class="pay-block stripe">
+      <div class="pay-title stripe-title">${showBacs ? "Option 2 — Pay by Card (Stripe)" : "Pay by Card (Stripe)"}</div>
+      <div style="font-size:12px;color:#555;margin-bottom:10px">Pay securely online by debit or credit card. Takes 30 seconds.</div>
+      <div class="stripe-btn">Pay £${grossAmount.toFixed(2)} online</div>
+      <div class="stripe-url">Payment link sent separately by email</div>
+    </div>` : ""}
+
+    <div class="note">${brand.invoiceNote || ""}</div>
+  </div>
+
+  <div class="footer">
+    ${brand.website ? `<span>${brand.website}</span>` : "<span></span>"}
+    ${brand.phone ? `<span>${brand.phone}</span>` : "<span></span>"}
+    ${brand.email ? `<span>${brand.email}</span>` : "<span></span>"}
+  </div>
+</div>
+<script>window.onload=()=>{window.print();}</script>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+  } else {
+    alert("Please allow pop-ups for this site to download invoices.");
+  }
+}
+
 // ─── Invoice Preview ──────────────────────────────────────────────────────────
 function InvoicePreview({ brand, invoice }) {
   const inv = invoice || { id: "INV-042", customer: "John Smith", address: "5 High Street\nGuildford GU1 3AA", desc: "Annual boiler service\nFlue check and clean\nPressure test", amount: 120, date: new Date().toLocaleDateString("en-GB"), due: "30 days", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false };
@@ -697,7 +885,7 @@ function Settings({ brand, setBrand }) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ setView, jobs, invoices, enquiries }) {
+function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
   const today = new Date(); today.setHours(0,0,0,0);
   const todayJobs = jobs.filter(j => j.dateObj && isSameDay(new Date(j.dateObj), today));
   const weekRevenue = jobs.reduce((sum, j) => sum + (j.value || 0), 0);
@@ -768,13 +956,14 @@ function Dashboard({ setView, jobs, invoices, enquiries }) {
           ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No invoices yet — create one in Payments or via the AI Assistant.</div>
           : invoices.slice(0, 5).map(inv => (
             <div key={inv.id} style={S.row}>
-              <div style={{ fontSize: 12, color: C.muted, width: 70 }}>{inv.id}</div>
-              <div style={{ flex: 1 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</span></div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 16 }}>£{inv.amount}</div>
-              <div style={{ width: 130, textAlign: "right" }}>
+              <div style={{ fontSize: 12, color: C.muted, width: 70, flexShrink: 0 }}>{inv.id}</div>
+              <div style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</span></div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 12, flexShrink: 0 }}>£{inv.amount}</div>
+              <div style={{ flexShrink: 0, textAlign: "right", marginRight: 10 }}>
                 <div style={S.badge(statusColor[inv.status] || C.muted)}>{statusLabel[inv.status] || inv.status}</div>
                 <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{inv.due}</div>
               </div>
+              <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }} onClick={() => downloadInvoicePDF(brand, inv)}>⬇ PDF</button>
             </div>
           ))
         }
@@ -821,30 +1010,30 @@ function Schedule({ jobs, setJobs }) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [showAddJob, setShowAddJob] = useState(false);
   const [addJobDate, setAddJobDate] = useState(null);
-  const [form, setForm] = useState({ customer: "", address: "", type: "", time: "09:00", value: "", status: "confirmed" });
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [editingJob, setEditingJob] = useState(null);
+  const [form, setForm] = useState({ customer: "", address: "", type: "", time: "09:00", value: "", status: "confirmed", notes: "" });
 
   const weekStart = new Date(getWeekStart(new Date()));
   weekStart.setDate(weekStart.getDate() + weekOffset * 7);
 
-  const weekDays = Array.from({ length: 5 }, (_, i) => {
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart);
     d.setDate(d.getDate() + i);
     return d;
   });
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const isThisWeek = weekOffset === 0;
-
   const jobsForDay = (day) => jobs.filter(j => j.dateObj && isSameDay(new Date(j.dateObj), day));
 
   const weekLabel = () => {
-    const end = new Date(weekStart); end.setDate(end.getDate() + 4);
+    const end = new Date(weekStart); end.setDate(end.getDate() + 6);
     return `${weekStart.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
   };
 
   const openAdd = (day) => {
     setAddJobDate(day);
-    setForm({ customer: "", address: "", type: "", time: "09:00", value: "", status: "confirmed" });
+    setForm({ customer: "", address: "", type: "", time: "09:00", value: "", status: "confirmed", notes: "" });
     setShowAddJob(true);
   };
 
@@ -862,9 +1051,29 @@ function Schedule({ jobs, setJobs }) {
       dateObj: dateObj.toISOString(),
       status: form.status,
       value: parseInt(form.value) || 0,
+      notes: form.notes,
     };
     setJobs(prev => [...prev, newJob]);
     setShowAddJob(false);
+  };
+
+  const saveEdit = () => {
+    setJobs(prev => prev.map(j => j.id === editingJob.id ? {
+      ...j,
+      customer: form.customer,
+      address: form.address,
+      type: form.type,
+      status: form.status,
+      value: parseInt(form.value) || 0,
+      notes: form.notes,
+    } : j));
+    setEditingJob(null);
+    setSelectedJob(null);
+  };
+
+  const deleteJob = (id) => {
+    setJobs(prev => prev.filter(j => j.id !== id));
+    setSelectedJob(null);
   };
 
   const allWeekJobs = jobs.filter(j => {
@@ -886,62 +1095,168 @@ function Schedule({ jobs, setJobs }) {
         <button style={S.btn("primary")} onClick={() => openAdd(weekDays[0])}>+ Add Job</button>
       </div>
 
-      {/* Calendar grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
-        {weekDays.map((day, i) => {
-          const dayJobs = jobsForDay(day);
-          const isToday = isSameDay(day, today);
-          return (
-            <div key={i} style={{ ...S.card, padding: 14, borderColor: isToday ? C.amber + "66" : C.border, background: isToday ? C.amber + "08" : C.surface }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: isToday ? C.amber : C.muted, textTransform: "uppercase" }}>
-                  {day.toLocaleDateString("en-GB", { weekday: "short" })} {day.getDate()}
-                </div>
-                <button onClick={() => openAdd(day)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px" }} title="Add job">+</button>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {dayJobs.length === 0 && <div style={{ fontSize: 10, color: C.border, fontStyle: "italic" }}>Free</div>}
-                {dayJobs.map(job => (
-                  <div key={job.id} style={{ padding: "7px 9px", background: C.surfaceHigh, borderRadius: 6, borderLeft: `2px solid ${statusColor[job.status] || C.muted}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 1 }}>{job.customer.split(" ")[0]}</div>
-                    <div style={{ fontSize: 10, color: C.muted }}>{job.type}</div>
-                    {job.value > 0 && <div style={{ fontSize: 10, color: C.amber, marginTop: 3 }}>£{job.value}</div>}
+      {/* Calendar grid — 7 days, jobs show name + time only, tap to see detail */}
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 8, minWidth: 560 }}>
+          {weekDays.map((day, i) => {
+            const dayJobs = jobsForDay(day);
+            const isToday = isSameDay(day, today);
+            const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+            return (
+              <div key={i} style={{ ...S.card, padding: 10, borderColor: isToday ? C.amber + "66" : C.border, background: isToday ? C.amber + "08" : isWeekend ? C.surfaceHigh : C.surface }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: isToday ? C.amber : isWeekend ? C.blue : C.muted, textTransform: "uppercase" }}>
+                    {day.toLocaleDateString("en-GB", { weekday: "short" })} {day.getDate()}
                   </div>
-                ))}
+                  <button onClick={() => openAdd(day)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 2px" }}>+</button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {dayJobs.length === 0 && <div style={{ fontSize: 9, color: C.border, fontStyle: "italic" }}>Free</div>}
+                  {dayJobs.map(job => (
+                    <div
+                      key={job.id}
+                      onClick={() => setSelectedJob(job)}
+                      style={{ padding: "5px 7px", background: C.surfaceHigh, borderRadius: 5, borderLeft: `2px solid ${statusColor[job.status] || C.muted}`, cursor: "pointer", transition: "opacity 0.15s" }}
+                      title="Tap for details"
+                    >
+                      {/* Calendar card — name and time ONLY */}
+                      <div style={{ fontSize: 10, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {job.customer.split(" ")[0]} {job.customer.split(" ").slice(-1)[0]}
+                      </div>
+                      <div style={{ fontSize: 9, color: C.muted, marginTop: 1 }}>
+                        {job.dateObj ? new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
-      {/* Jobs list this week */}
+      {/* Jobs list this week — name and address, tap for detail */}
       <div style={S.card}>
         <div style={S.sectionTitle}>Jobs This Week ({allWeekJobs.length})</div>
-        {allWeekJobs.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No jobs scheduled this week. Hit + to add one.</div>}
+        {allWeekJobs.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No jobs this week. Hit + to add one.</div>}
         {allWeekJobs.map(job => (
-          <div key={job.id} style={S.row}>
-            <div style={{ width: 4, height: 40, borderRadius: 2, background: statusColor[job.status] || C.muted, flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
+          <div key={job.id} onClick={() => setSelectedJob(job)} style={{ ...S.row, cursor: "pointer" }}>
+            <div style={{ width: 4, height: 44, borderRadius: 2, background: statusColor[job.status] || C.muted, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{job.customer}</div>
-              <div style={{ fontSize: 11, color: C.muted }}>{job.address}</div>
+              <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.address || "No address"}</div>
             </div>
-            <div style={{ fontSize: 12, color: C.textDim, marginRight: 12 }}>{job.type}</div>
-            <div style={{ fontSize: 12, color: C.textDim, marginRight: 12 }}>{job.date}</div>
+            <div style={{ fontSize: 11, color: C.textDim, marginRight: 12, flexShrink: 0 }}>
+              {job.dateObj ? new Date(job.dateObj).toLocaleDateString("en-GB", { weekday: "short", day: "numeric" }) : ""}<br />
+              <span style={{ fontSize: 10 }}>{job.dateObj ? new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+            </div>
             <div style={S.badge(statusColor[job.status] || C.muted)}>{statusLabel[job.status] || job.status}</div>
-            {job.value > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, marginLeft: 16 }}>£{job.value}</div>}
+            <div style={{ fontSize: 11, color: C.muted, marginLeft: 12 }}>→</div>
           </div>
         ))}
       </div>
 
-      {/* Add Job Modal */}
+      {/* ── Job Detail Modal ── */}
+      {selectedJob && !editingJob && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelectedJob(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>{selectedJob.customer}</div>
+                <div style={S.badge(statusColor[selectedJob.status] || C.muted)}>{statusLabel[selectedJob.status] || selectedJob.status}</div>
+              </div>
+              <button onClick={() => setSelectedJob(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>×</button>
+            </div>
+
+            {/* Details grid */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+              {[
+                { label: "Job Type", value: selectedJob.type },
+                { label: "Date & Time", value: selectedJob.dateObj ? new Date(selectedJob.dateObj).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " at " + new Date(selectedJob.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : selectedJob.date },
+                { label: "Address", value: selectedJob.address || "Not set" },
+                { label: "Value", value: selectedJob.value > 0 ? `£${selectedJob.value}` : "Not set" },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 13, color: C.text }}>{value}</div>
+                </div>
+              ))}
+
+              {/* Notes */}
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Notes</div>
+                <div style={{ fontSize: 13, color: selectedJob.notes ? C.text : C.muted, fontStyle: selectedJob.notes ? "normal" : "italic" }}>
+                  {selectedJob.notes || "No notes added"}
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button style={S.btn("primary")} onClick={() => {
+                setEditingJob(selectedJob);
+                setForm({ customer: selectedJob.customer, address: selectedJob.address || "", type: selectedJob.type, time: selectedJob.dateObj ? new Date(selectedJob.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }).replace(":", ":") : "09:00", value: selectedJob.value || "", status: selectedJob.status, notes: selectedJob.notes || "" });
+              }}>Edit Job</button>
+              {selectedJob.status !== "confirmed" && (
+                <button style={S.btn("green")} onClick={() => { setJobs(prev => prev.map(j => j.id === selectedJob.id ? { ...j, status: "confirmed" } : j)); setSelectedJob(null); }}>Mark Confirmed</button>
+              )}
+              {selectedJob.address && (
+                <a href={`https://maps.google.com/?q=${encodeURIComponent(selectedJob.address)}`} target="_blank" rel="noreferrer" style={{ ...S.btn("ghost"), textDecoration: "none" }}>📍 Directions</a>
+              )}
+              <button style={{ ...S.btn("ghost"), color: C.red, marginLeft: "auto" }} onClick={() => deleteJob(selectedJob.id)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Job Modal ── */}
+      {editingJob && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Job</div>
+              <button onClick={() => setEditingJob(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[
+                { k: "customer", l: "Customer Name", p: "e.g. John Smith" },
+                { k: "address", l: "Address", p: "e.g. 5 High Street, Guildford" },
+                { k: "type", l: "Job Type", p: "e.g. Boiler Service" },
+                { k: "value", l: "Value (£)", p: "e.g. 120" },
+              ].map(({ k, l, p }) => (
+                <div key={k}>
+                  <label style={S.label}>{l}</label>
+                  <input style={S.input} placeholder={p} value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} />
+                </div>
+              ))}
+              <div>
+                <label style={S.label}>Notes</label>
+                <textarea style={{ ...S.input, resize: "vertical", minHeight: 80 }} placeholder="Any notes about this job..." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+              <div>
+                <label style={S.label}>Status</label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {["confirmed", "pending", "quote_sent"].map(st => (
+                    <button key={st} onClick={() => setForm(f => ({ ...f, status: st }))} style={S.pill(statusColor[st], form.status === st)}>{statusLabel[st]}</button>
+                  ))}
+                </div>
+              </div>
+              <button style={S.btn("primary", !form.customer || !form.type)} disabled={!form.customer || !form.type} onClick={saveEdit}>Save Changes →</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Job Modal ── */}
       {showAddJob && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "90%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Job — {addJobDate?.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
               <button onClick={() => setShowAddJob(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[
                 { k: "customer", l: "Customer Name", p: "e.g. John Smith" },
                 { k: "address", l: "Address", p: "e.g. 5 High Street, Guildford" },
@@ -958,8 +1273,12 @@ function Schedule({ jobs, setJobs }) {
                 <input type="time" style={S.input} value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
               </div>
               <div>
+                <label style={S.label}>Notes</label>
+                <textarea style={{ ...S.input, resize: "vertical", minHeight: 72 }} placeholder="Any notes about this job..." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+              <div>
                 <label style={S.label}>Status</label>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {["confirmed", "pending", "quote_sent"].map(st => (
                     <button key={st} onClick={() => setForm(f => ({ ...f, status: st }))} style={S.pill(statusColor[st], form.status === st)}>{statusLabel[st]}</button>
                   ))}
@@ -975,9 +1294,21 @@ function Schedule({ jobs, setJobs }) {
 }
 
 // ─── Materials ────────────────────────────────────────────────────────────────
-function Materials() {
-  const [materials, setMaterials] = useState([]);
+const DEFAULT_SUPPLIERS = [
+  { name: "City Plumbing", phone: "01483 123456", email: "", notes: "Main plumbing supplies" },
+  { name: "Screwfix", phone: "03330 112112", email: "", notes: "Tools and fixings" },
+  { name: "Wolseley", phone: "01926 701600", email: "", notes: "Heating and plumbing" },
+  { name: "Toolstation", phone: "0330 333 3303", email: "", notes: "Tools and building supplies" },
+  { name: "BSS", phone: "0115 953 0500", email: "", notes: "Commercial heating" },
+  { name: "Plumb Center", phone: "0330 123 1456", email: "", notes: "Plumbing wholesale" },
+];
+
+function Materials({ materials, setMaterials }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [showSuppliers, setShowSuppliers] = useState(false);
+  const [suppliers, setSuppliers] = useState(DEFAULT_SUPPLIERS);
+  const [editingSupplier, setEditingSupplier] = useState(null);
+  const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "", notes: "" });
   const [form, setForm] = useState({ item: "", qty: 1, supplier: "", job: "", status: "to_order" });
 
   const save = () => {
@@ -987,12 +1318,35 @@ function Materials() {
     setShowAdd(false);
   };
 
+  const saveSupplier = () => {
+    if (!supplierForm.name) return;
+    if (editingSupplier !== null) {
+      setSuppliers(prev => prev.map((s, i) => i === editingSupplier ? supplierForm : s));
+    } else {
+      setSuppliers(prev => [...prev, supplierForm]);
+    }
+    setEditingSupplier(null);
+    setSupplierForm({ name: "", phone: "", email: "", notes: "" });
+  };
+
+  const deleteSupplier = (i) => setSuppliers(prev => prev.filter((_, j) => j !== i));
+
+  const dial = (phone) => {
+    if (!phone) return;
+    window.location.href = `tel:${phone.replace(/\s/g, "")}`;
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>Materials & Orders</div>
-        <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Material</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={S.btn("ghost")} onClick={() => setShowSuppliers(true)}>Manage Suppliers</button>
+          <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Material</button>
+        </div>
       </div>
+
+      {/* Material list */}
       <div style={S.card}>
         <div style={S.sectionTitle}>Material List</div>
         {materials.length === 0
@@ -1000,48 +1354,86 @@ function Materials() {
           : materials.map((m, i) => (
             <div key={i} style={S.row}>
               <div style={{ width: 4, height: 40, borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
-                {m.job && <div style={{ fontSize: 11, color: C.muted }}>For: {m.job}</div>}
+                <div style={{ fontSize: 11, color: C.muted }}>
+                  {[m.job && `For: ${m.job}`, m.supplier && `Via: ${m.supplier}`].filter(Boolean).join(" · ")}
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: C.textDim, marginRight: 16 }}>Qty: {m.qty}</div>
-              {m.supplier && <div style={{ fontSize: 12, color: C.textDim, marginRight: 16 }}>{m.supplier}</div>}
+              <div style={{ fontSize: 12, color: C.textDim, marginRight: 12, flexShrink: 0 }}>Qty: {m.qty}</div>
               <div style={S.badge(statusColor[m.status] || C.muted)}>{statusLabel[m.status] || m.status}</div>
-              <button onClick={() => setMaterials(prev => prev.map((x, j) => j === i ? { ...x, status: x.status === "to_order" ? "ordered" : x.status === "ordered" ? "collected" : "to_order" } : x))}
-                style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", marginLeft: 8 }}>
+              <button
+                onClick={() => setMaterials(prev => prev.map((x, j) => j === i ? { ...x, status: x.status === "to_order" ? "ordered" : x.status === "ordered" ? "collected" : "to_order" } : x))}
+                style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", marginLeft: 8 }}
+              >
                 {m.status === "to_order" ? "Mark Ordered" : m.status === "ordered" ? "Mark Collected" : "Reset"}
               </button>
+              <button onClick={() => setMaterials(prev => prev.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginLeft: 6 }}>✕</button>
             </div>
           ))
         }
       </div>
 
+      {/* Supplier quick dial */}
       <div style={S.card}>
-        <div style={S.sectionTitle}>Supplier Quick Dial</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          {["City Plumbing", "Screwfix", "Wolseley", "Toolstation", "BSS", "Plumb Center"].map(sup => (
-            <div key={sup} style={{ padding: "12px 14px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}`, cursor: "pointer" }}>
-              <div style={{ fontSize: 12, fontWeight: 600 }}>{sup}</div>
-              <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>Tap to call / order</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={S.sectionTitle}>Supplier Quick Dial</div>
+          <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => setShowSuppliers(true)}>+ Add Supplier</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+          {suppliers.map((sup, i) => (
+            <div key={i} style={{ padding: "12px 14px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{sup.name}</div>
+              {sup.notes && <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>{sup.notes}</div>}
+              {sup.phone ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>📞 {sup.phone}</button>
+                  {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 12px", textDecoration: "none", textAlign: "center" }}>✉ Email</a>}
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setEditingSupplier(i); setSupplierForm(sup); setShowSuppliers(true); }}
+                  style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", width: "100%" }}
+                >Add number</button>
+              )}
             </div>
           ))}
         </div>
       </div>
 
+      {/* Add Material Modal */}
       {showAdd && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
-          <div style={{ ...S.card, maxWidth: 420, width: "90%" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 420, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Material</div>
               <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[{ k: "item", l: "Item", p: "e.g. Copper pipe 22mm x 3m" }, { k: "qty", l: "Quantity", p: "1" }, { k: "supplier", l: "Supplier", p: "e.g. Screwfix" }, { k: "job", l: "For Job (optional)", p: "e.g. Boiler service — Smith" }].map(({ k, l, p }) => (
+              {[
+                { k: "item", l: "Item", p: "e.g. Copper pipe 22mm x 3m" },
+                { k: "qty", l: "Quantity", p: "1" },
+                { k: "job", l: "For Job (optional)", p: "e.g. Boiler service — Smith" },
+              ].map(({ k, l, p }) => (
                 <div key={k}>
                   <label style={S.label}>{l}</label>
                   <input style={S.input} placeholder={p} value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} />
                 </div>
               ))}
+              <div>
+                <label style={S.label}>Supplier</label>
+                <select style={{ ...S.input }} value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))}>
+                  <option value="">Select supplier...</option>
+                  {suppliers.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              {form.supplier === "other" && (
+                <div>
+                  <label style={S.label}>Supplier Name</label>
+                  <input style={S.input} placeholder="Enter supplier name" onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} />
+                </div>
+              )}
               <div>
                 <label style={S.label}>Status</label>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -1055,12 +1447,87 @@ function Materials() {
           </div>
         </div>
       )}
+
+      {/* Manage Suppliers Modal */}
+      {showSuppliers && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 520, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Manage Suppliers</div>
+              <button onClick={() => { setShowSuppliers(false); setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+
+            {/* Existing suppliers */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+              {suppliers.map((sup, i) => (
+                <div key={i} style={{ ...S.card, padding: "12px 14px", background: editingSupplier === i ? C.amber + "11" : C.surfaceHigh, borderColor: editingSupplier === i ? C.amber + "66" : C.border }}>
+                  {editingSupplier === i ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {[
+                        { k: "name", l: "Name", p: "e.g. City Plumbing" },
+                        { k: "phone", l: "Phone Number", p: "e.g. 01483 123456" },
+                        { k: "email", l: "Email Address", p: "e.g. orders@cityplumbing.co.uk" },
+                        { k: "notes", l: "Notes", p: "e.g. Main plumbing supplies" },
+                      ].map(({ k, l, p }) => (
+                        <div key={k}>
+                          <label style={S.label}>{l}</label>
+                          <input style={S.input} placeholder={p} value={supplierForm[k] || ""} onChange={e => setSupplierForm(f => ({ ...f, [k]: e.target.value }))} />
+                        </div>
+                      ))}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button style={S.btn("primary", !supplierForm.name)} disabled={!supplierForm.name} onClick={saveSupplier}>Save</button>
+                        <button style={S.btn("ghost")} onClick={() => { setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{sup.name}</div>
+                        <div style={{ fontSize: 11, color: sup.phone ? C.amber : C.muted }}>{sup.phone || "No phone number"}</div>
+                        {sup.email && <div style={{ fontSize: 11, color: C.blue }}>{sup.email}</div>}
+                        {sup.notes && <div style={{ fontSize: 11, color: C.muted }}>{sup.notes}</div>}
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        {sup.phone && <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>📞 Call</button>}
+                        {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", textDecoration: "none" }}>✉</a>}
+                      </div>
+                      <button onClick={() => { setEditingSupplier(i); setSupplierForm(sup); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px" }}>Edit</button>
+                      <button onClick={() => deleteSupplier(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>✕</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Add new supplier */}
+            {editingSupplier === null && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 12 }}>Add New Supplier</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[
+                    { k: "name", l: "Name", p: "e.g. National Plumbing Supplies" },
+                    { k: "phone", l: "Phone Number", p: "e.g. 01234 567890" },
+                    { k: "email", l: "Email Address", p: "e.g. orders@supplier.co.uk" },
+                    { k: "notes", l: "Notes (optional)", p: "e.g. Good for copper fittings" },
+                  ].map(({ k, l, p }) => (
+                    <div key={k}>
+                      <label style={S.label}>{l}</label>
+                      <input style={S.input} placeholder={p} value={supplierForm[k] || ""} onChange={e => setSupplierForm(f => ({ ...f, [k]: e.target.value }))} />
+                    </div>
+                  ))}
+                  <button style={S.btn("primary", !supplierForm.name)} disabled={!supplierForm.name} onClick={saveSupplier}>Add Supplier →</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, onAddReminder, setView }) {
-  const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can create and delete data across the whole app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Invoice Sarah Chen £85 for leak repair"\n• "Delete the job for John Smith"\n• "Remove the invoice for Sarah Chen"\n• "Log enquiry from Kevin Nash, WhatsApp, wants boiler fixed"\n• "Remind me to call Emma at 3pm"\n\nOr hold 🎙 and speak naturally.` }]);
+function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView }) {
+  const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can create and delete data across the whole app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Save John Smith's number as 07700 900123, email john@email.com"\n• "Invoice Sarah Chen £85 for leak repair"\n• "Log enquiry from Kevin Nash, WhatsApp, wants boiler fixed"\n• "Remind me to call Emma at 3pm"\n• "Add 10 lengths of 22mm copper pipe to materials"\n\nOr hold 🎙 and speak naturally.` }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState(null);
@@ -1180,11 +1647,39 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         required: ["name"],
       },
     },
+    {
+      name: "create_customer",
+      description: "Save a customer's contact details. Use when the user provides a customer's phone number, email, or address to store.",
+      input_schema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Customer full name" },
+          phone: { type: "string", description: "Phone number" },
+          email: { type: "string", description: "Email address" },
+          address: { type: "string", description: "Address" },
+          notes: { type: "string", description: "Any notes about this customer" },
+        },
+        required: ["name"],
+      },
+    },
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
   const executeTool = (name, input) => {
     switch (name) {
+      case "create_customer": {
+        // Update existing customer if name matches, otherwise add new
+        const existing = customers.find(c => c.name.toLowerCase() === input.name.toLowerCase());
+        if (existing) {
+          setCustomers(prev => prev.map(c => c.id === existing.id ? { ...c, ...input } : c));
+          setLastAction({ type: "enquiry", label: `Updated: ${input.name}`, view: "Customers" });
+          return `Customer updated: ${input.name}${input.phone ? ` · ${input.phone}` : ""}${input.email ? ` · ${input.email}` : ""}.`;
+        } else {
+          setCustomers(prev => [...prev, { ...input, id: Date.now() }]);
+          setLastAction({ type: "enquiry", label: `Saved: ${input.name}`, view: "Customers" });
+          return `Customer saved: ${input.name}${input.phone ? ` · ${input.phone}` : ""}${input.email ? ` · ${input.email}` : ""}.`;
+        }
+      }
       case "create_job": {
         const dateObj = new Date(`${input.date_iso}T${input.time || "09:00"}`);
         const job = {
@@ -1240,8 +1735,16 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         return `Reminder set: "${input.text}" — ${input.time_label || `in ${input.minutes_from_now} minutes`}.`;
       }
       case "create_material": {
-        setLastAction({ type: "material", label: `${input.item} x${input.qty}`, view: "Materials" });
-        return `Material added: ${input.item} x${input.qty}${input.supplier ? ` from ${input.supplier}` : ""}.`;
+        const mat = {
+          item: input.item,
+          qty: input.qty || 1,
+          supplier: input.supplier || "",
+          job: input.job || "",
+          status: "to_order",
+        };
+        setMaterials(prev => [...prev, mat]);
+        setLastAction({ type: "material", label: `${input.item} x${input.qty || 1}`, view: "Materials" });
+        return `Material added: ${input.item} x${input.qty || 1}${input.supplier ? ` from ${input.supplier}` : ""}${input.job ? ` for ${input.job}` : ""}.`;
       }
       case "delete_job": {
         const match = jobs.find(j =>
@@ -1283,6 +1786,8 @@ Current data you can act on:
 - Jobs: ${jobs.length === 0 ? "none" : jobs.map(j => `${j.customer} (${j.type})`).join(", ")}
 - Invoices: ${invoices.length === 0 ? "none" : invoices.map(i => `${i.id} ${i.customer} £${i.amount}`).join(", ")}
 - Enquiries: ${enquiries.length === 0 ? "none" : enquiries.map(e => e.name).join(", ")}
+- Materials: ${materials.length === 0 ? "none" : materials.map(m => `${m.item} x${m.qty}`).join(", ")}
+- Customers: ${customers.length === 0 ? "none" : customers.map(c => `${c.name}${c.phone ? ` (${c.phone})` : ""}${c.email ? ` <${c.email}>` : ""}`).join(", ")}
 
 When the user asks you to do something actionable — book a job, create an invoice, log an enquiry, set a reminder, add materials, OR delete/remove/cancel any of these — USE THE APPROPRIATE TOOL.
 
@@ -1394,12 +1899,22 @@ After using a tool, confirm what you did in 1-2 sentences. Be concise. Use £ no
         <div ref={bottomRef} />
       </div>
 
-      {transcribing && <div style={{ textAlign: "center", fontSize: 12, color: C.amber }}>Transcribing...</div>}
+      {recording && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 6, fontSize: 12, color: C.red }}>
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, animation: "bellPulse 1s ease infinite" }} />
+          Recording — tap Stop when done
+        </div>
+      )}
+      {transcribing && (
+        <div style={{ padding: "6px 12px", background: C.amber + "18", border: `1px solid ${C.amber}44`, borderRadius: 6, fontSize: 12, color: C.amber }}>
+          ⏳ Transcribing your voice note...
+        </div>
+      )}
 
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
         <textarea
           style={{ ...S.input, flex: 1, minHeight: 44, maxHeight: 120, resize: "none" }}
-          placeholder="Type or hold 🎙 — book a job, send an invoice, log an enquiry..."
+          placeholder="Type here, or tap 🎙 to speak..."
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
@@ -1408,8 +1923,8 @@ After using a tool, confirm what you did in 1-2 sentences. Be concise. Use £ no
         <button
           onClick={toggle}
           disabled={transcribing}
-          style={{ ...S.btn("ghost"), padding: "10px 14px", fontSize: 14, background: recording ? C.red + "33" : C.surfaceHigh, border: `1px solid ${recording ? C.red : C.border}`, color: recording ? C.red : C.textDim, whiteSpace: "nowrap" }}
-        >{micLabel}</button>
+          style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${recording ? C.red : C.border}`, background: recording ? C.red + "22" : C.surfaceHigh, color: recording ? C.red : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+        >{transcribing ? "⏳" : recording ? "⏹ Stop" : "🎙"}</button>
         <button onClick={() => send(input)} style={{ ...S.btn("primary"), padding: "10px 16px" }} disabled={loading || !input.trim()}>Send</button>
       </div>
     </div>
@@ -1569,14 +2084,25 @@ function Payments({ brand }) {
         </div>
         {invoices.map(inv => (
           <div key={inv.id} style={S.row}>
-            <div style={{ fontSize: 12, color: C.muted, width: 70 }}>{inv.id}</div>
-            <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
-            <div style={{ fontSize: 14, fontWeight: 700, marginRight: 14 }}>£{inv.amount}</div>
-            <div style={{ ...S.badge(statusColor[inv.status]), marginRight: 10 }}>{statusLabel[inv.status]}</div>
-            <div style={{ fontSize: 10, color: C.muted, marginRight: 12, width: 110 }}>{inv.due}</div>
-            {inv.status !== "paid" && <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>Copy Link</button>}
-            {inv.status === "overdue" && <button style={{ ...S.btn("danger"), fontSize: 11, padding: "4px 10px", marginLeft: 6 }} onClick={() => setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "sent", due: "Chaser sent" } : i))}>Chase</button>}
-            {inv.status === "paid" && <div style={{ fontSize: 11, color: C.green, marginLeft: 10 }}>✓</div>}
+            <div style={{ fontSize: 12, color: C.muted, width: 70, flexShrink: 0 }}>{inv.id}</div>
+            <div style={{ flex: 1, fontSize: 13, fontWeight: 600, minWidth: 0 }}>{inv.customer}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginRight: 14, flexShrink: 0 }}>£{inv.amount}</div>
+            <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 10, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
+            <div style={{ fontSize: 10, color: C.muted, marginRight: 12, width: 100, flexShrink: 0 }}>{inv.due}</div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <button
+                style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}
+                onClick={() => downloadInvoicePDF(brand, inv)}
+                title="Download PDF"
+              >⬇ PDF</button>
+              {inv.status === "overdue" && (
+                <button style={{ ...S.btn("danger"), fontSize: 11, padding: "4px 10px" }} onClick={() => setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "sent", due: "Chaser sent" } : i))}>Chase</button>
+              )}
+              {inv.status !== "paid" && (
+                <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green }} onClick={() => setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "paid", due: "Paid" } : i))}>✓ Paid</button>
+              )}
+              {inv.status === "paid" && <div style={{ fontSize: 11, color: C.green, padding: "4px 0" }}>✓ Paid</div>}
+            </div>
           </div>
         ))}
       </div>
@@ -2017,7 +2543,225 @@ Rules:
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
-const VIEWS = ["Dashboard", "Schedule", "Materials", "AI Assistant", "Reminders", "Payments", "Settings"];
+// ─── Customers ────────────────────────────────────────────────────────────────
+function Customers({ customers, setCustomers, jobs, invoices, setView }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", notes: "" });
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const save = () => {
+    if (!form.name) return;
+    if (editing) {
+      setCustomers(prev => prev.map(c => c.id === selected.id ? { ...c, ...form } : c));
+      setSelected({ ...selected, ...form });
+      setEditing(false);
+    } else {
+      const c = { ...form, id: Date.now() };
+      setCustomers(prev => [...prev, c]);
+      setShowAdd(false);
+      setForm({ name: "", phone: "", email: "", address: "", notes: "" });
+    }
+  };
+
+  const del = (id) => { setCustomers(prev => prev.filter(c => c.id !== id)); setSelected(null); };
+
+  const filtered = customers.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.email || "").toLowerCase().includes(search.toLowerCase()) ||
+    (c.phone || "").includes(search)
+  );
+
+  const jobsForCustomer = (name) => jobs.filter(j => j.customer?.toLowerCase() === name?.toLowerCase());
+  const invoicesForCustomer = (name) => invoices.filter(i => i.customer?.toLowerCase() === name?.toLowerCase());
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>Customers</div>
+        <button style={S.btn("primary")} onClick={() => { setForm({ name: "", phone: "", email: "", address: "", notes: "" }); setShowAdd(true); }}>+ Add Customer</button>
+      </div>
+
+      {/* Search */}
+      <input
+        style={S.input}
+        placeholder="Search by name, email or phone..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+      />
+
+      {/* Customer list */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>All Customers ({customers.length})</div>
+        {customers.length === 0
+          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No customers yet. Add one above or they'll be added automatically when you book jobs via the AI Assistant.</div>
+          : filtered.length === 0
+          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No customers match your search.</div>
+          : filtered.map(c => {
+            const cJobs = jobsForCustomer(c.name);
+            const cInvoices = invoicesForCustomer(c.name);
+            const totalSpend = cInvoices.reduce((s, i) => s + (i.amount || 0), 0);
+            return (
+              <div key={c.id} onClick={() => setSelected(c)} style={{ ...S.row, cursor: "pointer" }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.amber + "22", border: `1px solid ${C.amber}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: C.amber, flexShrink: 0 }}>
+                  {c.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>
+                    {[c.phone, c.email].filter(Boolean).join(" · ") || "No contact details"}
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, textAlign: "right", flexShrink: 0 }}>
+                  {cJobs.length > 0 && <div>{cJobs.length} job{cJobs.length !== 1 ? "s" : ""}</div>}
+                  {totalSpend > 0 && <div style={{ color: C.amber }}>£{totalSpend.toLocaleString()}</div>}
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginLeft: 10 }}>→</div>
+              </div>
+            );
+          })
+        }
+      </div>
+
+      {/* Customer Detail Modal */}
+      {selected && !editing && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelected(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 500, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.amber + "22", border: `1px solid ${C.amber}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: C.amber, flexShrink: 0 }}>
+                  {selected.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontSize: 17, fontWeight: 700 }}>{selected.name}</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{selected.address || "No address"}</div>
+                </div>
+              </div>
+              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+
+            {/* Contact details */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Phone</div>
+                {selected.phone
+                  ? <a href={`tel:${selected.phone.replace(/\s/g, "")}`} style={{ fontSize: 13, color: C.amber, textDecoration: "none", fontFamily: "'DM Mono',monospace" }}>📞 {selected.phone}</a>
+                  : <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>Not set</div>}
+              </div>
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Email</div>
+                {selected.email
+                  ? <a href={`mailto:${selected.email}`} style={{ fontSize: 12, color: C.blue, textDecoration: "none", wordBreak: "break-all" }}>✉ {selected.email}</a>
+                  : <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>Not set</div>}
+              </div>
+            </div>
+
+            {/* Notes */}
+            {selected.notes && (
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, marginBottom: 16 }}>
+                <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Notes</div>
+                <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{selected.notes}</div>
+              </div>
+            )}
+
+            {/* Job history */}
+            {jobsForCustomer(selected.name).length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 10 }}>Job History</div>
+                {jobsForCustomer(selected.name).map(j => (
+                  <div key={j.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>
+                    <span style={{ color: C.text }}>{j.type}</span>
+                    <span style={{ color: C.muted }}>{j.dateObj ? new Date(j.dateObj).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : j.date}</span>
+                    {j.value > 0 && <span style={{ color: C.amber }}>£{j.value}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Invoice history */}
+            {invoicesForCustomer(selected.name).length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 10 }}>Invoice History</div>
+                {invoicesForCustomer(selected.name).map(i => (
+                  <div key={i.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>
+                    <span style={{ color: C.muted }}>{i.id}</span>
+                    <span style={{ color: C.text }}>£{i.amount}</span>
+                    <span style={S.badge(statusColor[i.status] || C.muted)}>{statusLabel[i.status] || i.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button style={S.btn("primary")} onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}>Edit</button>
+              {selected.phone && <a href={`tel:${selected.phone.replace(/\s/g, "")}`} style={{ ...S.btn("ghost"), textDecoration: "none" }}>📞 Call</a>}
+              {selected.email && <a href={`mailto:${selected.email}`} style={{ ...S.btn("ghost"), textDecoration: "none" }}>✉ Email</a>}
+              <button style={{ ...S.btn("ghost"), color: C.red, marginLeft: "auto" }} onClick={() => del(selected.id)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {selected && editing && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Customer</div>
+              <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <CustomerForm form={form} set={set} onSave={save} onCancel={() => setEditing(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* Add Modal */}
+      {showAdd && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Customer</div>
+              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <CustomerForm form={form} set={set} onSave={save} onCancel={() => setShowAdd(false)} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CustomerForm({ form, set, onSave, onCancel }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {[
+        { k: "name", l: "Full Name", p: "e.g. John Smith", required: true },
+        { k: "phone", l: "Phone Number", p: "e.g. 07700 900123" },
+        { k: "email", l: "Email Address", p: "e.g. john@email.com" },
+        { k: "address", l: "Address", p: "e.g. 5 High Street, Guildford, GU1 3AA" },
+      ].map(({ k, l, p, required }) => (
+        <div key={k}>
+          <label style={S.label}>{l}{required && <span style={{ color: C.red }}> *</span>}</label>
+          <input style={S.input} placeholder={p} value={form[k]} onChange={set(k)} />
+        </div>
+      ))}
+      <div>
+        <label style={S.label}>Notes</label>
+        <textarea style={{ ...S.input, resize: "vertical", minHeight: 72 }} placeholder="e.g. Prefers morning appointments, gate code 1234..." value={form.notes} onChange={set("notes")} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button style={S.btn("primary", !form.name)} disabled={!form.name} onClick={onSave}>Save →</button>
+        <button style={S.btn("ghost")} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+const VIEWS = ["Dashboard", "Schedule", "Customers", "Materials", "AI Assistant", "Reminders", "Payments", "Settings"];
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -2080,9 +2824,11 @@ export default function App() {
     return { ...j, dateObj: d.toISOString() };
   }));
 
-  // Invoices and enquiries lifted to root so AI can write to them
+  // Invoices, enquiries, materials and customers lifted to root so AI can write to them
   const [invoices, setInvoices] = useState(INVOICES_INIT);
   const [enquiries, setEnquiries] = useState(ENQUIRIES);
+  const [materials, setMaterials] = useState([]);
+  const [customers, setCustomers] = useState([]);
 
   // Watch for reminders that just became due
   useEffect(() => {
@@ -2152,12 +2898,13 @@ export default function App() {
         </div>
       </header>
       <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24 }}>
-        {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} />}
-        {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} />}
-        {view === "Materials" && <Materials />}
-        {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} onAddReminder={add} setView={setView} />}
+        {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} />}
+        {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
+        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} />}
+        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} />}
+        {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
-        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} />}
+        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} />}
         {view === "Settings" && <Settings brand={brand} setBrand={setBrand} />}
       </main>
     </div>
