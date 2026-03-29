@@ -1,7 +1,5 @@
 {
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs20.x"
-    }
-  }
+  "buildCommand": "cd trade-pa && npm install && npm run build",
+  "outputDirectory": "trade-pa/dist",
+  "installCommand": "cd trade-pa && npm install"
 }
