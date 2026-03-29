@@ -2264,12 +2264,44 @@ function InvoiceModal({ brand, onClose, onSent }) {
 }
 
 // ─── Reminders ────────────────────────────────────────────────────────────────
-function useReminders() {
-  const [reminders, setReminders] = useState([]);
+function useReminders(userId) {
+  const [reminders, setRemindersRaw] = useState([]);
 
-  const add = (reminder) => setReminders(prev => [reminder, ...prev]);
-  const dismiss = (id) => setReminders(prev => prev.map(r => r.id === id ? { ...r, done: true } : r));
-  const remove = (id) => setReminders(prev => prev.filter(r => r.id !== id));
+  // Load from localStorage once userId is known
+  useEffect(() => {
+    if (!userId) return;
+    try {
+      const saved = localStorage.getItem(`trade-pa-reminders-${userId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Only restore reminders that haven't fired yet or are completed
+        const valid = parsed.filter(r => r.done || r.time > Date.now() - 1000 * 60 * 60);
+        setRemindersRaw(valid);
+      }
+    } catch {}
+  }, [userId]);
+
+  const persist = (next) => {
+    if (userId) {
+      try { localStorage.setItem(`trade-pa-reminders-${userId}`, JSON.stringify(next)); } catch {}
+    }
+  };
+
+  const add = (reminder) => setRemindersRaw(prev => {
+    const next = [reminder, ...prev];
+    persist(next);
+    return next;
+  });
+  const dismiss = (id) => setRemindersRaw(prev => {
+    const next = prev.map(r => r.id === id ? { ...r, done: true } : r);
+    persist(next);
+    return next;
+  });
+  const remove = (id) => setRemindersRaw(prev => {
+    const next = prev.filter(r => r.id !== id);
+    persist(next);
+    return next;
+  });
 
   return { reminders, add, dismiss, remove };
 }
@@ -2768,7 +2800,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [view, setView] = useState("Dashboard");
   const [brand, setBrand] = useState(DEFAULT_BRAND);
-  const { reminders, add, dismiss, remove } = useReminders();
+  const { reminders, add, dismiss, remove } = useReminders(user?.id);
   const [dueNow, setDueNow] = useState([]);
   const [bellFlash, setBellFlash] = useState(false);
   const now = Date.now();
@@ -2785,19 +2817,17 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load brand settings from localStorage keyed to user
+  // Load brand settings from localStorage (brand is small, localStorage is fine)
   useEffect(() => {
     if (!user) return;
     const saved = localStorage.getItem(`trade-pa-brand-${user.id}`);
     if (saved) setBrand(JSON.parse(saved));
     else {
-      // Pre-fill name from their signup
       const name = user.user_metadata?.full_name;
       if (name) setBrand(b => ({ ...b, tradingName: `${name}'s Trades` }));
     }
   }, [user]);
 
-  // Save brand settings whenever they change
   useEffect(() => {
     if (!user) return;
     localStorage.setItem(`trade-pa-brand-${user.id}`, JSON.stringify(brand));
@@ -2805,30 +2835,159 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setView("Dashboard");
+    setJobsRaw([]); setInvoicesRaw([]); setEnquiriesRaw([]);
+    setMaterialsRaw([]); setCustomersRaw([]);
+    setUser(null); setView("Dashboard");
   };
 
-  // Jobs with real dates
-  const [jobs, setJobs] = useState(() => JOBS.map(j => {
-    const today = new Date(); today.setHours(0,0,0,0);
-    const map = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4 };
-    const dayKey = j.date.split(" ")[0];
-    const timeStr = j.date.split(" ")[1] || "09:00";
-    const offset = map[dayKey] ?? 0;
-    const weekStart = getWeekStart(today);
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + offset);
-    const [h, m] = timeStr.split(":");
-    d.setHours(parseInt(h) || 9, parseInt(m) || 0);
-    return { ...j, dateObj: d.toISOString() };
-  }));
+  // ── State declarations ────────────────────────────────────────────────────
+  const [jobs, setJobsRaw] = useState([]);
+  const [invoices, setInvoicesRaw] = useState([]);
+  const [enquiries, setEnquiriesRaw] = useState([]);
+  const [materials, setMaterialsRaw] = useState([]);
+  const [customers, setCustomersRaw] = useState([]);
+  const [dbLoading, setDbLoading] = useState(false);
 
-  // Invoices, enquiries, materials and customers lifted to root so AI can write to them
-  const [invoices, setInvoices] = useState(INVOICES_INIT);
-  const [enquiries, setEnquiries] = useState(ENQUIRIES);
-  const [materials, setMaterials] = useState([]);
-  const [customers, setCustomers] = useState([]);
+  // ── Load all data from Supabase on login ──────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const fetchAll = async () => {
+      setDbLoading(true);
+      try {
+        const uid = user.id;
+        const [j, inv, enq, mat, cust] = await Promise.all([
+          supabase.from("jobs").select("*").eq("user_id", uid).order("date_obj", { ascending: true }),
+          supabase.from("invoices").select("*").eq("user_id", uid).order("created_at", { ascending: false }),
+          supabase.from("enquiries").select("*").eq("user_id", uid).order("created_at", { ascending: false }),
+          supabase.from("materials").select("*").eq("user_id", uid).order("created_at", { ascending: true }),
+          supabase.from("customers").select("*").eq("user_id", uid).order("name", { ascending: true }),
+        ]);
+        if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj, id: r.id })));
+        if (inv.data) setInvoicesRaw(inv.data.map(r => ({ ...r, vatEnabled: r.vat_enabled, vatRate: r.vat_rate })));
+        if (enq.data) setEnquiriesRaw(enq.data);
+        if (mat.data) setMaterialsRaw(mat.data);
+        if (cust.data) setCustomersRaw(cust.data);
+      } catch (e) { console.error("DB load error:", e); }
+      setDbLoading(false);
+    };
+    fetchAll();
+  }, [user?.id]);
+
+  // ── Supabase-backed setters ───────────────────────────────────────────────
+  const setJobs = async (updater) => {
+    setJobsRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      // Sync to Supabase in background
+      (async () => {
+        try {
+          const prevIds = new Set(prev.map(j => String(j.id)));
+          const nextIds = new Set(next.map(j => String(j.id)));
+          // Deleted jobs
+          for (const id of prevIds) {
+            if (!nextIds.has(id)) await supabase.from("jobs").delete().eq("id", id).eq("user_id", user.id);
+          }
+          // New or updated jobs
+          for (const job of next) {
+            if (!prevIds.has(String(job.id)) || JSON.stringify(prev.find(j => String(j.id) === String(job.id))) !== JSON.stringify(job)) {
+              await supabase.from("jobs").upsert({
+                id: String(job.id), user_id: user.id, customer: job.customer, address: job.address,
+                type: job.type, date: job.date, date_obj: job.dateObj || job.date_obj,
+                status: job.status, value: job.value || 0, notes: job.notes || "",
+              });
+            }
+          }
+        } catch (e) { console.error("Jobs sync error:", e); }
+      })();
+      return next;
+    });
+  };
+
+  const setInvoices = async (updater) => {
+    setInvoicesRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      (async () => {
+        try {
+          const prevIds = new Set(prev.map(i => i.id));
+          const nextIds = new Set(next.map(i => i.id));
+          for (const id of prevIds) {
+            if (!nextIds.has(id)) await supabase.from("invoices").delete().eq("id", id).eq("user_id", user.id);
+          }
+          for (const inv of next) {
+            if (!prevIds.has(inv.id) || JSON.stringify(prev.find(i => i.id === inv.id)) !== JSON.stringify(inv)) {
+              await supabase.from("invoices").upsert({
+                id: inv.id, user_id: user.id, customer: inv.customer, amount: inv.amount || 0,
+                due: inv.due, status: inv.status, description: inv.description || "",
+                vat_enabled: inv.vatEnabled || false, vat_rate: inv.vatRate || 20,
+                payment_method: inv.paymentMethod || "both",
+              });
+            }
+          }
+        } catch (e) { console.error("Invoices sync error:", e); }
+      })();
+      return next;
+    });
+  };
+
+  const setEnquiries = async (updater) => {
+    setEnquiriesRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      (async () => {
+        try {
+          // Simplest approach: delete all and reinsert (enquiries are low volume)
+          await supabase.from("enquiries").delete().eq("user_id", user.id);
+          if (next.length > 0) {
+            await supabase.from("enquiries").insert(
+              next.map(e => ({ user_id: user.id, name: e.name, source: e.source, msg: e.msg, time: e.time, urgent: e.urgent || false }))
+            );
+          }
+        } catch (e) { console.error("Enquiries sync error:", e); }
+      })();
+      return next;
+    });
+  };
+
+  const setMaterials = async (updater) => {
+    setMaterialsRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      (async () => {
+        try {
+          await supabase.from("materials").delete().eq("user_id", user.id);
+          if (next.length > 0) {
+            await supabase.from("materials").insert(
+              next.map(m => ({ user_id: user.id, item: m.item, qty: m.qty || 1, supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" }))
+            );
+          }
+        } catch (e) { console.error("Materials sync error:", e); }
+      })();
+      return next;
+    });
+  };
+
+  const setCustomers = async (updater) => {
+    setCustomersRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      (async () => {
+        try {
+          const prevIds = new Set(prev.map(c => c.id));
+          const nextIds = new Set(next.map(c => c.id));
+          for (const id of prevIds) {
+            if (!nextIds.has(id)) await supabase.from("customers").delete().eq("id", id).eq("user_id", user.id);
+          }
+          for (const c of next) {
+            if (!prevIds.has(c.id) || JSON.stringify(prev.find(x => x.id === c.id)) !== JSON.stringify(c)) {
+              if (String(c.id).length > 10) {
+                // New customer — insert without id (let DB assign)
+                await supabase.from("customers").insert({ user_id: user.id, name: c.name, phone: c.phone || "", email: c.email || "", address: c.address || "", notes: c.notes || "" });
+              } else {
+                await supabase.from("customers").upsert({ id: c.id, user_id: user.id, name: c.name, phone: c.phone || "", email: c.email || "", address: c.address || "", notes: c.notes || "" });
+              }
+            }
+          }
+        } catch (e) { console.error("Customers sync error:", e); }
+      })();
+      return next;
+    });
+  };
 
   // Watch for reminders that just became due
   useEffect(() => {
@@ -2857,6 +3016,15 @@ export default function App() {
   );
 
   if (!user) return <AuthScreen onAuth={setUser} />;
+
+  if (dbLoading) return (
+    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13, gap: 12 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&display=swap');`}</style>
+      <div style={{ fontSize: 28 }}>⚡</div>
+      <div style={{ color: "#f59e0b", fontWeight: 700 }}>TRADE PA</div>
+      <div>Loading your data...</div>
+    </div>
+  );
 
   return (
     <div style={S.app}>
