@@ -2144,7 +2144,7 @@ Rules:
           "anthropic-dangerous-direct-browser-access": "true",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 1000,
           system: SYSTEM,
           tools: TOOLS,
@@ -2153,11 +2153,26 @@ Rules:
       });
 
       const data = await res.json();
+
+      // Surface API errors clearly
+      if (data.error) {
+        console.error("API error:", data.error);
+        setMessages(prev => [...prev, { role: "assistant", content: `API Error: ${data.error.message || JSON.stringify(data.error)}` }]);
+        setLoading(false);
+        return;
+      }
+
+      if (!data.content || data.content.length === 0) {
+        console.error("Empty response:", data);
+        setMessages(prev => [...prev, { role: "assistant", content: `No response received. Stop reason: ${data.stop_reason || "unknown"}` }]);
+        setLoading(false);
+        return;
+      }
+
       let replyText = "";
       const toolResults = [];
 
-      // Process response — may contain text and/or tool use blocks
-      for (const block of (data.content || [])) {
+      for (const block of data.content) {
         if (block.type === "text") {
           replyText += block.text;
         } else if (block.type === "tool_use") {
@@ -2166,12 +2181,12 @@ Rules:
         }
       }
 
-      // If tool was used but no text, use tool result as reply
       const finalReply = replyText || toolResults.join("\n") || "Done.";
       setMessages(prev => [...prev, { role: "assistant", content: finalReply }]);
 
     } catch (e) {
-      setMessages(prev => [...prev, { role: "assistant", content: "Connection error — please try again." }]);
+      console.error("AI send error:", e);
+      setMessages(prev => [...prev, { role: "assistant", content: `Connection error: ${e.message}. Check your internet connection and try again.` }]);
     }
     setLoading(false);
   };
@@ -2889,7 +2904,7 @@ Rules:
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 200,
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: text }],
