@@ -1,7 +1,7 @@
 export default function handler(req, res) {
   const clientId = process.env.XERO_CLIENT_ID;
   const redirectUri = process.env.XERO_REDIRECT_URI;
-  const scope = 'openid profile email accounting.transactions accounting.contacts offline_access';
+  const scope = 'openid profile email accounting.invoices accounting.contacts offline_access';
   const state = req.query.userId || 'unknown';
 
   const url = new URL('https://login.xero.com/identity/connect/authorize');
