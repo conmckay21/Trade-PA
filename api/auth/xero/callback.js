@@ -1,15 +1,15 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+export const config = { runtime: 'nodejs20.x' };
 
 export default async function handler(req, res) {
   const { code, state: userId, error } = req.query;
+  const APP_URL = process.env.APP_URL || 'https://trade-pa-id3s.vercel.app';
 
   if (error) {
-    return res.redirect(`${process.env.APP_URL}/settings?xero=error&msg=${error}`);
+    return res.redirect(`${APP_URL}/?xero=error&msg=${encodeURIComponent(error)}`);
+  }
+
+  if (!code) {
+    return res.redirect(`${APP_URL}/?xero=error&msg=no_code`);
   }
 
   try {
@@ -22,31 +22,49 @@ export default async function handler(req, res) {
         redirect_uri: process.env.XERO_REDIRECT_URI,
         client_id: process.env.XERO_CLIENT_ID,
         client_secret: process.env.XERO_CLIENT_SECRET,
-      }),
+      }).toString(),
     });
 
     const tokens = await tokenRes.json();
-    if (!tokens.access_token) throw new Error('No access token received');
+
+    if (!tokens.access_token) {
+      throw new Error(`Token exchange failed: ${JSON.stringify(tokens)}`);
+    }
 
     const tenantsRes = await fetch('https://api.xero.com/connections', {
-      headers: { Authorization: `Bearer ${tokens.access_token}` },
+      headers: { 
+        Authorization: `Bearer ${tokens.access_token}`,
+        'Content-Type': 'application/json',
+      },
     });
     const tenants = await tenantsRes.json();
-    const tenantId = tenants[0]?.tenantId;
+    const tenantId = Array.isArray(tenants) ? tenants[0]?.tenantId : null;
 
-    await supabase.from('accounting_connections').upsert({
-      user_id: userId,
-      provider: 'xero',
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      tenant_id: tenantId,
-      expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,provider' });
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 
-    res.redirect(`${process.env.APP_URL}/settings?xero=connected`);
+    await fetch(`${supabaseUrl}/rest/v1/accounting_connections`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Prefer': 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        provider: 'xero',
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        tenant_id: tenantId,
+        expires_at: new Date(Date.now() + (tokens.expires_in || 1800) * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+      }),
+    });
+
+    res.redirect(`${APP_URL}/?xero=connected`);
   } catch (err) {
-    console.error('Xero callback error:', err);
-    res.redirect(`${process.env.APP_URL}/settings?xero=error&msg=${encodeURIComponent(err.message)}`);
+    console.error('Xero callback error:', err.message);
+    res.redirect(`${APP_URL}/?xero=error&msg=${encodeURIComponent(err.message)}`);
   }
 }
