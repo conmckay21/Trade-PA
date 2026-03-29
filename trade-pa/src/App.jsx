@@ -1069,9 +1069,9 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
           <div style={S.sectionTitle}>Invoice Pipeline</div>
           <button style={S.btn("ghost")} onClick={() => setView("Payments")}>Manage →</button>
         </div>
-        {invoices.length === 0
+        {invoices.filter(i => !i.isQuote).length === 0
           ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No invoices yet — create one in Payments or via the AI Assistant.</div>
-          : invoices.slice(0, 5).map(inv => (
+          : invoices.filter(i => !i.isQuote).slice(0, 4).map(inv => (
             <div key={inv.id} style={S.row}>
               <div style={{ fontSize: 12, color: C.muted, width: 70, flexShrink: 0 }}>{inv.id}</div>
               <div style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</span></div>
@@ -1085,6 +1085,27 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
           ))
         }
       </div>
+
+      {invoices.filter(i => i.isQuote).length > 0 && (
+        <div style={S.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={S.sectionTitle}>Quotes ({invoices.filter(i => i.isQuote).length})</div>
+            <button style={S.btn("ghost")} onClick={() => setView("Payments")}>Manage →</button>
+          </div>
+          {invoices.filter(i => i.isQuote).slice(0, 4).map(q => (
+            <div key={q.id} style={S.row}>
+              <div style={{ fontSize: 12, color: C.blue, width: 70, flexShrink: 0 }}>{q.id}</div>
+              <div style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</span></div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 12, flexShrink: 0 }}>£{q.amount}</div>
+              <div style={{ flexShrink: 0, textAlign: "right", marginRight: 10 }}>
+                <div style={S.badge(C.blue)}>Quote</div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{q.due}</div>
+              </div>
+              <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }} onClick={() => downloadInvoicePDF(brand, q)}>⬇ PDF</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Empty state call to action */}
       {jobs.length === 0 && invoices.length === 0 && enquiries.length === 0 && (
@@ -1644,7 +1665,14 @@ function Materials({ materials, setMaterials }) {
 }
 
 function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView }) {
-  const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can create and delete data across the whole app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Save John Smith's number as 07700 900123, email john@email.com"\n• "Invoice Sarah Chen £85 for leak repair"\n• "Log enquiry from Kevin Nash, WhatsApp, wants boiler fixed"\n• "Remind me to call Emma at 3pm"\n• "Add 10 lengths of 22mm copper pipe to materials"\n\nOr hold 🎙 and speak naturally.` }]);
+  const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can create and delete data across the whole app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Quote Sarah Chen £450 for a new bathroom"\n• "Invoice Kevin Nash £85 for leak repair"\n• "Save John's number as 07700 900123"\n• "Remind me to call Emma at 3pm"\n• "Add 10 lengths of 22mm copper pipe to materials"\n\nOr tap 🎙 and speak naturally.` }]);
+  
+  const quick = [
+    "Quote Sarah Chen £450 for new bathroom — supply and fit",
+    "Invoice John Smith £120 for boiler service",
+    "Book in Dave, 5 Park Road, boiler repair, Friday 9am",
+    "Remind me to chase Sarah Chen quote in 3 days",
+  ];
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState(null);
@@ -1689,7 +1717,20 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
       },
     },
     {
-      name: "log_enquiry",
+      name: "create_quote",
+      description: "Create a price quote for a customer. Use when the user mentions quoting, giving a price, or sending an estimate.",
+      input_schema: {
+        type: "object",
+        properties: {
+          customer: { type: "string", description: "Customer full name" },
+          amount: { type: "number", description: "Quote amount in pounds" },
+          description: { type: "string", description: "What the work involves" },
+          valid_days: { type: "number", description: "Days quote is valid for, default 30" },
+        },
+        required: ["customer", "amount", "description"],
+      },
+    },
+    {
       description: "Log a new customer enquiry. Use when someone has contacted the tradesperson asking about work.",
       input_schema: {
         type: "object",
@@ -1826,6 +1867,21 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         setInvoices(prev => [inv, ...prev]);
         setLastAction({ type: "invoice", label: `${id} — £${input.amount} — ${input.customer}`, view: "Payments" });
         return `Invoice ${id} created for ${input.customer} — £${input.amount} for ${input.description}.`;
+      }
+      case "create_quote": {
+        const id = `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
+        const quote = {
+          id,
+          customer: input.customer,
+          amount: input.amount,
+          due: `Valid for ${input.valid_days || 30} days`,
+          status: "sent",
+          description: input.description,
+          isQuote: true,
+        };
+        setInvoices(prev => [quote, ...prev]);
+        setLastAction({ type: "invoice", label: `${id} — £${input.amount} — ${input.customer}`, view: "Payments" });
+        return `Quote ${id} created for ${input.customer} — £${input.amount} for ${input.description}. Valid for ${input.valid_days || 30} days.`;
       }
       case "log_enquiry": {
         const enq = {
@@ -1973,13 +2029,6 @@ After using a tool, confirm what you did in 1-2 sentences. Be concise. Use £ no
 
   const micLabel = transcribing ? "⏳ Transcribing..." : recording ? "⏹ Tap to stop" : "🎙 Voice note";
 
-  const quick = [
-    "Book in John Smith, 14 Park Road Guildford, boiler service, Friday 10am, £120",
-    "Invoice Sarah Chen £85 for leak repair",
-    "Delete the job for John Smith",
-    "Remove invoice for Sarah Chen",
-  ];
-
   const actionIcons = { job: "📅", invoice: "💰", enquiry: "📩", reminder: "🔔", material: "🔧" };
 
   return (
@@ -2049,16 +2098,33 @@ After using a tool, confirm what you did in 1-2 sentences. Be concise. Use £ no
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
-function Payments({ brand }) {
+function Payments({ brand, invoices, setInvoices, customers }) {
   const [connected, setConnected] = useState(false);
   const [stage, setStage] = useState(0);
-  const [invoices, setInvoices] = useState(INVOICES_INIT);
-  const [showModal, setShowModal] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [bankVerified, setBankVerified] = useState(false);
   const [verifyStep, setVerifyStep] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [payout, setPayout] = useState("Daily");
   const [bizType, setBizType] = useState("sole_trader");
+  const [docType, setDocType] = useState("invoices"); // "invoices" | "quotes"
+  const [selected, setSelected] = useState(null);
+
+  const allInvoices = invoices.filter(i => !i.isQuote);
+  const allQuotes = invoices.filter(i => i.isQuote);
+  const shown = docType === "invoices" ? allInvoices : allQuotes;
+
+  const updateStatus = (id, status) => {
+    setInvoices(prev => prev.map(i => i.id === id ? { ...i, status, due: status === "paid" ? "Paid" : i.due } : i));
+    if (selected?.id === id) setSelected(s => ({ ...s, status, due: status === "paid" ? "Paid" : s.due }));
+  };
+  const convertToInvoice = (quote) => {
+    const inv = { ...quote, isQuote: false, id: `INV-${String(Math.floor(Math.random() * 900) + 100)}`, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
+    setInvoices(prev => [inv, ...prev.filter(i => i.id !== quote.id)]);
+    setSelected(null);
+    setDocType("invoices");
+  };
 
   if (!connected) return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -2075,155 +2141,267 @@ function Payments({ brand }) {
           ))}
         </div>
       )}
-
       {stage === 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ ...S.card, borderColor: C.purple + "44", background: "linear-gradient(135deg,#1a1a2e 0%,#1a1a1a 100%)" }}>
+          <div style={{ ...S.card, borderColor: C.purple + "44" }}>
             <div style={{ display: "flex", gap: 20 }}>
               <div style={{ fontSize: 44 }}>💳</div>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Connect Stripe to get paid</div>
-                <div style={{ fontSize: 13, color: C.textDim, lineHeight: 1.7, marginBottom: 20 }}>Customers pay invoices online. Money goes straight to your bank — TradeBase never touches it.</div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button style={S.btn("stripe")} onClick={() => setStage(1)}><span style={{ fontWeight: 900 }}>S</span> Connect with Stripe</button>
-                </div>
+                <div style={{ fontSize: 13, color: C.textDim, lineHeight: 1.7, marginBottom: 20 }}>Customers pay invoices online. Money goes straight to your bank.</div>
+                <button style={S.btn("stripe")} onClick={() => setStage(1)}><span style={{ fontWeight: 900 }}>S</span> Connect with Stripe</button>
               </div>
             </div>
           </div>
           <div style={S.grid3}>
-            {[{ icon: "🔒", t: "Your money, your bank", d: "Funds go directly to your Stripe account. TradeBase has zero access." }, { icon: "⚡", t: "Instant payment links", d: "Every invoice gets a pay link. Customers pay by card in seconds." }, { icon: "📊", t: "Auto reconciliation", d: "Invoice marks paid automatically when customer pays." }].map((f, i) => (
+            {[{ icon: "🔒", t: "Your money, your bank", d: "Funds go directly to your Stripe account." }, { icon: "⚡", t: "Instant payment links", d: "Every invoice gets a pay link. Customers pay in seconds." }, { icon: "📊", t: "Auto reconciliation", d: "Invoice marks paid automatically when customer pays." }].map((f, i) => (
               <div key={i} style={S.card}><div style={{ fontSize: 28, marginBottom: 10 }}>{f.icon}</div><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{f.t}</div><div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>{f.d}</div></div>
             ))}
           </div>
         </div>
       )}
-
-      {stage === 1 && (
-        <div style={{ ...S.card, textAlign: "center", padding: 48 }}>
-          <div style={{ fontSize: 48, marginBottom: 16, fontWeight: 900, color: "#635bff" }}>S</div>
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Redirecting to Stripe</div>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 24 }}>In production, you'd be sent to Stripe's secure OAuth page. For this demo we simulate the authorisation.</div>
-          <button style={S.btn("stripe")} onClick={() => setStage(2)}>Simulate Stripe Authorisation ✓</button>
-        </div>
-      )}
-
-      {stage === 2 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Business Details</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            {[{ l: "Trading Name", v: brand.tradingName }, { l: "Legal Name", v: "David Hughes" }, { l: "Mobile", v: brand.phone }, { l: "Email", v: brand.email }, { l: "VAT Number", v: brand.vatNumber || "" }, { l: "Address", v: brand.address }].map(({ l, v }) => (
-              <div key={l}><label style={S.label}>{l}</label><input style={S.input} defaultValue={v} /></div>
-            ))}
-          </div>
-          <div><label style={S.label}>Business Type</label>
-            <div style={{ display: "flex", gap: 10 }}>
-              {[["sole_trader", "Sole Trader"], ["limited_company", "Ltd Company"], ["partnership", "Partnership"]].map(([k, label]) => (
-                <button key={k} onClick={() => setBizType(k)} style={S.pill(brand.accentColor, bizType === k)}>{label}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}><button style={S.btn("primary")} onClick={() => setStage(3)}>Continue →</button></div>
-        </div>
-      )}
-
-      {stage === 3 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Bank Account for Payouts</div>
-          <div style={{ ...S.card, background: C.surfaceHigh }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-              {[{ l: "Sort Code", v: brand.sortCode }, { l: "Account Number", v: brand.accountNumber }, { l: "Account Name", v: brand.accountName }].map(({ l, v }) => (
-                <div key={l}><label style={S.label}>{l}</label><input style={S.input} defaultValue={v} /></div>
-              ))}
-            </div>
-            <div style={{ marginTop: 14 }}>
-              {!bankVerified ? <button style={S.btn("ghost")} onClick={() => setTimeout(() => setBankVerified(true), 1000)}>Verify Bank Account</button>
-                : <div style={S.badge(C.green)}>✓ Bank verified</div>}
-            </div>
-          </div>
-          <div style={S.card}>
-            <label style={S.label}>Payout Schedule</label>
-            <div style={{ display: "flex", gap: 10 }}>
-              {["Daily", "Weekly", "Monthly"].map(p => <button key={p} onClick={() => setPayout(p)} style={S.pill(brand.accentColor, payout === p)}>{p}</button>)}
-            </div>
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}><button style={S.btn("primary", !bankVerified)} disabled={!bankVerified} onClick={() => setStage(4)}>Continue →</button></div>
-        </div>
-      )}
-
-      {stage === 4 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Identity Verification</div>
-          {[{ t: "Photo ID", d: "Passport, driving licence, or national ID", icon: "🪪" }, { t: "Selfie with ID", d: "A photo of you holding your ID", icon: "🤳" }, { t: "Proof of Address", d: "Bank statement or utility bill (last 3 months)", icon: "📄" }].map((item, i) => (
-            <div key={i} style={{ ...S.card, display: "flex", alignItems: "center", gap: 16, borderColor: verifyStep > i ? C.green + "44" : C.border, background: verifyStep > i ? C.green + "08" : C.surface }}>
-              <div style={{ fontSize: 28 }}>{item.icon}</div>
-              <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700 }}>{item.t}</div><div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{item.d}</div></div>
-              {verifyStep > i ? <div style={S.badge(C.green)}>✓ Uploaded</div>
-                : verifyStep === i ? <button style={S.btn(uploading ? "ghost" : "primary")} onClick={() => { setUploading(true); setTimeout(() => { setUploading(false); setVerifyStep(s => s + 1); }, 1400); }} disabled={uploading}>{uploading ? "Uploading..." : "Upload →"}</button>
-                : <div style={{ fontSize: 11, color: C.muted }}>Waiting</div>}
-            </div>
-          ))}
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button style={S.btn("primary", verifyStep < 3)} disabled={verifyStep < 3} onClick={() => setConnected(true)}>Submit & Connect →</button>
-          </div>
-        </div>
-      )}
+      {stage === 1 && (<div style={{ ...S.card, textAlign: "center", padding: 48 }}><div style={{ fontSize: 48, marginBottom: 16, fontWeight: 900, color: "#635bff" }}>S</div><div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Redirecting to Stripe</div><div style={{ fontSize: 12, color: C.muted, marginBottom: 24 }}>In production, you'd be sent to Stripe's secure OAuth page.</div><button style={S.btn("stripe")} onClick={() => setStage(2)}>Simulate Stripe Authorisation ✓</button></div>)}
+      {stage === 2 && (<div style={{ display: "flex", flexDirection: "column", gap: 20 }}><div style={{ fontSize: 15, fontWeight: 700 }}>Business Details</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>{[{ l: "Trading Name", v: brand.tradingName }, { l: "Legal Name", v: "" }, { l: "Mobile", v: brand.phone }, { l: "Email", v: brand.email }, { l: "VAT Number", v: brand.vatNumber || "" }, { l: "Address", v: brand.address }].map(({ l, v }) => (<div key={l}><label style={S.label}>{l}</label><input style={S.input} defaultValue={v} /></div>))}</div><div><label style={S.label}>Business Type</label><div style={{ display: "flex", gap: 10 }}>{[["sole_trader", "Sole Trader"], ["limited_company", "Ltd Company"], ["partnership", "Partnership"]].map(([k, label]) => (<button key={k} onClick={() => setBizType(k)} style={S.pill(brand.accentColor, bizType === k)}>{label}</button>))}</div></div><div style={{ display: "flex", justifyContent: "flex-end" }}><button style={S.btn("primary")} onClick={() => setStage(3)}>Continue →</button></div></div>)}
+      {stage === 3 && (<div style={{ display: "flex", flexDirection: "column", gap: 20 }}><div style={{ fontSize: 15, fontWeight: 700 }}>Bank Account for Payouts</div><div style={{ ...S.card, background: C.surfaceHigh }}><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>{[{ l: "Sort Code", v: brand.sortCode }, { l: "Account Number", v: brand.accountNumber }, { l: "Account Name", v: brand.accountName }].map(({ l, v }) => (<div key={l}><label style={S.label}>{l}</label><input style={S.input} defaultValue={v} /></div>))}</div><div style={{ marginTop: 14 }}>{!bankVerified ? <button style={S.btn("ghost")} onClick={() => setTimeout(() => setBankVerified(true), 1000)}>Verify Bank Account</button> : <div style={S.badge(C.green)}>✓ Bank verified</div>}</div></div><div style={S.card}><label style={S.label}>Payout Schedule</label><div style={{ display: "flex", gap: 10 }}>{["Daily", "Weekly", "Monthly"].map(p => <button key={p} onClick={() => setPayout(p)} style={S.pill(brand.accentColor, payout === p)}>{p}</button>)}</div></div><div style={{ display: "flex", justifyContent: "flex-end" }}><button style={S.btn("primary", !bankVerified)} disabled={!bankVerified} onClick={() => setStage(4)}>Continue →</button></div></div>)}
+      {stage === 4 && (<div style={{ display: "flex", flexDirection: "column", gap: 20 }}><div style={{ fontSize: 15, fontWeight: 700 }}>Identity Verification</div>{[{ t: "Photo ID", d: "Passport, driving licence, or national ID", icon: "🪪" }, { t: "Selfie with ID", d: "A photo of you holding your ID", icon: "🤳" }, { t: "Proof of Address", d: "Bank statement or utility bill (last 3 months)", icon: "📄" }].map((item, i) => (<div key={i} style={{ ...S.card, display: "flex", alignItems: "center", gap: 16, borderColor: verifyStep > i ? C.green + "44" : C.border, background: verifyStep > i ? C.green + "08" : C.surface }}><div style={{ fontSize: 28 }}>{item.icon}</div><div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700 }}>{item.t}</div><div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{item.d}</div></div>{verifyStep > i ? <div style={S.badge(C.green)}>✓ Uploaded</div> : verifyStep === i ? <button style={S.btn(uploading ? "ghost" : "primary")} onClick={() => { setUploading(true); setTimeout(() => { setUploading(false); setVerifyStep(s => s + 1); }, 1400); }} disabled={uploading}>{uploading ? "Uploading..." : "Upload →"}</button> : <div style={{ fontSize: 11, color: C.muted }}>Waiting</div>}</div>))}<div style={{ display: "flex", justifyContent: "flex-end" }}><button style={S.btn("primary", verifyStep < 3)} disabled={verifyStep < 3} onClick={() => setConnected(true)}>Submit & Connect →</button></div></div>)}
     </div>
   );
 
-  // Connected
+  // ── Connected view ────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ ...S.card, borderColor: C.green + "44", background: "linear-gradient(135deg,#0d2018 0%,#1a1a1a 100%)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ fontSize: 32 }}>✅</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.green, marginBottom: 4 }}>Stripe Connected</div>
-            <div style={{ fontSize: 12, color: C.textDim }}>{brand.tradingName} · Sort {brand.sortCode} · Daily payouts</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 10, color: C.muted }}>ACCOUNT ID</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>acct_1Ox8dR...</div>
-          </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* Stripe status bar */}
+      <div style={{ ...S.card, borderColor: C.green + "44", padding: "12px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 20 }}>✅</div>
+          <div style={{ flex: 1, fontSize: 12, color: C.textDim }}>Stripe connected · {brand.tradingName} · Daily payouts</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.green }}>acct_1Ox8dR...</div>
         </div>
       </div>
-      <div style={S.grid4}>
-        {[{ l: "Available", v: "£834", c: C.green }, { l: "Pending", v: "£120", c: C.amber }, { l: "This Month", v: "£3,240", c: C.text }, { l: "Outstanding", v: "£1,250", c: C.red }].map((st, i) => (
-          <div key={i} style={{ ...S.card, textAlign: "center" }}>
-            <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>{st.l}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: st.c }}>{st.v}</div>
-          </div>
-        ))}
-      </div>
-      <div style={S.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={S.sectionTitle}>Invoices</div>
-          <button style={S.btn("primary")} onClick={() => setShowModal(true)}>+ Send Invoice</button>
+
+      {/* Tab switcher + new buttons */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[["invoices", "💰 Invoices"], ["quotes", "📋 Quotes"]].map(([k, l]) => (
+            <button key={k} onClick={() => { setDocType(k); setSelected(null); }} style={S.pill(brand.accentColor || C.amber, docType === k)}>
+              {l} ({k === "invoices" ? allInvoices.length : allQuotes.length})
+            </button>
+          ))}
         </div>
-        {invoices.map(inv => (
-          <div key={inv.id} style={S.row}>
-            <div style={{ fontSize: 12, color: C.muted, width: 70, flexShrink: 0 }}>{inv.id}</div>
-            <div style={{ flex: 1, fontSize: 13, fontWeight: 600, minWidth: 0 }}>{inv.customer}</div>
-            <div style={{ fontSize: 14, fontWeight: 700, marginRight: 14, flexShrink: 0 }}>£{inv.amount}</div>
-            <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 10, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
-            <div style={{ fontSize: 10, color: C.muted, marginRight: 12, width: 100, flexShrink: 0 }}>{inv.due}</div>
-            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-              <button
-                style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}
-                onClick={() => downloadInvoicePDF(brand, inv)}
-                title="Download PDF"
-              >⬇ PDF</button>
-              {inv.status === "overdue" && (
-                <button style={{ ...S.btn("danger"), fontSize: 11, padding: "4px 10px" }} onClick={() => setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "sent", due: "Chaser sent" } : i))}>Chase</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={S.btn("ghost")} onClick={() => setShowQuoteModal(true)}>+ Quote</button>
+          <button style={S.btn("primary")} onClick={() => setShowInvoiceModal(true)}>+ Invoice</button>
+        </div>
+      </div>
+
+      {/* ── INVOICES SECTION ── */}
+      {docType === "invoices" && (() => {
+        const paid = allInvoices.filter(i => i.status === "paid");
+        const outstanding = allInvoices.filter(i => i.status !== "paid");
+        const overdue = allInvoices.filter(i => i.status === "overdue");
+        const totalOutstanding = outstanding.reduce((s, i) => s + (i.amount || 0), 0);
+        const totalPaid = paid.reduce((s, i) => s + (i.amount || 0), 0);
+        return (
+          <>
+            {/* Invoice summary stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+              {[
+                { l: "Outstanding", v: outstanding.length, sub: `£${totalOutstanding.toLocaleString()}`, c: outstanding.length > 0 ? C.amber : C.muted },
+                { l: "Overdue", v: overdue.length, sub: overdue.length > 0 ? "Needs chasing" : "None", c: overdue.length > 0 ? C.red : C.muted },
+                { l: "Paid", v: paid.length, sub: `£${totalPaid.toLocaleString()}`, c: C.green },
+                { l: "Total Invoices", v: allInvoices.length, sub: `£${allInvoices.reduce((s,i)=>s+(i.amount||0),0).toLocaleString()} total`, c: C.text },
+              ].map((st, i) => (
+                <div key={i} style={{ ...S.card, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>{st.l}</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: st.c, marginBottom: 2 }}>{st.v}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{st.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Outstanding invoices */}
+            <div style={S.card}>
+              <div style={S.sectionTitle}>Outstanding ({outstanding.length})</div>
+              {outstanding.length === 0
+                ? <div style={{ fontSize: 12, color: C.green, fontStyle: "italic" }}>All invoices paid — nice work!</div>
+                : outstanding.map(inv => (
+                  <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
+                    <div style={{ width: 4, height: 44, borderRadius: 2, background: inv.status === "overdue" ? C.red : C.amber, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0, paddingLeft: 2 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
+                      <div style={{ fontSize: 10, color: C.muted }}>{inv.id} · {inv.due}</div>
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 10, flexShrink: 0 }}>£{inv.amount}</div>
+                    <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
+                    <button
+                      onClick={e => { e.stopPropagation(); updateStatus(inv.id, "paid"); }}
+                      style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green, flexShrink: 0 }}
+                    >✓ Paid</button>
+                    <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
+                  </div>
+                ))
+              }
+            </div>
+
+            {/* Paid invoices */}
+            {paid.length > 0 && (
+              <div style={S.card}>
+                <div style={S.sectionTitle}>Paid ({paid.length})</div>
+                {paid.map(inv => (
+                  <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
+                    <div style={{ width: 4, height: 44, borderRadius: 2, background: C.green, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0, paddingLeft: 2 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
+                      <div style={{ fontSize: 10, color: C.muted }}>{inv.id} · {inv.due}</div>
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.green, marginRight: 10, flexShrink: 0 }}>£{inv.amount}</div>
+                    <div style={S.badge(C.green)}>Paid</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>→</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        );
+      })()}
+
+      {/* ── QUOTES SECTION ── */}
+      {docType === "quotes" && (() => {
+        const accepted = allQuotes.filter(q => q.status === "accepted");
+        const pending = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
+        const declined = allQuotes.filter(q => q.status === "declined");
+        const totalValue = allQuotes.reduce((s, q) => s + (q.amount || 0), 0);
+        return (
+          <>
+            {/* Quote summary stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+              {[
+                { l: "Pending", v: pending.length, sub: `£${pending.reduce((s,q)=>s+(q.amount||0),0).toLocaleString()}`, c: C.blue },
+                { l: "Accepted", v: accepted.length, sub: `£${accepted.reduce((s,q)=>s+(q.amount||0),0).toLocaleString()}`, c: C.green },
+                { l: "Declined", v: declined.length, sub: declined.length > 0 ? "Not won" : "None lost", c: declined.length > 0 ? C.red : C.muted },
+                { l: "Total Quoted", v: allQuotes.length, sub: `£${totalValue.toLocaleString()} pipeline`, c: C.text },
+              ].map((st, i) => (
+                <div key={i} style={{ ...S.card, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>{st.l}</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: st.c, marginBottom: 2 }}>{st.v}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{st.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* All quotes list */}
+            <div style={S.card}>
+              <div style={S.sectionTitle}>All Quotes ({allQuotes.length})</div>
+              {allQuotes.length === 0
+                ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No quotes yet — create one above or via the AI Assistant.</div>
+                : allQuotes.map(q => (
+                  <div key={q.id} onClick={() => setSelected(q)} style={{ ...S.row, cursor: "pointer" }}>
+                    <div style={{ width: 4, height: 44, borderRadius: 2, background: q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0, paddingLeft: 2 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
+                      <div style={{ fontSize: 10, color: C.muted }}>{q.id} · {q.due}</div>
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, marginRight: 10, flexShrink: 0 }}>£{q.amount}</div>
+                    <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
+                      {q.status === "accepted" ? "Accepted" : q.status === "declined" ? "Declined" : "Sent"}
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); convertToInvoice(q); }}
+                      style={{ ...S.btn("primary"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}
+                    >→ Invoice</button>
+                    <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
+                  </div>
+                ))
+              }
+            </div>
+          </>
+        );
+      })()}
+
+      {/* ── Detail modal ── */}
+      {selected && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelected(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+                  {selected.isQuote ? "Quote" : "Invoice"} · {selected.id}
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{selected.customer}</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "paid" ? C.green : selected.isQuote ? C.blue : C.amber }}>£{selected.amount}</div>
+                  <span style={S.badge(statusColor[selected.status] || C.muted)}>{statusLabel[selected.status] || selected.status}</span>
+                </div>
+              </div>
+              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+
+            {/* Details */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+              {[
+                { l: "Description", v: selected.description || selected.desc || "—" },
+                { l: selected.isQuote ? "Valid for" : "Payment due", v: selected.due },
+                selected.address && { l: "Address", v: selected.address },
+              ].filter(Boolean).map(({ l, v }) => (
+                <div key={l} style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.6 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Primary actions */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* Mark Paid — big and obvious for invoices */}
+              {!selected.isQuote && selected.status !== "paid" && (
+                <button
+                  style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "12px", fontSize: 14, background: C.green, color: "#000" }}
+                  onClick={() => updateStatus(selected.id, "paid")}
+                >✓ Mark as Paid</button>
               )}
-              {inv.status !== "paid" && (
-                <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green }} onClick={() => setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "paid", due: "Paid" } : i))}>✓ Paid</button>
+              {!selected.isQuote && selected.status === "paid" && (
+                <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "12px 16px", fontSize: 13, color: C.green, textAlign: "center", fontWeight: 700 }}>
+                  ✓ Invoice Paid
+                </div>
               )}
-              {inv.status === "paid" && <div style={{ fontSize: 11, color: C.green, padding: "4px 0" }}>✓ Paid</div>}
+
+              {/* Convert quote to invoice */}
+              {selected.isQuote && (
+                <button
+                  style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "12px", fontSize: 14 }}
+                  onClick={() => convertToInvoice(selected)}
+                >→ Convert to Invoice</button>
+              )}
+
+              {/* Mark quote as accepted/declined */}
+              {selected.isQuote && selected.status !== "accepted" && selected.status !== "declined" && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.green }} onClick={() => updateStatus(selected.id, "accepted")}>✓ Mark Accepted</button>
+                  <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.red }} onClick={() => updateStatus(selected.id, "declined")}>✗ Mark Declined</button>
+                </div>
+              )}
+
+              {/* Secondary actions */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ Download PDF</button>
+                {!selected.isQuote && selected.status === "overdue" && (
+                  <button style={{ ...S.btn("danger"), flex: 1, justifyContent: "center" }} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>
+                )}
+                <button
+                  style={{ ...S.btn("ghost"), color: C.red }}
+                  onClick={() => { setInvoices(prev => prev.filter(i => i.id !== selected.id)); setSelected(null); }}
+                >Delete</button>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
-      {showModal && <InvoiceModal brand={brand} onClose={() => setShowModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...prev]); setShowModal(false); }} />}
+        </div>
+      )}
+
+      {showInvoiceModal && <InvoiceModal brand={brand} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...prev]); setShowInvoiceModal(false); }} />}
+      {showQuoteModal && <QuoteModal brand={brand} onClose={() => setShowQuoteModal(false)} onSent={(q) => { setInvoices(prev => [q, ...prev]); setShowQuoteModal(false); setDocType("quotes"); }} />}
     </div>
   );
 }
@@ -2380,7 +2558,119 @@ function InvoiceModal({ brand, onClose, onSent }) {
   );
 }
 
-// ─── Reminders ────────────────────────────────────────────────────────────────
+// ─── Quote Modal ──────────────────────────────────────────────────────────────
+function QuoteModal({ brand, onClose, onSent }) {
+  const [form, setForm] = useState({ customer: "", email: "", address: "", amount: "", desc: "", validDays: "30", vatEnabled: false, vatRate: 20 });
+  const [tab, setTab] = useState("form");
+  const [sent, setSent] = useState(false);
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+  const valid = form.customer && form.amount;
+  const isVatRegistered = !!brand.vatNumber;
+  const grossAmount = parseFloat(form.amount) || 0;
+  const netAmount = form.vatEnabled ? parseFloat((grossAmount / (1 + form.vatRate / 100)).toFixed(2)) : grossAmount;
+  const vatAmount = form.vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
+
+  const send = () => {
+    setSent(true);
+    setTimeout(() => {
+      const id = `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
+      onSent({
+        id, customer: form.customer, amount: grossAmount,
+        due: `Valid for ${form.validDays} days`, status: "sent",
+        description: form.desc, isQuote: true,
+        vatEnabled: form.vatEnabled, vatRate: form.vatRate,
+      });
+    }, 1000);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
+      <div style={{ ...S.card, maxWidth: 880, width: "100%", maxHeight: "92vh", overflowY: "auto" }}>
+        {sent ? (
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.blue, marginBottom: 8 }}>Quote Created!</div>
+            <div style={{ fontSize: 12, color: C.muted }}>Quote sent to {form.email || form.customer}. Valid for {form.validDays} days.</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>New Quote</div>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {["form", "preview"].map(t => <button key={t} onClick={() => setTab(t)} style={S.pill(C.blue, tab === t)}>{t === "form" ? "Details" : "Preview"}</button>)}
+                </div>
+                <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              </div>
+            </div>
+
+            {tab === "form" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={S.grid2}>
+                  {[
+                    { k: "customer", l: "Customer Name", p: "e.g. James Oliver" },
+                    { k: "email", l: "Customer Email", p: "james@email.com" },
+                    { k: "address", l: "Customer Address", p: "5 High Street, Guildford GU1 3AA" },
+                    { k: "amount", l: form.vatEnabled ? `Total inc. VAT @ ${form.vatRate}% (£)` : "Quote Amount (£)", p: "e.g. 480" },
+                  ].map(({ k, l, p }) => (
+                    <div key={k}><label style={S.label}>{l}</label>
+                      {k === "address" ? <textarea style={{ ...S.input, resize: "none", height: 60 }} placeholder={p} value={form[k]} onChange={set(k)} />
+                        : <input style={S.input} placeholder={p} value={form[k]} onChange={set(k)} />}
+                    </div>
+                  ))}
+                </div>
+
+                <div><label style={S.label}>Description of work (one line per item)</label>
+                  <textarea style={{ ...S.input, resize: "vertical", minHeight: 80 }} placeholder={"Supply and fit new boiler\nMagnetic filter installation\nFlue check and test"} value={form.desc} onChange={set("desc")} />
+                </div>
+
+                {/* VAT toggle */}
+                {isVatRegistered && (
+                  <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${form.vatEnabled ? C.blue + "66" : C.border}`, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 180 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3 }}>VAT Quote</div>
+                      {form.vatEnabled && grossAmount > 0
+                        ? <div style={{ fontSize: 11, color: C.muted }}>Net: £{netAmount.toFixed(2)} + VAT £{vatAmount.toFixed(2)} = Total £{grossAmount.toFixed(2)}</div>
+                        : <div style={{ fontSize: 11, color: C.muted }}>VAT No: {brand.vatNumber} — toggle to show VAT breakdown</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                      {form.vatEnabled && (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {[20, 5, 0].map(r => (
+                            <button key={r} onClick={() => setForm(f => ({ ...f, vatRate: r }))} style={{ ...S.pill(C.blue, form.vatRate === r), fontSize: 11, padding: "4px 10px" }}>{r}%</button>
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: !f.vatEnabled }))} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, background: form.vatEnabled ? C.blue : C.border, color: form.vatEnabled ? "#fff" : C.muted, transition: "all 0.2s" }}>
+                        {form.vatEnabled ? "VAT On ✓" : "Add VAT"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label style={S.label}>Quote Valid For</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {["14", "30", "60"].map(d => <button key={d} onClick={() => setForm(f => ({ ...f, validDays: d }))} style={S.pill(C.blue, form.validDays === d)}>{d} days</button>)}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button style={S.btn("ghost")} onClick={() => setTab("preview")} disabled={!valid}>Preview Quote →</button>
+                  <button style={{ ...S.btn("primary", !valid), background: valid ? C.blue : undefined }} disabled={!valid} onClick={send}>Send Quote →</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <InvoicePreview brand={brand} invoice={{ id: "QTE-001", customer: form.customer || "Customer Name", address: form.address || "Customer Address", desc: form.desc || "Description of work", amount: form.amount || "0", date: new Date().toLocaleDateString("en-GB"), due: `Valid for ${form.validDays} days`, isQuote: true, vatEnabled: form.vatEnabled, vatRate: form.vatRate }} />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 function useReminders(userId) {
   const [reminders, setRemindersRaw] = useState([]);
 
@@ -2858,449 +3148,4 @@ function Customers({ customers, setCustomers, jobs, invoices, setView }) {
       {/* Edit Modal */}
       {selected && editing && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Customer</div>
-              <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
-            </div>
-            <CustomerForm form={form} set={set} onSave={save} onCancel={() => setEditing(false)} />
-          </div>
-        </div>
-      )}
-
-      {/* Add Modal */}
-      {showAdd && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Customer</div>
-              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
-            </div>
-            <CustomerForm form={form} set={set} onSave={save} onCancel={() => setShowAdd(false)} />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CustomerForm({ form, set, onSave, onCancel }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {[
-        { k: "name", l: "Full Name", p: "e.g. John Smith", required: true },
-        { k: "phone", l: "Phone Number", p: "e.g. 07700 900123" },
-        { k: "email", l: "Email Address", p: "e.g. john@email.com" },
-        { k: "address", l: "Address", p: "e.g. 5 High Street, Guildford, GU1 3AA" },
-      ].map(({ k, l, p, required }) => (
-        <div key={k}>
-          <label style={S.label}>{l}{required && <span style={{ color: C.red }}> *</span>}</label>
-          <input style={S.input} placeholder={p} value={form[k]} onChange={set(k)} />
-        </div>
-      ))}
-      <div>
-        <label style={S.label}>Notes</label>
-        <textarea style={{ ...S.input, resize: "vertical", minHeight: 72 }} placeholder="e.g. Prefers morning appointments, gate code 1234..." value={form.notes} onChange={set("notes")} />
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button style={S.btn("primary", !form.name)} disabled={!form.name} onClick={onSave}>Save →</button>
-        <button style={S.btn("ghost")} onClick={onCancel}>Cancel</button>
-      </div>
-    </div>
-  );
-}
-
-const VIEWS = ["Dashboard", "Schedule", "Customers", "Materials", "AI Assistant", "Reminders", "Payments", "Settings"];
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [view, setView] = useState("Dashboard");
-  const [brand, setBrand] = useState(DEFAULT_BRAND);
-  const { reminders, add, dismiss, remove } = useReminders(user?.id);
-  const [dueNow, setDueNow] = useState([]);
-  const [bellFlash, setBellFlash] = useState(false);
-  const now = Date.now();
-
-  // Check existing session on load
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setAuthLoading(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Load brand settings from localStorage (brand is small, localStorage is fine)
-  useEffect(() => {
-    if (!user) return;
-    const saved = localStorage.getItem(`trade-pa-brand-${user.id}`);
-    if (saved) setBrand(JSON.parse(saved));
-    else {
-      const name = user.user_metadata?.full_name;
-      if (name) setBrand(b => ({ ...b, tradingName: `${name}'s Trades` }));
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    localStorage.setItem(`trade-pa-brand-${user.id}`, JSON.stringify(brand));
-  }, [brand, user]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setJobsRaw([]); setInvoicesRaw([]); setEnquiriesRaw([]);
-    setMaterialsRaw([]); setCustomersRaw([]);
-    setCompanyId(null); setCompanyName(""); setMembers([]);
-    setUser(null); setView("Dashboard");
-  };
-
-  // ── State declarations ────────────────────────────────────────────────────
-  const [jobs, setJobsRaw] = useState([]);
-  const [invoices, setInvoicesRaw] = useState([]);
-  const [enquiries, setEnquiriesRaw] = useState([]);
-  const [materials, setMaterialsRaw] = useState([]);
-  const [customers, setCustomersRaw] = useState([]);
-  const [dbLoading, setDbLoading] = useState(false);
-  const [companyId, setCompanyId] = useState(null);
-  const [companyName, setCompanyName] = useState("");
-  const [userRole, setUserRole] = useState("owner");
-  const [members, setMembers] = useState([]);
-  const [pendingInvite, setPendingInvite] = useState(null);
-
-  // ── Get or create company for user ───────────────────────────────────────
-  const getOrCreateCompany = async (uid) => {
-    // Check if user already belongs to a company
-    const { data: membership } = await supabase
-      .from("company_members")
-      .select("company_id, role, companies(name)")
-      .eq("user_id", uid)
-      .single();
-
-    if (membership) {
-      setCompanyId(membership.company_id);
-      setCompanyName(membership.companies?.name || "");
-      setUserRole(membership.role);
-      return membership.company_id;
-    }
-
-    // Check for pending invite using user's email
-    const { data: invite } = await supabase
-      .from("invites")
-      .select("*")
-      .eq("email", user.email)
-      .eq("accepted", false)
-      .single();
-
-    if (invite) {
-      // Accept the invite — join the existing company
-      await supabase.from("company_members").insert({
-        company_id: invite.company_id,
-        user_id: uid,
-        role: invite.role || "member",
-        invited_email: user.email,
-      });
-      await supabase.from("invites").update({ accepted: true }).eq("id", invite.id);
-      const { data: co } = await supabase.from("companies").select("name").eq("id", invite.company_id).single();
-      setCompanyId(invite.company_id);
-      setCompanyName(co?.name || "");
-      setUserRole(invite.role || "member");
-      setPendingInvite(null);
-      return invite.company_id;
-    }
-
-    // No company yet — create a new one
-    const compName = brand.tradingName || `${user.user_metadata?.full_name || "My"}'s Business`;
-    const { data: newCompany } = await supabase
-      .from("companies")
-      .insert({ name: compName })
-      .select()
-      .single();
-
-    if (newCompany) {
-      await supabase.from("company_members").insert({
-        company_id: newCompany.id,
-        user_id: uid,
-        role: "owner",
-      });
-      setCompanyId(newCompany.id);
-      setCompanyName(newCompany.name);
-      setUserRole("owner");
-      return newCompany.id;
-    }
-    return null;
-  };
-
-  // ── Load all data from Supabase on login ──────────────────────────────────
-  useEffect(() => {
-    if (!user) return;
-    const fetchAll = async () => {
-      setDbLoading(true);
-      try {
-        const cid = await getOrCreateCompany(user.id);
-        if (!cid) { setDbLoading(false); return; }
-
-        // Load members for team management
-        const { data: mem } = await supabase
-          .from("company_members")
-          .select("*, users:user_id(email)")
-          .eq("company_id", cid);
-        if (mem) setMembers(mem);
-
-        const [j, inv, enq, mat, cust] = await Promise.all([
-          supabase.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
-          supabase.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
-          supabase.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
-          supabase.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
-          supabase.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
-        ]);
-        if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
-        if (inv.data) setInvoicesRaw(inv.data.map(r => ({ ...r, vatEnabled: r.vat_enabled, vatRate: r.vat_rate })));
-        if (enq.data) setEnquiriesRaw(enq.data);
-        if (mat.data) setMaterialsRaw(mat.data);
-        if (cust.data) setCustomersRaw(cust.data);
-      } catch (e) { console.error("DB load error:", e); }
-      setDbLoading(false);
-    };
-    fetchAll();
-  }, [user?.id]);
-
-  // ── Company-aware Supabase setters ────────────────────────────────────────
-  const setJobs = (updater) => {
-    setJobsRaw(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if (!companyId) return next;
-      (async () => {
-        try {
-          const prevIds = new Set(prev.map(j => String(j.id)));
-          const nextIds = new Set(next.map(j => String(j.id)));
-          for (const id of prevIds) {
-            if (!nextIds.has(id)) await supabase.from("jobs").delete().eq("id", id).eq("company_id", companyId);
-          }
-          for (const job of next) {
-            if (!prevIds.has(String(job.id))) {
-              await supabase.from("jobs").upsert({
-                id: String(job.id), company_id: companyId, user_id: user.id,
-                customer: job.customer, address: job.address, type: job.type,
-                date: job.date, date_obj: job.dateObj || job.date_obj,
-                status: job.status, value: job.value || 0, notes: job.notes || "",
-              });
-            } else {
-              const old = prev.find(j => String(j.id) === String(job.id));
-              if (JSON.stringify(old) !== JSON.stringify(job)) {
-                await supabase.from("jobs").update({
-                  customer: job.customer, address: job.address, type: job.type,
-                  date: job.date, date_obj: job.dateObj || job.date_obj,
-                  status: job.status, value: job.value || 0, notes: job.notes || "",
-                }).eq("id", String(job.id)).eq("company_id", companyId);
-              }
-            }
-          }
-        } catch (e) { console.error("Jobs sync:", e); }
-      })();
-      return next;
-    });
-  };
-
-  const setInvoices = (updater) => {
-    setInvoicesRaw(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if (!companyId) return next;
-      (async () => {
-        try {
-          const prevIds = new Set(prev.map(i => i.id));
-          const nextIds = new Set(next.map(i => i.id));
-          for (const id of prevIds) {
-            if (!nextIds.has(id)) await supabase.from("invoices").delete().eq("id", id).eq("company_id", companyId);
-          }
-          for (const inv of next) {
-            if (!prevIds.has(inv.id)) {
-              await supabase.from("invoices").upsert({
-                id: inv.id, company_id: companyId, user_id: user.id,
-                customer: inv.customer, amount: inv.amount || 0, due: inv.due,
-                status: inv.status, description: inv.description || "",
-                vat_enabled: inv.vatEnabled || false, vat_rate: inv.vatRate || 20,
-                payment_method: inv.paymentMethod || "both",
-              });
-            } else {
-              const old = prev.find(i => i.id === inv.id);
-              if (JSON.stringify(old) !== JSON.stringify(inv)) {
-                await supabase.from("invoices").update({
-                  status: inv.status, due: inv.due, amount: inv.amount,
-                }).eq("id", inv.id).eq("company_id", companyId);
-              }
-            }
-          }
-        } catch (e) { console.error("Invoices sync:", e); }
-      })();
-      return next;
-    });
-  };
-
-  const setEnquiries = (updater) => {
-    setEnquiriesRaw(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if (!companyId) return next;
-      (async () => {
-        try {
-          await supabase.from("enquiries").delete().eq("company_id", companyId);
-          if (next.length > 0) {
-            await supabase.from("enquiries").insert(
-              next.map(e => ({ company_id: companyId, user_id: user.id, name: e.name, source: e.source, msg: e.msg, time: e.time, urgent: e.urgent || false }))
-            );
-          }
-        } catch (e) { console.error("Enquiries sync:", e); }
-      })();
-      return next;
-    });
-  };
-
-  const setMaterials = (updater) => {
-    setMaterialsRaw(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if (!companyId) return next;
-      (async () => {
-        try {
-          await supabase.from("materials").delete().eq("company_id", companyId);
-          if (next.length > 0) {
-            await supabase.from("materials").insert(
-              next.map(m => ({ company_id: companyId, user_id: user.id, item: m.item, qty: m.qty || 1, supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" }))
-            );
-          }
-        } catch (e) { console.error("Materials sync:", e); }
-      })();
-      return next;
-    });
-  };
-
-  const setCustomers = (updater) => {
-    setCustomersRaw(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if (!companyId) return next;
-      (async () => {
-        try {
-          const prevIds = new Set(prev.map(c => c.id));
-          const nextIds = new Set(next.map(c => c.id));
-          for (const id of prevIds) {
-            if (!nextIds.has(id)) await supabase.from("customers").delete().eq("id", id).eq("company_id", companyId);
-          }
-          for (const c of next) {
-            if (!prevIds.has(c.id)) {
-              await supabase.from("customers").insert({
-                company_id: companyId, user_id: user.id,
-                name: c.name, phone: c.phone || "", email: c.email || "",
-                address: c.address || "", notes: c.notes || "",
-              });
-            } else {
-              const old = prev.find(x => x.id === c.id);
-              if (JSON.stringify(old) !== JSON.stringify(c)) {
-                await supabase.from("customers").update({
-                  name: c.name, phone: c.phone || "", email: c.email || "",
-                  address: c.address || "", notes: c.notes || "",
-                }).eq("id", c.id).eq("company_id", companyId);
-              }
-            }
-          }
-        } catch (e) { console.error("Customers sync:", e); }
-      })();
-      return next;
-    });
-  };
-
-  // Watch for reminders that just became due
-  useEffect(() => {
-    const t = setInterval(() => {
-      const due = reminders.filter(r => !r.done && !r._due && r.time <= Date.now() && r.time > Date.now() - 60000);
-      if (due.length > 0) {
-        setDueNow(d => [...d, ...due.filter(r => !d.find(x => x.id === r.id))]);
-        setBellFlash(true);
-        setTimeout(() => setBellFlash(false), 3000);
-        due.forEach(r => dismiss(r.id));
-      }
-    }, 5000);
-    return () => clearInterval(t);
-  }, [reminders]);
-
-  const upcomingCount = reminders.filter(r => !r.done && !r._due && r.time > now).length;
-  const overdueCount = reminders.filter(r => !r.done && !r._due && r.time <= now).length;
-  const alertCount = dueNow.length + overdueCount;
-
-  // Auth gate
-  if (authLoading) return (
-    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13 }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&display=swap');`}</style>
-      Loading Trade PA...
-    </div>
-  );
-
-  if (!user) return <AuthScreen onAuth={setUser} />;
-
-  if (dbLoading) return (
-    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13, gap: 12 }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&display=swap');`}</style>
-      <div style={{ fontSize: 28 }}>⚡</div>
-      <div style={{ color: "#f59e0b", fontWeight: 700 }}>TRADE PA</div>
-      <div>Loading your data...</div>
-    </div>
-  );
-
-  return (
-    <div style={S.app}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500;700&display=swap');
-        *{box-sizing:border-box;margin:0;padding:0;}
-        html,body{width:100%;overflow-x:hidden;background:#0f0f0f;}
-        ::-webkit-scrollbar{width:5px;}
-        ::-webkit-scrollbar-track{background:#1a1a1a;}
-        ::-webkit-scrollbar-thumb{background:#333;border-radius:3px;}
-        .nav-scroll::-webkit-scrollbar{display:none;}
-        button:hover:not(:disabled){opacity:0.82;}
-        input:focus,textarea:focus{border-color:#f59e0b !important;outline:none;}
-        @keyframes bellPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
-        img{max-width:100%;}
-      `}</style>
-      <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100, width: "100%" }}>
-        {/* Top row — logo and right icons */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", height: 48 }}>
-          <div style={S.logo}>
-            <div style={S.logoIcon}>TP</div>
-            TRADE PA
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div onClick={() => setView("Reminders")} style={{ position: "relative", cursor: "pointer", padding: "4px 6px" }}>
-              <span style={{ fontSize: 18, display: "block", animation: bellFlash ? "bellPulse 0.4s ease 3" : "none" }}>🔔</span>
-              {alertCount > 0 && <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.red, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{alertCount}</div>}
-              {alertCount === 0 && upcomingCount > 0 && <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.amber, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{upcomingCount}</div>}
-            </div>
-            {members.length > 1 && (
-              <div onClick={() => setView("Settings")} style={{ fontSize: 10, color: C.muted, background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "2px 8px", cursor: "pointer" }}>
-                👥 {members.length}
-              </div>
-            )}
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
-            <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
-          </div>
-        </div>
-        {/* Nav row — scrolls independently */}
-        <div className="nav-scroll" style={{ display: "flex", overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "0 12px 8px", gap: 2, scrollbarWidth: "none" }}>
-          {VIEWS.map(v => (
-            <button key={v} onClick={() => setView(v)} style={{ ...S.navBtn(view === v), flexShrink: 0 }}>{v}</button>
-          ))}
-        </div>
-      </header>
-      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24 }}>
-        {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} />}
-        {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
-        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} />}
-        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} />}
-        {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} />}
-        {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
-        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} />}
-        {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} />}
-      </main>
-    </div>
-  );
-}
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight:
