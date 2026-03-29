@@ -2231,95 +2231,57 @@ Rules:
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
 function Payments({ brand, invoices, setInvoices, customers }) {
-  const [connected, setConnected] = useState(false);
-  const [stage, setStage] = useState(0);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
-  const [bankVerified, setBankVerified] = useState(false);
-  const [verifyStep, setVerifyStep] = useState(0);
-  const [uploading, setUploading] = useState(false);
-  const [payout, setPayout] = useState("Daily");
-  const [bizType, setBizType] = useState("sole_trader");
-  const [docType, setDocType] = useState("invoices"); // "invoices" | "quotes"
+  const [docType, setDocType] = useState("invoices");
   const [selected, setSelected] = useState(null);
 
-  const allInvoices = invoices.filter(i => !i.isQuote);
-  const allQuotes = invoices.filter(i => i.isQuote);
-  const shown = docType === "invoices" ? allInvoices : allQuotes;
+  const safeInvoices = invoices || [];
+  const allInvoices = safeInvoices.filter(i => !i.isQuote);
+  const allQuotes = safeInvoices.filter(i => i.isQuote);
+
+  // Invoice breakdowns
+  const paidInvoices = allInvoices.filter(i => i.status === "paid");
+  const outstandingInvoices = allInvoices.filter(i => i.status !== "paid");
+  const overdueInvoices = allInvoices.filter(i => i.status === "overdue");
+
+  // Quote breakdowns
+  const acceptedQuotes = allQuotes.filter(q => q.status === "accepted");
+  const pendingQuotes = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
+  const declinedQuotes = allQuotes.filter(q => q.status === "declined");
 
   const updateStatus = (id, status) => {
-    setInvoices(prev => prev.map(i => i.id === id ? { ...i, status, due: status === "paid" ? "Paid" : i.due } : i));
-    if (selected?.id === id) setSelected(s => ({ ...s, status, due: status === "paid" ? "Paid" : s.due }));
+    setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status, due: status === "paid" ? "Paid" : i.due } : i));
+    if (selected && selected.id === id) setSelected(s => ({ ...s, status, due: status === "paid" ? "Paid" : s.due }));
   };
+
   const convertToInvoice = (quote) => {
-    const inv = { ...quote, isQuote: false, id: `INV-${String(Math.floor(Math.random() * 900) + 100)}`, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
-    setInvoices(prev => [inv, ...prev.filter(i => i.id !== quote.id)]);
+    const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+    const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
+    setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== quote.id)]);
     setSelected(null);
     setDocType("invoices");
   };
 
-  if (!connected) return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {stage > 0 && (
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-          {["Authorise", "Business", "Bank", "Verify", "Connected"].map((label, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", flex: i < 4 ? 1 : 0 }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: stage > i + 1 ? C.green : stage === i + 1 ? brand.accentColor : C.surfaceHigh, border: `2px solid ${stage > i + 1 ? C.green : stage === i + 1 ? brand.accentColor : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: stage >= i + 1 ? "#000" : C.muted, transition: "all 0.3s" }}>{stage > i + 1 ? "✓" : i + 1}</div>
-                <div style={{ fontSize: 10, color: stage >= i + 1 ? C.text : C.muted, whiteSpace: "nowrap" }}>{label}</div>
-              </div>
-              {i < 4 && <div style={{ flex: 1, height: 2, background: stage > i + 1 ? C.green : C.border, margin: "0 6px", marginBottom: 18, transition: "all 0.3s" }} />}
-            </div>
-          ))}
-        </div>
-      )}
-      {stage === 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ ...S.card, borderColor: C.purple + "44" }}>
-            <div style={{ display: "flex", gap: 20 }}>
-              <div style={{ fontSize: 44 }}>💳</div>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Connect Stripe to get paid</div>
-                <div style={{ fontSize: 13, color: C.textDim, lineHeight: 1.7, marginBottom: 20 }}>Customers pay invoices online. Money goes straight to your bank.</div>
-                <button style={S.btn("stripe")} onClick={() => setStage(1)}><span style={{ fontWeight: 900 }}>S</span> Connect with Stripe</button>
-              </div>
-            </div>
-          </div>
-          <div style={S.grid3}>
-            {[{ icon: "🔒", t: "Your money, your bank", d: "Funds go directly to your Stripe account." }, { icon: "⚡", t: "Instant payment links", d: "Every invoice gets a pay link. Customers pay in seconds." }, { icon: "📊", t: "Auto reconciliation", d: "Invoice marks paid automatically when customer pays." }].map((f, i) => (
-              <div key={i} style={S.card}><div style={{ fontSize: 28, marginBottom: 10 }}>{f.icon}</div><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{f.t}</div><div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>{f.d}</div></div>
-            ))}
-          </div>
-        </div>
-      )}
-      {stage === 1 && (<div style={{ ...S.card, textAlign: "center", padding: 48 }}><div style={{ fontSize: 48, marginBottom: 16, fontWeight: 900, color: "#635bff" }}>S</div><div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Redirecting to Stripe</div><div style={{ fontSize: 12, color: C.muted, marginBottom: 24 }}>In production, you'd be sent to Stripe's secure OAuth page.</div><button style={S.btn("stripe")} onClick={() => setStage(2)}>Simulate Stripe Authorisation ✓</button></div>)}
-      {stage === 2 && (<div style={{ display: "flex", flexDirection: "column", gap: 20 }}><div style={{ fontSize: 15, fontWeight: 700 }}>Business Details</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>{[{ l: "Trading Name", v: brand.tradingName }, { l: "Legal Name", v: "" }, { l: "Mobile", v: brand.phone }, { l: "Email", v: brand.email }, { l: "VAT Number", v: brand.vatNumber || "" }, { l: "Address", v: brand.address }].map(({ l, v }) => (<div key={l}><label style={S.label}>{l}</label><input style={S.input} defaultValue={v} /></div>))}</div><div><label style={S.label}>Business Type</label><div style={{ display: "flex", gap: 10 }}>{[["sole_trader", "Sole Trader"], ["limited_company", "Ltd Company"], ["partnership", "Partnership"]].map(([k, label]) => (<button key={k} onClick={() => setBizType(k)} style={S.pill(brand.accentColor, bizType === k)}>{label}</button>))}</div></div><div style={{ display: "flex", justifyContent: "flex-end" }}><button style={S.btn("primary")} onClick={() => setStage(3)}>Continue →</button></div></div>)}
-      {stage === 3 && (<div style={{ display: "flex", flexDirection: "column", gap: 20 }}><div style={{ fontSize: 15, fontWeight: 700 }}>Bank Account for Payouts</div><div style={{ ...S.card, background: C.surfaceHigh }}><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>{[{ l: "Sort Code", v: brand.sortCode }, { l: "Account Number", v: brand.accountNumber }, { l: "Account Name", v: brand.accountName }].map(({ l, v }) => (<div key={l}><label style={S.label}>{l}</label><input style={S.input} defaultValue={v} /></div>))}</div><div style={{ marginTop: 14 }}>{!bankVerified ? <button style={S.btn("ghost")} onClick={() => setTimeout(() => setBankVerified(true), 1000)}>Verify Bank Account</button> : <div style={S.badge(C.green)}>✓ Bank verified</div>}</div></div><div style={S.card}><label style={S.label}>Payout Schedule</label><div style={{ display: "flex", gap: 10 }}>{["Daily", "Weekly", "Monthly"].map(p => <button key={p} onClick={() => setPayout(p)} style={S.pill(brand.accentColor, payout === p)}>{p}</button>)}</div></div><div style={{ display: "flex", justifyContent: "flex-end" }}><button style={S.btn("primary", !bankVerified)} disabled={!bankVerified} onClick={() => setStage(4)}>Continue →</button></div></div>)}
-      {stage === 4 && (<div style={{ display: "flex", flexDirection: "column", gap: 20 }}><div style={{ fontSize: 15, fontWeight: 700 }}>Identity Verification</div>{[{ t: "Photo ID", d: "Passport, driving licence, or national ID", icon: "🪪" }, { t: "Selfie with ID", d: "A photo of you holding your ID", icon: "🤳" }, { t: "Proof of Address", d: "Bank statement or utility bill (last 3 months)", icon: "📄" }].map((item, i) => (<div key={i} style={{ ...S.card, display: "flex", alignItems: "center", gap: 16, borderColor: verifyStep > i ? C.green + "44" : C.border, background: verifyStep > i ? C.green + "08" : C.surface }}><div style={{ fontSize: 28 }}>{item.icon}</div><div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700 }}>{item.t}</div><div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{item.d}</div></div>{verifyStep > i ? <div style={S.badge(C.green)}>✓ Uploaded</div> : verifyStep === i ? <button style={S.btn(uploading ? "ghost" : "primary")} onClick={() => { setUploading(true); setTimeout(() => { setUploading(false); setVerifyStep(s => s + 1); }, 1400); }} disabled={uploading}>{uploading ? "Uploading..." : "Upload →"}</button> : <div style={{ fontSize: 11, color: C.muted }}>Waiting</div>}</div>))}<div style={{ display: "flex", justifyContent: "flex-end" }}><button style={S.btn("primary", verifyStep < 3)} disabled={verifyStep < 3} onClick={() => setConnected(true)}>Submit & Connect →</button></div></div>)}
-    </div>
-  );
+  const deleteDoc = (id) => {
+    setInvoices(prev => (prev || []).filter(i => i.id !== id));
+    setSelected(null);
+  };
 
-  // ── Connected view ────────────────────────────────────────────────────────
+  const accent = brand.accentColor || "#f59e0b";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-      {/* Stripe status bar */}
-      <div style={{ ...S.card, borderColor: C.green + "44", padding: "12px 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ fontSize: 20 }}>✅</div>
-          <div style={{ flex: 1, fontSize: 12, color: C.textDim }}>Stripe connected · {brand.tradingName} · Daily payouts</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.green }}>acct_1Ox8dR...</div>
-        </div>
-      </div>
-
-      {/* Tab switcher + new buttons */}
+      {/* Tab switcher */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 4 }}>
-          {[["invoices", "💰 Invoices"], ["quotes", "📋 Quotes"]].map(([k, l]) => (
-            <button key={k} onClick={() => { setDocType(k); setSelected(null); }} style={S.pill(brand.accentColor || C.amber, docType === k)}>
-              {l} ({k === "invoices" ? allInvoices.length : allQuotes.length})
-            </button>
-          ))}
+          <button onClick={() => { setDocType("invoices"); setSelected(null); }} style={S.pill(accent, docType === "invoices")}>
+            💰 Invoices ({allInvoices.length})
+          </button>
+          <button onClick={() => { setDocType("quotes"); setSelected(null); }} style={S.pill(accent, docType === "quotes")}>
+            📋 Quotes ({allQuotes.length})
+          </button>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button style={S.btn("ghost")} onClick={() => setShowQuoteModal(true)}>+ Quote</button>
@@ -2327,139 +2289,137 @@ function Payments({ brand, invoices, setInvoices, customers }) {
         </div>
       </div>
 
-      {/* ── INVOICES SECTION ── */}
-      {docType === "invoices" && (() => {
-        const paid = allInvoices.filter(i => i.status === "paid");
-        const outstanding = allInvoices.filter(i => i.status !== "paid");
-        const overdue = allInvoices.filter(i => i.status === "overdue");
-        const totalOutstanding = outstanding.reduce((s, i) => s + (i.amount || 0), 0);
-        const totalPaid = paid.reduce((s, i) => s + (i.amount || 0), 0);
-        return (
-          <>
-            {/* Invoice summary stats */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
-              {[
-                { l: "Outstanding", v: outstanding.length, sub: `£${totalOutstanding.toLocaleString()}`, c: outstanding.length > 0 ? C.amber : C.muted },
-                { l: "Overdue", v: overdue.length, sub: overdue.length > 0 ? "Needs chasing" : "None", c: overdue.length > 0 ? C.red : C.muted },
-                { l: "Paid", v: paid.length, sub: `£${totalPaid.toLocaleString()}`, c: C.green },
-                { l: "Total Invoices", v: allInvoices.length, sub: `£${allInvoices.reduce((s,i)=>s+(i.amount||0),0).toLocaleString()} total`, c: C.text },
-              ].map((st, i) => (
-                <div key={i} style={{ ...S.card, padding: "14px 16px" }}>
-                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>{st.l}</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: st.c, marginBottom: 2 }}>{st.v}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>{st.sub}</div>
+      {/* ── INVOICES VIEW ── */}
+      {docType === "invoices" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+            <div style={S.card}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Outstanding</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: outstandingInvoices.length > 0 ? C.amber : C.muted }}>{outstandingInvoices.length}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>£{outstandingInvoices.reduce((s, i) => s + (i.amount || 0), 0).toLocaleString()}</div>
+            </div>
+            <div style={S.card}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Overdue</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: overdueInvoices.length > 0 ? C.red : C.muted }}>{overdueInvoices.length}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{overdueInvoices.length > 0 ? "Needs chasing" : "None"}</div>
+            </div>
+            <div style={S.card}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Paid</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>{paidInvoices.length}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>£{paidInvoices.reduce((s, i) => s + (i.amount || 0), 0).toLocaleString()}</div>
+            </div>
+            <div style={S.card}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Total</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: C.text }}>{allInvoices.length}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>£{allInvoices.reduce((s, i) => s + (i.amount || 0), 0).toLocaleString()}</div>
+            </div>
+          </div>
+
+          {/* Outstanding */}
+          <div style={S.card}>
+            <div style={S.sectionTitle}>Outstanding ({outstandingInvoices.length})</div>
+            {outstandingInvoices.length === 0
+              ? <div style={{ fontSize: 12, color: C.green, fontStyle: "italic" }}>All invoices paid!</div>
+              : outstandingInvoices.map(inv => (
+                <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
+                  <div style={{ width: 4, height: 44, borderRadius: 2, background: inv.status === "overdue" ? C.red : C.amber, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>{inv.id} · {inv.due}</div>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
+                  <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
+                  <button onClick={e => { e.stopPropagation(); updateStatus(inv.id, "paid"); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green, flexShrink: 0 }}>✓ Paid</button>
+                  <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
+                </div>
+              ))
+            }
+          </div>
+
+          {/* Paid */}
+          {paidInvoices.length > 0 && (
+            <div style={S.card}>
+              <div style={S.sectionTitle}>Paid ({paidInvoices.length})</div>
+              {paidInvoices.map(inv => (
+                <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
+                  <div style={{ width: 4, height: 44, borderRadius: 2, background: C.green, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>{inv.id}</div>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
+                  <div style={S.badge(C.green)}>Paid</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>→</div>
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
 
-            {/* Outstanding invoices */}
+      {/* ── QUOTES VIEW ── */}
+      {docType === "quotes" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
             <div style={S.card}>
-              <div style={S.sectionTitle}>Outstanding ({outstanding.length})</div>
-              {outstanding.length === 0
-                ? <div style={{ fontSize: 12, color: C.green, fontStyle: "italic" }}>All invoices paid — nice work!</div>
-                : outstanding.map(inv => (
-                  <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
-                    <div style={{ width: 4, height: 44, borderRadius: 2, background: inv.status === "overdue" ? C.red : C.amber, flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0, paddingLeft: 2 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
-                      <div style={{ fontSize: 10, color: C.muted }}>{inv.id} · {inv.due}</div>
-                    </div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 10, flexShrink: 0 }}>£{inv.amount}</div>
-                    <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
-                    <button
-                      onClick={e => { e.stopPropagation(); updateStatus(inv.id, "paid"); }}
-                      style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green, flexShrink: 0 }}
-                    >✓ Paid</button>
-                    <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
-                  </div>
-                ))
-              }
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Pending</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: C.blue }}>{pendingQuotes.length}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>£{pendingQuotes.reduce((s, q) => s + (q.amount || 0), 0).toLocaleString()}</div>
             </div>
+            <div style={S.card}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Accepted</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>{acceptedQuotes.length}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>£{acceptedQuotes.reduce((s, q) => s + (q.amount || 0), 0).toLocaleString()}</div>
+            </div>
+            <div style={S.card}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Declined</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: declinedQuotes.length > 0 ? C.red : C.muted }}>{declinedQuotes.length}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{declinedQuotes.length > 0 ? "Not won" : "None"}</div>
+            </div>
+            <div style={S.card}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Pipeline</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: C.text }}>{allQuotes.length}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>£{allQuotes.reduce((s, q) => s + (q.amount || 0), 0).toLocaleString()}</div>
+            </div>
+          </div>
 
-            {/* Paid invoices */}
-            {paid.length > 0 && (
-              <div style={S.card}>
-                <div style={S.sectionTitle}>Paid ({paid.length})</div>
-                {paid.map(inv => (
-                  <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
-                    <div style={{ width: 4, height: 44, borderRadius: 2, background: C.green, flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0, paddingLeft: 2 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
-                      <div style={{ fontSize: 10, color: C.muted }}>{inv.id} · {inv.due}</div>
-                    </div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: C.green, marginRight: 10, flexShrink: 0 }}>£{inv.amount}</div>
-                    <div style={S.badge(C.green)}>Paid</div>
-                    <div style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>→</div>
+          {/* All quotes */}
+          <div style={S.card}>
+            <div style={S.sectionTitle}>All Quotes ({allQuotes.length})</div>
+            {allQuotes.length === 0
+              ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No quotes yet — tap + Quote above or ask the AI Assistant.</div>
+              : allQuotes.map(q => (
+                <div key={q.id} onClick={() => setSelected(q)} style={{ ...S.row, cursor: "pointer" }}>
+                  <div style={{ width: 4, height: 44, borderRadius: 2, background: q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>{q.id} · {q.due}</div>
                   </div>
-                ))}
-              </div>
-            )}
-          </>
-        );
-      })()}
-
-      {/* ── QUOTES SECTION ── */}
-      {docType === "quotes" && (() => {
-        const accepted = allQuotes.filter(q => q.status === "accepted");
-        const pending = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
-        const declined = allQuotes.filter(q => q.status === "declined");
-        const totalValue = allQuotes.reduce((s, q) => s + (q.amount || 0), 0);
-        return (
-          <>
-            {/* Quote summary stats */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
-              {[
-                { l: "Pending", v: pending.length, sub: `£${pending.reduce((s,q)=>s+(q.amount||0),0).toLocaleString()}`, c: C.blue },
-                { l: "Accepted", v: accepted.length, sub: `£${accepted.reduce((s,q)=>s+(q.amount||0),0).toLocaleString()}`, c: C.green },
-                { l: "Declined", v: declined.length, sub: declined.length > 0 ? "Not won" : "None lost", c: declined.length > 0 ? C.red : C.muted },
-                { l: "Total Quoted", v: allQuotes.length, sub: `£${totalValue.toLocaleString()} pipeline`, c: C.text },
-              ].map((st, i) => (
-                <div key={i} style={{ ...S.card, padding: "14px 16px" }}>
-                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>{st.l}</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: st.c, marginBottom: 2 }}>{st.v}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>{st.sub}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>£{q.amount}</div>
+                  <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
+                    {q.status === "accepted" ? "Accepted" : q.status === "declined" ? "Declined" : "Sent"}
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); convertToInvoice(q); }} style={{ ...S.btn("primary"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>→ Invoice</button>
+                  <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
                 </div>
-              ))}
-            </div>
+              ))
+            }
+          </div>
+        </div>
+      )}
 
-            {/* All quotes list */}
-            <div style={S.card}>
-              <div style={S.sectionTitle}>All Quotes ({allQuotes.length})</div>
-              {allQuotes.length === 0
-                ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No quotes yet — create one above or via the AI Assistant.</div>
-                : allQuotes.map(q => (
-                  <div key={q.id} onClick={() => setSelected(q)} style={{ ...S.row, cursor: "pointer" }}>
-                    <div style={{ width: 4, height: 44, borderRadius: 2, background: q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue, flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0, paddingLeft: 2 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
-                      <div style={{ fontSize: 10, color: C.muted }}>{q.id} · {q.due}</div>
-                    </div>
-                    <div style={{ fontSize: 15, fontWeight: 700, marginRight: 10, flexShrink: 0 }}>£{q.amount}</div>
-                    <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
-                      {q.status === "accepted" ? "Accepted" : q.status === "declined" ? "Declined" : "Sent"}
-                    </div>
-                    <button
-                      onClick={e => { e.stopPropagation(); convertToInvoice(q); }}
-                      style={{ ...S.btn("primary"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}
-                    >→ Invoice</button>
-                    <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
-                  </div>
-                ))
-              }
-            </div>
-          </>
-        );
-      })()}
-
-      {/* ── Detail modal ── */}
+      {/* ── Detail Modal ── */}
       {selected && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelected(null)}>
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
 
-            {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
               <div>
-                <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+                <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
                   {selected.isQuote ? "Quote" : "Invoice"} · {selected.id}
                 </div>
                 <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{selected.customer}</div>
@@ -2468,72 +2428,63 @@ function Payments({ brand, invoices, setInvoices, customers }) {
                   <span style={S.badge(statusColor[selected.status] || C.muted)}>{statusLabel[selected.status] || selected.status}</span>
                 </div>
               </div>
-              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 24 }}>×</button>
             </div>
 
-            {/* Details */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-              {[
-                { l: "Description", v: selected.description || selected.desc || "—" },
-                { l: selected.isQuote ? "Valid for" : "Payment due", v: selected.due },
-                selected.address && { l: "Address", v: selected.address },
-              ].filter(Boolean).map(({ l, v }) => (
-                <div key={l} style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
-                  <div style={{ fontSize: 13, lineHeight: 1.6 }}>{v}</div>
-                </div>
-              ))}
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Description</div>
+                <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+              </div>
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{selected.isQuote ? "Valid for" : "Payment due"}</div>
+                <div style={{ fontSize: 13 }}>{selected.due}</div>
+              </div>
             </div>
 
-            {/* Primary actions */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {/* Mark Paid — big and obvious for invoices */}
-              {!selected.isQuote && selected.status !== "paid" && (
-                <button
-                  style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "12px", fontSize: 14, background: C.green, color: "#000" }}
-                  onClick={() => updateStatus(selected.id, "paid")}
-                >✓ Mark as Paid</button>
-              )}
-              {!selected.isQuote && selected.status === "paid" && (
-                <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "12px 16px", fontSize: 13, color: C.green, textAlign: "center", fontWeight: 700 }}>
-                  ✓ Invoice Paid
-                </div>
-              )}
-
-              {/* Convert quote to invoice */}
-              {selected.isQuote && (
-                <button
-                  style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "12px", fontSize: 14 }}
-                  onClick={() => convertToInvoice(selected)}
-                >→ Convert to Invoice</button>
-              )}
-
-              {/* Mark quote as accepted/declined */}
-              {selected.isQuote && selected.status !== "accepted" && selected.status !== "declined" && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.green }} onClick={() => updateStatus(selected.id, "accepted")}>✓ Mark Accepted</button>
-                  <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.red }} onClick={() => updateStatus(selected.id, "declined")}>✗ Mark Declined</button>
-                </div>
-              )}
-
-              {/* Secondary actions */}
-              <div style={{ display: "flex", gap: 8 }}>
-                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ Download PDF</button>
-                {!selected.isQuote && selected.status === "overdue" && (
-                  <button style={{ ...S.btn("danger"), flex: 1, justifyContent: "center" }} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>
-                )}
-                <button
-                  style={{ ...S.btn("ghost"), color: C.red }}
-                  onClick={() => { setInvoices(prev => prev.filter(i => i.id !== selected.id)); setSelected(null); }}
-                >Delete</button>
+            {/* Mark Paid — full width green button for invoices */}
+            {!selected.isQuote && selected.status !== "paid" && (
+              <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "14px", fontSize: 15, background: C.green, color: "#000", marginBottom: 10 }}
+                onClick={() => updateStatus(selected.id, "paid")}>
+                ✓ Mark as Paid
+              </button>
+            )}
+            {!selected.isQuote && selected.status === "paid" && (
+              <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "12px 16px", textAlign: "center", color: C.green, fontWeight: 700, fontSize: 13, marginBottom: 10 }}>
+                ✓ Invoice Paid
               </div>
+            )}
+
+            {/* Convert to Invoice — for quotes */}
+            {selected.isQuote && (
+              <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "14px", fontSize: 15, marginBottom: 10 }}
+                onClick={() => convertToInvoice(selected)}>
+                → Convert to Invoice
+              </button>
+            )}
+
+            {/* Quote accept/decline */}
+            {selected.isQuote && selected.status !== "accepted" && selected.status !== "declined" && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.green }} onClick={() => updateStatus(selected.id, "accepted")}>✓ Mark Accepted</button>
+                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.red }} onClick={() => updateStatus(selected.id, "declined")}>✗ Mark Declined</button>
+              </div>
+            )}
+
+            {/* Secondary */}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
+              {!selected.isQuote && selected.status === "overdue" && (
+                <button style={{ ...S.btn("danger") }} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>
+              )}
+              <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteDoc(selected.id)}>Delete</button>
             </div>
           </div>
         </div>
       )}
 
-      {showInvoiceModal && <InvoiceModal brand={brand} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...prev]); setShowInvoiceModal(false); }} />}
-      {showQuoteModal && <QuoteModal brand={brand} onClose={() => setShowQuoteModal(false)} onSent={(q) => { setInvoices(prev => [q, ...prev]); setShowQuoteModal(false); setDocType("quotes"); }} />}
+      {showInvoiceModal && <InvoiceModal brand={brand} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...(prev || [])]); setShowInvoiceModal(false); }} />}
+      {showQuoteModal && <QuoteModal brand={brand} onClose={() => setShowQuoteModal(false)} onSent={(q) => { setInvoices(prev => [q, ...(prev || [])]); setShowQuoteModal(false); setDocType("quotes"); }} />}
     </div>
   );
 }
