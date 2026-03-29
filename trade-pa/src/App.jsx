@@ -2382,6 +2382,8 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
     if (selected && selected.id === id) setSelected(s => ({ ...s, status, due: status === "paid" ? "Paid" : s.due }));
     if (status === "paid" && inv) syncInvoiceToAccounting(user?.id, { ...inv, status: "paid" });
   };
+
+  const convertToInvoice = (quote) => {
     const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
     const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
     setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== quote.id)]);
