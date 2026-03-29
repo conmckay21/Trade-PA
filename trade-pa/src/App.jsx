@@ -3148,4 +3148,451 @@ function Customers({ customers, setCustomers, jobs, invoices, setView }) {
       {/* Edit Modal */}
       {selected && editing && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight:
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Customer</div>
+              <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <CustomerForm form={form} set={set} onSave={save} onCancel={() => setEditing(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* Add Modal */}
+      {showAdd && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Customer</div>
+              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <CustomerForm form={form} set={set} onSave={save} onCancel={() => setShowAdd(false)} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CustomerForm({ form, set, onSave, onCancel }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {[
+        { k: "name", l: "Full Name", p: "e.g. John Smith", required: true },
+        { k: "phone", l: "Phone Number", p: "e.g. 07700 900123" },
+        { k: "email", l: "Email Address", p: "e.g. john@email.com" },
+        { k: "address", l: "Address", p: "e.g. 5 High Street, Guildford, GU1 3AA" },
+      ].map(({ k, l, p, required }) => (
+        <div key={k}>
+          <label style={S.label}>{l}{required && <span style={{ color: C.red }}> *</span>}</label>
+          <input style={S.input} placeholder={p} value={form[k]} onChange={set(k)} />
+        </div>
+      ))}
+      <div>
+        <label style={S.label}>Notes</label>
+        <textarea style={{ ...S.input, resize: "vertical", minHeight: 72 }} placeholder="e.g. Prefers morning appointments, gate code 1234..." value={form.notes} onChange={set("notes")} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button style={S.btn("primary", !form.name)} disabled={!form.name} onClick={onSave}>Save →</button>
+        <button style={S.btn("ghost")} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+const VIEWS = ["Dashboard", "Schedule", "Customers", "Materials", "AI Assistant", "Reminders", "Payments", "Settings"];
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [view, setView] = useState("Dashboard");
+  const [brand, setBrand] = useState(DEFAULT_BRAND);
+  const { reminders, add, dismiss, remove } = useReminders(user?.id);
+  const [dueNow, setDueNow] = useState([]);
+  const [bellFlash, setBellFlash] = useState(false);
+  const now = Date.now();
+
+  // Check existing session on load
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Load brand settings from localStorage (brand is small, localStorage is fine)
+  useEffect(() => {
+    if (!user) return;
+    const saved = localStorage.getItem(`trade-pa-brand-${user.id}`);
+    if (saved) setBrand(JSON.parse(saved));
+    else {
+      const name = user.user_metadata?.full_name;
+      if (name) setBrand(b => ({ ...b, tradingName: `${name}'s Trades` }));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    localStorage.setItem(`trade-pa-brand-${user.id}`, JSON.stringify(brand));
+  }, [brand, user]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setJobsRaw([]); setInvoicesRaw([]); setEnquiriesRaw([]);
+    setMaterialsRaw([]); setCustomersRaw([]);
+    setCompanyId(null); setCompanyName(""); setMembers([]);
+    setUser(null); setView("Dashboard");
+  };
+
+  // ── State declarations ────────────────────────────────────────────────────
+  const [jobs, setJobsRaw] = useState([]);
+  const [invoices, setInvoicesRaw] = useState([]);
+  const [enquiries, setEnquiriesRaw] = useState([]);
+  const [materials, setMaterialsRaw] = useState([]);
+  const [customers, setCustomersRaw] = useState([]);
+  const [dbLoading, setDbLoading] = useState(false);
+  const [companyId, setCompanyId] = useState(null);
+  const [companyName, setCompanyName] = useState("");
+  const [userRole, setUserRole] = useState("owner");
+  const [members, setMembers] = useState([]);
+  const [pendingInvite, setPendingInvite] = useState(null);
+
+  // ── Get or create company for user ───────────────────────────────────────
+  const getOrCreateCompany = async (uid) => {
+    // Check if user already belongs to a company
+    const { data: membership } = await supabase
+      .from("company_members")
+      .select("company_id, role, companies(name)")
+      .eq("user_id", uid)
+      .single();
+
+    if (membership) {
+      setCompanyId(membership.company_id);
+      setCompanyName(membership.companies?.name || "");
+      setUserRole(membership.role);
+      return membership.company_id;
+    }
+
+    // Check for pending invite using user's email
+    const { data: invite } = await supabase
+      .from("invites")
+      .select("*")
+      .eq("email", user.email)
+      .eq("accepted", false)
+      .single();
+
+    if (invite) {
+      // Accept the invite — join the existing company
+      await supabase.from("company_members").insert({
+        company_id: invite.company_id,
+        user_id: uid,
+        role: invite.role || "member",
+        invited_email: user.email,
+      });
+      await supabase.from("invites").update({ accepted: true }).eq("id", invite.id);
+      const { data: co } = await supabase.from("companies").select("name").eq("id", invite.company_id).single();
+      setCompanyId(invite.company_id);
+      setCompanyName(co?.name || "");
+      setUserRole(invite.role || "member");
+      setPendingInvite(null);
+      return invite.company_id;
+    }
+
+    // No company yet — create a new one
+    const compName = brand.tradingName || `${user.user_metadata?.full_name || "My"}'s Business`;
+    const { data: newCompany } = await supabase
+      .from("companies")
+      .insert({ name: compName })
+      .select()
+      .single();
+
+    if (newCompany) {
+      await supabase.from("company_members").insert({
+        company_id: newCompany.id,
+        user_id: uid,
+        role: "owner",
+      });
+      setCompanyId(newCompany.id);
+      setCompanyName(newCompany.name);
+      setUserRole("owner");
+      return newCompany.id;
+    }
+    return null;
+  };
+
+  // ── Load all data from Supabase on login ──────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const fetchAll = async () => {
+      setDbLoading(true);
+      try {
+        const cid = await getOrCreateCompany(user.id);
+        if (!cid) { setDbLoading(false); return; }
+
+        // Load members for team management
+        const { data: mem } = await supabase
+          .from("company_members")
+          .select("*, users:user_id(email)")
+          .eq("company_id", cid);
+        if (mem) setMembers(mem);
+
+        const [j, inv, enq, mat, cust] = await Promise.all([
+          supabase.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
+          supabase.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
+          supabase.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
+          supabase.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
+          supabase.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
+        ]);
+        if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
+        if (inv.data) setInvoicesRaw(inv.data.map(r => ({ ...r, vatEnabled: r.vat_enabled, vatRate: r.vat_rate, isQuote: r.is_quote })));
+        if (enq.data) setEnquiriesRaw(enq.data);
+        if (mat.data) setMaterialsRaw(mat.data);
+        if (cust.data) setCustomersRaw(cust.data);
+      } catch (e) { console.error("DB load error:", e); }
+      setDbLoading(false);
+    };
+    fetchAll();
+  }, [user?.id]);
+
+  // ── Company-aware Supabase setters ────────────────────────────────────────
+  const setJobs = (updater) => {
+    setJobsRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!companyId) return next;
+      (async () => {
+        try {
+          const prevIds = new Set(prev.map(j => String(j.id)));
+          const nextIds = new Set(next.map(j => String(j.id)));
+          for (const id of prevIds) {
+            if (!nextIds.has(id)) await supabase.from("jobs").delete().eq("id", id).eq("company_id", companyId);
+          }
+          for (const job of next) {
+            if (!prevIds.has(String(job.id))) {
+              await supabase.from("jobs").upsert({
+                id: String(job.id), company_id: companyId, user_id: user.id,
+                customer: job.customer, address: job.address, type: job.type,
+                date: job.date, date_obj: job.dateObj || job.date_obj,
+                status: job.status, value: job.value || 0, notes: job.notes || "",
+              });
+            } else {
+              const old = prev.find(j => String(j.id) === String(job.id));
+              if (JSON.stringify(old) !== JSON.stringify(job)) {
+                await supabase.from("jobs").update({
+                  customer: job.customer, address: job.address, type: job.type,
+                  date: job.date, date_obj: job.dateObj || job.date_obj,
+                  status: job.status, value: job.value || 0, notes: job.notes || "",
+                }).eq("id", String(job.id)).eq("company_id", companyId);
+              }
+            }
+          }
+        } catch (e) { console.error("Jobs sync:", e); }
+      })();
+      return next;
+    });
+  };
+
+  const setInvoices = (updater) => {
+    setInvoicesRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!companyId) return next;
+      (async () => {
+        try {
+          const prevIds = new Set(prev.map(i => i.id));
+          const nextIds = new Set(next.map(i => i.id));
+          for (const id of prevIds) {
+            if (!nextIds.has(id)) await supabase.from("invoices").delete().eq("id", id).eq("company_id", companyId);
+          }
+          for (const inv of next) {
+            if (!prevIds.has(inv.id)) {
+              await supabase.from("invoices").upsert({
+                id: inv.id, company_id: companyId, user_id: user.id,
+                customer: inv.customer, amount: inv.amount || 0, due: inv.due,
+                status: inv.status, description: inv.description || "",
+                vat_enabled: inv.vatEnabled || false, vat_rate: inv.vatRate || 20,
+                payment_method: inv.paymentMethod || "both",
+                is_quote: inv.isQuote || false,
+              });
+            } else {
+              const old = prev.find(i => i.id === inv.id);
+              if (JSON.stringify(old) !== JSON.stringify(inv)) {
+                await supabase.from("invoices").update({
+                  status: inv.status, due: inv.due, amount: inv.amount,
+                  is_quote: inv.isQuote || false,
+                }).eq("id", inv.id).eq("company_id", companyId);
+              }
+            }
+          }
+        } catch (e) { console.error("Invoices sync:", e); }
+      })();
+      return next;
+    });
+  };
+
+  const setEnquiries = (updater) => {
+    setEnquiriesRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!companyId) return next;
+      (async () => {
+        try {
+          await supabase.from("enquiries").delete().eq("company_id", companyId);
+          if (next.length > 0) {
+            await supabase.from("enquiries").insert(
+              next.map(e => ({ company_id: companyId, user_id: user.id, name: e.name, source: e.source, msg: e.msg, time: e.time, urgent: e.urgent || false }))
+            );
+          }
+        } catch (e) { console.error("Enquiries sync:", e); }
+      })();
+      return next;
+    });
+  };
+
+  const setMaterials = (updater) => {
+    setMaterialsRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!companyId) return next;
+      (async () => {
+        try {
+          await supabase.from("materials").delete().eq("company_id", companyId);
+          if (next.length > 0) {
+            await supabase.from("materials").insert(
+              next.map(m => ({ company_id: companyId, user_id: user.id, item: m.item, qty: m.qty || 1, supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" }))
+            );
+          }
+        } catch (e) { console.error("Materials sync:", e); }
+      })();
+      return next;
+    });
+  };
+
+  const setCustomers = (updater) => {
+    setCustomersRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!companyId) return next;
+      (async () => {
+        try {
+          const prevIds = new Set(prev.map(c => c.id));
+          const nextIds = new Set(next.map(c => c.id));
+          for (const id of prevIds) {
+            if (!nextIds.has(id)) await supabase.from("customers").delete().eq("id", id).eq("company_id", companyId);
+          }
+          for (const c of next) {
+            if (!prevIds.has(c.id)) {
+              await supabase.from("customers").insert({
+                company_id: companyId, user_id: user.id,
+                name: c.name, phone: c.phone || "", email: c.email || "",
+                address: c.address || "", notes: c.notes || "",
+              });
+            } else {
+              const old = prev.find(x => x.id === c.id);
+              if (JSON.stringify(old) !== JSON.stringify(c)) {
+                await supabase.from("customers").update({
+                  name: c.name, phone: c.phone || "", email: c.email || "",
+                  address: c.address || "", notes: c.notes || "",
+                }).eq("id", c.id).eq("company_id", companyId);
+              }
+            }
+          }
+        } catch (e) { console.error("Customers sync:", e); }
+      })();
+      return next;
+    });
+  };
+
+  // Watch for reminders that just became due
+  useEffect(() => {
+    const t = setInterval(() => {
+      const due = reminders.filter(r => !r.done && !r._due && r.time <= Date.now() && r.time > Date.now() - 60000);
+      if (due.length > 0) {
+        setDueNow(d => [...d, ...due.filter(r => !d.find(x => x.id === r.id))]);
+        setBellFlash(true);
+        setTimeout(() => setBellFlash(false), 3000);
+        due.forEach(r => dismiss(r.id));
+      }
+    }, 5000);
+    return () => clearInterval(t);
+  }, [reminders]);
+
+  const upcomingCount = reminders.filter(r => !r.done && !r._due && r.time > now).length;
+  const overdueCount = reminders.filter(r => !r.done && !r._due && r.time <= now).length;
+  const alertCount = dueNow.length + overdueCount;
+
+  // Auth gate
+  if (authLoading) return (
+    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&display=swap');`}</style>
+      Loading Trade PA...
+    </div>
+  );
+
+  if (!user) return <AuthScreen onAuth={setUser} />;
+
+  if (dbLoading) return (
+    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13, gap: 12 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&display=swap');`}</style>
+      <div style={{ fontSize: 28 }}>⚡</div>
+      <div style={{ color: "#f59e0b", fontWeight: 700 }}>TRADE PA</div>
+      <div>Loading your data...</div>
+    </div>
+  );
+
+  return (
+    <div style={S.app}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500;700&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0;}
+        html,body{width:100%;overflow-x:hidden;background:#0f0f0f;}
+        ::-webkit-scrollbar{width:5px;}
+        ::-webkit-scrollbar-track{background:#1a1a1a;}
+        ::-webkit-scrollbar-thumb{background:#333;border-radius:3px;}
+        .nav-scroll::-webkit-scrollbar{display:none;}
+        button:hover:not(:disabled){opacity:0.82;}
+        input:focus,textarea:focus{border-color:#f59e0b !important;outline:none;}
+        @keyframes bellPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
+        img{max-width:100%;}
+      `}</style>
+      <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100, width: "100%" }}>
+        {/* Top row — logo and right icons */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", height: 48 }}>
+          <div style={S.logo}>
+            <div style={S.logoIcon}>TP</div>
+            TRADE PA
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div onClick={() => setView("Reminders")} style={{ position: "relative", cursor: "pointer", padding: "4px 6px" }}>
+              <span style={{ fontSize: 18, display: "block", animation: bellFlash ? "bellPulse 0.4s ease 3" : "none" }}>🔔</span>
+              {alertCount > 0 && <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.red, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{alertCount}</div>}
+              {alertCount === 0 && upcomingCount > 0 && <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.amber, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{upcomingCount}</div>}
+            </div>
+            {members.length > 1 && (
+              <div onClick={() => setView("Settings")} style={{ fontSize: 10, color: C.muted, background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "2px 8px", cursor: "pointer" }}>
+                👥 {members.length}
+              </div>
+            )}
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
+            <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
+          </div>
+        </div>
+        {/* Nav row — scrolls independently */}
+        <div className="nav-scroll" style={{ display: "flex", overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "0 12px 8px", gap: 2, scrollbarWidth: "none" }}>
+          {VIEWS.map(v => (
+            <button key={v} onClick={() => setView(v)} style={{ ...S.navBtn(view === v), flexShrink: 0 }}>{v}</button>
+          ))}
+        </div>
+      </header>
+      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24 }}>
+        {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} />}
+        {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
+        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} />}
+        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} />}
+        {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} />}
+        {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
+        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} />}
+        {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} />}
+      </main>
+    </div>
+  );
+}
