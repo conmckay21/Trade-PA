@@ -653,7 +653,90 @@ function InvoicePreview({ brand, invoice }) {
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
-function Settings({ brand, setBrand }) {
+// ─── Team Invite ──────────────────────────────────────────────────────────────
+function TeamInvite({ companyId }) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("member");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const sendInvite = async () => {
+    if (!email || !companyId) return;
+    setSending(true); setError("");
+    try {
+      // Check if user already in company
+      const { data: existing } = await supabase
+        .from("invites")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("email", email.toLowerCase())
+        .eq("accepted", false);
+
+      if (existing && existing.length > 0) {
+        setError("An invite has already been sent to this email.");
+        setSending(false);
+        return;
+      }
+
+      await supabase.from("invites").insert({
+        company_id: companyId,
+        invited_by: (await supabase.auth.getUser()).data.user.id,
+        email: email.toLowerCase(),
+        role,
+        accepted: false,
+      });
+
+      setSent(true);
+      setEmail("");
+      setTimeout(() => { setSent(false); setShowForm(false); }, 3000);
+    } catch (e) {
+      setError("Failed to send invite. Please try again.");
+    }
+    setSending(false);
+  };
+
+  if (!showForm) return (
+    <button style={S.btn("primary")} onClick={() => setShowForm(true)}>+ Invite Team Member</button>
+  );
+
+  return (
+    <div style={{ ...S.card, background: C.surfaceHigh, padding: 16, minWidth: 300 }}>
+      {sent ? (
+        <div style={{ fontSize: 12, color: C.green }}>✓ Invite sent — they'll join when they sign up with this email.</div>
+      ) : (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 12 }}>Invite a team member</div>
+          {error && <div style={{ fontSize: 11, color: C.red, marginBottom: 8 }}>{error}</div>}
+          <input
+            style={{ ...S.input, marginBottom: 10 }}
+            type="email"
+            placeholder="colleague@email.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+          />
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            {[["member", "Member"], ["owner", "Owner"]].map(([v, l]) => (
+              <button key={v} onClick={() => setRole(v)} style={S.pill(C.amber, role === v)}>{l}</button>
+            ))}
+          </div>
+          <div style={{ fontSize: 10, color: C.muted, marginBottom: 12 }}>
+            {role === "owner" ? "Owners can invite others and manage all settings." : "Members can add and edit jobs, invoices and customers."}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={S.btn("primary", !email || sending)} disabled={!email || sending} onClick={sendInvite}>
+              {sending ? "Sending..." : "Send Invite →"}
+            </button>
+            <button style={S.btn("ghost")} onClick={() => { setShowForm(false); setError(""); }}>Cancel</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Settings({ brand, setBrand, companyId, companyName, userRole, members, user }) {
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
   const logoRef = useRef();
@@ -866,6 +949,40 @@ function Settings({ brand, setBrand }) {
             );
           })}
         </div>
+      </div>
+
+      {/* Team Management — only visible to owners */}
+      <div style={S.card}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={S.sectionTitle}>Team Access</div>
+          {userRole === "owner" && <TeamInvite companyId={companyId} />}
+        </div>
+
+        {/* Company name */}
+        <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Company Workspace</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{companyName || "Your Business"}</div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>All team members share the same jobs, invoices and customers.</div>
+        </div>
+
+        {/* Current members */}
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 10 }}>Team Members</div>
+        {members.map((m, i) => (
+          <div key={i} style={{ ...S.row, alignItems: "center" }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: m.user_id === user?.id ? C.amber + "22" : C.surfaceHigh, border: `1px solid ${m.user_id === user?.id ? C.amber + "44" : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: m.user_id === user?.id ? C.amber : C.muted, flexShrink: 0 }}>
+              {(m.invited_email || m.users?.email || "?")[0].toUpperCase()}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13 }}>{m.invited_email || m.users?.email || "Team member"}</div>
+              {m.user_id === user?.id && <div style={{ fontSize: 10, color: C.muted }}>You</div>}
+            </div>
+            <div style={S.badge(m.role === "owner" ? C.amber : C.blue)}>{m.role}</div>
+          </div>
+        ))}
+
+        {userRole !== "owner" && (
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>Only the account owner can invite new team members.</div>
+        )}
       </div>
 
       {/* Preview Modal */}
@@ -2837,6 +2954,7 @@ export default function App() {
     await supabase.auth.signOut();
     setJobsRaw([]); setInvoicesRaw([]); setEnquiriesRaw([]);
     setMaterialsRaw([]); setCustomersRaw([]);
+    setCompanyId(null); setCompanyName(""); setMembers([]);
     setUser(null); setView("Dashboard");
   };
 
@@ -2847,6 +2965,74 @@ export default function App() {
   const [materials, setMaterialsRaw] = useState([]);
   const [customers, setCustomersRaw] = useState([]);
   const [dbLoading, setDbLoading] = useState(false);
+  const [companyId, setCompanyId] = useState(null);
+  const [companyName, setCompanyName] = useState("");
+  const [userRole, setUserRole] = useState("owner");
+  const [members, setMembers] = useState([]);
+  const [pendingInvite, setPendingInvite] = useState(null);
+
+  // ── Get or create company for user ───────────────────────────────────────
+  const getOrCreateCompany = async (uid) => {
+    // Check if user already belongs to a company
+    const { data: membership } = await supabase
+      .from("company_members")
+      .select("company_id, role, companies(name)")
+      .eq("user_id", uid)
+      .single();
+
+    if (membership) {
+      setCompanyId(membership.company_id);
+      setCompanyName(membership.companies?.name || "");
+      setUserRole(membership.role);
+      return membership.company_id;
+    }
+
+    // Check for pending invite using user's email
+    const { data: invite } = await supabase
+      .from("invites")
+      .select("*")
+      .eq("email", user.email)
+      .eq("accepted", false)
+      .single();
+
+    if (invite) {
+      // Accept the invite — join the existing company
+      await supabase.from("company_members").insert({
+        company_id: invite.company_id,
+        user_id: uid,
+        role: invite.role || "member",
+        invited_email: user.email,
+      });
+      await supabase.from("invites").update({ accepted: true }).eq("id", invite.id);
+      const { data: co } = await supabase.from("companies").select("name").eq("id", invite.company_id).single();
+      setCompanyId(invite.company_id);
+      setCompanyName(co?.name || "");
+      setUserRole(invite.role || "member");
+      setPendingInvite(null);
+      return invite.company_id;
+    }
+
+    // No company yet — create a new one
+    const compName = brand.tradingName || `${user.user_metadata?.full_name || "My"}'s Business`;
+    const { data: newCompany } = await supabase
+      .from("companies")
+      .insert({ name: compName })
+      .select()
+      .single();
+
+    if (newCompany) {
+      await supabase.from("company_members").insert({
+        company_id: newCompany.id,
+        user_id: uid,
+        role: "owner",
+      });
+      setCompanyId(newCompany.id);
+      setCompanyName(newCompany.name);
+      setUserRole("owner");
+      return newCompany.id;
+    }
+    return null;
+  };
 
   // ── Load all data from Supabase on login ──────────────────────────────────
   useEffect(() => {
@@ -2854,15 +3040,24 @@ export default function App() {
     const fetchAll = async () => {
       setDbLoading(true);
       try {
-        const uid = user.id;
+        const cid = await getOrCreateCompany(user.id);
+        if (!cid) { setDbLoading(false); return; }
+
+        // Load members for team management
+        const { data: mem } = await supabase
+          .from("company_members")
+          .select("*, users:user_id(email)")
+          .eq("company_id", cid);
+        if (mem) setMembers(mem);
+
         const [j, inv, enq, mat, cust] = await Promise.all([
-          supabase.from("jobs").select("*").eq("user_id", uid).order("date_obj", { ascending: true }),
-          supabase.from("invoices").select("*").eq("user_id", uid).order("created_at", { ascending: false }),
-          supabase.from("enquiries").select("*").eq("user_id", uid).order("created_at", { ascending: false }),
-          supabase.from("materials").select("*").eq("user_id", uid).order("created_at", { ascending: true }),
-          supabase.from("customers").select("*").eq("user_id", uid).order("name", { ascending: true }),
+          supabase.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
+          supabase.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
+          supabase.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
+          supabase.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
+          supabase.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
         ]);
-        if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj, id: r.id })));
+        if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
         if (inv.data) setInvoicesRaw(inv.data.map(r => ({ ...r, vatEnabled: r.vat_enabled, vatRate: r.vat_rate })));
         if (enq.data) setEnquiriesRaw(enq.data);
         if (mat.data) setMaterialsRaw(mat.data);
@@ -2873,117 +3068,143 @@ export default function App() {
     fetchAll();
   }, [user?.id]);
 
-  // ── Supabase-backed setters ───────────────────────────────────────────────
-  const setJobs = async (updater) => {
+  // ── Company-aware Supabase setters ────────────────────────────────────────
+  const setJobs = (updater) => {
     setJobsRaw(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      // Sync to Supabase in background
+      if (!companyId) return next;
       (async () => {
         try {
           const prevIds = new Set(prev.map(j => String(j.id)));
           const nextIds = new Set(next.map(j => String(j.id)));
-          // Deleted jobs
           for (const id of prevIds) {
-            if (!nextIds.has(id)) await supabase.from("jobs").delete().eq("id", id).eq("user_id", user.id);
+            if (!nextIds.has(id)) await supabase.from("jobs").delete().eq("id", id).eq("company_id", companyId);
           }
-          // New or updated jobs
           for (const job of next) {
-            if (!prevIds.has(String(job.id)) || JSON.stringify(prev.find(j => String(j.id) === String(job.id))) !== JSON.stringify(job)) {
+            if (!prevIds.has(String(job.id))) {
               await supabase.from("jobs").upsert({
-                id: String(job.id), user_id: user.id, customer: job.customer, address: job.address,
-                type: job.type, date: job.date, date_obj: job.dateObj || job.date_obj,
+                id: String(job.id), company_id: companyId, user_id: user.id,
+                customer: job.customer, address: job.address, type: job.type,
+                date: job.date, date_obj: job.dateObj || job.date_obj,
                 status: job.status, value: job.value || 0, notes: job.notes || "",
               });
+            } else {
+              const old = prev.find(j => String(j.id) === String(job.id));
+              if (JSON.stringify(old) !== JSON.stringify(job)) {
+                await supabase.from("jobs").update({
+                  customer: job.customer, address: job.address, type: job.type,
+                  date: job.date, date_obj: job.dateObj || job.date_obj,
+                  status: job.status, value: job.value || 0, notes: job.notes || "",
+                }).eq("id", String(job.id)).eq("company_id", companyId);
+              }
             }
           }
-        } catch (e) { console.error("Jobs sync error:", e); }
+        } catch (e) { console.error("Jobs sync:", e); }
       })();
       return next;
     });
   };
 
-  const setInvoices = async (updater) => {
+  const setInvoices = (updater) => {
     setInvoicesRaw(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!companyId) return next;
       (async () => {
         try {
           const prevIds = new Set(prev.map(i => i.id));
           const nextIds = new Set(next.map(i => i.id));
           for (const id of prevIds) {
-            if (!nextIds.has(id)) await supabase.from("invoices").delete().eq("id", id).eq("user_id", user.id);
+            if (!nextIds.has(id)) await supabase.from("invoices").delete().eq("id", id).eq("company_id", companyId);
           }
           for (const inv of next) {
-            if (!prevIds.has(inv.id) || JSON.stringify(prev.find(i => i.id === inv.id)) !== JSON.stringify(inv)) {
+            if (!prevIds.has(inv.id)) {
               await supabase.from("invoices").upsert({
-                id: inv.id, user_id: user.id, customer: inv.customer, amount: inv.amount || 0,
-                due: inv.due, status: inv.status, description: inv.description || "",
+                id: inv.id, company_id: companyId, user_id: user.id,
+                customer: inv.customer, amount: inv.amount || 0, due: inv.due,
+                status: inv.status, description: inv.description || "",
                 vat_enabled: inv.vatEnabled || false, vat_rate: inv.vatRate || 20,
                 payment_method: inv.paymentMethod || "both",
               });
+            } else {
+              const old = prev.find(i => i.id === inv.id);
+              if (JSON.stringify(old) !== JSON.stringify(inv)) {
+                await supabase.from("invoices").update({
+                  status: inv.status, due: inv.due, amount: inv.amount,
+                }).eq("id", inv.id).eq("company_id", companyId);
+              }
             }
           }
-        } catch (e) { console.error("Invoices sync error:", e); }
+        } catch (e) { console.error("Invoices sync:", e); }
       })();
       return next;
     });
   };
 
-  const setEnquiries = async (updater) => {
+  const setEnquiries = (updater) => {
     setEnquiriesRaw(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!companyId) return next;
       (async () => {
         try {
-          // Simplest approach: delete all and reinsert (enquiries are low volume)
-          await supabase.from("enquiries").delete().eq("user_id", user.id);
+          await supabase.from("enquiries").delete().eq("company_id", companyId);
           if (next.length > 0) {
             await supabase.from("enquiries").insert(
-              next.map(e => ({ user_id: user.id, name: e.name, source: e.source, msg: e.msg, time: e.time, urgent: e.urgent || false }))
+              next.map(e => ({ company_id: companyId, user_id: user.id, name: e.name, source: e.source, msg: e.msg, time: e.time, urgent: e.urgent || false }))
             );
           }
-        } catch (e) { console.error("Enquiries sync error:", e); }
+        } catch (e) { console.error("Enquiries sync:", e); }
       })();
       return next;
     });
   };
 
-  const setMaterials = async (updater) => {
+  const setMaterials = (updater) => {
     setMaterialsRaw(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!companyId) return next;
       (async () => {
         try {
-          await supabase.from("materials").delete().eq("user_id", user.id);
+          await supabase.from("materials").delete().eq("company_id", companyId);
           if (next.length > 0) {
             await supabase.from("materials").insert(
-              next.map(m => ({ user_id: user.id, item: m.item, qty: m.qty || 1, supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" }))
+              next.map(m => ({ company_id: companyId, user_id: user.id, item: m.item, qty: m.qty || 1, supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" }))
             );
           }
-        } catch (e) { console.error("Materials sync error:", e); }
+        } catch (e) { console.error("Materials sync:", e); }
       })();
       return next;
     });
   };
 
-  const setCustomers = async (updater) => {
+  const setCustomers = (updater) => {
     setCustomersRaw(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!companyId) return next;
       (async () => {
         try {
           const prevIds = new Set(prev.map(c => c.id));
           const nextIds = new Set(next.map(c => c.id));
           for (const id of prevIds) {
-            if (!nextIds.has(id)) await supabase.from("customers").delete().eq("id", id).eq("user_id", user.id);
+            if (!nextIds.has(id)) await supabase.from("customers").delete().eq("id", id).eq("company_id", companyId);
           }
           for (const c of next) {
-            if (!prevIds.has(c.id) || JSON.stringify(prev.find(x => x.id === c.id)) !== JSON.stringify(c)) {
-              if (String(c.id).length > 10) {
-                // New customer — insert without id (let DB assign)
-                await supabase.from("customers").insert({ user_id: user.id, name: c.name, phone: c.phone || "", email: c.email || "", address: c.address || "", notes: c.notes || "" });
-              } else {
-                await supabase.from("customers").upsert({ id: c.id, user_id: user.id, name: c.name, phone: c.phone || "", email: c.email || "", address: c.address || "", notes: c.notes || "" });
+            if (!prevIds.has(c.id)) {
+              await supabase.from("customers").insert({
+                company_id: companyId, user_id: user.id,
+                name: c.name, phone: c.phone || "", email: c.email || "",
+                address: c.address || "", notes: c.notes || "",
+              });
+            } else {
+              const old = prev.find(x => x.id === c.id);
+              if (JSON.stringify(old) !== JSON.stringify(c)) {
+                await supabase.from("customers").update({
+                  name: c.name, phone: c.phone || "", email: c.email || "",
+                  address: c.address || "", notes: c.notes || "",
+                }).eq("id", c.id).eq("company_id", companyId);
               }
             }
           }
-        } catch (e) { console.error("Customers sync error:", e); }
+        } catch (e) { console.error("Customers sync:", e); }
       })();
       return next;
     });
@@ -3054,6 +3275,11 @@ export default function App() {
               {alertCount > 0 && <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.red, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{alertCount}</div>}
               {alertCount === 0 && upcomingCount > 0 && <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.amber, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{upcomingCount}</div>}
             </div>
+            {members.length > 1 && (
+              <div onClick={() => setView("Settings")} style={{ fontSize: 10, color: C.muted, background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "2px 8px", cursor: "pointer" }}>
+                👥 {members.length}
+              </div>
+            )}
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
             <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
           </div>
@@ -3073,7 +3299,7 @@ export default function App() {
         {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} />}
-        {view === "Settings" && <Settings brand={brand} setBrand={setBrand} />}
+        {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} />}
       </main>
     </div>
   );
