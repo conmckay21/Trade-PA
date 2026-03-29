@@ -1,20 +1,19 @@
-const CACHE = "trade-pa-v1";
-
-// Core files to cache for offline shell
+const CACHE = "trade-pa-v2";
+ 
 const PRECACHE = [
   "/",
   "/manifest.json",
   "/icon-192.png",
   "/icon-512.png",
 ];
-
+ 
 self.addEventListener("install", (e) => {
   e.waitUntil(
     caches.open(CACHE).then((c) => c.addAll(PRECACHE))
   );
   self.skipWaiting();
 });
-
+ 
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
@@ -23,12 +22,11 @@ self.addEventListener("activate", (e) => {
   );
   self.clients.claim();
 });
-
-// Network-first for API calls, cache-first for assets
+ 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-
-  // Always go network for Supabase, Anthropic, OpenAI
+ 
+  // Always network for API calls
   if (
     url.hostname.includes("supabase") ||
     url.hostname.includes("anthropic") ||
@@ -37,11 +35,9 @@ self.addEventListener("fetch", (e) => {
   ) {
     return;
   }
-
-  // Cache-first for static assets
+ 
+  // Cache-first ONLY for images and icons
   if (
-    e.request.destination === "image" ||
-    e.request.destination === "font" ||
     url.pathname.endsWith(".png") ||
     url.pathname.endsWith(".svg") ||
     url.pathname.endsWith(".ico")
@@ -57,9 +53,16 @@ self.addEventListener("fetch", (e) => {
     );
     return;
   }
-
-  // Network-first for everything else (JS, HTML, API)
+ 
+  // Network-first for EVERYTHING else — JS, HTML, CSS always fresh
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    fetch(e.request)
+      .then((res) => {
+        const clone = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
+ 
