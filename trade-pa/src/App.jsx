@@ -232,7 +232,7 @@ const C = {
 };
 
 const S = {
-  app: { fontFamily: "'DM Mono','Courier New',monospace", background: C.bg, minHeight: "100vh", minHeight: "-webkit-fill-available", color: C.text, width: "100%", overflowX: "hidden" },
+  app: { fontFamily: "'DM Mono','Courier New',monospace", background: C.bg, minHeight: "-webkit-fill-available", color: C.text, width: "100%", overflowX: "hidden" },
   header: { background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, position: "sticky", top: 0, zIndex: 100, width: "100%" },
   logo: { display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 16, letterSpacing: "0.05em", color: C.amber },
   logoIcon: { width: 32, height: 28, background: C.amber, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontSize: 11, fontWeight: 900, letterSpacing: "-0.02em" },
