@@ -769,8 +769,10 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
   // Check connection status on load and from URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('xero') === 'connected') setXeroConnected(true);
-    if (params.get('qb') === 'connected') setQbConnected(true);
+    if (params.get('xero') === 'connected') { setXeroConnected(true); }
+    if (params.get('qb') === 'connected') { setQbConnected(true); }
+    if (params.get('xero') === 'error') { alert(`Xero connection failed: ${params.get('msg') || 'unknown error'}`); }
+    if (params.get('qb') === 'error') { alert(`QuickBooks connection failed: ${params.get('msg') || 'unknown error'}`); }
     // Clean URL
     if (params.has('xero') || params.has('qb')) window.history.replaceState({}, '', window.location.pathname);
   }, []);
@@ -3686,7 +3688,12 @@ const VIEWS = ["Dashboard", "Schedule", "Customers", "Invoices", "Quotes", "Mate
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [view, setView] = useState("Dashboard");
+  const [view, setView] = useState(() => {
+    // If redirected back from OAuth, go to Settings
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('xero') || params.has('qb')) return "Settings";
+    return "Dashboard";
+  });
   const [brand, setBrand] = useState(DEFAULT_BRAND);
   const { reminders, add, dismiss, remove } = useReminders(user?.id);
   const [dueNow, setDueNow] = useState([]);
