@@ -1,5 +1,3 @@
-export const config = { runtime: 'nodejs20.x' };
-
 export default async function handler(req, res) {
   const { code, state: userId, error } = req.query;
   const APP_URL = process.env.APP_URL || 'https://trade-pa-id3s.vercel.app';
@@ -26,29 +24,20 @@ export default async function handler(req, res) {
     });
 
     const tokens = await tokenRes.json();
-
-    if (!tokens.access_token) {
-      throw new Error(`Token exchange failed: ${JSON.stringify(tokens)}`);
-    }
+    if (!tokens.access_token) throw new Error(`Token exchange failed: ${JSON.stringify(tokens)}`);
 
     const tenantsRes = await fetch('https://api.xero.com/connections', {
-      headers: { 
-        Authorization: `Bearer ${tokens.access_token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${tokens.access_token}`, 'Content-Type': 'application/json' },
     });
     const tenants = await tenantsRes.json();
     const tenantId = Array.isArray(tenants) ? tenants[0]?.tenantId : null;
 
-    const supabaseUrl = process.env.VITE_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
-
-    await fetch(`${supabaseUrl}/rest/v1/accounting_connections`, {
+    await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/accounting_connections`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
+        'apikey': process.env.SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
         'Prefer': 'resolution=merge-duplicates',
       },
       body: JSON.stringify({
