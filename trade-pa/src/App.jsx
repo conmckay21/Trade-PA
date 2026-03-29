@@ -951,37 +951,90 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         </div>
       </div>
 
-      {/* Team Management — only visible to owners */}
+      {/* Team Management */}
       <div style={S.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={S.sectionTitle}>Team Access</div>
           {userRole === "owner" && <TeamInvite companyId={companyId} />}
         </div>
 
-        {/* Company name */}
         <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, marginBottom: 14 }}>
           <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Company Workspace</div>
           <div style={{ fontSize: 13, fontWeight: 600 }}>{companyName || "Your Business"}</div>
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>All team members share the same jobs, invoices and customers.</div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>All team members share the same data. Owners can control which sections each member can access.</div>
         </div>
 
-        {/* Current members */}
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 10 }}>Team Members</div>
-        {members.map((m, i) => (
-          <div key={i} style={{ ...S.row, alignItems: "center" }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: m.user_id === user?.id ? C.amber + "22" : C.surfaceHigh, border: `1px solid ${m.user_id === user?.id ? C.amber + "44" : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: m.user_id === user?.id ? C.amber : C.muted, flexShrink: 0 }}>
-              {(m.invited_email || m.users?.email || "?")[0].toUpperCase()}
+        {members.map((m, i) => {
+          const isMe = m.user_id === user?.id;
+          const isOwner = m.role === "owner";
+          const email = m.invited_email || m.users?.email || "Team member";
+          const initials = email[0].toUpperCase();
+          const perms = m.permissions || {};
+          const ALL_SECTIONS = ["Dashboard", "Schedule", "Customers", "Invoices", "Quotes", "Materials", "AI Assistant", "Reminders", "Payments"];
+
+          return (
+            <div key={i} style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 14, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: isOwner || isMe ? 0 : 12 }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: isMe ? C.amber + "22" : C.surfaceHigh, border: `1px solid ${isMe ? C.amber + "44" : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: isMe ? C.amber : C.muted, flexShrink: 0 }}>
+                  {initials}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13 }}>{email}{isMe ? " (You)" : ""}</div>
+                </div>
+                <div style={S.badge(isOwner ? C.amber : C.blue)}>{m.role}</div>
+              </div>
+
+              {/* Permission toggles — only shown for non-owners, only editable by the account owner */}
+              {!isOwner && (
+                <div style={{ marginTop: 12, paddingLeft: 44 }}>
+                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>Section Access</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {ALL_SECTIONS.map(section => {
+                      const allowed = perms[section] !== false;
+                      const canEdit = userRole === "owner" && !isMe;
+                      return (
+                        <button
+                          key={section}
+                          disabled={!canEdit}
+                          onClick={async () => {
+                            if (!canEdit) return;
+                            const newPerms = { ...perms, [section]: !allowed };
+                            const updated = members.map((mem, j) => j === i ? { ...mem, permissions: newPerms } : mem);
+                            // Update in Supabase
+                            try {
+                              await supabase.from("company_members")
+                                .update({ permissions: newPerms })
+                                .eq("company_id", companyId)
+                                .eq("user_id", m.user_id);
+                            } catch (e) { console.error("Permission update failed:", e); }
+                          }}
+                          style={{
+                            padding: "3px 10px", borderRadius: 12, fontSize: 10, fontFamily: "'DM Mono',monospace", fontWeight: 600,
+                            border: `1px solid ${allowed ? C.green + "66" : C.border}`,
+                            background: allowed ? C.green + "18" : C.surfaceHigh,
+                            color: allowed ? C.green : C.muted,
+                            cursor: canEdit ? "pointer" : "default",
+                            opacity: canEdit ? 1 : 0.7,
+                          }}
+                        >
+                          {allowed ? "✓" : "✗"} {section}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {!userRole === "owner" && <div style={{ fontSize: 10, color: C.muted, marginTop: 6 }}>Only the owner can change permissions.</div>}
+                </div>
+              )}
+              {isOwner && !isMe && (
+                <div style={{ paddingLeft: 44, marginTop: 6, fontSize: 11, color: C.muted }}>Owners always have full access to all sections.</div>
+              )}
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13 }}>{m.invited_email || m.users?.email || "Team member"}</div>
-              {m.user_id === user?.id && <div style={{ fontSize: 10, color: C.muted }}>You</div>}
-            </div>
-            <div style={S.badge(m.role === "owner" ? C.amber : C.blue)}>{m.role}</div>
-          </div>
-        ))}
+          );
+        })}
 
         {userRole !== "owner" && (
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>Only the account owner can invite new team members.</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Contact the account owner to change your access permissions.</div>
         )}
       </div>
 
@@ -1895,189 +1948,153 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
 
   // ── Execute tool calls ────────────────────────────────────────────────────
   const executeTool = (name, input) => {
-    switch (name) {
-      case "create_customer": {
-        // Update existing customer if name matches, otherwise add new
-        const existing = customers.find(c => c.name.toLowerCase() === input.name.toLowerCase());
-        if (existing) {
-          setCustomers(prev => prev.map(c => c.id === existing.id ? { ...c, ...input } : c));
-          setLastAction({ type: "enquiry", label: `Updated: ${input.name}`, view: "Customers" });
-          return `Customer updated: ${input.name}${input.phone ? ` · ${input.phone}` : ""}${input.email ? ` · ${input.email}` : ""}.`;
-        } else {
-          setCustomers(prev => [...prev, { ...input, id: Date.now() }]);
-          setLastAction({ type: "enquiry", label: `Saved: ${input.name}`, view: "Customers" });
-          return `Customer saved: ${input.name}${input.phone ? ` · ${input.phone}` : ""}${input.email ? ` · ${input.email}` : ""}.`;
+    try {
+      switch (name) {
+        case "create_customer": {
+          const existing = (customers || []).find(c => c.name.toLowerCase() === input.name.toLowerCase());
+          if (existing) {
+            setCustomers(prev => (prev || []).map(c => c.id === existing.id ? { ...c, ...input } : c));
+            setLastAction({ type: "enquiry", label: `Updated: ${input.name}`, view: "Customers" });
+            return `Customer updated: ${input.name}${input.phone ? ` · ${input.phone}` : ""}${input.email ? ` · ${input.email}` : ""}.`;
+          } else {
+            const newCustomer = { name: input.name, phone: input.phone || "", email: input.email || "", address: input.address || "", notes: input.notes || "", id: Date.now() };
+            setCustomers(prev => [...(prev || []), newCustomer]);
+            setLastAction({ type: "enquiry", label: `Saved: ${input.name}`, view: "Customers" });
+            return `Customer saved: ${input.name}${input.phone ? ` · ${input.phone}` : ""}${input.email ? ` · ${input.email}` : ""}.`;
+          }
         }
-      }
-      case "create_job": {
-        const dateObj = new Date(`${input.date_iso}T${input.time || "09:00"}`);
-        const job = {
-          id: Date.now(),
-          customer: input.customer,
-          address: input.address || "",
-          type: input.type,
-          date: dateObj.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + " " + input.time,
-          dateObj: dateObj.toISOString(),
-          status: input.status || "confirmed",
-          value: input.value || 0,
-        };
-        setJobs(prev => [...prev, job]);
-        setLastAction({ type: "job", label: `${input.type} — ${input.customer}`, view: "Schedule" });
-        return `Job created: ${input.type} for ${input.customer} on ${dateObj.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} at ${input.time}.`;
-      }
-      case "create_invoice": {
-        const id = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
-        const inv = {
-          id,
-          customer: input.customer,
-          amount: input.amount,
-          due: `Due in ${input.due_days || 30} days`,
-          status: "sent",
-          description: input.description,
-        };
-        setInvoices(prev => [inv, ...prev]);
-        setLastAction({ type: "invoice", label: `${id} — £${input.amount} — ${input.customer}`, view: "Payments" });
-        return `Invoice ${id} created for ${input.customer} — £${input.amount} for ${input.description}.`;
-      }
-      case "create_quote": {
-        const id = `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
-        const quote = {
-          id,
-          customer: input.customer,
-          amount: input.amount,
-          due: `Valid for ${input.valid_days || 30} days`,
-          status: "sent",
-          description: input.description,
-          isQuote: true,
-        };
-        setInvoices(prev => [quote, ...prev]);
-        setLastAction({ type: "invoice", label: `${id} — £${input.amount} — ${input.customer}`, view: "Payments" });
-        return `Quote ${id} created for ${input.customer} — £${input.amount} for ${input.description}. Valid for ${input.valid_days || 30} days.`;
-      }
-      case "log_enquiry": {
-        const enq = {
-          name: input.name,
-          source: input.source,
-          msg: input.message,
-          time: "Just now",
-          urgent: input.urgent || false,
-        };
-        setEnquiries(prev => [enq, ...prev]);
-        setLastAction({ type: "enquiry", label: `${input.name} via ${input.source}`, view: "Dashboard" });
-        return `Enquiry logged from ${input.name} via ${input.source}.`;
-      }
-      case "set_reminder": {
-        const reminder = {
-          id: `r${Date.now()}`,
-          text: input.text,
-          time: Date.now() + (input.minutes_from_now * 60000),
-          timeLabel: input.time_label || "",
-          done: false,
-        };
-        onAddReminder(reminder);
-        setLastAction({ type: "reminder", label: input.text, view: "Reminders" });
-        return `Reminder set: "${input.text}" — ${input.time_label || `in ${input.minutes_from_now} minutes`}.`;
-      }
-      case "create_material": {
-        const mat = {
-          item: input.item,
-          qty: input.qty || 1,
-          supplier: input.supplier || "",
-          job: input.job || "",
-          status: "to_order",
-        };
-        setMaterials(prev => [...prev, mat]);
-        setLastAction({ type: "material", label: `${input.item} x${input.qty || 1}`, view: "Materials" });
-        return `Material added: ${input.item} x${input.qty || 1}${input.supplier ? ` from ${input.supplier}` : ""}${input.job ? ` for ${input.job}` : ""}.`;
-      }
-      case "delete_job": {
-        const match = jobs.find(j =>
-          j.customer.toLowerCase().includes(input.customer.toLowerCase()) &&
-          (!input.job_type || j.type.toLowerCase().includes(input.job_type.toLowerCase()))
-        );
-        if (!match) return `Couldn't find a job for "${input.customer}". Check the Schedule tab for exact details.`;
-        setJobs(prev => prev.filter(j => j.id !== match.id));
-        setLastAction({ type: "job", label: `Deleted: ${match.type} — ${match.customer}`, view: "Schedule" });
-        return `Job deleted: ${match.type} for ${match.customer}.`;
-      }
-      case "delete_invoice": {
-        const match = invoices.find(i =>
-          (input.invoice_id && i.id.toLowerCase() === input.invoice_id.toLowerCase()) ||
-          (input.customer && i.customer.toLowerCase().includes(input.customer.toLowerCase()))
-        );
-        if (!match) return `Couldn't find that invoice. Check the Payments tab for exact details.`;
-        setInvoices(prev => prev.filter(i => i.id !== match.id));
-        setLastAction({ type: "invoice", label: `Deleted: ${match.id} — ${match.customer}`, view: "Payments" });
-        return `Invoice ${match.id} for ${match.customer} (£${match.amount}) deleted.`;
-      }
-      case "delete_enquiry": {
-        const match = enquiries.find(e =>
-          e.name.toLowerCase().includes(input.name.toLowerCase())
-        );
-        if (!match) return `Couldn't find an enquiry from "${input.name}". Check the Dashboard for exact details.`;
-        setEnquiries(prev => prev.filter(e => e !== match));
-        setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Dashboard" });
-        return `Enquiry from ${match.name} deleted.`;
-      }
-      case "delete_customer": {
-        const match = customers.find(c => c.name.toLowerCase().includes(input.name.toLowerCase()));
-        if (!match) return `Couldn't find a customer named "${input.name}". Check the Customers tab.`;
-        setCustomers(prev => prev.filter(c => c.id !== match.id));
-        setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Customers" });
-        return `Customer ${match.name} deleted.`;
-      }
-      case "delete_material": {
-        const match = materials.find(m => m.item.toLowerCase().includes(input.item.toLowerCase()));
-        if (!match) return `Couldn't find a material matching "${input.item}". Check the Materials tab.`;
-        setMaterials(prev => prev.filter(m => m !== match));
-        setLastAction({ type: "material", label: `Deleted: ${match.item}`, view: "Materials" });
-        return `Material "${match.item}" deleted.`;
-      }
-      case "mark_invoice_paid": {
-        const match = invoices.find(i =>
-          !i.isQuote && (
+        case "create_job": {
+          const dateObj = new Date(`${input.date_iso}T${input.time || "09:00"}`);
+          const job = {
+            id: Date.now(),
+            customer: input.customer,
+            address: input.address || "",
+            type: input.type,
+            date: dateObj.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + " " + input.time,
+            dateObj: dateObj.toISOString(),
+            status: input.status || "confirmed",
+            value: input.value || 0,
+          };
+          setJobs(prev => [...(prev || []), job]);
+          setLastAction({ type: "job", label: `${input.type} — ${input.customer}`, view: "Schedule" });
+          return `Job created: ${input.type} for ${input.customer} on ${dateObj.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} at ${input.time}.`;
+        }
+        case "create_invoice": {
+          const id = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+          const inv = { id, customer: input.customer, amount: input.amount, due: `Due in ${input.due_days || 30} days`, status: "sent", description: input.description, isQuote: false };
+          setInvoices(prev => [inv, ...(prev || [])]);
+          setLastAction({ type: "invoice", label: `${id} — £${input.amount} — ${input.customer}`, view: "Invoices" });
+          return `Invoice ${id} created for ${input.customer} — £${input.amount} for ${input.description}.`;
+        }
+        case "create_quote": {
+          const id = `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
+          const quote = { id, customer: input.customer, amount: input.amount, due: `Valid for ${input.valid_days || 30} days`, status: "sent", description: input.description, isQuote: true };
+          setInvoices(prev => [quote, ...(prev || [])]);
+          setLastAction({ type: "invoice", label: `${id} — £${input.amount} — ${input.customer}`, view: "Quotes" });
+          return `Quote ${id} created for ${input.customer} — £${input.amount} for ${input.description}. Valid for ${input.valid_days || 30} days.`;
+        }
+        case "log_enquiry": {
+          const enq = { name: input.name, source: input.source, msg: input.message, time: "Just now", urgent: input.urgent || false };
+          setEnquiries(prev => [enq, ...(prev || [])]);
+          setLastAction({ type: "enquiry", label: `${input.name} via ${input.source}`, view: "Dashboard" });
+          return `Enquiry logged from ${input.name} via ${input.source}.`;
+        }
+        case "set_reminder": {
+          const reminder = { id: `r${Date.now()}`, text: input.text, time: Date.now() + (input.minutes_from_now * 60000), timeLabel: input.time_label || "", done: false };
+          onAddReminder(reminder);
+          setLastAction({ type: "reminder", label: input.text, view: "Reminders" });
+          return `Reminder set: "${input.text}" — ${input.time_label || `in ${input.minutes_from_now} minutes`}.`;
+        }
+        case "create_material": {
+          const mat = { item: input.item, qty: input.qty || 1, supplier: input.supplier || "", job: input.job || "", status: "to_order" };
+          setMaterials(prev => [...(prev || []), mat]);
+          setLastAction({ type: "material", label: `${input.item} x${input.qty || 1}`, view: "Materials" });
+          return `Material added: ${input.item} x${input.qty || 1}${input.supplier ? ` from ${input.supplier}` : ""}${input.job ? ` for ${input.job}` : ""}.`;
+        }
+        case "delete_job": {
+          const match = (jobs || []).find(j => j.customer.toLowerCase().includes(input.customer.toLowerCase()) && (!input.job_type || j.type.toLowerCase().includes(input.job_type.toLowerCase())));
+          if (!match) return `Couldn't find a job for "${input.customer}". Check the Schedule tab.`;
+          setJobs(prev => (prev || []).filter(j => j.id !== match.id));
+          setLastAction({ type: "job", label: `Deleted: ${match.type} — ${match.customer}`, view: "Schedule" });
+          return `Job deleted: ${match.type} for ${match.customer}.`;
+        }
+        case "delete_invoice": {
+          const match = (invoices || []).find(i =>
             (input.invoice_id && i.id.toLowerCase() === input.invoice_id.toLowerCase()) ||
-            (input.customer && i.customer.toLowerCase().includes(input.customer.toLowerCase()) && i.status !== "paid")
-          )
-        );
-        if (!match) return `Couldn't find an unpaid invoice matching that. Check the Payments tab.`;
-        setInvoices(prev => prev.map(i => i.id === match.id ? { ...i, status: "paid", due: "Paid" } : i));
-        setLastAction({ type: "invoice", label: `Paid: ${match.id} — ${match.customer}`, view: "Payments" });
-        return `Invoice ${match.id} for ${match.customer} (£${match.amount}) marked as paid.`;
-      }
-      case "update_job_status": {
-        const match = jobs.find(j =>
-          j.customer.toLowerCase().includes(input.customer.toLowerCase()) &&
-          (!input.job_type || j.type.toLowerCase().includes(input.job_type.toLowerCase()))
-        );
-        if (!match) return `Couldn't find a job for "${input.customer}". Check the Schedule tab.`;
-        setJobs(prev => prev.map(j => j.id === match.id ? { ...j, status: input.status } : j));
-        setLastAction({ type: "job", label: `${input.status}: ${match.type} — ${match.customer}`, view: "Schedule" });
-        return `Job "${match.type}" for ${match.customer} updated to ${input.status}.`;
-      }
-      case "convert_quote_to_invoice": {
-        const match = invoices.find(i =>
-          i.isQuote && (
-            (input.quote_id && i.id.toLowerCase() === input.quote_id.toLowerCase()) ||
             (input.customer && i.customer.toLowerCase().includes(input.customer.toLowerCase()))
-          )
-        );
-        if (!match) return `Couldn't find a quote matching that. Check the Payments → Quotes tab.`;
-        const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
-        const inv = { ...match, id: newId, isQuote: false, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
-        setInvoices(prev => [inv, ...prev.filter(i => i.id !== match.id)]);
-        setLastAction({ type: "invoice", label: `Converted: ${newId} — ${match.customer}`, view: "Payments" });
-        return `Quote ${match.id} converted to invoice ${newId} for ${match.customer} — £${match.amount}.`;
+          );
+          if (!match) return `Couldn't find that invoice. Check the Invoices tab.`;
+          setInvoices(prev => (prev || []).filter(i => i.id !== match.id));
+          setLastAction({ type: "invoice", label: `Deleted: ${match.id} — ${match.customer}`, view: "Invoices" });
+          return `Invoice ${match.id} for ${match.customer} (£${match.amount}) deleted.`;
+        }
+        case "delete_enquiry": {
+          const match = (enquiries || []).find(e => e.name.toLowerCase().includes(input.name.toLowerCase()));
+          if (!match) return `Couldn't find an enquiry from "${input.name}".`;
+          setEnquiries(prev => (prev || []).filter(e => e !== match));
+          setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Dashboard" });
+          return `Enquiry from ${match.name} deleted.`;
+        }
+        case "delete_customer": {
+          const match = (customers || []).find(c => c.name.toLowerCase().includes(input.name.toLowerCase()));
+          if (!match) return `Couldn't find a customer named "${input.name}". Check the Customers tab.`;
+          setCustomers(prev => (prev || []).filter(c => c.id !== match.id));
+          setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Customers" });
+          return `Customer ${match.name} deleted.`;
+        }
+        case "delete_material": {
+          const match = (materials || []).find(m => m.item.toLowerCase().includes(input.item.toLowerCase()));
+          if (!match) return `Couldn't find a material matching "${input.item}". Check the Materials tab.`;
+          setMaterials(prev => (prev || []).filter(m => m !== match));
+          setLastAction({ type: "material", label: `Deleted: ${match.item}`, view: "Materials" });
+          return `Material "${match.item}" deleted.`;
+        }
+        case "mark_invoice_paid": {
+          const match = (invoices || []).find(i =>
+            !i.isQuote && (
+              (input.invoice_id && i.id.toLowerCase() === input.invoice_id.toLowerCase()) ||
+              (input.customer && i.customer.toLowerCase().includes(input.customer.toLowerCase()) && i.status !== "paid")
+            )
+          );
+          if (!match) return `Couldn't find an unpaid invoice matching that. Check the Invoices tab.`;
+          setInvoices(prev => (prev || []).map(i => i.id === match.id ? { ...i, status: "paid", due: "Paid" } : i));
+          setLastAction({ type: "invoice", label: `Paid: ${match.id} — ${match.customer}`, view: "Invoices" });
+          return `Invoice ${match.id} for ${match.customer} (£${match.amount}) marked as paid.`;
+        }
+        case "update_job_status": {
+          const match = (jobs || []).find(j => j.customer.toLowerCase().includes(input.customer.toLowerCase()) && (!input.job_type || j.type.toLowerCase().includes(input.job_type.toLowerCase())));
+          if (!match) return `Couldn't find a job for "${input.customer}". Check the Schedule tab.`;
+          setJobs(prev => (prev || []).map(j => j.id === match.id ? { ...j, status: input.status } : j));
+          setLastAction({ type: "job", label: `${input.status}: ${match.type} — ${match.customer}`, view: "Schedule" });
+          return `Job "${match.type}" for ${match.customer} updated to ${input.status}.`;
+        }
+        case "convert_quote_to_invoice": {
+          const match = (invoices || []).find(i =>
+            i.isQuote && (
+              (input.quote_id && i.id.toLowerCase() === input.quote_id.toLowerCase()) ||
+              (input.customer && i.customer.toLowerCase().includes(input.customer.toLowerCase()))
+            )
+          );
+          if (!match) return `Couldn't find a quote matching that. Check the Quotes tab.`;
+          const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+          const inv = { ...match, id: newId, isQuote: false, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
+          setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== match.id)]);
+          setLastAction({ type: "invoice", label: `Converted: ${newId} — ${match.customer}`, view: "Invoices" });
+          return `Quote ${match.id} converted to invoice ${newId} for ${match.customer} — £${match.amount}.`;
+        }
+        case "update_material_status": {
+          const match = (materials || []).find(m => m.item.toLowerCase().includes(input.item.toLowerCase()));
+          if (!match) return `Couldn't find a material matching "${input.item}". Check the Materials tab.`;
+          setMaterials(prev => (prev || []).map(m => m === match ? { ...m, status: input.status } : m));
+          setLastAction({ type: "material", label: `${input.status}: ${match.item}`, view: "Materials" });
+          return `Material "${match.item}" marked as ${input.status}.`;
+        }
+        default:
+          return `Unknown action: ${name}`;
       }
-      case "update_material_status": {
-        const match = materials.find(m => m.item.toLowerCase().includes(input.item.toLowerCase()));
-        if (!match) return `Couldn't find a material matching "${input.item}". Check the Materials tab.`;
-        setMaterials(prev => prev.map(m => m === match ? { ...m, status: input.status } : m));
-        setLastAction({ type: "material", label: `${input.status}: ${match.item}`, view: "Materials" });
-        return `Material "${match.item}" marked as ${input.status}.`;
-      }
-      default:
-        return "Action completed.";
+    } catch (err) {
+      console.error("Tool execution error:", name, err);
+      return `Error executing ${name}: ${err.message}`;
     }
   };
 
@@ -3283,7 +3300,291 @@ function CustomerForm({ form, set, onSave, onCancel }) {
   );
 }
 
-const VIEWS = ["Dashboard", "Schedule", "Customers", "Materials", "AI Assistant", "Reminders", "Payments", "Settings"];
+// ─── Invoices View ────────────────────────────────────────────────────────────
+function InvoicesView({ brand, invoices, setInvoices }) {
+  const [selected, setSelected] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+
+  const allInvoices = (invoices || []).filter(i => !i.isQuote);
+  const paid = allInvoices.filter(i => i.status === "paid");
+  const outstanding = allInvoices.filter(i => i.status !== "paid");
+  const overdue = allInvoices.filter(i => i.status === "overdue");
+
+  const updateStatus = (id, status) => {
+    setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status, due: status === "paid" ? "Paid" : i.due } : i));
+    if (selected && selected.id === id) setSelected(s => ({ ...s, status, due: status === "paid" ? "Paid" : s.due }));
+  };
+
+  const deleteInvoice = (id) => {
+    setInvoices(prev => (prev || []).filter(i => i.id !== id));
+    setSelected(null);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>Invoices</div>
+        <button style={S.btn("primary")} onClick={() => setShowModal(true)}>+ New Invoice</button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+        <div style={S.card}>
+          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Outstanding</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: outstanding.length > 0 ? C.amber : C.muted }}>{outstanding.length}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>£{outstanding.reduce((s, i) => s + (i.amount || 0), 0).toLocaleString()}</div>
+        </div>
+        <div style={S.card}>
+          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Overdue</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: overdue.length > 0 ? C.red : C.muted }}>{overdue.length}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>{overdue.length > 0 ? "Needs chasing" : "All on time"}</div>
+        </div>
+        <div style={S.card}>
+          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Paid</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: C.green }}>{paid.length}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>£{paid.reduce((s, i) => s + (i.amount || 0), 0).toLocaleString()}</div>
+        </div>
+        <div style={S.card}>
+          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Total</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: C.text }}>{allInvoices.length}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>£{allInvoices.reduce((s, i) => s + (i.amount || 0), 0).toLocaleString()}</div>
+        </div>
+      </div>
+
+      {/* Outstanding list */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>Outstanding ({outstanding.length})</div>
+        {outstanding.length === 0
+          ? <div style={{ fontSize: 12, color: C.green, fontStyle: "italic" }}>All invoices paid — great work!</div>
+          : outstanding.map(inv => (
+            <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
+              <div style={{ width: 4, height: 44, borderRadius: 2, background: inv.status === "overdue" ? C.red : C.amber, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>{inv.id} · {inv.due}</div>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
+              <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
+              <button onClick={e => { e.stopPropagation(); updateStatus(inv.id, "paid"); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green, flexShrink: 0 }}>✓ Paid</button>
+              <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
+            </div>
+          ))
+        }
+      </div>
+
+      {/* Paid list */}
+      {paid.length > 0 && (
+        <div style={S.card}>
+          <div style={S.sectionTitle}>Paid ({paid.length})</div>
+          {paid.map(inv => (
+            <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
+              <div style={{ width: 4, height: 44, borderRadius: 2, background: C.green, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>{inv.id}</div>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
+              <div style={S.badge(C.green)}>Paid</div>
+              <div style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>→</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {allInvoices.length === 0 && (
+        <div style={{ ...S.card, textAlign: "center", padding: 40 }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>💰</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>No invoices yet</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Create your first invoice or ask the AI Assistant.</div>
+          <button style={S.btn("primary")} onClick={() => setShowModal(true)}>+ Create Invoice</button>
+        </div>
+      )}
+
+      {/* Detail modal */}
+      {selected && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelected(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Invoice · {selected.id}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{selected.customer}</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "paid" ? C.green : C.amber }}>£{selected.amount}</div>
+                  <span style={S.badge(statusColor[selected.status] || C.muted)}>{statusLabel[selected.status] || selected.status}</span>
+                </div>
+              </div>
+              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 24 }}>×</button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Description</div>
+                <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+              </div>
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Payment Due</div>
+                <div style={{ fontSize: 13 }}>{selected.due}</div>
+              </div>
+            </div>
+
+            {selected.status !== "paid"
+              ? <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "14px", fontSize: 15, background: C.green, color: "#000", marginBottom: 10 }} onClick={() => updateStatus(selected.id, "paid")}>✓ Mark as Paid</button>
+              : <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "12px 16px", textAlign: "center", color: C.green, fontWeight: 700, marginBottom: 10 }}>✓ Invoice Paid</div>
+            }
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
+              {selected.status === "overdue" && <button style={S.btn("danger")} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>}
+              <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteInvoice(selected.id)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModal && <InvoiceModal brand={brand} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); }} />}
+    </div>
+  );
+}
+
+// ─── Quotes View ──────────────────────────────────────────────────────────────
+function QuotesView({ brand, invoices, setInvoices, setView }) {
+  const [selected, setSelected] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+
+  const allQuotes = (invoices || []).filter(i => i.isQuote);
+  const pending = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
+  const accepted = allQuotes.filter(q => q.status === "accepted");
+  const declined = allQuotes.filter(q => q.status === "declined");
+
+  const updateStatus = (id, status) => {
+    setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status } : i));
+    if (selected && selected.id === id) setSelected(s => ({ ...s, status }));
+  };
+
+  const convertToInvoice = (quote) => {
+    const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+    const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
+    setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== quote.id)]);
+    setSelected(null);
+    setView("Invoices");
+  };
+
+  const deleteQuote = (id) => {
+    setInvoices(prev => (prev || []).filter(i => i.id !== id));
+    setSelected(null);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>Quotes</div>
+        <button style={{ ...S.btn("primary"), background: C.blue }} onClick={() => setShowModal(true)}>+ New Quote</button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+        <div style={S.card}>
+          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Pending</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: C.blue }}>{pending.length}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>£{pending.reduce((s, q) => s + (q.amount || 0), 0).toLocaleString()}</div>
+        </div>
+        <div style={S.card}>
+          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Accepted</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: C.green }}>{accepted.length}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>£{accepted.reduce((s, q) => s + (q.amount || 0), 0).toLocaleString()}</div>
+        </div>
+        <div style={S.card}>
+          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Declined</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: declined.length > 0 ? C.red : C.muted }}>{declined.length}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>{declined.length > 0 ? "Not won" : "None lost"}</div>
+        </div>
+        <div style={S.card}>
+          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Pipeline</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: C.text }}>{allQuotes.length}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>£{allQuotes.reduce((s, q) => s + (q.amount || 0), 0).toLocaleString()}</div>
+        </div>
+      </div>
+
+      {/* All quotes */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>All Quotes ({allQuotes.length})</div>
+        {allQuotes.length === 0
+          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No quotes yet — tap + New Quote or ask the AI Assistant.</div>
+          : allQuotes.map(q => (
+            <div key={q.id} onClick={() => setSelected(q)} style={{ ...S.row, cursor: "pointer" }}>
+              <div style={{ width: 4, height: 44, borderRadius: 2, background: q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>{q.id} · {q.due}</div>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>£{q.amount}</div>
+              <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
+                {q.status === "accepted" ? "Accepted" : q.status === "declined" ? "Declined" : "Sent"}
+              </div>
+              <button onClick={e => { e.stopPropagation(); convertToInvoice(q); }} style={{ ...S.btn("primary"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>→ Invoice</button>
+              <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
+            </div>
+          ))
+        }
+      </div>
+
+      {/* Detail modal */}
+      {selected && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelected(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 11, color: C.blue, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Quote · {selected.id}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{selected.customer}</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "accepted" ? C.green : C.blue }}>£{selected.amount}</div>
+                  <span style={S.badge(selected.status === "accepted" ? C.green : selected.status === "declined" ? C.red : C.blue)}>
+                    {selected.status === "accepted" ? "Accepted" : selected.status === "declined" ? "Declined" : "Sent"}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 24 }}>×</button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Description</div>
+                <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+              </div>
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Valid For</div>
+                <div style={{ fontSize: 13 }}>{selected.due}</div>
+              </div>
+            </div>
+
+            {/* Convert — big primary button */}
+            <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "14px", fontSize: 15, marginBottom: 10 }}
+              onClick={() => convertToInvoice(selected)}>
+              → Convert to Invoice
+            </button>
+
+            {/* Accept / Decline */}
+            {selected.status !== "accepted" && selected.status !== "declined" && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.green }} onClick={() => updateStatus(selected.id, "accepted")}>✓ Mark Accepted</button>
+                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.red }} onClick={() => updateStatus(selected.id, "declined")}>✗ Mark Declined</button>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
+              <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteQuote(selected.id)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModal && <QuoteModal brand={brand} onClose={() => setShowModal(false)} onSent={q => { setInvoices(prev => [q, ...(prev || [])]); setShowModal(false); }} />}
+    </div>
+  );
+}
+
+const VIEWS = ["Dashboard", "Schedule", "Customers", "Invoices", "Quotes", "Materials", "AI Assistant", "Reminders", "Payments", "Settings"];
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -3659,17 +3960,41 @@ export default function App() {
             <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
           </div>
         </div>
-        {/* Nav row — scrolls independently */}
+        {/* Nav row — filtered by permissions for members */}
         <div className="nav-scroll" style={{ display: "flex", overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "0 12px 8px", gap: 2, scrollbarWidth: "none" }}>
-          {VIEWS.map(v => (
+          {VIEWS.filter(v => {
+            if (userRole === "owner") return true;
+            if (v === "Settings") return false; // members never see Settings
+            const myMember = members.find(m => m.user_id === user?.id);
+            const perms = myMember?.permissions;
+            if (!perms) return true; // no restrictions set yet
+            return perms[v] !== false;
+          }).map(v => (
             <button key={v} onClick={() => setView(v)} style={{ ...S.navBtn(view === v), flexShrink: 0 }}>{v}</button>
           ))}
         </div>
       </header>
       <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24 }}>
+        {(() => {
+          // Guard — redirect member to Dashboard if they're on a tab they can't access
+          if (userRole !== "owner" && view !== "Dashboard") {
+            const myMember = members.find(m => m.user_id === user?.id);
+            const perms = myMember?.permissions;
+            if (perms && perms[view] === false) {
+              return <div style={{ ...S.card, textAlign: "center", padding: 40 }}>
+                <div style={{ fontSize: 28, marginBottom: 12 }}>🔒</div>
+                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Access Restricted</div>
+                <div style={{ fontSize: 12, color: C.muted }}>You don't have permission to view this section. Contact your account owner.</div>
+              </div>;
+            }
+          }
+          return null;
+        })()}
         {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} />}
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} />}
+        {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} />}
+        {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} />}
         {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
