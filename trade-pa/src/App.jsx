@@ -1,6 +1,28 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabase.js";
 
+// ─── Sync invoice to accounting software ─────────────────────────────────────
+async function syncInvoiceToAccounting(userId, invoice) {
+  if (!userId || !invoice) return;
+  try {
+    // Try Xero
+    await fetch("/api/xero/create-invoice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, invoice }),
+    }).catch(() => {}); // Silently fail if not connected
+
+    // Try QuickBooks
+    await fetch("/api/quickbooks/create-invoice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, invoice }),
+    }).catch(() => {}); // Silently fail if not connected
+  } catch (e) {
+    console.log("Accounting sync skipped:", e.message);
+  }
+}
+
 // ─── Auth Screen ──────────────────────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState("login"); // login | signup | reset
@@ -739,8 +761,19 @@ function TeamInvite({ companyId }) {
 function Settings({ brand, setBrand, companyId, companyName, userRole, members, user }) {
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [xeroConnected, setXeroConnected] = useState(false);
+  const [qbConnected, setQbConnected] = useState(false);
   const logoRef = useRef();
   const set = (k) => (e) => setBrand(b => ({ ...b, [k]: e.target.value }));
+
+  // Check connection status on load and from URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('xero') === 'connected') setXeroConnected(true);
+    if (params.get('qb') === 'connected') setQbConnected(true);
+    // Clean URL
+    if (params.has('xero') || params.has('qb')) window.history.replaceState({}, '', window.location.pathname);
+  }, []);
 
   const handleLogo = (e) => {
     const file = e.target.files[0];
@@ -948,6 +981,54 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Accounting Integrations */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>Accounting Integrations</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>
+          Connect your accounting software. Invoices created in Trade PA will automatically sync across.
+        </div>
+
+        {/* Xero */}
+        <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, marginBottom: 10, display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 8, background: "#13B5EA", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <span style={{ color: "#fff", fontWeight: 900, fontSize: 14 }}>X</span>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Xero</div>
+            <div style={{ fontSize: 11, color: C.muted }}>
+              {xeroConnected ? "Connected — invoices will sync automatically" : "Not connected"}
+            </div>
+          </div>
+          {xeroConnected
+            ? <div style={S.badge(C.green)}>✓ Connected</div>
+            : <a
+                href={`/api/auth/xero/connect?userId=${user?.id}`}
+                style={{ ...S.btn("primary"), textDecoration: "none", background: "#13B5EA", fontSize: 12 }}
+              >Connect Xero</a>
+          }
+        </div>
+
+        {/* QuickBooks */}
+        <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 8, background: "#2CA01C", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <span style={{ color: "#fff", fontWeight: 900, fontSize: 11 }}>QB</span>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>QuickBooks</div>
+            <div style={{ fontSize: 11, color: C.muted }}>
+              {qbConnected ? "Connected — invoices will sync automatically" : "Not connected"}
+            </div>
+          </div>
+          {qbConnected
+            ? <div style={S.badge(C.green)}>✓ Connected</div>
+            : <a
+                href={`/api/auth/quickbooks/connect?userId=${user?.id}`}
+                style={{ ...S.btn("primary"), textDecoration: "none", background: "#2CA01C", fontSize: 12 }}
+              >Connect QuickBooks</a>
+          }
         </div>
       </div>
 
