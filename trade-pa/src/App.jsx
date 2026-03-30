@@ -3088,12 +3088,13 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
 
 // ─── Line Items Builder ───────────────────────────────────────────────────────
 function LineItemsBuilder({ form, setForm, accentColor, isQuote }) {
+  // Normalise lineItems — support both {desc} and {description} keys
   const items = form.lineItems && form.lineItems.length > 0
-    ? form.lineItems
+    ? form.lineItems.map(l => ({ desc: l.desc ?? l.description ?? "", amount: l.amount ?? "" }))
     : [{ desc: form.desc || "", amount: "" }];
 
   const [useIndividualPrices, setUseIndividualPrices] = useState(
-    form.lineItems && form.lineItems.some(l => l.amount)
+    form.lineItems && form.lineItems.some(l => l.amount && l.amount !== "")
   );
 
   const updateItem = (i, key, val) => {
@@ -3200,7 +3201,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
   const cisNetPayable = form.cisEnabled ? parseFloat((cisGross - cisDeduction).toFixed(2)) : 0;
 
   // Compute total from line items if individual prices set
-  const lineItemsTotal = form.lineItems && form.lineItems.length > 0 && form.lineItems.some(l => l.amount)
+  const lineItemsTotal = form.lineItems && form.lineItems.length > 0 && form.lineItems.some(l => l.amount && l.amount !== "")
     ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
     : null;
 
@@ -3219,7 +3220,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
   const send = () => {
     try {
       const finalDesc = form.lineItems && form.lineItems.length > 0
-        ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
+        ? form.lineItems.map(l => l.amount && l.amount !== "" ? `${l.desc || l.description}|${l.amount}` : (l.desc || l.description || "")).filter(Boolean).join("\n")
         : form.desc;
       const finalAmount = form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount);
       const payload = {
@@ -3441,8 +3442,12 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                 <div style={{ display: "flex", gap: 10 }}>
                   <button style={S.btn("ghost")} onClick={() => setTab("preview")} disabled={!valid}>Preview Invoice →</button>
                   {(form.paymentMethod === "card" || form.paymentMethod === "both")
-                    ? <button style={S.btn("stripe", !valid)} disabled={!valid} onClick={send}><span style={{ fontWeight: 900 }}>S</span> {isEditing ? "Save Changes →" : "Send via Stripe →"}</button>
-                    : <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>{isEditing ? "Save Changes →" : "Send Invoice →"}</button>
+                    {isEditing
+                      ? <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>Save Changes →</button>
+                      : (form.paymentMethod === "card" || form.paymentMethod === "both")
+                        ? <button style={S.btn("stripe", !valid)} disabled={!valid} onClick={send}><span style={{ fontWeight: 900 }}>S</span> Send via Stripe →</button>
+                        : <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>Send Invoice →</button>
+                    }
                   }
                 </div>
               </div>
@@ -3478,7 +3483,7 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const isVatRegistered = !!brand.vatNumber;
 
-  const lineItemsTotal = form.lineItems && form.lineItems.some(l => l.amount)
+  const lineItemsTotal = form.lineItems && form.lineItems.some(l => l.amount && l.amount !== "")
     ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
     : null;
 
@@ -3493,7 +3498,7 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
     try {
       const id = initialData?.id || `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
       const finalDesc = form.lineItems && form.lineItems.length > 0
-        ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
+        ? form.lineItems.map(l => l.amount && l.amount !== "" ? `${l.desc || l.description}|${l.amount}` : (l.desc || l.description || "")).filter(Boolean).join("\n")
         : form.desc;
       const payload = {
         id, customer: form.customer, email: form.email, address: form.address,
@@ -4497,21 +4502,27 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
 // ─── Line Items Display ───────────────────────────────────────────────────────
 function LineItemsDisplay({ inv }) {
   if (!inv) return null;
-  const items = inv.lineItems && inv.lineItems.length > 0
-    ? inv.lineItems
+
+  // Normalise items — handle both {desc, amount} from builder and {description, amount} from legacy
+  const rawItems = inv.lineItems && inv.lineItems.length > 0
+    ? inv.lineItems.map(l => ({
+        description: l.description || l.desc || "",
+        amount: l.amount !== "" && l.amount != null && !isNaN(parseFloat(l.amount)) ? parseFloat(l.amount) : null,
+      })).filter(l => l.description)
     : (inv.description || inv.desc || "").split(/\n|;\s*/).map(s => {
         const pipeIdx = s.lastIndexOf("|");
         if (pipeIdx > 0) return { description: s.slice(0, pipeIdx).trim(), amount: parseFloat(s.slice(pipeIdx + 1)) || null };
         return { description: s.trim(), amount: null };
       }).filter(i => i.description);
 
+  const items = rawItems;
   if (items.length === 0) return <div style={{ fontSize: 13, color: "#888" }}>—</div>;
 
   if (items.length === 1) {
     return (
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
         <span>{items[0].description}</span>
-        {items[0].amount != null && <span style={{ fontWeight: 600 }}>£{items[0].amount.toFixed ? items[0].amount.toFixed(2) : items[0].amount}</span>}
+        {items[0].amount != null && <span style={{ fontWeight: 600 }}>£{Number(items[0].amount).toFixed(2)}</span>}
       </div>
     );
   }
