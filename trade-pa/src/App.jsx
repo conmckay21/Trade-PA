@@ -877,6 +877,56 @@ function TeamInvite({ companyId }) {
   );
 }
 
+const ALL_CERTS = [
+  { label: "Gas Safe Registered", icon: "🔥", key: "cert_gassafe" },
+  { label: "OFTEC Registered", icon: "🛢", key: "cert_oftec" },
+  { label: "NICEIC Approved", icon: "⚡", key: "cert_niceic" },
+  { label: "NAPIT Registered", icon: "🔌", key: "cert_napit" },
+  { label: "Which? Trusted Trader", icon: "✓", key: "cert_which" },
+  { label: "Federation of Master Builders", icon: "🏗", key: "cert_fmb" },
+  { label: "TrustMark Registered", icon: "🛡", key: "cert_trustmark" },
+  { label: "CORGI Registered", icon: "🔧", key: "cert_corgi" },
+  { label: "CHAS Accredited", icon: "📋", key: "cert_chas" },
+  { label: "SAFEcontractor Approved", icon: "🦺", key: "cert_safecontractor" },
+  { label: "Checkatrade Member", icon: "🏠", key: "cert_checkatrade" },
+  { label: "F-Gas Certified", icon: "❄", key: "cert_fgas" },
+];
+
+function CertificationsCard({ brand, setBrand }) {
+  const [expanded, setExpanded] = useState(false);
+  const enabledCerts = ALL_CERTS.filter(c => brand[c.key]);
+  const visibleCerts = expanded ? ALL_CERTS : (enabledCerts.length > 0 ? enabledCerts : ALL_CERTS.slice(0, 4));
+  return (
+    <div style={S.card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <div style={S.sectionTitle}>Certifications & Compliance</div>
+        <button onClick={() => setExpanded(e => !e)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>
+          {expanded ? "Show less ↑" : `Show all (${ALL_CERTS.length}) ↓`}
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
+        {enabledCerts.length > 0 ? `${enabledCerts.length} shown on invoices & quotes` : "Tap to enable certifications shown on your invoices."}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {visibleCerts.map((cert) => {
+          const on = brand[cert.key] || false;
+          return (
+            <div key={cert.key}
+              style={{ display: "flex", alignItems: "center", gap: 14, padding: "11px 14px", background: on ? brand.accentColor + "11" : C.surfaceHigh, border: `1px solid ${on ? brand.accentColor + "44" : C.border}`, borderRadius: 8, cursor: "pointer", transition: "all 0.15s" }}
+              onClick={() => setBrand(b => ({ ...b, [cert.key]: !on }))}>
+              <div style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: "center" }}>{cert.icon}</div>
+              <div style={{ flex: 1, fontSize: 13, fontWeight: on ? 600 : 400, color: on ? C.text : C.textDim }}>{cert.label}</div>
+              <div style={{ width: 36, height: 20, borderRadius: 10, background: on ? brand.accentColor : C.border, position: "relative", flexShrink: 0, transition: "all 0.2s" }}>
+                <div style={{ position: "absolute", top: 2, left: on ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "all 0.2s" }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Settings({ brand, setBrand, companyId, companyName, userRole, members, user }) {
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
@@ -1098,54 +1148,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       </div>
 
       {/* Certifications */}
-      {(() => {
-        const [expanded, setExpanded] = useState(false);
-        const ALL_CERTS = [
-          { label: "Gas Safe Registered", icon: "🔥", key: "cert_gassafe" },
-          { label: "OFTEC Registered", icon: "🛢", key: "cert_oftec" },
-          { label: "NICEIC Approved", icon: "⚡", key: "cert_niceic" },
-          { label: "NAPIT Registered", icon: "🔌", key: "cert_napit" },
-          { label: "Which? Trusted Trader", icon: "✓", key: "cert_which" },
-          { label: "Federation of Master Builders", icon: "🏗", key: "cert_fmb" },
-          { label: "TrustMark Registered", icon: "🛡", key: "cert_trustmark" },
-          { label: "CORGI Registered", icon: "🔧", key: "cert_corgi" },
-          { label: "CHAS Accredited", icon: "📋", key: "cert_chas" },
-          { label: "SAFEcontractor Approved", icon: "🦺", key: "cert_safecontractor" },
-          { label: "Checkatrade Member", icon: "🏠", key: "cert_checkatrade" },
-          { label: "F-Gas Certified", icon: "❄", key: "cert_fgas" },
-        ];
-        const enabledCerts = ALL_CERTS.filter(c => brand[c.key]);
-        const visibleCerts = expanded ? ALL_CERTS : (enabledCerts.length > 0 ? enabledCerts : ALL_CERTS.slice(0, 4));
-        return (
-          <div style={S.card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <div style={S.sectionTitle}>Certifications & Compliance</div>
-              <button onClick={() => setExpanded(e => !e)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>
-                {expanded ? "Show less ↑" : `Show all (${ALL_CERTS.length}) ↓`}
-              </button>
-            </div>
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
-              {enabledCerts.length > 0 ? `${enabledCerts.length} shown on invoices & quotes` : "Tap to enable certifications shown on your invoices."}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {visibleCerts.map((cert) => {
-                const on = brand[cert.key] || false;
-                return (
-                  <div key={cert.key}
-                    style={{ display: "flex", alignItems: "center", gap: 14, padding: "11px 14px", background: on ? brand.accentColor + "11" : C.surfaceHigh, border: `1px solid ${on ? brand.accentColor + "44" : C.border}`, borderRadius: 8, cursor: "pointer", transition: "all 0.15s" }}
-                    onClick={() => setBrand(b => ({ ...b, [cert.key]: !on }))}>
-                    <div style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: "center" }}>{cert.icon}</div>
-                    <div style={{ flex: 1, fontSize: 13, fontWeight: on ? 600 : 400, color: on ? C.text : C.textDim }}>{cert.label}</div>
-                    <div style={{ width: 36, height: 20, borderRadius: 10, background: on ? brand.accentColor : C.border, position: "relative", flexShrink: 0, transition: "all 0.2s" }}>
-                      <div style={{ position: "absolute", top: 2, left: on ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "all 0.2s" }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
+      <CertificationsCard brand={brand} setBrand={setBrand} />
 
       {/* Accounting Integrations */}
       <div style={S.card}>
