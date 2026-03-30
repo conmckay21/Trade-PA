@@ -353,10 +353,13 @@ function downloadInvoicePDF(brand, inv) {
   // Parse line items — support stored lineItems array, or pipe-separated "desc|amount" format, or plain text
   let lineItems;
   if (cisEnabled) {
-    // CIS invoices always show labour + materials as separate lines
+    // CIS invoices: labour as single line, materials as individual items
     lineItems = [];
     if (cisLabour > 0) lineItems.push({ description: "Labour", amount: cisLabour });
-    if (cisMaterials > 0) lineItems.push({ description: "Materials", amount: cisMaterials });
+    const matItems = inv.materialItems && inv.materialItems.filter(m => m.desc || m.description).length > 0
+      ? inv.materialItems.filter(m => m.desc || m.description)
+      : cisMaterials > 0 ? [{ description: "Materials", amount: cisMaterials }] : [];
+    matItems.forEach(m => lineItems.push({ description: m.description || m.desc, amount: parseFloat(m.amount) || 0 }));
     if (lineItems.length === 0) lineItems.push({ description: rawDesc, amount: grossAmount });
   } else if (inv.lineItems && inv.lineItems.length > 0) {
     lineItems = inv.lineItems.map(l => ({
@@ -961,9 +964,29 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
   const handleLogo = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setBrand(b => ({ ...b, logo: ev.target.result }));
-    reader.readAsDataURL(file);
+    // Compress image before storing to prevent localStorage overflow
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 400; // max dimension px
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        const ratio = Math.min(MAX / width, MAX / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      const compressed = canvas.toDataURL("image/jpeg", 0.8);
+      setBrand(b => ({ ...b, logo: compressed }));
+    };
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
+    // Reset input so same file can be re-selected
+    e.target.value = "";
   };
 
   const save = () => {
@@ -3273,7 +3296,8 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
     cisRate: initialData.cisRate || 20,
     jobRef: initialData?.jobRef || "",
     lineItems: initialData?.lineItems || [],
-  } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatZeroRated: false, cisEnabled: false, cisRate: 20, jobRef: "", lineItems: [] });
+    materialItems: initialData?.materialItems || [{ desc: "", amount: "" }],
+  } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatZeroRated: false, cisEnabled: false, cisRate: 20, jobRef: "", lineItems: [], materialItems: [{ desc: "", amount: "" }] });
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
@@ -3323,6 +3347,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
         cisEnabled: form.cisEnabled, cisRate: form.cisRate,
         cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
         jobRef: form.jobRef || "",
+        materialItems: form.materialItems || [],
       };
       if (isEditing) {
         onSent(payload);
@@ -3408,15 +3433,22 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                   </div>
                   {form.cisEnabled && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <div style={S.grid2}>
-                        <div>
-                          <label style={S.label}>Labour (£)</label>
-                          <input style={S.input} type="number" placeholder="e.g. 400" value={form.labour} onChange={set("labour")} />
+                      <div>
+                        <label style={S.label}>Labour (£)</label>
+                        <input style={S.input} type="number" placeholder="e.g. 400" value={form.labour} onChange={set("labour")} />
+                      </div>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <label style={S.label}>Materials <span style={{ color: C.muted, fontWeight: 400 }}>(no CIS deduction)</span></label>
+                          <button onClick={() => setForm(f => ({ ...f, materialItems: [...(f.materialItems || [{ desc: "", amount: "" }]), { desc: "", amount: "" }] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "3px 10px" }}>+ Add line</button>
                         </div>
-                        <div>
-                          <label style={S.label}>Materials (£) <span style={{ color: C.muted, fontWeight: 400 }}>(no CIS deduction)</span></label>
-                          <input style={S.input} type="number" placeholder="e.g. 80" value={form.materials} onChange={set("materials")} />
-                        </div>
+                        {(form.materialItems || [{ desc: "", amount: "" }]).map((item, i) => (
+                          <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
+                            <input style={{ ...S.input, flex: 1 }} placeholder="e.g. Boiler unit" value={item.desc} onChange={e => setForm(f => { const next = [...(f.materialItems || [{ desc: "", amount: "" }])]; next[i] = { ...next[i], desc: e.target.value }; return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} />
+                            <input style={{ ...S.input, width: 90, flexShrink: 0 }} type="number" placeholder="£" value={item.amount} onChange={e => setForm(f => { const next = [...(f.materialItems || [{ desc: "", amount: "" }])]; next[i] = { ...next[i], amount: e.target.value }; return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} />
+                            {(form.materialItems || []).length > 1 && <button onClick={() => setForm(f => { const next = f.materialItems.filter((_, j) => j !== i); return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>}
+                          </div>
+                        ))}
                       </div>
                       <div>
                         <label style={S.label}>CIS Deduction Rate</label>
@@ -3430,9 +3462,15 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                         <div style={{ background: C.surface, borderRadius: 8, padding: "12px 14px", border: `1px solid ${C.border}` }}>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span style={{ color: C.muted }}>Labour</span><span>£{labourAmt.toFixed(2)}</span></div>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span style={{ color: C.muted }}>Materials</span><span>£{materialsAmt.toFixed(2)}</span></div>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}><span style={{ color: C.muted }}>Gross Total</span><span>£{cisGross.toFixed(2)}</span></div>
+                          {form.vatEnabled && !form.vatZeroRated && !form.vatType?.includes("drc") && (
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span style={{ color: C.muted }}>VAT @ {form.vatRate}%</span><span>£{(cisGross * form.vatRate / 100).toFixed(2)}</span></div>
+                          )}
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}><span style={{ color: C.muted }}>Gross Total</span><span>£{(cisGross + (form.vatEnabled && !form.vatType?.includes("drc") ? cisGross * form.vatRate / 100 : 0)).toFixed(2)}</span></div>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4, color: C.red }}><span>CIS Deduction ({form.cisRate}% of labour)</span><span>-£{cisDeduction.toFixed(2)}</span></div>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.green }}><span>Net Payable to You</span><span>£{cisNetPayable.toFixed(2)}</span></div>
+                          {form.vatEnabled && form.vatType?.includes("drc") && (
+                            <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>DRC — contractor accounts for VAT @ {form.vatRate}%</div>
+                          )}
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.green }}><span>Net Payable to You</span><span>£{(cisNetPayable + (form.vatEnabled && !form.vatType?.includes("drc") ? cisGross * form.vatRate / 100 : 0)).toFixed(2)}</span></div>
                         </div>
                       )}
                     </div>
@@ -3454,8 +3492,10 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                           if (v === "none") setForm(f => ({ ...f, vatEnabled: false, vatZeroRated: false, vatType: "" }));
                           else if (v === "zero") setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: true, vatRate: 0, vatType: "zero" }));
                           else {
-                            const [rate, type] = v.split("_");
-                            setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: false, vatRate: parseInt(rate), vatType: type }));
+                            const parts = v.split("_");
+                            const rate = parseInt(parts[0]);
+                            const type = parts.slice(1).join("_"); // handles "income", "expenses", "drc_income", "drc_expenses"
+                            setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: false, vatRate: rate, vatType: type }));
                           }
                         }}
                         style={{ ...S.input, width: "auto", minWidth: 260, padding: "6px 10px" }}
@@ -3669,8 +3709,10 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
                           const v = e.target.value;
                           if (v === "none") setForm(f => ({ ...f, vatEnabled: false, vatType: "" }));
                           else {
-                            const [rate, type] = v.split("_");
-                            setForm(f => ({ ...f, vatEnabled: true, vatRate: parseInt(rate), vatType: type }));
+                            const parts = v.split("_");
+                            const rate = parseInt(parts[0]);
+                            const type = parts.slice(1).join("_");
+                            setForm(f => ({ ...f, vatEnabled: true, vatRate: rate, vatType: type }));
                           }
                         }}
                         style={{ ...S.input, width: "auto", minWidth: 260, padding: "6px 10px" }}
@@ -4672,7 +4714,18 @@ export default function App() {
     if (!user) return;
     brandSaveCount.current++;
     if (brandSaveCount.current <= 1) return; // skip first fire — that's the default brand before load completes
-    localStorage.setItem(`trade-pa-brand-${user.id}`, JSON.stringify(brand));
+    try {
+      localStorage.setItem(`trade-pa-brand-${user.id}`, JSON.stringify(brand));
+    } catch (e) {
+      // localStorage quota exceeded — try saving without the logo
+      try {
+        const { logo, ...brandWithoutLogo } = brand;
+        localStorage.setItem(`trade-pa-brand-${user.id}`, JSON.stringify(brandWithoutLogo));
+        console.warn("Logo too large for localStorage, saved settings without logo");
+      } catch (e2) {
+        console.error("Could not save brand settings:", e2);
+      }
+    }
   }, [brand, user?.id]);
 
   const handleLogout = async () => {
