@@ -352,15 +352,23 @@ function downloadInvoicePDF(brand, inv) {
 
   // Parse line items — support stored lineItems array, or pipe-separated "desc|amount" format, or plain text
   let lineItems;
-  if (inv.lineItems && inv.lineItems.length > 0) {
-    lineItems = inv.lineItems;
+  if (cisEnabled) {
+    // CIS invoices always show labour + materials as separate lines
+    lineItems = [];
+    if (cisLabour > 0) lineItems.push({ description: "Labour", amount: cisLabour });
+    if (cisMaterials > 0) lineItems.push({ description: "Materials", amount: cisMaterials });
+    if (lineItems.length === 0) lineItems.push({ description: rawDesc, amount: grossAmount });
+  } else if (inv.lineItems && inv.lineItems.length > 0) {
+    lineItems = inv.lineItems.map(l => ({
+      description: l.description || l.desc || "",
+      amount: l.amount !== "" && l.amount != null && !isNaN(parseFloat(l.amount)) ? parseFloat(l.amount) : null,
+    })).filter(l => l.description);
   } else {
     lineItems = rawDesc
       .split(/\n|;\s*/)
       .map(s => s.trim())
       .filter(Boolean)
       .map(s => {
-        // Check for pipe-separated "description|amount" format
         const pipeIdx = s.lastIndexOf("|");
         if (pipeIdx > 0) {
           const desc = s.slice(0, pipeIdx).trim();
@@ -372,7 +380,7 @@ function downloadInvoicePDF(brand, inv) {
   }
 
   // If only one item with no price, use the total
-  if (lineItems.length === 1 && lineItems[0].amount === null) {
+  if (!cisEnabled && lineItems.length === 1 && lineItems[0].amount === null) {
     lineItems[0].amount = grossAmount;
   }
 
@@ -453,8 +461,10 @@ function downloadInvoicePDF(brand, inv) {
   </div>
 
   <div class="infobar">
-    <div><span>Date:</span>${date}</div>
-    <div><span>${isQuote ? "Valid for:" : "Payment due:"}</span>${isQuote ? "30 days" : `${brand.paymentTerms || 30} days`}</div>
+    <div>
+      <div><span>Date:</span>${date}</div>
+      <div style="margin-top:3px"><span>${isQuote ? "Valid for:" : "Payment due:"}</span>${isQuote ? (inv.due || "30 days") : (inv.due || `${brand.paymentTerms || 30} days`)}</div>
+    </div>
     ${brand.vatNumber ? `<div><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
     <div><span>Ref:</span>${ref}</div>
     ${inv.jobRef ? `<div><span>Job Ref:</span>${inv.jobRef}</div>` : ""}
@@ -481,24 +491,26 @@ function downloadInvoicePDF(brand, inv) {
       <thead>
         <tr>
           <th>Description</th>
-          ${vatEnabled ? `<th class="right">Net</th><th class="right">VAT ${vatRate}%</th>` : ""}
-          <th class="right">${vatEnabled ? "Gross" : "Amount"}</th>
+          ${cisEnabled ? `<th class="right">Amount</th>` : vatEnabled ? `<th class="right">Net</th><th class="right">VAT ${vatRate}%</th><th class="right">Gross</th>` : `<th class="right">Amount</th>`}
         </tr>
       </thead>
       <tbody>
         ${lineItems.map((line, i) => {
           const isLast = i === lineItems.length - 1;
-          const lineAmt = line.amount !== null ? line.amount : (isLast ? grossAmount : null);
-          const lineNet = vatEnabled && lineAmt !== null ? parseFloat((lineAmt / (1 + vatRate / 100)).toFixed(2)) : null;
-          const lineVat = vatEnabled && lineAmt !== null ? parseFloat((lineAmt - lineNet).toFixed(2)) : null;
+          const lineAmt = line.amount !== null ? line.amount : (isLast && !hasIndividualPrices ? grossAmount : null);
+          const lineNet = !cisEnabled && vatEnabled && lineAmt !== null ? parseFloat((lineAmt / (1 + vatRate / 100)).toFixed(2)) : null;
+          const lineVat = !cisEnabled && vatEnabled && lineAmt !== null ? parseFloat((lineAmt - lineNet).toFixed(2)) : null;
           return `
         <tr>
           <td>${line.description || line}</td>
-          ${vatEnabled ? `
-            <td class="right">${lineNet !== null ? "£" + lineNet.toFixed(2) : ""}</td>
-            <td class="right">${lineVat !== null ? "£" + lineVat.toFixed(2) : ""}</td>
-          ` : ""}
-          <td class="right">${lineAmt !== null ? "£" + lineAmt.toFixed(2) : ""}</td>
+          ${cisEnabled
+            ? `<td class="right">${lineAmt !== null ? "£" + lineAmt.toFixed(2) : "—"}</td>`
+            : vatEnabled
+              ? `<td class="right">${lineNet !== null ? "£" + lineNet.toFixed(2) : "—"}</td>
+                 <td class="right">${lineVat !== null ? "£" + lineVat.toFixed(2) : "—"}</td>
+                 <td class="right">${lineAmt !== null ? "£" + lineAmt.toFixed(2) : "—"}</td>`
+              : `<td class="right">${lineAmt !== null ? "£" + lineAmt.toFixed(2) : "—"}</td>`
+          }
         </tr>`;
         }).join("")}
       </tbody>
