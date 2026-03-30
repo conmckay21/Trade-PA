@@ -3441,13 +3441,11 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
 
                 <div style={{ display: "flex", gap: 10 }}>
                   <button style={S.btn("ghost")} onClick={() => setTab("preview")} disabled={!valid}>Preview Invoice →</button>
-                  {(form.paymentMethod === "card" || form.paymentMethod === "both")
-                    {isEditing
-                      ? <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>Save Changes →</button>
-                      : (form.paymentMethod === "card" || form.paymentMethod === "both")
-                        ? <button style={S.btn("stripe", !valid)} disabled={!valid} onClick={send}><span style={{ fontWeight: 900 }}>S</span> Send via Stripe →</button>
-                        : <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>Send Invoice →</button>
-                    }
+                  {isEditing
+                    ? <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>Save Changes →</button>
+                    : (form.paymentMethod === "card" || form.paymentMethod === "both")
+                      ? <button style={S.btn("stripe", !valid)} disabled={!valid} onClick={send}><span style={{ fontWeight: 900 }}>S</span> Send via Stripe →</button>
+                      : <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>Send Invoice →</button>
                   }
                 </div>
               </div>
