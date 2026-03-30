@@ -263,27 +263,27 @@ const C = {
 
 const S = {
   app: { fontFamily: "'DM Mono','Courier New',monospace", background: C.bg, minHeight: "-webkit-fill-available", color: C.text, width: "100%", overflowX: "hidden" },
-  header: { background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, position: "sticky", top: 0, zIndex: 100, width: "100%" },
-  logo: { display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 16, letterSpacing: "0.05em", color: C.amber },
-  logoIcon: { width: 32, height: 28, background: C.amber, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontSize: 11, fontWeight: 900, letterSpacing: "-0.02em" },
+  header: { background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 12px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, position: "sticky", top: 0, zIndex: 100, width: "100%", boxSizing: "border-box" },
+  logo: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 14, letterSpacing: "0.05em", color: C.amber },
+  logoIcon: { width: 28, height: 28, background: C.amber, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontSize: 10, fontWeight: 900, letterSpacing: "-0.02em", flexShrink: 0 },
   nav: { display: "flex", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", flexShrink: 0 },
-  navBtn: (a) => ({ padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: a ? 700 : 400, letterSpacing: "0.04em", background: a ? C.amber : "transparent", color: a ? "#000" : C.textDim, transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }),
-  main: { flex: 1, padding: "16px", maxWidth: 1200, width: "100%", margin: "0 auto", boxSizing: "border-box", overflowX: "hidden" },
-  card: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, minWidth: 0 },
-  grid2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 },
-  grid3: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 },
-  grid4: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 },
-  sectionTitle: { fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: 16 },
-  badge: (color) => ({ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", background: color + "22", color, border: `1px solid ${color}44` }),
-  pill: (color, active) => ({ padding: "6px 14px", borderRadius: 6, border: `1px solid ${active ? color : C.border}`, background: active ? color + "22" : C.surfaceHigh, color: active ? color : C.textDim, cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600 }),
-  btn: (v = "primary", dis = false) => ({ padding: "8px 16px", borderRadius: 6, border: v === "ghost" ? `1px solid ${C.border}` : "none", cursor: dis ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 600, letterSpacing: "0.04em", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 6, background: dis ? C.surfaceHigh : v === "primary" ? C.amber : v === "stripe" ? "#635bff" : v === "danger" ? C.red : v === "green" ? C.green : C.surfaceHigh, color: dis ? C.muted : v === "primary" ? "#000" : v === "green" ? "#000" : C.text, opacity: dis ? 0.6 : 1, transition: "all 0.15s" }),
-  input: { width: "100%", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", color: C.text, fontSize: 13, fontFamily: "'DM Mono',monospace", outline: "none", boxSizing: "border-box" },
+  navBtn: (a) => ({ padding: "6px 8px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 10, fontFamily: "'DM Mono',monospace", fontWeight: a ? 700 : 400, letterSpacing: "0.04em", background: a ? C.amber : "transparent", color: a ? "#000" : C.textDim, transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }),
+  main: { flex: 1, padding: "12px", maxWidth: 600, width: "100%", margin: "0 auto", boxSizing: "border-box", overflowX: "hidden" },
+  card: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, minWidth: 0, boxSizing: "border-box" },
+  grid2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 },
+  grid3: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 },
+  grid4: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 },
+  sectionTitle: { fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: 14 },
+  badge: (color) => ({ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", background: color + "22", color, border: `1px solid ${color}44`, whiteSpace: "nowrap" }),
+  pill: (color, active) => ({ padding: "6px 12px", borderRadius: 6, border: `1px solid ${active ? color : C.border}`, background: active ? color + "22" : C.surfaceHigh, color: active ? color : C.textDim, cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600 }),
+  btn: (v = "primary", dis = false) => ({ padding: "8px 14px", borderRadius: 6, border: v === "ghost" ? `1px solid ${C.border}` : "none", cursor: dis ? "not-allowed" : "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600, letterSpacing: "0.04em", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 6, background: dis ? C.surfaceHigh : v === "primary" ? C.amber : v === "stripe" ? "#635bff" : v === "danger" ? C.red : v === "green" ? C.green : C.surfaceHigh, color: dis ? C.muted : v === "primary" ? "#000" : v === "green" ? "#000" : C.text, opacity: dis ? 0.6 : 1, transition: "all 0.15s", flexShrink: 0 }),
+  input: { width: "100%", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", color: C.text, fontSize: 13, fontFamily: "'DM Mono',monospace", outline: "none", boxSizing: "border-box" },
   label: { fontSize: 11, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6, display: "block" },
-  row: { display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${C.border}` },
-  statCard: (accent) => ({ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${accent}`, borderRadius: 10, padding: 20 }),
+  row: { display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: `1px solid ${C.border}`, minWidth: 0, overflow: "hidden" },
+  statCard: (accent) => ({ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${accent}`, borderRadius: 10, padding: 16 }),
   aiMsg: (r) => ({ display: "flex", gap: 10, marginBottom: 16, flexDirection: r === "user" ? "row-reverse" : "row" }),
-  aiBubble: (r) => ({ maxWidth: "80%", padding: "10px 14px", borderRadius: r === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px", background: r === "user" ? C.amberDim : C.surfaceHigh, border: `1px solid ${r === "user" ? C.amber + "44" : C.border}`, fontSize: 13, lineHeight: 1.6, color: C.text, whiteSpace: "pre-wrap" }),
-  avatar: (r) => ({ width: 30, height: 30, borderRadius: "50%", background: r === "user" ? C.amber : C.surface, border: `1px solid ${r === "user" ? C.amber : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: r === "user" ? "#000" : C.amber, flexShrink: 0 }),
+  aiBubble: (r) => ({ maxWidth: "85%", padding: "10px 14px", borderRadius: r === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px", background: r === "user" ? C.amberDim : C.surfaceHigh, border: `1px solid ${r === "user" ? C.amber + "44" : C.border}`, fontSize: 13, lineHeight: 1.6, color: C.text, whiteSpace: "pre-wrap" }),
+  avatar: (r) => ({ width: 28, height: 28, borderRadius: "50%", background: r === "user" ? C.amber : C.surface, border: `1px solid ${r === "user" ? C.amber : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: r === "user" ? "#000" : C.amber, flexShrink: 0 }),
 };
 
 const JOBS = [];
@@ -733,18 +733,25 @@ function InvoicePreview({ brand, invoice }) {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 // ─── Team Invite ──────────────────────────────────────────────────────────────
 function TeamInvite({ companyId }) {
+  const ALL_SECTIONS = ["Dashboard", "Schedule", "Customers", "Invoices", "Quotes", "Materials", "AI Assistant", "Reminders", "Payments"];
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [permissions, setPermissions] = useState(() => {
+    const p = {};
+    ALL_SECTIONS.forEach(s => p[s] = true);
+    return p;
+  });
+
+  const togglePerm = (section) => setPermissions(p => ({ ...p, [section]: !p[section] }));
 
   const sendInvite = async () => {
     if (!email || !companyId) return;
     setSending(true); setError("");
     try {
-      // Check if user already in company
       const { data: existing } = await supabase
         .from("invites")
         .select("id")
@@ -763,6 +770,7 @@ function TeamInvite({ companyId }) {
         invited_by: (await supabase.auth.getUser()).data.user.id,
         email: email.toLowerCase(),
         role,
+        permissions: role === "owner" ? null : permissions,
         accepted: false,
       });
 
@@ -780,28 +788,68 @@ function TeamInvite({ companyId }) {
   );
 
   return (
-    <div style={{ ...S.card, background: C.surfaceHigh, padding: 16, minWidth: 300 }}>
+    <div style={{ ...S.card, background: C.surfaceHigh, padding: 16 }}>
       {sent ? (
         <div style={{ fontSize: 12, color: C.green }}>✓ Invite sent — they'll join when they sign up with this email.</div>
       ) : (
         <>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 12 }}>Invite a team member</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Invite a team member</div>
           {error && <div style={{ fontSize: 11, color: C.red, marginBottom: 8 }}>{error}</div>}
+
+          <label style={S.label}>Email address</label>
           <input
-            style={{ ...S.input, marginBottom: 10 }}
+            style={{ ...S.input, marginBottom: 14 }}
             type="email"
             placeholder="colleague@email.com"
             value={email}
             onChange={e => setEmail(e.target.value)}
           />
-          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+
+          <label style={S.label}>Role</label>
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
             {[["member", "Member"], ["owner", "Owner"]].map(([v, l]) => (
               <button key={v} onClick={() => setRole(v)} style={S.pill(C.amber, role === v)}>{l}</button>
             ))}
           </div>
-          <div style={{ fontSize: 10, color: C.muted, marginBottom: 12 }}>
-            {role === "owner" ? "Owners can invite others and manage all settings." : "Members can add and edit jobs, invoices and customers."}
-          </div>
+
+          {role === "member" && (
+            <>
+              <label style={S.label}>Section Access</label>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>
+                Choose which sections this member can see. Toggle off to restrict access.
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+                {ALL_SECTIONS.map(section => {
+                  const allowed = permissions[section] !== false;
+                  return (
+                    <button
+                      key={section}
+                      onClick={() => togglePerm(section)}
+                      style={{
+                        padding: "5px 12px", borderRadius: 12, fontSize: 11,
+                        fontFamily: "'DM Mono',monospace", fontWeight: 600, cursor: "pointer",
+                        border: `1px solid ${allowed ? C.green + "66" : C.border}`,
+                        background: allowed ? C.green + "18" : C.surface,
+                        color: allowed ? C.green : C.muted,
+                      }}
+                    >
+                      {allowed ? "✓" : "✗"} {section}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
+                {Object.values(permissions).filter(Boolean).length} of {ALL_SECTIONS.length} sections enabled
+              </div>
+            </>
+          )}
+
+          {role === "owner" && (
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
+              Owners have full access to all sections including Settings.
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 8 }}>
             <button style={S.btn("primary", !email || sending)} disabled={!email || sending} onClick={sendInvite}>
               {sending ? "Sending..." : "Send Invite →"}
@@ -908,7 +956,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       {/* Business Info */}
       <div style={S.card}>
         <div style={S.sectionTitle}>Business Information</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {[
             { k: "tradingName", l: "Trading Name" },
             { k: "tagline", l: "Tagline (shown on invoice)" },
@@ -925,7 +973,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           ))}
           <div>
             <label style={S.label}>Business Address</label>
-            <textarea style={{ ...S.input, resize: "vertical", minHeight: 72 }} value={brand.address} onChange={set("address")} />
+            <textarea style={{ ...S.input, resize: "vertical", minHeight: 80 }} value={brand.address} onChange={set("address")} />
           </div>
         </div>
       </div>
@@ -1035,26 +1083,54 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       </div>
 
       {/* Certifications */}
-      <div style={S.card}>
-        <div style={S.sectionTitle}>Certifications & Compliance</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-          {[
-            { label: "Gas Safe Registered", icon: "🔥", enabled: true },
-            { label: "OFTEC Registered", icon: "🛢", enabled: false },
-            { label: "NICEIC Approved", icon: "⚡", enabled: false },
-            { label: "Which? Trusted Trader", icon: "✓", enabled: true },
-          ].map((cert, i) => {
-            const [on, setOn] = useState(cert.enabled);
-            return (
-              <div key={i} onClick={() => setOn(o => !o)} style={{ padding: "14px", background: on ? brand.accentColor + "11" : C.surfaceHigh, border: `1px solid ${on ? brand.accentColor + "44" : C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "center", transition: "all 0.2s" }}>
-                <div style={{ fontSize: 24, marginBottom: 6 }}>{cert.icon}</div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: on ? C.text : C.muted }}>{cert.label}</div>
-                <div style={{ fontSize: 10, color: on ? brand.accentColor : C.muted, marginTop: 4 }}>{on ? "Shown on invoice" : "Click to enable"}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {(() => {
+        const [expanded, setExpanded] = useState(false);
+        const ALL_CERTS = [
+          { label: "Gas Safe Registered", icon: "🔥", key: "cert_gassafe" },
+          { label: "OFTEC Registered", icon: "🛢", key: "cert_oftec" },
+          { label: "NICEIC Approved", icon: "⚡", key: "cert_niceic" },
+          { label: "NAPIT Registered", icon: "🔌", key: "cert_napit" },
+          { label: "Which? Trusted Trader", icon: "✓", key: "cert_which" },
+          { label: "Federation of Master Builders", icon: "🏗", key: "cert_fmb" },
+          { label: "TrustMark Registered", icon: "🛡", key: "cert_trustmark" },
+          { label: "CORGI Registered", icon: "🔧", key: "cert_corgi" },
+          { label: "CHAS Accredited", icon: "📋", key: "cert_chas" },
+          { label: "SAFEcontractor Approved", icon: "🦺", key: "cert_safecontractor" },
+          { label: "Checkatrade Member", icon: "🏠", key: "cert_checkatrade" },
+          { label: "F-Gas Certified", icon: "❄", key: "cert_fgas" },
+        ];
+        const enabledCerts = ALL_CERTS.filter(c => brand[c.key]);
+        const visibleCerts = expanded ? ALL_CERTS : (enabledCerts.length > 0 ? enabledCerts : ALL_CERTS.slice(0, 4));
+        return (
+          <div style={S.card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <div style={S.sectionTitle}>Certifications & Compliance</div>
+              <button onClick={() => setExpanded(e => !e)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>
+                {expanded ? "Show less ↑" : `Show all (${ALL_CERTS.length}) ↓`}
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
+              {enabledCerts.length > 0 ? `${enabledCerts.length} shown on invoices & quotes` : "Tap to enable certifications shown on your invoices."}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {visibleCerts.map((cert) => {
+                const on = brand[cert.key] || false;
+                return (
+                  <div key={cert.key}
+                    style={{ display: "flex", alignItems: "center", gap: 14, padding: "11px 14px", background: on ? brand.accentColor + "11" : C.surfaceHigh, border: `1px solid ${on ? brand.accentColor + "44" : C.border}`, borderRadius: 8, cursor: "pointer", transition: "all 0.15s" }}
+                    onClick={() => setBrand(b => ({ ...b, [cert.key]: !on }))}>
+                    <div style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: "center" }}>{cert.icon}</div>
+                    <div style={{ flex: 1, fontSize: 13, fontWeight: on ? 600 : 400, color: on ? C.text : C.textDim }}>{cert.label}</div>
+                    <div style={{ width: 36, height: 20, borderRadius: 10, background: on ? brand.accentColor : C.border, position: "relative", flexShrink: 0, transition: "all 0.2s" }}>
+                      <div style={{ position: "absolute", top: 2, left: on ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "all 0.2s" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Accounting Integrations */}
       <div style={S.card}>
@@ -3558,6 +3634,9 @@ function CustomerForm({ form, set, onSave, onCancel }) {
 function InvoicesView({ brand, invoices, setInvoices, user }) {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const setF = k => e => setEditForm(f => ({ ...f, [k]: e.target.value }));
 
   const allInvoices = (invoices || []).filter(i => !i.isQuote);
   const paid = allInvoices.filter(i => i.status === "paid");
@@ -3701,8 +3780,36 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
 
             <div style={{ display: "flex", gap: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => { setEditForm({ customer: selected.customer, amount: selected.amount, description: selected.description || selected.desc || "", due: selected.due }); setEditing(true); }}>✏ Edit</button>
               {selected.status === "overdue" && <button style={S.btn("danger")} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteInvoice(selected.id)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {selected && editing && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Invoice · {selected.id}</div>
+              <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+              <div><label style={S.label}>Customer</label><input style={S.input} value={editForm.customer || ""} onChange={setF("customer")} /></div>
+              <div><label style={S.label}>Amount (£)</label><input style={S.input} type="number" value={editForm.amount || ""} onChange={setF("amount")} /></div>
+              <div><label style={S.label}>Description</label><textarea style={{ ...S.input, resize: "vertical", minHeight: 72 }} value={editForm.description || ""} onChange={setF("description")} /></div>
+              <div><label style={S.label}>Payment Due</label><input style={S.input} value={editForm.due || ""} onChange={setF("due")} /></div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => {
+                const updated = { ...selected, ...editForm, amount: parseFloat(editForm.amount) || selected.amount };
+                setInvoices(prev => (prev || []).map(i => i.id === selected.id ? updated : i));
+                setSelected(updated);
+                setEditing(false);
+              }}>Save Changes</button>
+              <button style={S.btn("ghost")} onClick={() => setEditing(false)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -4026,12 +4133,13 @@ export default function App() {
       .single();
 
     if (invite) {
-      // Accept the invite — join the existing company
+      // Accept the invite — join the existing company with permissions from invite
       await supabase.from("company_members").insert({
         company_id: invite.company_id,
         user_id: uid,
         role: invite.role || "member",
         invited_email: user.email,
+        permissions: invite.permissions || null,
       });
       await supabase.from("invites").update({ accepted: true }).eq("id", invite.id);
       const { data: co } = await supabase.from("companies").select("name").eq("id", invite.company_id).single();
