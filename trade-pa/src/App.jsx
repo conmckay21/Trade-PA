@@ -3185,7 +3185,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
     cisRate: initialData.cisRate || 20,
     jobRef: initialData?.jobRef || "",
     lineItems: initialData?.lineItems || [],
-  } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatZeroRated: false, cisEnabled: false, cisRate: 20, jobRef: "" });
+  } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatZeroRated: false, cisEnabled: false, cisRate: 20, jobRef: "", lineItems: [] });
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
@@ -3199,20 +3199,20 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
   const cisGross = form.cisEnabled ? labourAmt + materialsAmt : 0;
   const cisNetPayable = form.cisEnabled ? parseFloat((cisGross - cisDeduction).toFixed(2)) : 0;
 
-  // Standard amount
-  const grossAmount = form.cisEnabled ? cisGross : (parseFloat(form.amount) || 0);
+  // Compute total from line items if individual prices set
+  const lineItemsTotal = form.lineItems && form.lineItems.length > 0 && form.lineItems.some(l => l.amount)
+    ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+    : null;
+
+  // grossAmount uses lineItemsTotal when available
+  const grossAmount = form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : (parseFloat(form.amount) || 0));
   const vatRate = form.vatZeroRated ? 0 : (form.vatRate || 20);
   const netAmount = (form.vatEnabled && !form.vatZeroRated) ? parseFloat((grossAmount / (1 + vatRate / 100)).toFixed(2)) : grossAmount;
   const vatAmount = (form.vatEnabled && !form.vatZeroRated) ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
 
   const previewRef = buildRef(brand, { id: "INV-043", customer: form.customer || "Customer Name" });
 
-  // Compute total from line items if individual prices set
-  const lineItemsTotal = form.lineItems && form.lineItems.length > 0 && form.lineItems.some(l => l.amount)
-    ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
-    : null;
-
-  // Has any amount: line items total, form.amount, or CIS fields
+  // Valid if customer + email + some amount source
   const hasAmount = form.cisEnabled ? (form.labour || form.materials) : (lineItemsTotal !== null || !!form.amount);
   const valid = form.customer && form.email && hasAmount;
 
@@ -3293,9 +3293,15 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                         : <input style={S.input} placeholder={p} value={form[k]} onChange={set(k)} />}
                     </div>
                   ))}
-                  {!form.cisEnabled && (
+                  {!form.cisEnabled && lineItemsTotal === null && (
                     <div><label style={S.label}>{form.vatEnabled && !form.vatZeroRated ? `Amount inc. VAT @ ${vatRate}% (£)` : "Amount (£)"}</label>
                       <input style={S.input} placeholder="e.g. 480" value={form.amount} onChange={set("amount")} />
+                    </div>
+                  )}
+                  {!form.cisEnabled && lineItemsTotal !== null && (
+                    <div>
+                      <label style={S.label}>Total from line items</label>
+                      <div style={{ ...S.input, color: C.amber, fontWeight: 700, cursor: "default" }}>£{lineItemsTotal.toFixed(2)}</div>
                     </div>
                   )}
                 </div>
@@ -3471,13 +3477,14 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
   const [sent, setSent] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const isVatRegistered = !!brand.vatNumber;
-  const grossAmount = parseFloat(form.amount) || 0;
-  const netAmount = form.vatEnabled ? parseFloat((grossAmount / (1 + form.vatRate / 100)).toFixed(2)) : grossAmount;
-  const vatAmount = form.vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
 
   const lineItemsTotal = form.lineItems && form.lineItems.some(l => l.amount)
     ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
     : null;
+
+  const grossAmount = lineItemsTotal !== null ? lineItemsTotal : (parseFloat(form.amount) || 0);
+  const netAmount = form.vatEnabled ? parseFloat((grossAmount / (1 + form.vatRate / 100)).toFixed(2)) : grossAmount;
+  const vatAmount = form.vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
 
   const hasAmount = lineItemsTotal !== null || !!form.amount;
   const valid = form.customer && hasAmount;
@@ -3535,13 +3542,21 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
                     { k: "customer", l: "Customer Name", p: "e.g. James Oliver" },
                     { k: "email", l: "Customer Email", p: "james@email.com" },
                     { k: "address", l: "Customer Address", p: "5 High Street, Guildford GU1 3AA" },
-                    { k: "amount", l: form.vatEnabled ? `Total inc. VAT @ ${form.vatRate}% (£)` : "Quote Amount (£)", p: "e.g. 480" },
                   ].map(({ k, l, p }) => (
                     <div key={k}><label style={S.label}>{l}</label>
                       {k === "address" ? <textarea style={{ ...S.input, resize: "none", height: 60 }} placeholder={p} value={form[k]} onChange={set(k)} />
                         : <input style={S.input} placeholder={p} value={form[k]} onChange={set(k)} />}
                     </div>
                   ))}
+                  {lineItemsTotal === null ? (
+                    <div><label style={S.label}>{form.vatEnabled ? `Total inc. VAT @ ${form.vatRate}% (£)` : "Quote Amount (£)"}</label>
+                      <input style={S.input} placeholder="e.g. 480" value={form.amount} onChange={set("amount")} />
+                    </div>
+                  ) : (
+                    <div><label style={S.label}>Total from line items</label>
+                      <div style={{ ...S.input, color: C.amber, fontWeight: 700, cursor: "default" }}>£{lineItemsTotal.toFixed(2)}</div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Line items */}
