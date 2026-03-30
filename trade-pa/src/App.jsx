@@ -1368,7 +1368,9 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={S.sectionTitle}>Invoice Pipeline</div>
           <button style={S.btn("ghost")} onClick={() => setView("Invoices")}>Manage →</button>
-          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No invoices yet — create one in Payments or via the AI Assistant.</div>
+        </div>
+        {invoices.filter(i => !i.isQuote).length === 0
+          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No invoices yet — create one in Invoices or via the AI Assistant.</div>
           : invoices.filter(i => !i.isQuote).slice(0, 4).map(inv => (
             <div key={inv.id} style={S.row}>
               <div style={{ fontSize: 12, color: C.muted, width: 70, flexShrink: 0 }}>{inv.id}</div>
