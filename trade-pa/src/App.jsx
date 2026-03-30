@@ -356,6 +356,7 @@ function downloadInvoicePDF(brand, inv) {
   const cisEnabled = inv.cisEnabled;
   const cisLabour = parseFloat(inv.cisLabour) || 0;
   const cisMaterials = parseFloat(inv.cisMaterials) || 0;
+  const cisGross = cisLabour + cisMaterials;
   const cisDeduction = parseFloat(inv.cisDeduction) || 0;
   const cisNetPayable = parseFloat(inv.cisNetPayable) || 0;
   const cisRate = Number(inv.cisRate) || 20;
