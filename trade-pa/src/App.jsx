@@ -461,7 +461,7 @@ function downloadInvoicePDF(brand, inv) {
 </head>
 <body>
 <div class="back-bar">
-  <a onclick="if(window.opener||window.history.length<=1){window.close();}else{window.history.back();}">← Back to Trade PA</a>
+  <a onclick="try{window.parent.postMessage('close-pdf','*')}catch(e){}; try{if(window.opener||window.history.length<=1){window.close();}else{window.history.back();}}catch(e){}">← Back to Trade PA</a>
   <a onclick="window.print()" style="color:#aaa;">🖨 Print / Save PDF</a>
 </div>
 <div class="page">
@@ -596,7 +596,7 @@ function downloadInvoicePDF(brand, inv) {
 
   <!-- Back to app button — hidden when printing -->
   <div class="no-print" style="text-align:center;padding:20px;margin-top:10px;">
-    <button onclick="if(window.opener||window.history.length<=1){window.close();}else{window.history.back();}" style="padding:10px 24px;background:#f59e0b;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-right:10px;">← Back to Trade PA</button>
+    <button onclick="try{window.parent.postMessage('close-pdf','*')}catch(e){}; try{if(window.opener||window.history.length<=1){window.close();}else{window.history.back();}}catch(e){}" style="padding:10px 24px;background:#f59e0b;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-right:10px;">← Back to Trade PA</button>
     <button onclick="window.print()" style="padding:10px 24px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">🖨 Print / Save PDF</button>
   </div>
 </div>
@@ -632,10 +632,14 @@ function PDFOverlay({ html, onClose }) {
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-    // Write after mount so contentDocument is ready
     const doc = iframe.contentDocument || iframe.contentWindow?.document;
     if (doc) { doc.open(); doc.write(html); doc.close(); }
   }, [html]);
+  useEffect(() => {
+    const handler = (e) => { if (e.data === "close-pdf") onClose(); };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [onClose]);
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", flexDirection: "column", background: "#fff" }}>
       <div style={{ display: "flex", gap: 8, padding: "12px 16px", background: "#1a1a1a", flexShrink: 0 }}>
@@ -3445,7 +3449,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
         amount: finalAmount,
         grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
         due: `Due in ${form.due} days`, status: initialData?.status || "sent",
-        description: finalDesc,
+        description: finalDesc, paymentMethod: form.paymentMethod || "bacs",
         lineItems: form.lineItems || [],
         vatEnabled: form.vatEnabled, vatRate: form.vatZeroRated ? 0 : vatRate,
         vatZeroRated: form.vatZeroRated, vatType: form.vatType || "",
