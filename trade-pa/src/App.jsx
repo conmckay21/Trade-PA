@@ -308,7 +308,7 @@ const DEFAULT_BRAND = {
   accountNumber: "",
   accountName: "",
   accentColor: "#f59e0b",
-  paymentTerms: "30",
+  paymentTerms: "14",
   invoiceNote: "Thank you for your business. Payment due within 30 days.",
   refFormat: "invoice_number",
   refPrefix: "",
@@ -342,7 +342,35 @@ function downloadInvoicePDF(brand, inv) {
   const date = inv.date || new Date().toLocaleDateString("en-GB");
   const isQuote = inv.isQuote;
 
-  const lineItems = (inv.desc || inv.description || "Service").split("\n").filter(Boolean);
+  const rawDesc = inv.desc || inv.description || "Service";
+
+  // Parse line items — support stored lineItems array, or pipe-separated "desc|amount" format, or plain text
+  let lineItems;
+  if (inv.lineItems && inv.lineItems.length > 0) {
+    lineItems = inv.lineItems;
+  } else {
+    lineItems = rawDesc
+      .split(/\n|;\s*/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(s => {
+        // Check for pipe-separated "description|amount" format
+        const pipeIdx = s.lastIndexOf("|");
+        if (pipeIdx > 0) {
+          const desc = s.slice(0, pipeIdx).trim();
+          const amt = parseFloat(s.slice(pipeIdx + 1));
+          if (!isNaN(amt)) return { description: desc, amount: amt };
+        }
+        return { description: s, amount: null };
+      });
+  }
+
+  // If only one item with no price, use the total
+  if (lineItems.length === 1 && lineItems[0].amount === null) {
+    lineItems[0].amount = grossAmount;
+  }
+
+  const hasIndividualPrices = lineItems.some(l => l.amount !== null && lineItems.length > 1);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -394,12 +422,18 @@ function downloadInvoicePDF(brand, inv) {
   .footer{background:${accent}18;padding:10px 36px;display:flex;justify-content:space-between;border-top:1px solid ${accent}44;font-size:11px;color:#888;margin-top:20px;}
   .validity{background:#fff8e8;border:1px solid ${accent}44;border-radius:6px;padding:10px 16px;margin:0 36px;font-size:12px;color:#888;}
   @media print{
+    .back-bar{display:none !important;}
     body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    .no-print{display:none;}
   }
+  .back-bar{background:#1a1a1a;padding:10px 36px;display:flex;gap:16px;align-items:center;position:sticky;top:0;z-index:10;}
+  .back-bar a{color:#f59e0b;font-size:13px;text-decoration:none;font-weight:600;cursor:pointer;}
 </style>
 </head>
 <body>
+<div class="back-bar">
+  <a onclick="if(window.opener||window.history.length<=1){window.close();}else{window.history.back();}">← Back to Trade PA</a>
+  <a onclick="window.print()" style="color:#aaa;">🖨 Print / Save PDF</a>
+</div>
 <div class="page">
   <div class="header">
     <div class="header-left">
@@ -445,12 +479,21 @@ function downloadInvoicePDF(brand, inv) {
         </tr>
       </thead>
       <tbody>
-        ${lineItems.map((line, i) => `
+        ${lineItems.map((line, i) => {
+          const isLast = i === lineItems.length - 1;
+          const lineAmt = line.amount !== null ? line.amount : (isLast ? grossAmount : null);
+          const lineNet = vatEnabled && lineAmt !== null ? parseFloat((lineAmt / (1 + vatRate / 100)).toFixed(2)) : null;
+          const lineVat = vatEnabled && lineAmt !== null ? parseFloat((lineAmt - lineNet).toFixed(2)) : null;
+          return `
         <tr>
-          <td>${line}</td>
-          ${vatEnabled ? `<td class="right${i > 0 ? " muted" : ""}">${i === 0 ? "£" + netAmount.toFixed(2) : "—"}</td><td class="right${i > 0 ? " muted" : ""}">${i === 0 ? "£" + vatAmount.toFixed(2) : "—"}</td>` : ""}
-          <td class="right${i > 0 ? " muted" : ""}">${i === 0 ? "£" + grossAmount.toFixed(2) : "—"}</td>
-        </tr>`).join("")}
+          <td>${line.description || line}</td>
+          ${vatEnabled ? `
+            <td class="right">${lineNet !== null ? "£" + lineNet.toFixed(2) : ""}</td>
+            <td class="right">${lineVat !== null ? "£" + lineVat.toFixed(2) : ""}</td>
+          ` : ""}
+          <td class="right">${lineAmt !== null ? "£" + lineAmt.toFixed(2) : ""}</td>
+        </tr>`;
+        }).join("")}
       </tbody>
     </table>
   </div>
@@ -501,8 +544,13 @@ function downloadInvoicePDF(brand, inv) {
     ${brand.phone ? `<span>${brand.phone}</span>` : "<span></span>"}
     ${brand.email ? `<span>${brand.email}</span>` : "<span></span>"}
   </div>
+
+  <!-- Back to app button — hidden when printing -->
+  <div class="no-print" style="text-align:center;padding:20px;margin-top:10px;">
+    <button onclick="if(window.opener||window.history.length<=1){window.close();}else{window.history.back();}" style="padding:10px 24px;background:#f59e0b;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-right:10px;">← Back to Trade PA</button>
+    <button onclick="window.print()" style="padding:10px 24px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">🖨 Print / Save PDF</button>
+  </div>
 </div>
-<script>window.onload=()=>{window.print();}</script>
 </body>
 </html>`;
 
@@ -906,11 +954,25 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
           <div style={{ marginBottom: 16 }}>
             <label style={S.label}>Default Payment Terms</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              {["7", "14", "30"].map(d => (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {["0", "7", "14"].map(d => (
                 <button key={d} onClick={() => setBrand(b => ({ ...b, paymentTerms: d }))} style={S.pill(brand.accentColor, brand.paymentTerms === d)}>{d} days</button>
               ))}
+              <button onClick={() => setBrand(b => ({ ...b, paymentTerms: "custom" }))} style={S.pill(brand.accentColor, !["0","7","14"].includes(brand.paymentTerms))}>Custom</button>
             </div>
+            {!["0","7","14"].includes(brand.paymentTerms) && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <input
+                  style={{ ...S.input, width: 80 }}
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 60"
+                  value={["0","7","14","custom"].includes(brand.paymentTerms) ? "" : brand.paymentTerms}
+                  onChange={e => setBrand(b => ({ ...b, paymentTerms: e.target.value }))}
+                />
+                <span style={{ fontSize: 12, color: C.muted }}>days</span>
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: 16 }}>
@@ -1848,30 +1910,50 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
     },
     {
       name: "create_invoice",
-      description: "Create a new invoice. Use when the user mentions invoicing a customer, charging for completed work, or sending a bill.",
+      description: "Create a new invoice. Use when the user mentions invoicing a customer, charging for completed work, or sending a bill. Extract each individual item/service as a separate line item with its own price. Never combine everything into one line.",
       input_schema: {
         type: "object",
         properties: {
           customer: { type: "string", description: "Customer full name" },
-          amount: { type: "number", description: "Invoice amount in pounds" },
-          description: { type: "string", description: "What the work was" },
+          line_items: {
+            type: "array",
+            description: "Individual line items — one per service or product. Each has a description and price.",
+            items: {
+              type: "object",
+              properties: {
+                description: { type: "string", description: "What this line item is e.g. Boiler Service, Call Out Charge" },
+                amount: { type: "number", description: "Price for this line item in pounds" },
+              },
+              required: ["description", "amount"],
+            },
+          },
           due_days: { type: "number", description: "Days until payment due, default 30" },
         },
-        required: ["customer", "amount", "description"],
+        required: ["customer", "line_items"],
       },
     },
     {
       name: "create_quote",
-      description: "Create a price quote for a customer. Use when the user mentions quoting, giving a price, or sending an estimate.",
+      description: "Create a price quote for a customer. Use when the user mentions quoting, giving a price, or sending an estimate. Extract each individual item/service as a separate line item with its own price.",
       input_schema: {
         type: "object",
         properties: {
           customer: { type: "string", description: "Customer full name" },
-          amount: { type: "number", description: "Quote amount in pounds" },
-          description: { type: "string", description: "What the work involves" },
+          line_items: {
+            type: "array",
+            description: "Individual line items — one per service or product. Each has a description and price.",
+            items: {
+              type: "object",
+              properties: {
+                description: { type: "string", description: "What this line item is e.g. Supply and fit boiler, Labour" },
+                amount: { type: "number", description: "Price for this line item in pounds" },
+              },
+              required: ["description", "amount"],
+            },
+          },
           valid_days: { type: "number", description: "Days quote is valid for, default 30" },
         },
-        required: ["customer", "amount", "description"],
+        required: ["customer", "line_items"],
       },
     },
     {
@@ -2073,18 +2155,40 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         }
         case "create_invoice": {
           const id = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
-          const inv = { id, customer: input.customer, amount: input.amount, due: `Due in ${input.due_days || 30} days`, status: "sent", description: input.description, isQuote: false };
+          const lineItems = input.line_items || [{ description: input.description || "Services", amount: input.amount || 0 }];
+          const totalAmount = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
+          const inv = {
+            id,
+            customer: input.customer,
+            amount: totalAmount,
+            due: `Due in ${input.due_days || 30} days`,
+            status: "sent",
+            description: lineItems.map(l => `${l.description}|${l.amount}`).join("\n"),
+            lineItems,
+            isQuote: false,
+          };
           setInvoices(prev => [inv, ...(prev || [])]);
           syncInvoiceToAccounting(user?.id, inv);
-          setLastAction({ type: "invoice", label: `${id} — £${input.amount} — ${input.customer}`, view: "Invoices" });
-          return `Invoice ${id} created for ${input.customer} — £${input.amount} for ${input.description}.`;
+          setLastAction({ type: "invoice", label: `${id} — £${totalAmount} — ${input.customer}`, view: "Invoices" });
+          return `Invoice ${id} created for ${input.customer} — £${totalAmount} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
         }
         case "create_quote": {
           const id = `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
-          const quote = { id, customer: input.customer, amount: input.amount, due: `Valid for ${input.valid_days || 30} days`, status: "sent", description: input.description, isQuote: true };
+          const lineItems = input.line_items || [{ description: input.description || "Services", amount: input.amount || 0 }];
+          const totalAmount = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
+          const quote = {
+            id,
+            customer: input.customer,
+            amount: totalAmount,
+            due: `Valid for ${input.valid_days || 30} days`,
+            status: "sent",
+            description: lineItems.map(l => `${l.description}|${l.amount}`).join("\n"),
+            lineItems,
+            isQuote: true,
+          };
           setInvoices(prev => [quote, ...(prev || [])]);
-          setLastAction({ type: "invoice", label: `${id} — £${input.amount} — ${input.customer}`, view: "Quotes" });
-          return `Quote ${id} created for ${input.customer} — £${input.amount} for ${input.description}. Valid for ${input.valid_days || 30} days.`;
+          setLastAction({ type: "invoice", label: `${id} — £${totalAmount} — ${input.customer}`, view: "Quotes" });
+          return `Quote ${id} created for ${input.customer} — £${totalAmount} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
         }
         case "log_enquiry": {
           const enq = { name: input.name, source: input.source, msg: input.message, time: "Just now", urgent: input.urgent || false };
@@ -2212,7 +2316,8 @@ Rules:
 - For jobs: if no year given assume ${new Date().getFullYear()}. Calculate actual dates from "Friday", "next Monday" etc.
 - For reminders: calculate minutes_from_now from the time mentioned.
 - For updates/deletes: match by name or ID. If no match, say so clearly.
-- After every tool use: confirm in 1-2 sentences what you did. Use £ not $. Be concise.`;
+- After every tool use: confirm in 1-2 sentences what you did. Use £ not $. Be concise.
+- For invoices/quotes: ALWAYS use the line_items array — one object per item with description and amount. If someone says "invoice for labour £200 and materials £150" create TWO line items: [{description:"Labour",amount:200},{description:"Materials",amount:150}]. Never put multiple items in one description string. Total amount is calculated automatically from the line items.`;
 
   const send = async (text) => {
     if (!text.trim() || loading) return;
@@ -2561,8 +2666,16 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Description</div>
-                <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Line Items</div>
+                {(selected.lineItems && selected.lineItems.length > 0)
+                  ? selected.lineItems.map((l, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: i > 0 ? 6 : 0, borderTop: i > 0 ? `1px solid ${C.border}` : "none", marginTop: i > 0 ? 6 : 0 }}>
+                      <span>{l.description}</span>
+                      <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{(l.amount || 0).toFixed(2)}</span>
+                    </div>
+                  ))
+                  : <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+                }
               </div>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{selected.isQuote ? "Valid for" : "Payment due"}</div>
@@ -2724,9 +2837,23 @@ function InvoiceModal({ brand, onClose, onSent }) {
                 <div style={S.grid2}>
                   <div>
                     <label style={S.label}>Payment Due</label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {["7", "14", "30"].map(d => <button key={d} onClick={() => setForm(f => ({ ...f, due: d }))} style={S.pill(brand.accentColor, form.due === d)}>{d} days</button>)}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {["0", "7", "14"].map(d => <button key={d} onClick={() => setForm(f => ({ ...f, due: d }))} style={S.pill(brand.accentColor, form.due === d)}>{d} days</button>)}
+                      <button onClick={() => setForm(f => ({ ...f, due: "custom" }))} style={S.pill(brand.accentColor, !["0","7","14"].includes(form.due))}>Custom</button>
                     </div>
+                    {!["0","7","14"].includes(form.due) && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                        <input
+                          style={{ ...S.input, width: 80 }}
+                          type="number"
+                          min="1"
+                          placeholder="e.g. 60"
+                          value={form.due === "custom" ? "" : form.due}
+                          onChange={e => setForm(f => ({ ...f, due: e.target.value }))}
+                        />
+                        <span style={{ fontSize: 12, color: C.muted }}>days</span>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label style={S.label}>Payment Method</label>
@@ -2862,7 +2989,23 @@ function QuoteModal({ brand, onClose, onSent }) {
                 <div>
                   <label style={S.label}>Quote Valid For</label>
                   <div style={{ display: "flex", gap: 8 }}>
-                    {["14", "30", "60"].map(d => <button key={d} onClick={() => setForm(f => ({ ...f, validDays: d }))} style={S.pill(C.blue, form.validDays === d)}>{d} days</button>)}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {["0", "7", "14"].map(d => <button key={d} onClick={() => setForm(f => ({ ...f, validDays: d }))} style={S.pill(C.blue, form.validDays === d)}>{d} days</button>)}
+                      <button onClick={() => setForm(f => ({ ...f, validDays: "custom" }))} style={S.pill(C.blue, !["0","7","14"].includes(form.validDays))}>Custom</button>
+                    </div>
+                    {!["0","7","14"].includes(form.validDays) && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                        <input
+                          style={{ ...S.input, width: 80 }}
+                          type="number"
+                          min="1"
+                          placeholder="e.g. 90"
+                          value={form.validDays === "custom" ? "" : form.validDays}
+                          onChange={e => setForm(f => ({ ...f, validDays: e.target.value }))}
+                        />
+                        <span style={{ fontSize: 12, color: C.muted }}>days</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -3534,8 +3677,16 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Description</div>
-                <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Line Items</div>
+                {(selected.lineItems && selected.lineItems.length > 0)
+                  ? selected.lineItems.map((l, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: i > 0 ? 6 : 0, borderTop: i > 0 ? `1px solid ${C.border}` : "none", marginTop: i > 0 ? 6 : 0 }}>
+                      <span>{l.description}</span>
+                      <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{(l.amount || 0).toFixed(2)}</span>
+                    </div>
+                  ))
+                  : <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+                }
               </div>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Payment Due</div>
@@ -3566,6 +3717,8 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
 function QuotesView({ brand, invoices, setInvoices, setView }) {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
 
   const allQuotes = (invoices || []).filter(i => i.isQuote);
   const pending = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
@@ -3575,6 +3728,13 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
   const updateStatus = (id, status) => {
     setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status } : i));
     if (selected && selected.id === id) setSelected(s => ({ ...s, status }));
+  };
+
+  const saveEdit = () => {
+    const updated = { ...selected, ...editForm, amount: parseFloat(editForm.amount) || selected.amount };
+    setInvoices(prev => (prev || []).map(i => i.id === selected.id ? updated : i));
+    setSelected(updated);
+    setEditing(false);
   };
 
   const convertToInvoice = (quote) => {
@@ -3627,7 +3787,7 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
         {allQuotes.length === 0
           ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No quotes yet — tap + New Quote or ask the AI Assistant.</div>
           : allQuotes.map(q => (
-            <div key={q.id} onClick={() => setSelected(q)} style={{ ...S.row, cursor: "pointer" }}>
+            <div key={q.id} onClick={() => { setSelected(q); setEditing(false); }} style={{ ...S.row, cursor: "pointer" }}>
               <div style={{ width: 4, height: 44, borderRadius: 2, background: q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
@@ -3645,7 +3805,7 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
       </div>
 
       {/* Detail modal */}
-      {selected && (
+      {selected && !editing && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelected(null)}>
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
@@ -3664,8 +3824,16 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Description</div>
-                <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Line Items</div>
+                {(selected.lineItems && selected.lineItems.length > 0)
+                  ? selected.lineItems.map((l, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: i > 0 ? 6 : 0, borderTop: i > 0 ? `1px solid ${C.border}` : "none", marginTop: i > 0 ? 6 : 0 }}>
+                      <span>{l.description}</span>
+                      <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{(l.amount || 0).toFixed(2)}</span>
+                    </div>
+                  ))
+                  : <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+                }
               </div>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Valid For</div>
@@ -3673,13 +3841,9 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
               </div>
             </div>
 
-            {/* Convert — big primary button */}
             <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "14px", fontSize: 15, marginBottom: 10 }}
-              onClick={() => convertToInvoice(selected)}>
-              → Convert to Invoice
-            </button>
+              onClick={() => convertToInvoice(selected)}>→ Convert to Invoice</button>
 
-            {/* Accept / Decline */}
             {selected.status !== "accepted" && selected.status !== "declined" && (
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.green }} onClick={() => updateStatus(selected.id, "accepted")}>✓ Mark Accepted</button>
@@ -3688,6 +3852,7 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
             )}
 
             <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => { setEditForm({ customer: selected.customer, amount: selected.amount, description: selected.description || selected.desc || "", due: selected.due }); setEditing(true); }}>✏️ Edit</button>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteQuote(selected.id)}>Delete</button>
             </div>
@@ -3695,7 +3860,77 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
         </div>
       )}
 
+      {/* Edit modal */}
+      {selected && editing && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setEditing(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>Edit Quote · {selected.id}</div>
+              <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 24 }}>×</button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={S.label}>Customer Name</label>
+                <input style={S.input} value={editForm.customer} onChange={e => setEditForm(f => ({ ...f, customer: e.target.value }))} />
+              </div>
+              <div>
+                <label style={S.label}>Amount (£)</label>
+                <input style={S.input} type="number" value={editForm.amount} onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))} />
+              </div>
+              <div>
+                <label style={S.label}>Description / Scope of Work</label>
+                <textarea style={{ ...S.input, minHeight: 100, resize: "vertical" }} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div>
+                <label style={S.label}>Valid For</label>
+                <input style={S.input} value={editForm.due} onChange={e => setEditForm(f => ({ ...f, due: e.target.value }))} placeholder="e.g. Valid for 30 days" />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={saveEdit}>Save Changes</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModal && <QuoteModal brand={brand} onClose={() => setShowModal(false)} onSent={q => { setInvoices(prev => [q, ...(prev || [])]); setShowModal(false); }} />}
+    </div>
+  );
+}
+
+// ─── Line Items Display ───────────────────────────────────────────────────────
+function LineItemsDisplay({ inv }) {
+  if (!inv) return null;
+  const items = inv.lineItems && inv.lineItems.length > 0
+    ? inv.lineItems
+    : (inv.description || inv.desc || "").split(/\n|;\s*/).map(s => {
+        const pipeIdx = s.lastIndexOf("|");
+        if (pipeIdx > 0) return { description: s.slice(0, pipeIdx).trim(), amount: parseFloat(s.slice(pipeIdx + 1)) || null };
+        return { description: s.trim(), amount: null };
+      }).filter(i => i.description);
+
+  if (items.length === 0) return <div style={{ fontSize: 13, color: "#888" }}>—</div>;
+
+  if (items.length === 1) {
+    return (
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+        <span>{items[0].description}</span>
+        {items[0].amount != null && <span style={{ fontWeight: 600 }}>£{items[0].amount.toFixed ? items[0].amount.toFixed(2) : items[0].amount}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {items.map((item, i) => (
+        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingBottom: 6, borderBottom: i < items.length - 1 ? `1px solid rgba(255,255,255,0.06)` : "none" }}>
+          <span>{item.description}</span>
+          {item.amount != null && <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{Number(item.amount).toFixed(2)}</span>}
+        </div>
+      ))}
     </div>
   );
 }
