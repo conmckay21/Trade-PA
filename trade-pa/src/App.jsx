@@ -1848,6 +1848,8 @@ If you cannot read the receipt clearly, still return valid JSON with what you ca
     setSyncMsg(`✓ ${newMaterials.length} items added from receipt`);
     setTimeout(() => setSyncMsg(""), 3000);
   };
+
+  const saveAll = () => {
     const valid = rows.filter(r => r.item.trim());
     if (!valid.length) return;
     setMaterials(prev => [...(prev || []), ...valid.map(r => ({ ...r, qty: parseInt(r.qty) || 1, unitPrice: parseFloat(r.unitPrice) || 0 }))]);
