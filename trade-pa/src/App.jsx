@@ -1747,8 +1747,11 @@ function Materials({ materials, setMaterials, user }) {
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
+  const [scanImageData, setScanImageData] = useState(null); // base64 data URL of receipt
+  const [scanImageType, setScanImageType] = useState("image/jpeg");
   const [scanError, setScanError] = useState("");
   const fileRef = useRef();
+  const uploadRef = useRef();
   const suppliers = DEFAULT_SUPPLIERS;
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "", notes: "" });
@@ -1767,13 +1770,21 @@ function Materials({ materials, setMaterials, user }) {
     setScanning(true);
     setScanError("");
     setScanResult(null);
+    setScanImageData(null);
     try {
-      const base64 = await new Promise((res, rej) => {
+      // Read file as both base64 for API and as data URL for display/storage
+      const { base64, dataUrl } = await new Promise((res, rej) => {
         const reader = new FileReader();
-        reader.onload = e => res(e.target.result.split(",")[1]);
+        reader.onload = e => {
+          const full = e.target.result;
+          res({ base64: full.split(",")[1], dataUrl: full });
+        };
         reader.onerror = rej;
         reader.readAsDataURL(file);
       });
+
+      setScanImageData(dataUrl);
+      setScanImageType(file.type || "image/jpeg");
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -1789,13 +1800,8 @@ function Materials({ materials, setMaterials, user }) {
           messages: [{
             role: "user",
             content: [
-              {
-                type: "image",
-                source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 },
-              },
-              {
-                type: "text",
-                text: `You are reading a supplier receipt or invoice. Extract all line items and return ONLY valid JSON like this:
+              { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } },
+              { type: "text", text: `Read this supplier receipt or invoice. Extract all line items and return ONLY valid JSON:
 {
   "supplier": "supplier name",
   "date": "YYYY-MM-DD or empty string",
@@ -1804,8 +1810,7 @@ function Materials({ materials, setMaterials, user }) {
     { "item": "item name", "qty": 1, "unitPrice": 12.50 }
   ]
 }
-If you cannot read the receipt clearly, still return valid JSON with what you can extract. Do not include any text outside the JSON.`,
-              },
+Return only JSON, no other text.` },
             ],
           }],
         }),
@@ -1826,24 +1831,37 @@ If you cannot read the receipt clearly, still return valid JSON with what you ca
 
   const addScannedMaterials = async () => {
     if (!scanResult) return;
+    const receiptId = `rcpt_${Date.now()}`;
+    // Store image in localStorage keyed by receipt ID
+    if (scanImageData) {
+      try { localStorage.setItem(`trade-pa-receipt-${receiptId}`, scanImageData); } catch {}
+    }
     const newMaterials = (scanResult.items || []).map(item => ({
       item: item.item,
       qty: item.qty || 1,
       unitPrice: item.unitPrice || 0,
       supplier: scanResult.supplier || "",
-      job: "",
+      job: scanResult.jobRef || "",
       status: "to_order",
+      receiptId,
+      receiptDate: scanResult.date || "",
     }));
     setMaterials(prev => [...(prev || []), ...newMaterials]);
-    // Sync to Xero as bill
+    // Sync to Xero as bill, attaching the image
     if (user?.id) {
       fetch("/api/xero/create-bill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, bill: { ...scanResult, jobRef: "" } }),
+        body: JSON.stringify({
+          userId: user.id,
+          bill: { ...scanResult, jobRef: "" },
+          receiptImage: scanImageData,
+          receiptImageType: scanImageType,
+        }),
       }).catch(() => {});
     }
     setScanResult(null);
+    setScanImageData(null);
     setShowScanner(false);
     setSyncMsg(`✓ ${newMaterials.length} items added from receipt`);
     setTimeout(() => setSyncMsg(""), 3000);
@@ -1908,8 +1926,12 @@ If you cannot read the receipt clearly, still return valid JSON with what you ca
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button style={S.btn("ghost")} onClick={() => setShowSuppliers(true)}>Suppliers</button>
           <button style={{ ...S.btn("ghost"), color: "#13B5EA", borderColor: "#13B5EA44" }} onClick={syncToXero} disabled={syncing}>{syncing ? "Syncing..." : "↑ Xero"}</button>
+          {/* Camera button — opens device camera */}
           <button style={{ ...S.btn("ghost"), color: C.amber }} onClick={() => fileRef.current?.click()} disabled={scanning}>{scanning ? "⏳ Scanning..." : "📷 Scan Receipt"}</button>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => { scanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
+          {/* Upload button — opens file picker / gallery */}
+          <button style={{ ...S.btn("ghost"), color: C.amber }} onClick={() => uploadRef.current?.click()} disabled={scanning}>⬆ Upload Receipt</button>
+          <input ref={uploadRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { scanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
           <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Materials</button>
         </div>
       </div>
@@ -1918,45 +1940,80 @@ If you cannot read the receipt clearly, still return valid JSON with what you ca
         <div style={{ padding: "10px 14px", background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 8, fontSize: 12, color: C.red }}>{scanError}</div>
       )}
 
+      {/* Receipt scanner result modal — fully editable */}
       {showScanner && scanResult && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setShowScanner(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Receipt Scanned ✓</div>
-              <button onClick={() => setShowScanner(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>Receipt Scanned ✓</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Review and edit before saving</div>
+              </div>
+              <button onClick={() => { setShowScanner(false); setScanResult(null); setScanImageData(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
             </div>
+
+            {/* Receipt image thumbnail */}
+            {scanImageData && (
+              <div style={{ marginBottom: 14 }}>
+                <img src={scanImageData} alt="Receipt" style={{ width: "100%", maxHeight: 160, objectFit: "contain", borderRadius: 8, border: `1px solid ${C.border}`, background: "#111" }} />
+              </div>
+            )}
+
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Supplier</div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{scanResult.supplier || "Unknown"}</div>
+              {/* Editable supplier */}
+              <div>
+                <label style={S.label}>Supplier</label>
+                <input style={S.input} value={scanResult.supplier || ""} onChange={e => setScanResult(r => ({ ...r, supplier: e.target.value }))} placeholder="Supplier name" />
               </div>
-              {scanResult.date && (
-                <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Date</div>
-                  <div style={{ fontSize: 13 }}>{scanResult.date}</div>
+
+              {/* Editable date */}
+              <div>
+                <label style={S.label}>Date</label>
+                <input style={S.input} type="date" value={scanResult.date || ""} onChange={e => setScanResult(r => ({ ...r, date: e.target.value }))} />
+              </div>
+
+              {/* Job reference */}
+              <div>
+                <label style={S.label}>Job Reference <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
+                <input style={S.input} placeholder="e.g. Kitchen refurb, Job #1042" value={scanResult.jobRef || ""} onChange={e => setScanResult(r => ({ ...r, jobRef: e.target.value }))} />
+              </div>
+
+              {/* Editable line items */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <label style={S.label}>Items</label>
+                  <button onClick={() => setScanResult(r => ({ ...r, items: [...(r.items || []), { item: "", qty: 1, unitPrice: 0 }] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "3px 10px" }}>+ Add line</button>
                 </div>
-              )}
-              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Items ({(scanResult.items || []).length})</div>
-                {(scanResult.items || []).map((item, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: i > 0 ? 8 : 0, borderTop: i > 0 ? `1px solid ${C.border}` : "none", marginTop: i > 0 ? 8 : 0 }}>
-                    <span>{item.item}{item.qty > 1 ? ` × ${item.qty}` : ""}</span>
-                    {item.unitPrice > 0 && <span style={{ fontWeight: 600, marginLeft: 12, flexShrink: 0 }}>£{((item.unitPrice || 0) * (item.qty || 1)).toFixed(2)}</span>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {/* Header row */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 80px 28px", gap: 6 }}>
+                    <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Item</div>
+                    <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Qty</div>
+                    <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Unit £</div>
+                    <div />
                   </div>
-                ))}
-                {scanResult.total > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, paddingTop: 10, borderTop: `1px solid ${C.border}`, marginTop: 10, color: C.amber }}>
-                    <span>Total</span><span>£{parseFloat(scanResult.total).toFixed(2)}</span>
-                  </div>
-                )}
+                  {(scanResult.items || []).map((item, i) => (
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 60px 80px 28px", gap: 6, alignItems: "center" }}>
+                      <input style={{ ...S.input, fontSize: 12 }} value={item.item} onChange={e => setScanResult(r => ({ ...r, items: r.items.map((x, j) => j === i ? { ...x, item: e.target.value } : x) }))} placeholder="Item name" />
+                      <input style={{ ...S.input, fontSize: 12, textAlign: "center" }} type="number" min="1" value={item.qty} onChange={e => setScanResult(r => ({ ...r, items: r.items.map((x, j) => j === i ? { ...x, qty: parseFloat(e.target.value) || 1 } : x) }))} />
+                      <input style={{ ...S.input, fontSize: 12 }} type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => setScanResult(r => ({ ...r, items: r.items.map((x, j) => j === i ? { ...x, unitPrice: parseFloat(e.target.value) || 0 } : x) }))} />
+                      <button onClick={() => setScanResult(r => ({ ...r, items: r.items.filter((_, j) => j !== i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: 0, textAlign: "center" }}>×</button>
+                    </div>
+                  ))}
+                </div>
+                {/* Running total */}
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10, fontSize: 13, fontWeight: 700, color: C.amber }}>
+                  Total: £{(scanResult.items || []).reduce((s, x) => s + (x.unitPrice || 0) * (x.qty || 1), 0).toFixed(2)}
+                </div>
               </div>
             </div>
+
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
-              Items will be added to Materials{user?.id ? " and a draft bill created in Xero." : "."}
+              Items will be added to Materials{user?.id ? " and a draft bill with the receipt image sent to Xero." : "."}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={addScannedMaterials}>✓ Add to Materials</button>
-              <button style={S.btn("ghost")} onClick={() => setShowScanner(false)}>Cancel</button>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={addScannedMaterials}>✓ Save to Materials</button>
+              <button style={S.btn("ghost")} onClick={() => { setShowScanner(false); setScanResult(null); setScanImageData(null); }}>Cancel</button>
             </div>
           </div>
         </div>
