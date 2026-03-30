@@ -3086,6 +3086,81 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
   );
 }
 
+// ─── Mic Button for Modals ────────────────────────────────────────────────────
+function MicButton({ form, setForm, accentColor }) {
+  const [recording, setRecording] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const mediaRef = useRef(null);
+  const chunksRef = useRef([]);
+
+  const start = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      chunksRef.current = [];
+      mr.ondataavailable = e => chunksRef.current.push(e.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setRecording(false);
+        setProcessing(true);
+        try {
+          const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+          const fd = new FormData();
+          fd.append("file", blob, "audio.webm");
+          fd.append("model", "whisper-1");
+          const wr = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+            method: "POST", headers: { Authorization: `Bearer ${import.meta.env.VITE_OPENAI_KEY}` }, body: fd,
+          });
+          const { text } = await wr.json();
+          if (!text) { setProcessing(false); return; }
+
+          // Ask Claude to interpret the voice and return updated fields
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-6",
+              max_tokens: 400,
+              messages: [{
+                role: "user",
+                content: `You are helping fill in an invoice/quote form. Current form: ${JSON.stringify({ customer: form.customer, email: form.email, address: form.address, amount: form.amount, desc: form.desc, jobRef: form.jobRef, due: form.due })}.
+Voice instruction: "${text}"
+Return ONLY a JSON object with ONLY the fields to update (use exact same keys). Example: {"customer":"John Smith","amount":"450"}.
+Do not include fields that aren't being changed.`,
+              }],
+            }),
+          });
+          const data = await res.json();
+          const raw = data.content?.[0]?.text || "";
+          const match = raw.match(/\{[\s\S]*\}/);
+          if (match) {
+            const updates = JSON.parse(match[0]);
+            setForm(f => ({ ...f, ...updates }));
+          }
+        } catch (e) { console.error("Mic error:", e); }
+        setProcessing(false);
+      };
+      mr.start();
+      mediaRef.current = mr;
+      setRecording(true);
+    } catch (e) { console.error("Mic access denied"); }
+  };
+
+  const stop = () => { if (mediaRef.current?.state === "recording") mediaRef.current.stop(); };
+
+  const label = processing ? "⏳" : recording ? "⏹" : "🎙";
+  const color = recording ? C.red : processing ? C.amber : C.muted;
+
+  return (
+    <button
+      onClick={recording ? stop : start}
+      disabled={processing}
+      title={recording ? "Tap to stop" : "Voice edit"}
+      style={{ background: recording ? C.red + "22" : "none", border: `1px solid ${recording ? C.red + "66" : C.border}`, borderRadius: 6, color, cursor: processing ? "wait" : "pointer", fontSize: 15, padding: "4px 8px", transition: "all 0.2s", flexShrink: 0 }}
+    >{label}</button>
+  );
+}
+
 // ─── Line Items Builder ───────────────────────────────────────────────────────
 function LineItemsBuilder({ form, setForm, accentColor, isQuote }) {
   // Normalise lineItems — support both {desc} and {description} keys
@@ -3213,9 +3288,9 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
 
   const previewRef = buildRef(brand, { id: "INV-043", customer: form.customer || "Customer Name" });
 
-  // Valid if customer + email + some amount source
+  // Valid if customer + (email required for new, optional for edits) + some amount source
   const hasAmount = form.cisEnabled ? (form.labour || form.materials) : (lineItemsTotal !== null || !!form.amount);
-  const valid = form.customer && form.email && hasAmount;
+  const valid = form.customer && (isEditing || form.email) && hasAmount;
 
   const send = () => {
     try {
@@ -3273,7 +3348,8 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>{isEditing ? `Edit Invoice · ${initialData.id}` : "New Invoice"}</div>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <MicButton form={form} setForm={setForm} accentColor={brand.accentColor} />
                 <div style={{ display: "flex", gap: 4 }}>
                   {["form", "preview"].map(t => <button key={t} onClick={() => setTab(t)} style={S.pill(brand.accentColor, tab === t)}>{t === "form" ? "Details" : "Preview"}</button>)}
                 </div>
@@ -3530,7 +3606,8 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>{isEditing ? `Edit Quote · ${initialData.id}` : "New Quote"}</div>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <MicButton form={form} setForm={setForm} accentColor={C.blue} />
                 <div style={{ display: "flex", gap: 4 }}>
                   {["form", "preview"].map(t => <button key={t} onClick={() => setTab(t)} style={S.pill(C.blue, tab === t)}>{t === "form" ? "Details" : "Preview"}</button>)}
                 </div>
