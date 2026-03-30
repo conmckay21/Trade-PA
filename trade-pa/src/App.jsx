@@ -3148,27 +3148,32 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
     : null;
 
   const send = () => {
-    setSent(true);
-    setTimeout(() => {
-      const finalDesc = form.lineItems && form.lineItems.length > 0
-        ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
-        : form.desc;
-      const finalAmount = form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount);
-      onSent({
-        id: initialData?.id || `INV-0${43 + Math.floor(Math.random() * 10)}`,
-        customer: form.customer, email: form.email, address: form.address,
-        amount: finalAmount,
-        grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
-        due: `Due in ${form.due} days`, status: initialData?.status || "sent",
-        description: finalDesc,
-        lineItems: form.lineItems || [],
-        vatEnabled: form.vatEnabled, vatRate: form.vatZeroRated ? 0 : vatRate,
-        vatZeroRated: form.vatZeroRated,
-        cisEnabled: form.cisEnabled, cisRate: form.cisRate,
-        cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
-        jobRef: form.jobRef || "",
-      });
-    }, isEditing ? 0 : 1500);
+    const finalDesc = form.lineItems && form.lineItems.length > 0
+      ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
+      : form.desc;
+    const finalAmount = form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount);
+    const payload = {
+      id: initialData?.id || `INV-0${43 + Math.floor(Math.random() * 10)}`,
+      customer: form.customer, email: form.email, address: form.address,
+      amount: finalAmount,
+      grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+      due: `Due in ${form.due} days`, status: initialData?.status || "sent",
+      description: finalDesc,
+      lineItems: form.lineItems || [],
+      vatEnabled: form.vatEnabled, vatRate: form.vatZeroRated ? 0 : vatRate,
+      vatZeroRated: form.vatZeroRated,
+      cisEnabled: form.cisEnabled, cisRate: form.cisRate,
+      cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
+      jobRef: form.jobRef || "",
+    };
+    if (isEditing) {
+      // For edits: save and close immediately, no success screen
+      onSent(payload);
+    } else {
+      // For new: show success screen then close
+      setSent(true);
+      setTimeout(() => onSent(payload), 1500);
+    }
   };
 
   return (
@@ -3274,18 +3279,38 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                 {/* VAT toggle */}
                 {isVatRegistered ? (
                   <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${(form.vatEnabled || form.vatZeroRated) ? C.amber + "66" : C.border}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>VAT</div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: false, vatZeroRated: false }))} style={{ ...S.pill(C.amber, !form.vatEnabled && !form.vatZeroRated), fontSize: 11 }}>No VAT</button>
-                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: false, vatRate: 20 }))} style={{ ...S.pill(C.amber, form.vatEnabled && form.vatRate === 20 && !form.vatZeroRated), fontSize: 11 }}>Standard 20%</button>
-                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: false, vatRate: 5 }))} style={{ ...S.pill(C.amber, form.vatEnabled && form.vatRate === 5 && !form.vatZeroRated), fontSize: 11 }}>Reduced 5%</button>
-                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: true, vatRate: 0 }))} style={{ ...S.pill(C.green, form.vatZeroRated), fontSize: 11 }}>0% New Build</button>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: (form.vatEnabled && !form.vatZeroRated && grossAmount > 0) || form.vatZeroRated ? 8 : 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700 }}>VAT</div>
+                      <select
+                        value={form.vatZeroRated ? "zero" : form.vatEnabled ? `${form.vatRate}_${form.vatType || "income"}` : "none"}
+                        onChange={e => {
+                          const v = e.target.value;
+                          if (v === "none") setForm(f => ({ ...f, vatEnabled: false, vatZeroRated: false, vatType: "" }));
+                          else if (v === "zero") setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: true, vatRate: 0, vatType: "zero" }));
+                          else {
+                            const [rate, type] = v.split("_");
+                            setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: false, vatRate: parseInt(rate), vatType: type }));
+                          }
+                        }}
+                        style={{ ...S.input, width: "auto", minWidth: 260, padding: "6px 10px" }}
+                      >
+                        <option value="none">No VAT</option>
+                        <option value="5_income">5% Income</option>
+                        <option value="5_expenses">5% Expenses</option>
+                        <option value="20_income">20% Income</option>
+                        <option value="20_expenses">20% Expenses</option>
+                        <option value="zero">Zero Rate 0% — New Build</option>
+                        <option value="5_drc_income">Domestic Reverse Charge @ 5% Income</option>
+                        <option value="5_drc_expenses">Domestic Reverse Charge @ 5% Expenses</option>
+                        <option value="20_drc_income">Domestic Reverse Charge @ 20% Income</option>
+                        <option value="20_drc_expenses">Domestic Reverse Charge @ 20% Expenses</option>
+                      </select>
                     </div>
                     {form.vatZeroRated && (
-                      <div style={{ fontSize: 11, color: C.green, marginTop: 8 }}>✓ Zero-rated — new residential build. VAT shown as £0.00 on invoice. Xero tax code: ZERORATEDOUTPUT</div>
+                      <div style={{ fontSize: 11, color: C.green }}>✓ Zero-rated — new residential build. Xero code: ZERORATEDOUTPUT</div>
                     )}
                     {form.vatEnabled && !form.vatZeroRated && grossAmount > 0 && (
-                      <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Net: £{netAmount.toFixed(2)} + VAT £{vatAmount.toFixed(2)} = Gross £{grossAmount.toFixed(2)}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>Net: £{netAmount.toFixed(2)} + VAT £{vatAmount.toFixed(2)} = Gross £{grossAmount.toFixed(2)}</div>
                     )}
                   </div>
                 ) : (
@@ -3381,24 +3406,27 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
   const vatAmount = form.vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
 
   const send = () => {
-    setSent(true);
-    setTimeout(() => {
-      const id = initialData?.id || `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
-      const lineItemsTotal = form.lineItems && form.lineItems.some(l => l.amount)
-        ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
-        : null;
-      const finalDesc = form.lineItems && form.lineItems.length > 0
-        ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
-        : form.desc;
-      onSent({
-        id, customer: form.customer, email: form.email, address: form.address,
-        amount: lineItemsTotal !== null ? lineItemsTotal : grossAmount,
-        due: `Valid for ${form.validDays} days`, status: initialData?.status || "sent",
-        description: finalDesc, lineItems: form.lineItems || [], isQuote: true,
-        vatEnabled: form.vatEnabled, vatRate: form.vatRate,
-        jobRef: form.jobRef || "",
-      });
-    }, isEditing ? 0 : 1000);
+    const id = initialData?.id || `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
+    const lineItemsTotal = form.lineItems && form.lineItems.some(l => l.amount)
+      ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+      : null;
+    const finalDesc = form.lineItems && form.lineItems.length > 0
+      ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
+      : form.desc;
+    const payload = {
+      id, customer: form.customer, email: form.email, address: form.address,
+      amount: lineItemsTotal !== null ? lineItemsTotal : grossAmount,
+      due: `Valid for ${form.validDays} days`, status: initialData?.status || "sent",
+      description: finalDesc, lineItems: form.lineItems || [], isQuote: true,
+      vatEnabled: form.vatEnabled, vatRate: form.vatRate,
+      jobRef: form.jobRef || "",
+    };
+    if (isEditing) {
+      onSent(payload);
+    } else {
+      setSent(true);
+      setTimeout(() => onSent(payload), 1000);
+    }
   };
 
   return (
@@ -3447,25 +3475,36 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
 
                 {/* VAT toggle */}
                 {isVatRegistered && (
-                  <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${form.vatEnabled ? C.blue + "66" : C.border}`, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 180 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3 }}>VAT Quote</div>
-                      {form.vatEnabled && grossAmount > 0
-                        ? <div style={{ fontSize: 11, color: C.muted }}>Net: £{netAmount.toFixed(2)} + VAT £{vatAmount.toFixed(2)} = Total £{grossAmount.toFixed(2)}</div>
-                        : <div style={{ fontSize: 11, color: C.muted }}>VAT No: {brand.vatNumber} — toggle to show VAT breakdown</div>}
+                  <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${form.vatEnabled ? C.blue + "66" : C.border}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: form.vatEnabled && grossAmount > 0 ? 8 : 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700 }}>VAT</div>
+                      <select
+                        value={form.vatEnabled ? `${form.vatRate}_${form.vatType || "income"}` : "none"}
+                        onChange={e => {
+                          const v = e.target.value;
+                          if (v === "none") setForm(f => ({ ...f, vatEnabled: false, vatType: "" }));
+                          else {
+                            const [rate, type] = v.split("_");
+                            setForm(f => ({ ...f, vatEnabled: true, vatRate: parseInt(rate), vatType: type }));
+                          }
+                        }}
+                        style={{ ...S.input, width: "auto", minWidth: 260, padding: "6px 10px" }}
+                      >
+                        <option value="none">No VAT</option>
+                        <option value="5_income">5% Income</option>
+                        <option value="5_expenses">5% Expenses</option>
+                        <option value="20_income">20% Income</option>
+                        <option value="20_expenses">20% Expenses</option>
+                        <option value="0_zero">Zero Rate 0% — New Build</option>
+                        <option value="5_drc_income">Domestic Reverse Charge @ 5% Income</option>
+                        <option value="5_drc_expenses">Domestic Reverse Charge @ 5% Expenses</option>
+                        <option value="20_drc_income">Domestic Reverse Charge @ 20% Income</option>
+                        <option value="20_drc_expenses">Domestic Reverse Charge @ 20% Expenses</option>
+                      </select>
                     </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                      {form.vatEnabled && (
-                        <div style={{ display: "flex", gap: 6 }}>
-                          {[20, 5, 0].map(r => (
-                            <button key={r} onClick={() => setForm(f => ({ ...f, vatRate: r }))} style={{ ...S.pill(C.blue, form.vatRate === r), fontSize: 11, padding: "4px 10px" }}>{r}%</button>
-                          ))}
-                        </div>
-                      )}
-                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: !f.vatEnabled }))} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, background: form.vatEnabled ? C.blue : C.border, color: form.vatEnabled ? "#fff" : C.muted, transition: "all 0.2s" }}>
-                        {form.vatEnabled ? "VAT On ✓" : "Add VAT"}
-                      </button>
-                    </div>
+                    {form.vatEnabled && grossAmount > 0 && (
+                      <div style={{ fontSize: 11, color: C.muted }}>Net: £{netAmount.toFixed(2)} + VAT £{vatAmount.toFixed(2)} = Total £{grossAmount.toFixed(2)}</div>
+                    )}
                   </div>
                 )}
 
