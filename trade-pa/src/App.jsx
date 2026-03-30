@@ -340,13 +340,14 @@ function buildRef(brand, inv) {
 
 // ─── PDF Generator ────────────────────────────────────────────────────────────
 function downloadInvoicePDF(brand, inv) {
+  try {
   const accent = brand.accentColor || "#f59e0b";
   const ref = buildRef(brand, inv);
   const payMethod = inv.paymentMethod || brand.defaultPaymentMethod || "both";
   const showBacs = payMethod === "bacs" || payMethod === "both";
   const showCard = payMethod === "card" || payMethod === "both";
   const vatEnabled = inv.vatEnabled && brand.vatNumber;
-  const vatRate = inv.vatZeroRated ? 0 : (inv.vatRate || 20);
+  const vatRate = Number(inv.vatZeroRated ? 0 : (inv.vatRate || 20));
   const grossAmount = parseFloat(inv.grossAmount || inv.amount) || 0;
   const netAmount = (vatEnabled && !inv.vatZeroRated) ? parseFloat((grossAmount / (1 + vatRate / 100)).toFixed(2)) : grossAmount;
   const vatAmount = (vatEnabled && !inv.vatZeroRated) ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
@@ -357,7 +358,7 @@ function downloadInvoicePDF(brand, inv) {
   const cisMaterials = parseFloat(inv.cisMaterials) || 0;
   const cisDeduction = parseFloat(inv.cisDeduction) || 0;
   const cisNetPayable = parseFloat(inv.cisNetPayable) || 0;
-  const cisRate = inv.cisRate || 20;
+  const cisRate = Number(inv.cisRate) || 20;
 
   const rawDesc = inv.desc || inv.description || "Service";
 
@@ -511,19 +512,19 @@ function downloadInvoicePDF(brand, inv) {
       <tbody>
         ${lineItems.map((line, i) => {
           const isLast = i === lineItems.length - 1;
-          const lineAmt = line.amount !== null ? line.amount : (isLast && !hasIndividualPrices ? grossAmount : null);
+          const lineAmt = line.amount !== null && line.amount !== undefined ? Number(line.amount) : (isLast && !hasIndividualPrices ? grossAmount : null);
           const lineNet = !cisEnabled && vatEnabled && lineAmt !== null ? parseFloat((lineAmt / (1 + vatRate / 100)).toFixed(2)) : null;
           const lineVat = !cisEnabled && vatEnabled && lineAmt !== null ? parseFloat((lineAmt - lineNet).toFixed(2)) : null;
           return `
         <tr>
           <td>${line.description || line}</td>
           ${cisEnabled
-            ? `<td class="right">${lineAmt !== null ? "£" + lineAmt.toFixed(2) : "—"}</td>`
+            ? `<td class="right">${lineAmt !== null ? "£" + Number(lineAmt).toFixed(2) : "—"}</td>`
             : vatEnabled
-              ? `<td class="right">${lineNet !== null ? "£" + lineNet.toFixed(2) : "—"}</td>
-                 <td class="right">${lineVat !== null ? "£" + lineVat.toFixed(2) : "—"}</td>
-                 <td class="right">${lineAmt !== null ? "£" + lineAmt.toFixed(2) : "—"}</td>`
-              : `<td class="right">${lineAmt !== null ? "£" + lineAmt.toFixed(2) : "—"}</td>`
+              ? `<td class="right">${lineNet !== null ? "£" + Number(lineNet).toFixed(2) : "—"}</td>
+                 <td class="right">${lineVat !== null ? "£" + Number(lineVat).toFixed(2) : "—"}</td>
+                 <td class="right">${lineAmt !== null ? "£" + Number(lineAmt).toFixed(2) : "—"}</td>`
+              : `<td class="right">${lineAmt !== null ? "£" + Number(lineAmt).toFixed(2) : "—"}</td>`
           }
         </tr>`;
         }).join("")}
@@ -601,18 +602,27 @@ function downloadInvoicePDF(brand, inv) {
 </body>
 </html>`;
 
-  // Try new tab first (works in desktop browsers and regular Safari)
-  try {
-    const win = window.open("", "_blank");
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      return;
-    }
-  } catch (e) {}
+  // iOS PWA mode (navigator.standalone) skips window.open entirely
+  const isIOSPWA = window.navigator.standalone === true;
 
-  // iOS PWA / popup blocked — dispatch event for React PDFOverlay to handle
+  if (!isIOSPWA) {
+    try {
+      const win = window.open("", "_blank");
+      if (win) {
+        win.document.write(html);
+        win.document.close();
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // Fallback: React PDFOverlay via custom event
   window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
+
+  } catch (err) {
+    console.error("PDF generation error:", err);
+    alert("Could not generate PDF: " + err.message);
+  }
 }
 
 // ─── PDF Overlay (iOS PWA fallback) ──────────────────────────────────────────
