@@ -457,6 +457,7 @@ function downloadInvoicePDF(brand, inv) {
     <div><span>${isQuote ? "Valid for:" : "Payment due:"}</span>${isQuote ? "30 days" : `${brand.paymentTerms || 30} days`}</div>
     ${brand.vatNumber ? `<div><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
     <div><span>Ref:</span>${ref}</div>
+    ${inv.jobRef ? `<div><span>Job Ref:</span>${inv.jobRef}</div>` : ""}
   </div>
 
   <div class="addresses">
@@ -1592,8 +1593,8 @@ function Schedule({ jobs, setJobs }) {
 
       {/* ── Job Detail Modal ── */}
       {selectedJob && !editingJob && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelectedJob(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelectedJob(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
               <div>
@@ -1647,7 +1648,7 @@ function Schedule({ jobs, setJobs }) {
       {/* ── Edit Job Modal ── */}
       {editingJob && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Job</div>
               <button onClick={() => setEditingJob(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
@@ -1684,8 +1685,8 @@ function Schedule({ jobs, setJobs }) {
 
       {/* ── Add Job Modal ── */}
       {showAddJob && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Job — {addJobDate?.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
               <button onClick={() => setShowAddJob(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
@@ -1837,8 +1838,8 @@ function Materials({ materials, setMaterials }) {
 
       {/* Add Material Modal */}
       {showAdd && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 420, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 420, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Material</div>
               <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
@@ -1884,8 +1885,8 @@ function Materials({ materials, setMaterials }) {
 
       {/* Manage Suppliers Modal */}
       {showSuppliers && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 520, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Manage Suppliers</div>
               <button onClick={() => { setShowSuppliers(false); setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
@@ -2737,8 +2738,8 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
 
       {/* ── Detail Modal ── */}
       {selected && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelected(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelected(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
               <div>
@@ -2764,7 +2765,7 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
                       <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{(l.amount || 0).toFixed(2)}</span>
                     </div>
                   ))
-                  : <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+                  : <div style={{ fontSize: 13, whiteSpace: "pre-line", lineHeight: 1.7 }}>{selected.description || selected.desc || "—"}</div>
                 }
               </div>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
@@ -2821,8 +2822,22 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
 }
 
 // ─── Invoice Modal ────────────────────────────────────────────────────────────
-function InvoiceModal({ brand, onClose, onSent }) {
-  const [form, setForm] = useState({ customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatZeroRated: false, cisEnabled: false, cisRate: 20 });
+function InvoiceModal({ brand, onClose, onSent, initialData }) {
+  const [form, setForm] = useState(() => initialData ? {
+    customer: initialData.customer || "",
+    email: initialData.email || "",
+    address: initialData.address || "",
+    amount: initialData.amount ? String(initialData.amount) : "",
+    labour: initialData.cisLabour ? String(initialData.cisLabour) : "",
+    materials: initialData.cisMaterials ? String(initialData.cisMaterials) : "",
+    desc: initialData.description || initialData.desc || "",
+    due: initialData.due?.replace(/\D/g, "") || brand.paymentTerms || "14",
+    paymentMethod: initialData.paymentMethod || brand.defaultPaymentMethod || "both",
+    vatEnabled: initialData.vatEnabled || false,
+    vatRate: initialData.vatRate || 20,
+    vatZeroRated: initialData.vatZeroRated || false,
+    jobRef: initialData?.jobRef || "",
+  const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -2848,29 +2863,30 @@ function InvoiceModal({ brand, onClose, onSent }) {
     setSent(true);
     setTimeout(() => {
       onSent({
-        id: `INV-0${43 + Math.floor(Math.random() * 10)}`,
+        id: initialData?.id || `INV-0${43 + Math.floor(Math.random() * 10)}`,
         customer: form.customer, email: form.email, address: form.address,
         amount: form.cisEnabled ? cisNetPayable : grossAmount,
         grossAmount: grossAmount,
-        due: `Due in ${form.due} days`, status: "sent",
+        due: `Due in ${form.due} days`, status: initialData?.status || "sent",
         description: form.desc,
         vatEnabled: form.vatEnabled, vatRate: form.vatZeroRated ? 0 : vatRate,
         vatZeroRated: form.vatZeroRated,
         cisEnabled: form.cisEnabled, cisRate: form.cisRate,
         cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
+        jobRef: form.jobRef || "",
       });
-    }, 1500);
+    }, isEditing ? 0 : 1500);
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
-      <div style={{ ...S.card, maxWidth: 880, width: "100%", maxHeight: "92vh", overflowY: "auto" }}>
+    <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+      <div style={{ ...S.card, maxWidth: 880, width: "100%", marginBottom: 16 }}>
         {sent ? (
           <div style={{ textAlign: "center", padding: 40 }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: C.green, marginBottom: 8 }}>Invoice Sent!</div>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>{isEditing ? "✅" : "✅"}</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.green, marginBottom: 8 }}>{isEditing ? "Invoice Updated!" : "Invoice Sent!"}</div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>
-              {(form.paymentMethod === "card" || form.paymentMethod === "both") ? `Payment link sent to ${form.email}` : `BACS details sent to ${form.email}`}
+              {isEditing ? "Changes saved successfully." : (form.paymentMethod === "card" || form.paymentMethod === "both") ? `Payment link sent to ${form.email}` : `BACS details sent to ${form.email}`}
             </div>
             {form.vatEnabled && (
               <div style={{ ...S.card, background: C.surfaceHigh, padding: 14, display: "inline-block", textAlign: "left", marginBottom: 16 }}>
@@ -2886,7 +2902,7 @@ function InvoiceModal({ brand, onClose, onSent }) {
         ) : (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>New Invoice</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{isEditing ? `Edit Invoice · ${initialData.id}` : "New Invoice"}</div>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ display: "flex", gap: 4 }}>
                   {["form", "preview"].map(t => <button key={t} onClick={() => setTab(t)} style={S.pill(brand.accentColor, tab === t)}>{t === "form" ? "Details" : "Preview"}</button>)}
@@ -2963,6 +2979,10 @@ function InvoiceModal({ brand, onClose, onSent }) {
                   <textarea style={{ ...S.input, resize: "vertical", minHeight: 80 }} placeholder={"Annual boiler service\nFlue check and clean\nPressure test"} value={form.desc} onChange={set("desc")} />
                 </div>
 
+                <div><label style={S.label}>Job Reference <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
+                  <input style={S.input} placeholder="e.g. Kitchen refurb Phase 2, Job #1042" value={form.jobRef || ""} onChange={set("jobRef")} />
+                </div>
+
                 {/* VAT toggle */}
                 {isVatRegistered ? (
                   <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${(form.vatEnabled || form.vatZeroRated) ? C.amber + "66" : C.border}` }}>
@@ -3031,8 +3051,8 @@ function InvoiceModal({ brand, onClose, onSent }) {
                 <div style={{ display: "flex", gap: 10 }}>
                   <button style={S.btn("ghost")} onClick={() => setTab("preview")} disabled={!valid}>Preview Invoice →</button>
                   {(form.paymentMethod === "card" || form.paymentMethod === "both")
-                    ? <button style={S.btn("stripe", !valid)} disabled={!valid} onClick={send}><span style={{ fontWeight: 900 }}>S</span> Send via Stripe →</button>
-                    : <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>Send Invoice →</button>
+                    ? <button style={S.btn("stripe", !valid)} disabled={!valid} onClick={send}><span style={{ fontWeight: 900 }}>S</span> {isEditing ? "Save Changes →" : "Send via Stripe →"}</button>
+                    : <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>{isEditing ? "Save Changes →" : "Send Invoice →"}</button>
                   }
                 </div>
               </div>
@@ -3049,8 +3069,18 @@ function InvoiceModal({ brand, onClose, onSent }) {
 }
 
 // ─── Quote Modal ──────────────────────────────────────────────────────────────
-function QuoteModal({ brand, onClose, onSent }) {
-  const [form, setForm] = useState({ customer: "", email: "", address: "", amount: "", desc: "", validDays: "30", vatEnabled: false, vatRate: 20 });
+function QuoteModal({ brand, onClose, onSent, initialData }) {
+  const [form, setForm] = useState(() => initialData ? {
+    customer: initialData.customer || "",
+    email: initialData.email || "",
+    address: initialData.address || "",
+    amount: initialData.amount ? String(initialData.amount) : "",
+    desc: initialData.description || initialData.desc || "",
+    validDays: initialData.due?.replace(/\D/g, "") || "30",
+    vatEnabled: initialData.vatEnabled || false,
+    vatRate: initialData.vatRate || 20,
+  } : { customer: "", email: "", address: "", amount: "", desc: "", validDays: "30", vatEnabled: false, vatRate: 20, jobRef: "" });
+  const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -3063,29 +3093,30 @@ function QuoteModal({ brand, onClose, onSent }) {
   const send = () => {
     setSent(true);
     setTimeout(() => {
-      const id = `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
+      const id = initialData?.id || `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
       onSent({
         id, customer: form.customer, email: form.email, address: form.address, amount: grossAmount,
-        due: `Valid for ${form.validDays} days`, status: "sent",
+        due: `Valid for ${form.validDays} days`, status: initialData?.status || "sent",
         description: form.desc, isQuote: true,
         vatEnabled: form.vatEnabled, vatRate: form.vatRate,
+        jobRef: form.jobRef || "",
       });
-    }, 1000);
+    }, isEditing ? 0 : 1000);
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
-      <div style={{ ...S.card, maxWidth: 880, width: "100%", maxHeight: "92vh", overflowY: "auto" }}>
+    <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+      <div style={{ ...S.card, maxWidth: 880, width: "100%", marginBottom: 16 }}>
         {sent ? (
           <div style={{ textAlign: "center", padding: 40 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: C.blue, marginBottom: 8 }}>Quote Created!</div>
-            <div style={{ fontSize: 12, color: C.muted }}>Quote sent to {form.email || form.customer}. Valid for {form.validDays} days.</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.blue, marginBottom: 8 }}>{isEditing ? "Quote Updated!" : "Quote Created!"}</div>
+            <div style={{ fontSize: 12, color: C.muted }}>{isEditing ? "Changes saved successfully." : `Quote sent to ${form.email || form.customer}. Valid for ${form.validDays} days.`}</div>
           </div>
         ) : (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>New Quote</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{isEditing ? `Edit Quote · ${initialData.id}` : "New Quote"}</div>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ display: "flex", gap: 4 }}>
                   {["form", "preview"].map(t => <button key={t} onClick={() => setTab(t)} style={S.pill(C.blue, tab === t)}>{t === "form" ? "Details" : "Preview"}</button>)}
@@ -3112,6 +3143,10 @@ function QuoteModal({ brand, onClose, onSent }) {
 
                 <div><label style={S.label}>Description of work (one line per item)</label>
                   <textarea style={{ ...S.input, resize: "vertical", minHeight: 80 }} placeholder={"Supply and fit new boiler\nMagnetic filter installation\nFlue check and test"} value={form.desc} onChange={set("desc")} />
+                </div>
+
+                <div><label style={S.label}>Job Reference <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
+                  <input style={S.input} placeholder="e.g. Kitchen refurb Phase 2, Job #1042" value={form.jobRef || ""} onChange={set("jobRef")} />
                 </div>
 
                 {/* VAT toggle */}
@@ -3163,7 +3198,7 @@ function QuoteModal({ brand, onClose, onSent }) {
 
                 <div style={{ display: "flex", gap: 10 }}>
                   <button style={S.btn("ghost")} onClick={() => setTab("preview")} disabled={!valid}>Preview Quote →</button>
-                  <button style={{ ...S.btn("primary", !valid), background: valid ? C.blue : undefined }} disabled={!valid} onClick={send}>Send Quote →</button>
+                  <button style={{ ...S.btn("primary", !valid), background: valid ? C.blue : undefined }} disabled={!valid} onClick={send}>{isEditing ? "Save Changes →" : "Send Quote →"}</button>
                 </div>
               </div>
             ) : (
@@ -3572,8 +3607,8 @@ function Customers({ customers, setCustomers, jobs, invoices, setView }) {
 
       {/* Customer Detail Modal */}
       {selected && !editing && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelected(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 500, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelected(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 500, width: "100%", marginBottom: 16 }}>
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
               <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
@@ -3654,7 +3689,7 @@ function Customers({ customers, setCustomers, jobs, invoices, setView }) {
       {/* Edit Modal */}
       {selected && editing && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Customer</div>
               <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
@@ -3666,8 +3701,8 @@ function Customers({ customers, setCustomers, jobs, invoices, setView }) {
 
       {/* Add Modal */}
       {showAdd && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Customer</div>
               <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
@@ -3710,9 +3745,7 @@ function CustomerForm({ form, set, onSave, onCancel }) {
 function InvoicesView({ brand, invoices, setInvoices, user }) {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({});
-  const setF = k => e => setEditForm(f => ({ ...f, [k]: e.target.value }));
+  const [editingInvoice, setEditingInvoice] = useState(null);
 
   const allInvoices = (invoices || []).filter(i => !i.isQuote);
   const paid = allInvoices.filter(i => i.status === "paid");
@@ -3816,8 +3849,8 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
 
       {/* Detail modal */}
       {selected && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelected(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelected(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Invoice · {selected.id}</div>
@@ -3846,13 +3879,19 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
                       <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{(l.amount || 0).toFixed(2)}</span>
                     </div>
                   ))
-                  : <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+                  : <div style={{ fontSize: 13, whiteSpace: "pre-line", lineHeight: 1.7 }}>{selected.description || selected.desc || "—"}</div>
                 }
               </div>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Payment Due</div>
                 <div style={{ fontSize: 13 }}>{selected.due}</div>
               </div>
+              {selected.jobRef && (
+                <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Job Reference</div>
+                  <div style={{ fontSize: 13 }}>{selected.jobRef}</div>
+                </div>
+              )}
             </div>
 
             {selected.status !== "paid"
@@ -3862,7 +3901,7 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
 
             <div style={{ display: "flex", gap: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => { setEditForm({ customer: selected.customer, amount: selected.amount, address: selected.address || "", description: selected.description || selected.desc || "", due: selected.due }); setEditing(true); }}>✏ Edit</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingInvoice(selected)}>✏ Edit</button>
               {selected.status === "overdue" && <button style={S.btn("danger")} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteInvoice(selected.id)}>Delete</button>
             </div>
@@ -3870,35 +3909,8 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
         </div>
       )}
 
-      {/* Edit modal */}
-      {editing && selected && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }} onClick={() => setEditing(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Invoice · {selected.id}</div>
-              <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-              <div><label style={S.label}>Customer Name</label><input style={S.input} value={editForm.customer || ""} onChange={setF("customer")} /></div>
-              <div><label style={S.label}>Address</label><input style={S.input} placeholder="e.g. 5 High Street, Guildford" value={editForm.address || ""} onChange={setF("address")} /></div>
-              <div><label style={S.label}>Amount (£)</label><input style={S.input} type="number" value={editForm.amount || ""} onChange={setF("amount")} /></div>
-              <div><label style={S.label}>Description</label><textarea style={{ ...S.input, resize: "vertical", minHeight: 72 }} value={editForm.description || ""} onChange={setF("description")} /></div>
-              <div><label style={S.label}>Payment Due</label><input style={S.input} value={editForm.due || ""} onChange={setF("due")} /></div>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => {
-                const updated = { ...selected, customer: editForm.customer, address: editForm.address, amount: parseFloat(editForm.amount) || selected.amount, description: editForm.description, due: editForm.due };
-                setInvoices(prev => (prev || []).map(i => i.id === selected.id ? updated : i));
-                setSelected(updated);
-                setEditing(false);
-              }}>Save Changes</button>
-              <button style={S.btn("ghost")} onClick={() => setEditing(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showModal && <InvoiceModal brand={brand} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
+      {editingInvoice && <InvoiceModal brand={brand} initialData={editingInvoice} onClose={() => setEditingInvoice(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingInvoice.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingInvoice(null); }} />}
     </div>
   );
 }
@@ -3907,8 +3919,7 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
 function QuotesView({ brand, invoices, setInvoices, setView }) {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({});
+  const [editingQuote, setEditingQuote] = useState(null);
 
   const allQuotes = (invoices || []).filter(i => i.isQuote);
   const pending = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
@@ -3918,13 +3929,6 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
   const updateStatus = (id, status) => {
     setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status } : i));
     if (selected && selected.id === id) setSelected(s => ({ ...s, status }));
-  };
-
-  const saveEdit = () => {
-    const updated = { ...selected, ...editForm, amount: parseFloat(editForm.amount) || selected.amount };
-    setInvoices(prev => (prev || []).map(i => i.id === selected.id ? updated : i));
-    setSelected(updated);
-    setEditing(false);
   };
 
   const convertToInvoice = (quote) => {
@@ -3996,8 +4000,8 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
 
       {/* Detail modal */}
       {selected && !editing && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setSelected(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelected(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: 11, color: C.blue, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Quote · {selected.id}</div>
@@ -4022,13 +4026,19 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
                       <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{(l.amount || 0).toFixed(2)}</span>
                     </div>
                   ))
-                  : <div style={{ fontSize: 13 }}>{selected.description || selected.desc || "—"}</div>
+                  : <div style={{ fontSize: 13, whiteSpace: "pre-line", lineHeight: 1.7 }}>{selected.description || selected.desc || "—"}</div>
                 }
               </div>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Valid For</div>
                 <div style={{ fontSize: 13 }}>{selected.due}</div>
               </div>
+              {selected.jobRef && (
+                <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Job Reference</div>
+                  <div style={{ fontSize: 13 }}>{selected.jobRef}</div>
+                </div>
+              )}
             </div>
 
             <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "14px", fontSize: 15, marginBottom: 10 }}
@@ -4042,7 +4052,7 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
             )}
 
             <div style={{ display: "flex", gap: 8 }}>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => { setEditForm({ customer: selected.customer, amount: selected.amount, description: selected.description || selected.desc || "", due: selected.due }); setEditing(true); }}>✏️ Edit</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingQuote(selected)}>✏️ Edit</button>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteQuote(selected.id)}>Delete</button>
             </div>
@@ -4050,43 +4060,8 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
         </div>
       )}
 
-      {/* Edit modal */}
-      {selected && editing && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={() => setEditing(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>Edit Quote · {selected.id}</div>
-              <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 24 }}>×</button>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label style={S.label}>Customer Name</label>
-                <input style={S.input} value={editForm.customer} onChange={e => setEditForm(f => ({ ...f, customer: e.target.value }))} />
-              </div>
-              <div>
-                <label style={S.label}>Amount (£)</label>
-                <input style={S.input} type="number" value={editForm.amount} onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))} />
-              </div>
-              <div>
-                <label style={S.label}>Description / Scope of Work</label>
-                <textarea style={{ ...S.input, minHeight: 100, resize: "vertical" }} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
-              </div>
-              <div>
-                <label style={S.label}>Valid For</label>
-                <input style={S.input} value={editForm.due} onChange={e => setEditForm(f => ({ ...f, due: e.target.value }))} placeholder="e.g. Valid for 30 days" />
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={saveEdit}>Save Changes</button>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditing(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showModal && <QuoteModal brand={brand} onClose={() => setShowModal(false)} onSent={q => { setInvoices(prev => [q, ...(prev || [])]); setShowModal(false); }} />}
+      {editingQuote && <QuoteModal brand={brand} initialData={editingQuote} onClose={() => setEditingQuote(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingQuote.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingQuote(null); }} />}
     </div>
   );
 }
