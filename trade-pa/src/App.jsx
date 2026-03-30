@@ -601,50 +601,39 @@ function downloadInvoicePDF(brand, inv) {
 </body>
 </html>`;
 
-  // Try new tab first (works in desktop browsers)
-  let opened = false;
+  // Try new tab first (works in desktop browsers and regular Safari)
   try {
     const win = window.open("", "_blank");
     if (win) {
       win.document.write(html);
       win.document.close();
-      opened = true;
+      return;
     }
   } catch (e) {}
 
-  if (!opened) {
-    // iOS PWA / popup blocked — full-screen iframe overlay using document.write
-    const overlay = document.createElement("div");
-    overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;display:flex;flex-direction:column;";
+  // iOS PWA / popup blocked — dispatch event for React PDFOverlay to handle
+  window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
+}
 
-    const toolbar = document.createElement("div");
-    toolbar.style.cssText = "display:flex;gap:8px;padding:12px 16px;background:#1a1a1a;flex-shrink:0;";
-
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = "✕ Close";
-    closeBtn.style.cssText = "background:#f59e0b;border:none;padding:10px 18px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;color:#000;";
-
-    const printBtn = document.createElement("button");
-    printBtn.textContent = "🖨 Print / Save";
-    printBtn.style.cssText = "background:#444;color:#fff;border:none;padding:10px 18px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;";
-
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "flex:1;border:none;width:100%;background:#fff;";
-
-    toolbar.appendChild(closeBtn);
-    toolbar.appendChild(printBtn);
-    overlay.appendChild(toolbar);
-    overlay.appendChild(iframe);
-    document.body.appendChild(overlay);
-
-    // Use document.write on iframe (more reliable than srcdoc on iOS)
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-
-    closeBtn.onclick = () => document.body.removeChild(overlay);
-    printBtn.onclick = () => { try { iframe.contentWindow.print(); } catch(e) {} };
-  }
+// ─── PDF Overlay (iOS PWA fallback) ──────────────────────────────────────────
+function PDFOverlay({ html, onClose }) {
+  const iframeRef = useRef();
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    // Write after mount so contentDocument is ready
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (doc) { doc.open(); doc.write(html); doc.close(); }
+  }, [html]);
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", flexDirection: "column", background: "#fff" }}>
+      <div style={{ display: "flex", gap: 8, padding: "12px 16px", background: "#1a1a1a", flexShrink: 0 }}>
+        <button onClick={onClose} style={{ background: C.amber, border: "none", padding: "10px 18px", borderRadius: 6, fontWeight: 700, cursor: "pointer", fontSize: 14, color: "#000" }}>✕ Close</button>
+        <button onClick={() => { try { iframeRef.current?.contentWindow?.print(); } catch(e) {} }} style={{ background: "#444", color: "#fff", border: "none", padding: "10px 18px", borderRadius: 6, fontWeight: 700, cursor: "pointer", fontSize: 14 }}>🖨 Print / Save</button>
+      </div>
+      <iframe ref={iframeRef} style={{ flex: 1, border: "none", width: "100%" }} />
+    </div>
+  );
 }
 
 // ─── Invoice Preview ──────────────────────────────────────────────────────────
@@ -3395,13 +3384,14 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
     paymentMethod: initialData.paymentMethod || brand.defaultPaymentMethod || "both",
     vatEnabled: initialData.vatEnabled || false,
     vatRate: initialData.vatRate || 20,
+    vatType: initialData.vatType || "income",
     vatZeroRated: initialData.vatZeroRated || false,
     cisEnabled: initialData.cisEnabled || false,
     cisRate: initialData.cisRate || 20,
     jobRef: initialData?.jobRef || "",
     lineItems: initialData?.lineItems || [],
     materialItems: initialData?.materialItems || [{ desc: "", amount: "" }],
-  } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatZeroRated: false, cisEnabled: false, cisRate: 20, jobRef: "", lineItems: [], materialItems: [{ desc: "", amount: "" }] });
+  } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatType: "income", vatZeroRated: false, cisEnabled: false, cisRate: 20, jobRef: "", lineItems: [], materialItems: [{ desc: "", amount: "" }] });
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
@@ -4885,6 +4875,7 @@ const VIEWS = ["Dashboard", "Schedule", "Customers", "Invoices", "Quotes", "Mate
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [pdfHtml, setPdfHtml] = useState(null);
   const [view, setView] = useState(() => {
     // If redirected back from OAuth, go to Settings
     const params = new URLSearchParams(window.location.search);
@@ -4896,6 +4887,13 @@ export default function App() {
   const [dueNow, setDueNow] = useState([]);
   const [bellFlash, setBellFlash] = useState(false);
   const now = Date.now();
+
+  // PDF overlay event listener (iOS PWA fallback)
+  useEffect(() => {
+    const handler = (e) => setPdfHtml(e.detail);
+    window.addEventListener("trade-pa-show-pdf", handler);
+    return () => window.removeEventListener("trade-pa-show-pdf", handler);
+  }, []);
 
   // Check existing session on load
   useEffect(() => {
@@ -5266,6 +5264,7 @@ export default function App() {
 
   return (
     <div style={S.app}>
+      {pdfHtml && <PDFOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500;700&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
