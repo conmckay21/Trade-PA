@@ -601,30 +601,49 @@ function downloadInvoicePDF(brand, inv) {
 </body>
 </html>`;
 
-  const win = window.open("about:blank", "_blank");
-  if (win) {
-    win.document.write(html);
-    win.document.close();
-  } else {
-    // iOS PWA / popup blocked — show full-screen iframe overlay within the app
+  // Try new tab first (works in desktop browsers)
+  let opened = false;
+  try {
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      opened = true;
+    }
+  } catch (e) {}
+
+  if (!opened) {
+    // iOS PWA / popup blocked — full-screen iframe overlay using document.write
     const overlay = document.createElement("div");
-    overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:#fff;";
+    overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;display:flex;flex-direction:column;";
+
+    const toolbar = document.createElement("div");
+    toolbar.style.cssText = "display:flex;gap:8px;padding:12px 16px;background:#1a1a1a;flex-shrink:0;";
+
     const closeBtn = document.createElement("button");
     closeBtn.textContent = "✕ Close";
-    closeBtn.style.cssText = "position:fixed;top:env(safe-area-inset-top,16px);right:16px;z-index:10000;background:#f59e0b;border:none;padding:10px 18px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;";
+    closeBtn.style.cssText = "background:#f59e0b;border:none;padding:10px 18px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;color:#000;";
+
     const printBtn = document.createElement("button");
     printBtn.textContent = "🖨 Print / Save";
-    printBtn.style.cssText = "position:fixed;top:env(safe-area-inset-top,16px);right:120px;z-index:10000;background:#1a1a1a;color:#fff;border:none;padding:10px 18px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;";
+    printBtn.style.cssText = "background:#444;color:#fff;border:none;padding:10px 18px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;";
+
     const iframe = document.createElement("iframe");
-    iframe.style.cssText = "width:100%;height:100%;border:none;";
-    iframe.srcdoc = html;
-    const cleanup = () => { document.body.removeChild(overlay); document.body.removeChild(closeBtn); document.body.removeChild(printBtn); };
-    closeBtn.onclick = cleanup;
-    printBtn.onclick = () => iframe.contentWindow?.print();
+    iframe.style.cssText = "flex:1;border:none;width:100%;background:#fff;";
+
+    toolbar.appendChild(closeBtn);
+    toolbar.appendChild(printBtn);
+    overlay.appendChild(toolbar);
     overlay.appendChild(iframe);
     document.body.appendChild(overlay);
-    document.body.appendChild(closeBtn);
-    document.body.appendChild(printBtn);
+
+    // Use document.write on iframe (more reliable than srcdoc on iOS)
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+
+    closeBtn.onclick = () => document.body.removeChild(overlay);
+    printBtn.onclick = () => { try { iframe.contentWindow.print(); } catch(e) {} };
   }
 }
 
@@ -3428,7 +3447,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
         description: finalDesc,
         lineItems: form.lineItems || [],
         vatEnabled: form.vatEnabled, vatRate: form.vatZeroRated ? 0 : vatRate,
-        vatZeroRated: form.vatZeroRated,
+        vatZeroRated: form.vatZeroRated, vatType: form.vatType || "",
         cisEnabled: form.cisEnabled, cisRate: form.cisRate,
         cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
         jobRef: form.jobRef || "",
