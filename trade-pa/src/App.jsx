@@ -601,13 +601,16 @@ function downloadInvoicePDF(brand, inv) {
 </body>
 </html>`;
 
-  const win = window.open("", "_blank");
-  if (win) {
-    win.document.write(html);
-    win.document.close();
-  } else {
-    alert("Please allow pop-ups for this site to download invoices.");
-  }
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
 // ─── Invoice Preview ──────────────────────────────────────────────────────────
@@ -1822,6 +1825,7 @@ function Materials({ materials, setMaterials, user }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
 
+  const [editingMaterial, setEditingMaterial] = useState(null); // {index, ...fields}
   const emptyRow = () => ({ item: "", qty: 1, unitPrice: "", supplier: "", job: "", status: "to_order" });
   const [rows, setRows] = useState([emptyRow()]);
   const updateRow = (i, k, v) => setRows(prev => prev.map((r, j) => j === i ? { ...r, [k]: v } : r));
@@ -2146,12 +2150,50 @@ Return only JSON, no other text.` },
                 <button onClick={() => cycleStatus(i)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0 }}>
                   {m.status === "to_order" ? "→ Ordered" : m.status === "ordered" ? "→ Collected" : "↺ Reset"}
                 </button>
+                <button onClick={() => setEditingMaterial({ index: i, item: m.item, qty: String(m.qty || 1), unitPrice: String(m.unitPrice || ""), supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" })} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0 }}>✏</button>
                 <button onClick={() => deleteMaterial(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginLeft: 4 }}>×</button>
               </div>
             );
           })
         }
       </div>
+
+      {/* Material edit modal */}
+      {editingMaterial && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setEditingMaterial(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Material</div>
+              <button onClick={() => setEditingMaterial(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div><label style={S.label}>Item Description</label><input style={S.input} value={editingMaterial.item} onChange={e => setEditingMaterial(m => ({ ...m, item: e.target.value }))} placeholder="e.g. 22mm copper pipe" /></div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Qty</label><input style={S.input} type="number" min="1" value={editingMaterial.qty} onChange={e => setEditingMaterial(m => ({ ...m, qty: e.target.value }))} /></div>
+                <div><label style={S.label}>Unit Price (£)</label><input style={S.input} type="number" min="0" step="0.01" value={editingMaterial.unitPrice} onChange={e => setEditingMaterial(m => ({ ...m, unitPrice: e.target.value }))} placeholder="0.00" /></div>
+              </div>
+              <div><label style={S.label}>Supplier</label><input style={S.input} value={editingMaterial.supplier} onChange={e => setEditingMaterial(m => ({ ...m, supplier: e.target.value }))} placeholder="e.g. Screwfix" /></div>
+              <div><label style={S.label}>Job Reference</label><input style={S.input} value={editingMaterial.job} onChange={e => setEditingMaterial(m => ({ ...m, job: e.target.value }))} placeholder="e.g. Kitchen refurb" /></div>
+              <div>
+                <label style={S.label}>Status</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {[["to_order", "To Order"], ["ordered", "Ordered"], ["collected", "Collected"]].map(([v, l]) => (
+                    <button key={v} onClick={() => setEditingMaterial(m => ({ ...m, status: v }))} style={S.pill(C.amber, editingMaterial.status === v)}>{l}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => {
+                const { index, ...fields } = editingMaterial;
+                setMaterials(prev => (prev || []).map((m, j) => j === index ? { ...m, item: fields.item, qty: parseInt(fields.qty) || 1, unitPrice: parseFloat(fields.unitPrice) || 0, supplier: fields.supplier, job: fields.job, status: fields.status } : m));
+                setEditingMaterial(null);
+              }}>Save Changes</button>
+              <button style={S.btn("ghost")} onClick={() => setEditingMaterial(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={S.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -3607,7 +3649,31 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
               </div>
             ) : (
               <div style={{ display: "flex", justifyContent: "center" }}>
-                <InvoicePreview brand={brand} invoice={{ id: "INV-043", customer: form.customer || "Customer Name", address: form.address || "Customer Address", desc: form.desc || "Service description", amount: form.amount || "0", date: new Date().toLocaleDateString("en-GB"), due: form.due, paymentMethod: form.paymentMethod, vatEnabled: form.vatEnabled, vatRate: form.vatRate }} />
+                <InvoicePreview brand={brand} invoice={{
+                  id: isEditing ? initialData.id : "INV-043",
+                  customer: form.customer || "Customer Name",
+                  address: form.address || "Customer Address",
+                  email: form.email,
+                  desc: form.desc,
+                  lineItems: form.lineItems || [],
+                  materialItems: form.materialItems || [],
+                  amount: form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+                  grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+                  date: new Date().toLocaleDateString("en-GB"),
+                  due: form.due,
+                  paymentMethod: form.paymentMethod,
+                  vatEnabled: form.vatEnabled,
+                  vatRate: form.vatRate,
+                  vatType: form.vatType,
+                  vatZeroRated: form.vatZeroRated,
+                  cisEnabled: form.cisEnabled,
+                  cisRate: form.cisRate,
+                  cisLabour: labourAmt,
+                  cisMaterials: materialsAmt,
+                  cisDeduction,
+                  cisNetPayable,
+                  jobRef: form.jobRef,
+                }} />
               </div>
             )}
           </>
@@ -3862,7 +3928,31 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
               </div>
             ) : (
               <div style={{ display: "flex", justifyContent: "center" }}>
-                <InvoicePreview brand={brand} invoice={{ id: "QTE-001", customer: form.customer || "Customer Name", address: form.address || "Customer Address", desc: form.desc || "Description of work", amount: form.amount || "0", date: new Date().toLocaleDateString("en-GB"), due: `Valid for ${form.validDays} days`, isQuote: true, vatEnabled: form.vatEnabled, vatRate: form.vatRate }} />
+                <InvoicePreview brand={brand} invoice={{
+                  id: isEditing ? initialData.id : "QTE-001",
+                  customer: form.customer || "Customer Name",
+                  address: form.address || "Customer Address",
+                  email: form.email,
+                  desc: form.desc,
+                  lineItems: form.lineItems || [],
+                  materialItems: form.materialItems || [],
+                  amount: form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+                  grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+                  date: new Date().toLocaleDateString("en-GB"),
+                  due: `Valid for ${form.validDays} days`,
+                  isQuote: true,
+                  vatEnabled: form.vatEnabled,
+                  vatRate: form.vatRate,
+                  vatType: form.vatType,
+                  vatZeroRated: form.vatZeroRated,
+                  cisEnabled: form.cisEnabled,
+                  cisRate: form.cisRate,
+                  cisLabour: labourAmt,
+                  cisMaterials: materialsAmt,
+                  cisDeduction,
+                  cisNetPayable,
+                  jobRef: form.jobRef,
+                }} />
               </div>
             )}
           </>
