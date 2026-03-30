@@ -601,16 +601,19 @@ function downloadInvoicePDF(brand, inv) {
 </body>
 </html>`;
 
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.target = "_blank";
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  const win = window.open("about:blank", "_blank");
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+  } else {
+    // Fallback: Blob URL (desktop)
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
 }
 
 // ─── Invoice Preview ──────────────────────────────────────────────────────────
@@ -4619,18 +4622,39 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
                   <div style={{ fontSize: 13 }}>{selected.address}</div>
                 </div>
               )}
-              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Line Items</div>
-                {(selected.lineItems && selected.lineItems.length > 0)
-                  ? selected.lineItems.map((l, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: i > 0 ? 6 : 0, borderTop: i > 0 ? `1px solid ${C.border}` : "none", marginTop: i > 0 ? 6 : 0 }}>
-                      <span>{l.description}</span>
-                      <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{(l.amount || 0).toFixed(2)}</span>
-                    </div>
-                  ))
-                  : <div style={{ fontSize: 13, whiteSpace: "pre-line", lineHeight: 1.7 }}>{selected.description || selected.desc || "—"}</div>
-                }
-              </div>
+              {selected.cisEnabled ? (
+                <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>CIS Breakdown</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>Labour</span><span>£{(selected.cisLabour || 0).toFixed(2)}</span></div>
+                    {(selected.materialItems || []).filter(m => m.desc || m.description).map((m, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>{m.desc || m.description}</span><span>£{(parseFloat(m.amount) || 0).toFixed(2)}</span></div>
+                    ))}
+                    {!(selected.materialItems || []).filter(m => m.desc).length && selected.cisMaterials > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>Materials</span><span>£{(selected.cisMaterials || 0).toFixed(2)}</span></div>
+                    )}
+                    {selected.vatEnabled && !((selected.vatType || "").includes("drc")) && (
+                      <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>{vatLabel(selected)}</span><span>£{((selected.cisLabour + selected.cisMaterials) * (selected.vatRate || 20) / 100).toFixed(2)}</span></div>
+                    )}
+                    {selected.vatEnabled && (selected.vatType || "").includes("drc") && (
+                      <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>{vatLabel(selected)} — contractor accounts for VAT</div>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", color: C.red, paddingTop: 4, borderTop: `1px solid ${C.border}`, marginTop: 4 }}><span>CIS Deduction ({selected.cisRate || 20}% labour)</span><span>-£{(selected.cisDeduction || 0).toFixed(2)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 13 }}><span>Net Payable</span><span>£{(selected.cisNetPayable || selected.amount || 0).toFixed ? (selected.cisNetPayable || selected.amount || 0).toFixed(2) : selected.cisNetPayable}</span></div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Line Items</div>
+                  <LineItemsDisplay inv={selected} />
+                </div>
+              )}
+              {selected.vatEnabled && !selected.cisEnabled && (
+                <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>VAT</div>
+                  <div style={{ fontSize: 13 }}>{vatLabel(selected)}</div>
+                </div>
+              )}
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Payment Due</div>
                 <div style={{ fontSize: 13 }}>{selected.due}</div>
@@ -5024,7 +5048,17 @@ export default function App() {
           supabase.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
         ]);
         if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
-        if (inv.data) setInvoicesRaw(inv.data.map(r => ({ ...r, vatEnabled: r.vat_enabled, vatRate: r.vat_rate, isQuote: r.is_quote })));
+        if (inv.data) setInvoicesRaw(inv.data.map(r => ({
+          ...r,
+          vatEnabled: r.vat_enabled, vatRate: r.vat_rate, vatType: r.vat_type || "",
+          vatZeroRated: r.vat_zero_rated || false, isQuote: r.is_quote,
+          paymentMethod: r.payment_method, grossAmount: r.gross_amount || r.amount,
+          jobRef: r.job_ref || "", address: r.address || "", email: r.email || "",
+          lineItems: r.line_items || [], materialItems: r.material_items || [],
+          cisEnabled: r.cis_enabled || false, cisRate: r.cis_rate || 20,
+          cisLabour: r.cis_labour || 0, cisMaterials: r.cis_materials || 0,
+          cisDeduction: r.cis_deduction || 0, cisNetPayable: r.cis_net_payable || 0,
+        })));
         if (enq.data) setEnquiriesRaw(enq.data);
         if (mat.data) setMaterialsRaw(mat.data);
         if (cust.data) setCustomersRaw(cust.data);
@@ -5083,25 +5117,31 @@ export default function App() {
             if (!nextIds.has(id)) await supabase.from("invoices").delete().eq("id", id).eq("company_id", companyId);
           }
           for (const inv of next) {
+            const invRow = {
+              id: inv.id, company_id: companyId, user_id: user.id,
+              customer: inv.customer || "", amount: inv.amount || 0,
+              gross_amount: inv.grossAmount || inv.amount || 0,
+              due: inv.due, status: inv.status,
+              description: inv.description || "",
+              address: inv.address || "", email: inv.email || "",
+              vat_enabled: inv.vatEnabled || false, vat_rate: inv.vatRate || 20,
+              vat_type: inv.vatType || "", vat_zero_rated: inv.vatZeroRated || false,
+              payment_method: inv.paymentMethod || "both",
+              is_quote: inv.isQuote || false,
+              job_ref: inv.jobRef || "",
+              cis_enabled: inv.cisEnabled || false, cis_rate: inv.cisRate || 20,
+              cis_labour: inv.cisLabour || 0, cis_materials: inv.cisMaterials || 0,
+              cis_deduction: inv.cisDeduction || 0, cis_net_payable: inv.cisNetPayable || 0,
+              line_items: JSON.stringify(inv.lineItems || []),
+              material_items: JSON.stringify(inv.materialItems || []),
+            };
             if (!prevIds.has(inv.id)) {
-              await supabase.from("invoices").upsert({
-                id: inv.id, company_id: companyId, user_id: user.id,
-                customer: inv.customer, amount: inv.amount || 0, due: inv.due,
-                status: inv.status, description: inv.description || "",
-                vat_enabled: inv.vatEnabled || false, vat_rate: inv.vatRate || 20,
-                payment_method: inv.paymentMethod || "both",
-                is_quote: inv.isQuote || false,
-              });
+              await supabase.from("invoices").upsert(invRow);
             } else {
               const old = prev.find(i => i.id === inv.id);
               if (JSON.stringify(old) !== JSON.stringify(inv)) {
-                await supabase.from("invoices").update({
-                  customer: inv.customer, amount: inv.amount, due: inv.due,
-                  status: inv.status, description: inv.description || "",
-                  vat_enabled: inv.vatEnabled || false, vat_rate: inv.vatRate || 20,
-                  payment_method: inv.paymentMethod || "both",
-                  is_quote: inv.isQuote || false,
-                }).eq("id", inv.id).eq("company_id", companyId);
+                const { id, company_id, user_id, ...updateFields } = invRow;
+                await supabase.from("invoices").update(updateFields).eq("id", inv.id).eq("company_id", companyId);
               }
             }
           }
