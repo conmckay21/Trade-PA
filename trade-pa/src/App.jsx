@@ -3472,9 +3472,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
               <div style={{ fontSize: 15, fontWeight: 700 }}>{isEditing ? `Edit Invoice · ${initialData.id}` : "New Invoice"}</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <MicButton form={form} setForm={setForm} accentColor={brand.accentColor} />
-                <div style={{ display: "flex", gap: 4 }}>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button onClick={() => {
+                <button onClick={() => {
                     const finalDesc = form.lineItems && form.lineItems.length > 0
                       ? form.lineItems.map(l => l.amount && l.amount !== "" ? `${l.desc||l.description}|${l.amount}` : (l.desc||l.description||"")).filter(Boolean).join("\n")
                       : form.desc;
@@ -3491,8 +3489,6 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                       jobRef: form.jobRef,
                     });
                   }} style={S.pill(brand.accentColor, false)} disabled={!valid}>Preview PDF</button>
-                </div>
-                </div>
                 <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
               </div>
             </div>
@@ -3678,36 +3674,6 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                   }
                 </div>
               </div>
-            </div>
-            {false && (
-              <div>
-                <InvoicePreview brand={brand} invoice={{
-                  id: isEditing ? initialData.id : "INV-043",
-                  customer: form.customer || "Customer Name",
-                  address: form.address || "Customer Address",
-                  email: form.email,
-                  desc: form.desc,
-                  lineItems: form.lineItems || [],
-                  materialItems: form.materialItems || [],
-                  amount: form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
-                  grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
-                  date: new Date().toLocaleDateString("en-GB"),
-                  due: form.due,
-                  paymentMethod: form.paymentMethod,
-                  vatEnabled: form.vatEnabled,
-                  vatRate: form.vatRate,
-                  vatType: form.vatType,
-                  vatZeroRated: form.vatZeroRated,
-                  cisEnabled: form.cisEnabled,
-                  cisRate: form.cisRate,
-                  cisLabour: labourAmt,
-                  cisMaterials: materialsAmt,
-                  cisDeduction,
-                  cisNetPayable,
-                  jobRef: form.jobRef,
-                }} />
-              </div>
-            )}
           </>
         )}
       </div>
@@ -3974,36 +3940,6 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
                   <button style={{ ...S.btn("primary", !valid), background: valid ? C.blue : undefined }} disabled={!valid} onClick={send}>{isEditing ? "Save Changes →" : "Send Quote →"}</button>
                 </div>
               </div>
-            </div>
-            {false && (
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <InvoicePreview brand={brand} invoice={{
-                  id: isEditing ? initialData.id : "QTE-001",
-                  customer: form.customer || "Customer Name",
-                  address: form.address || "Customer Address",
-                  email: form.email,
-                  desc: form.desc,
-                  lineItems: form.lineItems || [],
-                  materialItems: form.materialItems || [],
-                  amount: form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
-                  grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
-                  date: new Date().toLocaleDateString("en-GB"),
-                  due: `Valid for ${form.validDays} days`,
-                  isQuote: true,
-                  vatEnabled: form.vatEnabled,
-                  vatRate: form.vatRate,
-                  vatType: form.vatType,
-                  vatZeroRated: form.vatZeroRated,
-                  cisEnabled: form.cisEnabled,
-                  cisRate: form.cisRate,
-                  cisLabour: labourAmt,
-                  cisMaterials: materialsAmt,
-                  cisDeduction,
-                  cisNetPayable,
-                  jobRef: form.jobRef,
-                }} />
-              </div>
-            )}
           </>
         )}
       </div>
