@@ -2836,7 +2836,10 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
     vatEnabled: initialData.vatEnabled || false,
     vatRate: initialData.vatRate || 20,
     vatZeroRated: initialData.vatZeroRated || false,
+    cisEnabled: initialData.cisEnabled || false,
+    cisRate: initialData.cisRate || 20,
     jobRef: initialData?.jobRef || "",
+  } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatZeroRated: false, cisEnabled: false, cisRate: 20, jobRef: "" });
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
