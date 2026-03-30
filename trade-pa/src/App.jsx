@@ -1772,7 +1772,8 @@ function Materials({ materials, setMaterials, user }) {
     setScanResult(null);
     setScanImageData(null);
     try {
-      // Read file as both base64 for API and as data URL for display/storage
+      const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+
       const { base64, dataUrl } = await new Promise((res, rej) => {
         const reader = new FileReader();
         reader.onload = e => {
@@ -1785,6 +1786,11 @@ function Materials({ materials, setMaterials, user }) {
 
       setScanImageData(dataUrl);
       setScanImageType(file.type || "image/jpeg");
+
+      // Build the content block — PDFs as document, images as image
+      const fileContent = isPdf
+        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+        : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -1800,7 +1806,7 @@ function Materials({ materials, setMaterials, user }) {
           messages: [{
             role: "user",
             content: [
-              { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } },
+              fileContent,
               { type: "text", text: `Read this supplier receipt or invoice. Extract all line items and return ONLY valid JSON:
 {
   "supplier": "supplier name",
@@ -1824,7 +1830,8 @@ Return only JSON, no other text.` },
       setScanResult(parsed);
       setShowScanner(true);
     } catch (e) {
-      setScanError("Could not read receipt — try a clearer photo");
+      console.error("Scan error:", e);
+      setScanError("Could not read receipt — try a clearer photo or different file");
     }
     setScanning(false);
   };
@@ -3183,7 +3190,6 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
-  const valid = form.customer && form.email && (form.cisEnabled ? (form.labour || form.materials) : form.amount);
   const isVatRegistered = !!brand.vatNumber;
 
   // CIS calculations
@@ -3206,32 +3212,38 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
     ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
     : null;
 
+  // Has any amount: line items total, form.amount, or CIS fields
+  const hasAmount = form.cisEnabled ? (form.labour || form.materials) : (lineItemsTotal !== null || !!form.amount);
+  const valid = form.customer && form.email && hasAmount;
+
   const send = () => {
-    const finalDesc = form.lineItems && form.lineItems.length > 0
-      ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
-      : form.desc;
-    const finalAmount = form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount);
-    const payload = {
-      id: initialData?.id || `INV-0${43 + Math.floor(Math.random() * 10)}`,
-      customer: form.customer, email: form.email, address: form.address,
-      amount: finalAmount,
-      grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
-      due: `Due in ${form.due} days`, status: initialData?.status || "sent",
-      description: finalDesc,
-      lineItems: form.lineItems || [],
-      vatEnabled: form.vatEnabled, vatRate: form.vatZeroRated ? 0 : vatRate,
-      vatZeroRated: form.vatZeroRated,
-      cisEnabled: form.cisEnabled, cisRate: form.cisRate,
-      cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
-      jobRef: form.jobRef || "",
-    };
-    if (isEditing) {
-      // For edits: save and close immediately, no success screen
-      onSent(payload);
-    } else {
-      // For new: show success screen then close
-      setSent(true);
-      setTimeout(() => onSent(payload), 1500);
+    try {
+      const finalDesc = form.lineItems && form.lineItems.length > 0
+        ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
+        : form.desc;
+      const finalAmount = form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount);
+      const payload = {
+        id: initialData?.id || `INV-0${43 + Math.floor(Math.random() * 10)}`,
+        customer: form.customer, email: form.email, address: form.address,
+        amount: finalAmount,
+        grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+        due: `Due in ${form.due} days`, status: initialData?.status || "sent",
+        description: finalDesc,
+        lineItems: form.lineItems || [],
+        vatEnabled: form.vatEnabled, vatRate: form.vatZeroRated ? 0 : vatRate,
+        vatZeroRated: form.vatZeroRated,
+        cisEnabled: form.cisEnabled, cisRate: form.cisRate,
+        cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
+        jobRef: form.jobRef || "",
+      };
+      if (isEditing) {
+        onSent(payload);
+      } else {
+        setSent(true);
+        setTimeout(() => onSent(payload), 1500);
+      }
+    } catch (e) {
+      console.error("Invoice save error:", e);
     }
   };
 
@@ -3458,33 +3470,40 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
-  const valid = form.customer && form.amount;
   const isVatRegistered = !!brand.vatNumber;
   const grossAmount = parseFloat(form.amount) || 0;
   const netAmount = form.vatEnabled ? parseFloat((grossAmount / (1 + form.vatRate / 100)).toFixed(2)) : grossAmount;
   const vatAmount = form.vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
 
+  const lineItemsTotal = form.lineItems && form.lineItems.some(l => l.amount)
+    ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+    : null;
+
+  const hasAmount = lineItemsTotal !== null || !!form.amount;
+  const valid = form.customer && hasAmount;
+
   const send = () => {
-    const id = initialData?.id || `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
-    const lineItemsTotal = form.lineItems && form.lineItems.some(l => l.amount)
-      ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
-      : null;
-    const finalDesc = form.lineItems && form.lineItems.length > 0
-      ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
-      : form.desc;
-    const payload = {
-      id, customer: form.customer, email: form.email, address: form.address,
-      amount: lineItemsTotal !== null ? lineItemsTotal : grossAmount,
-      due: `Valid for ${form.validDays} days`, status: initialData?.status || "sent",
-      description: finalDesc, lineItems: form.lineItems || [], isQuote: true,
-      vatEnabled: form.vatEnabled, vatRate: form.vatRate,
-      jobRef: form.jobRef || "",
-    };
-    if (isEditing) {
-      onSent(payload);
-    } else {
-      setSent(true);
-      setTimeout(() => onSent(payload), 1000);
+    try {
+      const id = initialData?.id || `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
+      const finalDesc = form.lineItems && form.lineItems.length > 0
+        ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
+        : form.desc;
+      const payload = {
+        id, customer: form.customer, email: form.email, address: form.address,
+        amount: lineItemsTotal !== null ? lineItemsTotal : grossAmount,
+        due: `Valid for ${form.validDays} days`, status: initialData?.status || "sent",
+        description: finalDesc, lineItems: form.lineItems || [], isQuote: true,
+        vatEnabled: form.vatEnabled, vatRate: form.vatRate,
+        jobRef: form.jobRef || "",
+      };
+      if (isEditing) {
+        onSent(payload);
+      } else {
+        setSent(true);
+        setTimeout(() => onSent(payload), 1000);
+      }
+    } catch (e) {
+      console.error("Quote save error:", e);
     }
   };
 
@@ -4524,20 +4543,24 @@ export default function App() {
   }, []);
 
   // Load brand settings from localStorage (brand is small, localStorage is fine)
+  const brandSaveCount = useRef(0);
   useEffect(() => {
     if (!user) return;
+    brandSaveCount.current = 0; // reset counter so first save after login is skipped
     const saved = localStorage.getItem(`trade-pa-brand-${user.id}`);
     if (saved) setBrand(JSON.parse(saved));
     else {
       const name = user.user_metadata?.full_name;
       if (name) setBrand(b => ({ ...b, tradingName: `${name}'s Trades` }));
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
+    brandSaveCount.current++;
+    if (brandSaveCount.current <= 1) return; // skip first fire — that's the default brand before load completes
     localStorage.setItem(`trade-pa-brand-${user.id}`, JSON.stringify(brand));
-  }, [brand, user]);
+  }, [brand, user?.id]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
