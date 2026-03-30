@@ -1744,7 +1744,12 @@ const DEFAULT_SUPPLIERS = [
 function Materials({ materials, setMaterials, user }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showSuppliers, setShowSuppliers] = useState(false);
-  const [suppliers, setSuppliers] = useState(DEFAULT_SUPPLIERS);
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const [scanError, setScanError] = useState("");
+  const fileRef = useRef();
+  const suppliers = DEFAULT_SUPPLIERS;
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "", notes: "" });
   const [filterJob, setFilterJob] = useState("all");
@@ -1757,7 +1762,92 @@ function Materials({ materials, setMaterials, user }) {
   const addRow = () => setRows(prev => [...prev, emptyRow()]);
   const removeRow = (i) => setRows(prev => prev.filter((_, j) => j !== i));
 
-  const saveAll = () => {
+  const scanReceipt = async (file) => {
+    if (!file) return;
+    setScanning(true);
+    setScanError("");
+    setScanResult(null);
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result.split(",")[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 },
+              },
+              {
+                type: "text",
+                text: `You are reading a supplier receipt or invoice. Extract all line items and return ONLY valid JSON like this:
+{
+  "supplier": "supplier name",
+  "date": "YYYY-MM-DD or empty string",
+  "total": 123.45,
+  "items": [
+    { "item": "item name", "qty": 1, "unitPrice": 12.50 }
+  ]
+}
+If you cannot read the receipt clearly, still return valid JSON with what you can extract. Do not include any text outside the JSON.`,
+              },
+            ],
+          }],
+        }),
+      });
+
+      const data = await response.json();
+      const text = data.content?.[0]?.text || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("Could not parse receipt");
+      const parsed = JSON.parse(jsonMatch[0]);
+      setScanResult(parsed);
+      setShowScanner(true);
+    } catch (e) {
+      setScanError("Could not read receipt — try a clearer photo");
+    }
+    setScanning(false);
+  };
+
+  const addScannedMaterials = async () => {
+    if (!scanResult) return;
+    const newMaterials = (scanResult.items || []).map(item => ({
+      item: item.item,
+      qty: item.qty || 1,
+      unitPrice: item.unitPrice || 0,
+      supplier: scanResult.supplier || "",
+      job: "",
+      status: "to_order",
+    }));
+    setMaterials(prev => [...(prev || []), ...newMaterials]);
+    // Sync to Xero as bill
+    if (user?.id) {
+      fetch("/api/xero/create-bill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, bill: { ...scanResult, jobRef: "" } }),
+      }).catch(() => {});
+    }
+    setScanResult(null);
+    setShowScanner(false);
+    setSyncMsg(`✓ ${newMaterials.length} items added from receipt`);
+    setTimeout(() => setSyncMsg(""), 3000);
+  };
     const valid = rows.filter(r => r.item.trim());
     if (!valid.length) return;
     setMaterials(prev => [...(prev || []), ...valid.map(r => ({ ...r, qty: parseInt(r.qty) || 1, unitPrice: parseFloat(r.unitPrice) || 0 }))]);
@@ -1811,17 +1901,67 @@ function Materials({ materials, setMaterials, user }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>Materials & Orders</div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button style={S.btn("ghost")} onClick={() => setShowSuppliers(true)}>Suppliers</button>
-          <button style={{ ...S.btn("ghost"), color: "#13B5EA", borderColor: "#13B5EA44" }} onClick={syncToXero} disabled={syncing}>{syncing ? "Syncing..." : "\u2191 Xero"}</button>
+          <button style={{ ...S.btn("ghost"), color: "#13B5EA", borderColor: "#13B5EA44" }} onClick={syncToXero} disabled={syncing}>{syncing ? "Syncing..." : "↑ Xero"}</button>
+          <button style={{ ...S.btn("ghost"), color: C.amber }} onClick={() => fileRef.current?.click()} disabled={scanning}>{scanning ? "⏳ Scanning..." : "📷 Scan Receipt"}</button>
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => { scanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
           <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Materials</button>
         </div>
       </div>
 
+      {scanError && (
+        <div style={{ padding: "10px 14px", background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 8, fontSize: 12, color: C.red }}>{scanError}</div>
+      )}
+
+      {showScanner && scanResult && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setShowScanner(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Receipt Scanned ✓</div>
+              <button onClick={() => setShowScanner(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Supplier</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{scanResult.supplier || "Unknown"}</div>
+              </div>
+              {scanResult.date && (
+                <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Date</div>
+                  <div style={{ fontSize: 13 }}>{scanResult.date}</div>
+                </div>
+              )}
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Items ({(scanResult.items || []).length})</div>
+                {(scanResult.items || []).map((item, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: i > 0 ? 8 : 0, borderTop: i > 0 ? `1px solid ${C.border}` : "none", marginTop: i > 0 ? 8 : 0 }}>
+                    <span>{item.item}{item.qty > 1 ? ` × ${item.qty}` : ""}</span>
+                    {item.unitPrice > 0 && <span style={{ fontWeight: 600, marginLeft: 12, flexShrink: 0 }}>£{((item.unitPrice || 0) * (item.qty || 1)).toFixed(2)}</span>}
+                  </div>
+                ))}
+                {scanResult.total > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, paddingTop: 10, borderTop: `1px solid ${C.border}`, marginTop: 10, color: C.amber }}>
+                    <span>Total</span><span>£{parseFloat(scanResult.total).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>
+              Items will be added to Materials{user?.id ? " and a draft bill created in Xero." : "."}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={addScannedMaterials}>✓ Add to Materials</button>
+              <button style={S.btn("ghost")} onClick={() => setShowScanner(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {syncMsg && (
-        <div style={{ padding: "10px 14px", background: syncMsg.startsWith("\u2713") ? C.green + "18" : C.red + "18", border: `1px solid ${syncMsg.startsWith("\u2713") ? C.green + "44" : C.red + "44"}`, borderRadius: 8, fontSize: 12, color: syncMsg.startsWith("\u2713") ? C.green : C.red }}>
+        <div style={{ padding: "10px 14px", background: syncMsg.startsWith("✓") ? C.green + "18" : C.red + "18", border: `1px solid ${syncMsg.startsWith("✓") ? C.green + "44" : C.red + "44"}`, borderRadius: 8, fontSize: 12, color: syncMsg.startsWith("✓") ? C.green : C.red }}>
           {syncMsg}
         </div>
       )}
@@ -1906,8 +2046,8 @@ function Materials({ materials, setMaterials, user }) {
       </div>
 
       {showAdd && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div style={{ ...S.card, maxWidth: 700, width: "100%", marginBottom: 16 }}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => { setShowAdd(false); setRows([emptyRow()]); }}>
+          <div style={{ ...S.card, maxWidth: 700, width: "100%", marginBottom: 16 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>Add Materials</div>
@@ -2878,6 +3018,86 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
   );
 }
 
+// ─── Line Items Builder ───────────────────────────────────────────────────────
+function LineItemsBuilder({ form, setForm, accentColor, isQuote }) {
+  const items = form.lineItems && form.lineItems.length > 0
+    ? form.lineItems
+    : [{ desc: form.desc || "", amount: "" }];
+
+  const [useIndividualPrices, setUseIndividualPrices] = useState(
+    form.lineItems && form.lineItems.some(l => l.amount)
+  );
+
+  const updateItem = (i, key, val) => {
+    const next = items.map((item, idx) => idx === i ? { ...item, [key]: val } : item);
+    setForm(f => ({ ...f, lineItems: next, desc: next.map(l => l.desc).filter(Boolean).join("\n") }));
+  };
+
+  const addItem = () => {
+    const next = [...items, { desc: "", amount: "" }];
+    setForm(f => ({ ...f, lineItems: next }));
+  };
+
+  const removeItem = (i) => {
+    const next = items.filter((_, idx) => idx !== i);
+    setForm(f => ({ ...f, lineItems: next, desc: next.map(l => l.desc).filter(Boolean).join("\n") }));
+  };
+
+  const total = useIndividualPrices ? items.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0) : null;
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <label style={S.label}>{isQuote ? "Scope of Work" : "Line Items"}</label>
+        <button
+          onClick={() => {
+            const next = !useIndividualPrices;
+            setUseIndividualPrices(next);
+            if (!next) setForm(f => ({ ...f, lineItems: items.map(l => ({ ...l, amount: "" })) }));
+          }}
+          style={{ ...S.btn("ghost"), fontSize: 10, padding: "3px 10px" }}
+        >
+          {useIndividualPrices ? "✓ Individual prices" : "Add individual prices"}
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {items.map((item, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              style={{ ...S.input, flex: 1 }}
+              placeholder={isQuote ? `e.g. Supply and fit new boiler` : `e.g. Boiler service`}
+              value={item.desc}
+              onChange={e => updateItem(i, "desc", e.target.value)}
+            />
+            {useIndividualPrices && (
+              <input
+                style={{ ...S.input, width: 90, flexShrink: 0 }}
+                type="number"
+                placeholder="£"
+                value={item.amount}
+                onChange={e => updateItem(i, "amount", e.target.value)}
+              />
+            )}
+            {items.length > 1 && (
+              <button onClick={() => removeItem(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+        <button onClick={addItem} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>+ Add line</button>
+        {useIndividualPrices && total !== null && (
+          <div style={{ fontSize: 12, color: C.muted }}>
+            Total: <span style={{ fontWeight: 700, color: C.text }}>£{total.toFixed(2)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Invoice Modal ────────────────────────────────────────────────────────────
 function InvoiceModal({ brand, onClose, onSent, initialData }) {
   const [form, setForm] = useState(() => initialData ? {
@@ -2896,6 +3116,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
     cisEnabled: initialData.cisEnabled || false,
     cisRate: initialData.cisRate || 20,
     jobRef: initialData?.jobRef || "",
+    lineItems: initialData?.lineItems || [],
   } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatZeroRated: false, cisEnabled: false, cisRate: 20, jobRef: "" });
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
@@ -2919,16 +3140,26 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
 
   const previewRef = buildRef(brand, { id: "INV-043", customer: form.customer || "Customer Name" });
 
+  // Compute total from line items if individual prices set
+  const lineItemsTotal = form.lineItems && form.lineItems.length > 0 && form.lineItems.some(l => l.amount)
+    ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+    : null;
+
   const send = () => {
     setSent(true);
     setTimeout(() => {
+      const finalDesc = form.lineItems && form.lineItems.length > 0
+        ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
+        : form.desc;
+      const finalAmount = form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount);
       onSent({
         id: initialData?.id || `INV-0${43 + Math.floor(Math.random() * 10)}`,
         customer: form.customer, email: form.email, address: form.address,
-        amount: form.cisEnabled ? cisNetPayable : grossAmount,
-        grossAmount: grossAmount,
+        amount: finalAmount,
+        grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
         due: `Due in ${form.due} days`, status: initialData?.status || "sent",
-        description: form.desc,
+        description: finalDesc,
+        lineItems: form.lineItems || [],
         vatEnabled: form.vatEnabled, vatRate: form.vatZeroRated ? 0 : vatRate,
         vatZeroRated: form.vatZeroRated,
         cisEnabled: form.cisEnabled, cisRate: form.cisRate,
@@ -3035,13 +3266,8 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                   )}
                 </div>
 
-                <div><label style={S.label}>Description (one line per item)</label>
-                  <textarea style={{ ...S.input, resize: "vertical", minHeight: 80 }} placeholder={"Annual boiler service\nFlue check and clean\nPressure test"} value={form.desc} onChange={set("desc")} />
-                </div>
-
-                <div><label style={S.label}>Job Reference <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
-                  <input style={S.input} placeholder="e.g. Kitchen refurb Phase 2, Job #1042" value={form.jobRef || ""} onChange={set("jobRef")} />
-                </div>
+                {/* Line items */}
+                <LineItemsBuilder form={form} setForm={setForm} accentColor={brand.accentColor} />
 
                 {/* VAT toggle */}
                 {isVatRegistered ? (
@@ -3139,7 +3365,9 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
     validDays: initialData.due?.replace(/\D/g, "") || "30",
     vatEnabled: initialData.vatEnabled || false,
     vatRate: initialData.vatRate || 20,
-  } : { customer: "", email: "", address: "", amount: "", desc: "", validDays: "30", vatEnabled: false, vatRate: 20, jobRef: "" });
+    jobRef: initialData.jobRef || "",
+    lineItems: initialData.lineItems || [],
+  } : { customer: "", email: "", address: "", amount: "", desc: "", validDays: "30", vatEnabled: false, vatRate: 20, jobRef: "", lineItems: [] });
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
@@ -3154,10 +3382,17 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
     setSent(true);
     setTimeout(() => {
       const id = initialData?.id || `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
+      const lineItemsTotal = form.lineItems && form.lineItems.some(l => l.amount)
+        ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+        : null;
+      const finalDesc = form.lineItems && form.lineItems.length > 0
+        ? form.lineItems.map(l => l.amount ? `${l.desc}|${l.amount}` : l.desc).filter(Boolean).join("\n")
+        : form.desc;
       onSent({
-        id, customer: form.customer, email: form.email, address: form.address, amount: grossAmount,
+        id, customer: form.customer, email: form.email, address: form.address,
+        amount: lineItemsTotal !== null ? lineItemsTotal : grossAmount,
         due: `Valid for ${form.validDays} days`, status: initialData?.status || "sent",
-        description: form.desc, isQuote: true,
+        description: finalDesc, lineItems: form.lineItems || [], isQuote: true,
         vatEnabled: form.vatEnabled, vatRate: form.vatRate,
         jobRef: form.jobRef || "",
       });
@@ -3201,9 +3436,8 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
                   ))}
                 </div>
 
-                <div><label style={S.label}>Description of work (one line per item)</label>
-                  <textarea style={{ ...S.input, resize: "vertical", minHeight: 80 }} placeholder={"Supply and fit new boiler\nMagnetic filter installation\nFlue check and test"} value={form.desc} onChange={set("desc")} />
-                </div>
+                {/* Line items */}
+                <LineItemsBuilder form={form} setForm={setForm} accentColor={brand.accentColor} isQuote />
 
                 <div><label style={S.label}>Job Reference <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
                   <input style={S.input} placeholder="e.g. Kitchen refurb Phase 2, Job #1042" value={form.jobRef || ""} onChange={set("jobRef")} />
