@@ -29,43 +29,27 @@ export default async function handler(req, res) {
       });
     }
 
-    // Determine tax type
+    // Map VAT type to Xero tax type
+    const vatType = invoice.vatType || "income";
     let taxType = 'NONE';
     if (invoice.vatZeroRated) taxType = 'ZERORATEDOUTPUT';
-    else if (invoice.vatEnabled && invoice.vatRate === 20) taxType = 'OUTPUT2';
-    else if (invoice.vatEnabled && invoice.vatRate === 5) taxType = 'RRINPUT';
+    else if (invoice.vatEnabled) {
+      const rate = invoice.vatRate;
+      if (vatType.includes('drc')) {
+        taxType = rate === 20 ? 'ECOUTPUT' : 'ECOUTPUTSERVICES'; // DRC codes
+      } else if (vatType === 'expenses') {
+        taxType = rate === 20 ? 'INPUT2' : 'RRINPUT';
+      } else {
+        taxType = rate === 20 ? 'OUTPUT2' : 'RRINPUT';
+      }
+    }
 
-    // Build line items
     let lineItems = [];
-
     if (invoice.cisEnabled) {
-      // CIS invoice — split labour and materials
-      if (invoice.cisLabour > 0) {
-        lineItems.push({
-          Description: 'Labour',
-          Quantity: 1,
-          UnitAmount: invoice.cisLabour,
-          AccountCode: '200',
-          TaxType: taxType,
-        });
-      }
-      if (invoice.cisMaterials > 0) {
-        lineItems.push({
-          Description: 'Materials',
-          Quantity: 1,
-          UnitAmount: invoice.cisMaterials,
-          AccountCode: '200',
-          TaxType: taxType,
-        });
-      }
+      if (invoice.cisLabour > 0) lineItems.push({ Description: 'Labour', Quantity: 1, UnitAmount: invoice.cisLabour, AccountCode: '200', TaxType: taxType });
+      if (invoice.cisMaterials > 0) lineItems.push({ Description: 'Materials', Quantity: 1, UnitAmount: invoice.cisMaterials, AccountCode: '200', TaxType: taxType });
     } else {
-      lineItems.push({
-        Description: invoice.description || 'Services rendered',
-        Quantity: 1,
-        UnitAmount: invoice.grossAmount || invoice.amount,
-        AccountCode: '200',
-        TaxType: taxType,
-      });
+      lineItems.push({ Description: invoice.description || 'Services rendered', Quantity: 1, UnitAmount: invoice.grossAmount || invoice.amount, AccountCode: '200', TaxType: taxType });
     }
 
     const xeroInvoice = {
@@ -74,9 +58,9 @@ export default async function handler(req, res) {
       LineItems: lineItems,
       LineAmountTypes: invoice.vatEnabled && !invoice.vatZeroRated ? 'INCLUSIVE' : 'EXCLUSIVE',
       Date: new Date().toISOString().split('T')[0],
-      DueDate: new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
+      DueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       InvoiceNumber: invoice.id,
-      Reference: invoice.id,
+      Reference: invoice.jobRef || invoice.id,
       Status: 'AUTHORISED',
       CurrencyCode: 'GBP',
     };
