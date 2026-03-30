@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { userId, bill } = req.body;
+  const { userId, bill, receiptImage, receiptImageType } = req.body;
   if (!userId || !bill) return res.status(400).json({ error: 'Missing userId or bill' });
 
   try {
@@ -59,11 +59,39 @@ export default async function handler(req, res) {
     });
 
     const xeroData = await xeroRes.json();
-    if (xeroData.Invoices?.[0]?.InvoiceID) {
-      return res.status(200).json({ success: true, xeroId: xeroData.Invoices[0].InvoiceID });
-    } else {
-      throw new Error(JSON.stringify(xeroData));
+    const invoiceId = xeroData.Invoices?.[0]?.InvoiceID;
+
+    if (!invoiceId) throw new Error(JSON.stringify(xeroData));
+
+    // Attach the receipt image to the bill if provided
+    if (receiptImage && invoiceId) {
+      try {
+        const base64Data = receiptImage.includes(',') ? receiptImage.split(',')[1] : receiptImage;
+        const mimeType = receiptImageType || 'image/jpeg';
+        const ext = mimeType.includes('png') ? 'png' : mimeType.includes('pdf') ? 'pdf' : 'jpg';
+        const filename = `receipt-${Date.now()}.${ext}`;
+
+        // Convert base64 to binary
+        const binaryStr = atob(base64Data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+        await fetch(`https://api.xero.com/api.xro/2.0/Invoices/${invoiceId}/Attachments/${filename}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Xero-tenant-id': conn.tenant_id,
+            'Content-Type': mimeType,
+          },
+          body: bytes,
+        });
+      } catch (attachErr) {
+        console.error('Xero attachment error (non-fatal):', attachErr.message);
+        // Don't fail the whole request if attachment fails
+      }
     }
+
+    return res.status(200).json({ success: true, xeroId: invoiceId });
   } catch (err) {
     console.error('Xero create bill error:', err.message);
     res.status(500).json({ error: err.message });
