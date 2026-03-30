@@ -606,13 +606,25 @@ function downloadInvoicePDF(brand, inv) {
     win.document.write(html);
     win.document.close();
   } else {
-    // Fallback: Blob URL (desktop)
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.target = "_blank"; a.rel = "noopener";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    // iOS PWA / popup blocked — show full-screen iframe overlay within the app
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:#fff;";
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "✕ Close";
+    closeBtn.style.cssText = "position:fixed;top:env(safe-area-inset-top,16px);right:16px;z-index:10000;background:#f59e0b;border:none;padding:10px 18px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;";
+    const printBtn = document.createElement("button");
+    printBtn.textContent = "🖨 Print / Save";
+    printBtn.style.cssText = "position:fixed;top:env(safe-area-inset-top,16px);right:120px;z-index:10000;background:#1a1a1a;color:#fff;border:none;padding:10px 18px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;";
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "width:100%;height:100%;border:none;";
+    iframe.srcdoc = html;
+    const cleanup = () => { document.body.removeChild(overlay); document.body.removeChild(closeBtn); document.body.removeChild(printBtn); };
+    closeBtn.onclick = cleanup;
+    printBtn.onclick = () => iframe.contentWindow?.print();
+    overlay.appendChild(iframe);
+    document.body.appendChild(overlay);
+    document.body.appendChild(closeBtn);
+    document.body.appendChild(printBtn);
   }
 }
 
@@ -3461,14 +3473,31 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <MicButton form={form} setForm={setForm} accentColor={brand.accentColor} />
                 <div style={{ display: "flex", gap: 4 }}>
-                  {["form", "preview"].map(t => <button key={t} onClick={() => setTab(t)} style={S.pill(brand.accentColor, tab === t)}>{t === "form" ? "Details" : "Preview"}</button>)}
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button onClick={() => {
+                    const finalDesc = form.lineItems && form.lineItems.length > 0
+                      ? form.lineItems.map(l => l.amount && l.amount !== "" ? `${l.desc||l.description}|${l.amount}` : (l.desc||l.description||"")).filter(Boolean).join("\n")
+                      : form.desc;
+                    downloadInvoicePDF(brand, {
+                      id: isEditing ? initialData.id : "INV-043",
+                      customer: form.customer || "Customer Name", email: form.email, address: form.address,
+                      description: finalDesc, lineItems: form.lineItems || [], materialItems: form.materialItems || [],
+                      amount: form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+                      grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+                      due: `Due in ${form.due} days`, paymentMethod: form.paymentMethod,
+                      vatEnabled: form.vatEnabled, vatRate: form.vatRate, vatType: form.vatType, vatZeroRated: form.vatZeroRated,
+                      cisEnabled: form.cisEnabled, cisRate: form.cisRate,
+                      cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
+                      jobRef: form.jobRef,
+                    });
+                  }} style={S.pill(brand.accentColor, false)} disabled={!valid}>Preview PDF</button>
+                </div>
                 </div>
                 <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
               </div>
             </div>
 
-            {tab === "form" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div style={S.grid2}>
                   {[
                     { k: "customer", l: "Customer Name", p: "e.g. James Oliver" },
@@ -3641,7 +3670,6 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                 </div>
 
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button style={S.btn("ghost")} onClick={() => setTab("preview")} disabled={!valid}>Preview Invoice →</button>
                   {isEditing
                     ? <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>Save Changes →</button>
                     : (form.paymentMethod === "card" || form.paymentMethod === "both")
@@ -3650,8 +3678,9 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                   }
                 </div>
               </div>
-            ) : (
-              <div style={{ display: "flex", justifyContent: "center" }}>
+            </div>
+            {false && (
+              <div>
                 <InvoicePreview brand={brand} invoice={{
                   id: isEditing ? initialData.id : "INV-043",
                   customer: form.customer || "Customer Name",
@@ -3775,14 +3804,31 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <MicButton form={form} setForm={setForm} accentColor={C.blue} />
                 <div style={{ display: "flex", gap: 4 }}>
-                  {["form", "preview"].map(t => <button key={t} onClick={() => setTab(t)} style={S.pill(C.blue, tab === t)}>{t === "form" ? "Details" : "Preview"}</button>)}
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button onClick={() => {
+                    const finalDesc = form.lineItems && form.lineItems.length > 0
+                      ? form.lineItems.map(l => l.amount && l.amount !== "" ? `${l.desc||l.description}|${l.amount}` : (l.desc||l.description||"")).filter(Boolean).join("\n")
+                      : form.desc;
+                    downloadInvoicePDF(brand, {
+                      id: isEditing ? initialData.id : "QTE-001",
+                      customer: form.customer || "Customer Name", email: form.email, address: form.address,
+                      description: finalDesc, lineItems: form.lineItems || [], materialItems: form.materialItems || [],
+                      amount: form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+                      grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+                      due: `Valid for ${form.validDays} days`, isQuote: true,
+                      vatEnabled: form.vatEnabled, vatRate: form.vatRate, vatType: form.vatType, vatZeroRated: form.vatZeroRated,
+                      cisEnabled: form.cisEnabled, cisRate: form.cisRate,
+                      cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
+                      jobRef: form.jobRef,
+                    });
+                  }} style={S.pill(C.blue, false)} disabled={!valid}>Preview PDF</button>
+                </div>
                 </div>
                 <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
               </div>
             </div>
 
-            {tab === "form" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div style={S.grid2}>
                   {[
                     { k: "customer", l: "Customer Name", p: "e.g. James Oliver" },
@@ -3925,11 +3971,11 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
                 </div>
 
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button style={S.btn("ghost")} onClick={() => setTab("preview")} disabled={!valid}>Preview Quote →</button>
                   <button style={{ ...S.btn("primary", !valid), background: valid ? C.blue : undefined }} disabled={!valid} onClick={send}>{isEditing ? "Save Changes →" : "Send Quote →"}</button>
                 </div>
               </div>
-            ) : (
+            </div>
+            {false && (
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <InvoicePreview brand={brand} invoice={{
                   id: isEditing ? initialData.id : "QTE-001",
@@ -4626,21 +4672,21 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
                 <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                   <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>CIS Breakdown</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>Labour</span><span>£{(selected.cisLabour || 0).toFixed(2)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>Labour</span><span>£{Number(selected.cisLabour || 0).toFixed(2)}</span></div>
                     {(selected.materialItems || []).filter(m => m.desc || m.description).map((m, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>{m.desc || m.description}</span><span>£{(parseFloat(m.amount) || 0).toFixed(2)}</span></div>
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>{m.desc || m.description}</span><span>£{Number(parseFloat(m.amount) || 0).toFixed(2)}</span></div>
                     ))}
-                    {!(selected.materialItems || []).filter(m => m.desc).length && selected.cisMaterials > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>Materials</span><span>£{(selected.cisMaterials || 0).toFixed(2)}</span></div>
+                    {!(selected.materialItems || []).filter(m => m.desc || m.description).length && Number(selected.cisMaterials) > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>Materials</span><span>£{Number(selected.cisMaterials || 0).toFixed(2)}</span></div>
                     )}
                     {selected.vatEnabled && !((selected.vatType || "").includes("drc")) && (
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>{vatLabel(selected)}</span><span>£{((selected.cisLabour + selected.cisMaterials) * (selected.vatRate || 20) / 100).toFixed(2)}</span></div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>{vatLabel(selected)}</span><span>£{((Number(selected.cisLabour) + Number(selected.cisMaterials)) * (Number(selected.vatRate) || 20) / 100).toFixed(2)}</span></div>
                     )}
                     {selected.vatEnabled && (selected.vatType || "").includes("drc") && (
                       <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>{vatLabel(selected)} — contractor accounts for VAT</div>
                     )}
-                    <div style={{ display: "flex", justifyContent: "space-between", color: C.red, paddingTop: 4, borderTop: `1px solid ${C.border}`, marginTop: 4 }}><span>CIS Deduction ({selected.cisRate || 20}% labour)</span><span>-£{(selected.cisDeduction || 0).toFixed(2)}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 13 }}><span>Net Payable</span><span>£{(selected.cisNetPayable || selected.amount || 0).toFixed ? (selected.cisNetPayable || selected.amount || 0).toFixed(2) : selected.cisNetPayable}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", color: C.red, paddingTop: 4, borderTop: `1px solid ${C.border}`, marginTop: 4 }}><span>CIS Deduction ({Number(selected.cisRate) || 20}% labour)</span><span>-£{Number(selected.cisDeduction || 0).toFixed(2)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 13 }}><span>Net Payable</span><span>£{Number(selected.cisNetPayable || selected.amount || 0).toFixed(2)}</span></div>
                   </div>
                 </div>
               ) : (
@@ -5050,14 +5096,19 @@ export default function App() {
         if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
         if (inv.data) setInvoicesRaw(inv.data.map(r => ({
           ...r,
-          vatEnabled: r.vat_enabled, vatRate: r.vat_rate, vatType: r.vat_type || "",
-          vatZeroRated: r.vat_zero_rated || false, isQuote: r.is_quote,
-          paymentMethod: r.payment_method, grossAmount: r.gross_amount || r.amount,
+          vatEnabled: r.vat_enabled, vatRate: parseFloat(r.vat_rate) || 20,
+          vatType: r.vat_type || "", vatZeroRated: r.vat_zero_rated || false,
+          isQuote: r.is_quote, paymentMethod: r.payment_method,
+          amount: parseFloat(r.amount) || 0,
+          grossAmount: parseFloat(r.gross_amount || r.amount) || 0,
           jobRef: r.job_ref || "", address: r.address || "", email: r.email || "",
-          lineItems: r.line_items || [], materialItems: r.material_items || [],
-          cisEnabled: r.cis_enabled || false, cisRate: r.cis_rate || 20,
-          cisLabour: r.cis_labour || 0, cisMaterials: r.cis_materials || 0,
-          cisDeduction: r.cis_deduction || 0, cisNetPayable: r.cis_net_payable || 0,
+          lineItems: Array.isArray(r.line_items) ? r.line_items : (r.line_items ? JSON.parse(r.line_items) : []),
+          materialItems: Array.isArray(r.material_items) ? r.material_items : (r.material_items ? JSON.parse(r.material_items) : []),
+          cisEnabled: r.cis_enabled || false, cisRate: parseFloat(r.cis_rate) || 20,
+          cisLabour: parseFloat(r.cis_labour) || 0,
+          cisMaterials: parseFloat(r.cis_materials) || 0,
+          cisDeduction: parseFloat(r.cis_deduction) || 0,
+          cisNetPayable: parseFloat(r.cis_net_payable) || 0,
         })));
         if (enq.data) setEnquiriesRaw(enq.data);
         if (mat.data) setMaterialsRaw(mat.data);
