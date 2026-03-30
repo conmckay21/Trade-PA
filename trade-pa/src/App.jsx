@@ -316,6 +316,17 @@ const DEFAULT_BRAND = {
 };
 
 // Helper: build the payment reference string for a given invoice
+function vatLabel(inv) {
+  if (!inv.vatEnabled) return "";
+  if (inv.vatZeroRated) return "Zero Rate 0% — New Build";
+  const t = inv.vatType || "income";
+  const r = inv.vatRate || 20;
+  if (t === "drc_income") return `Domestic Reverse Charge @ ${r}% Income`;
+  if (t === "drc_expenses") return `Domestic Reverse Charge @ ${r}% Expenses`;
+  if (t === "expenses") return `${r}% Expenses`;
+  return `${r}% Income`;
+}
+
 function buildRef(brand, inv) {
   const num = (inv.id || "INV-001").replace(/\D/g, "");
   const surname = (inv.customer || "").split(" ").pop().toUpperCase();
@@ -521,15 +532,21 @@ function downloadInvoicePDF(brand, inv) {
   </div>
 
   <div class="totals">
-    ${cisEnabled ? `
+    ${cisEnabled ? (() => {
+      const isDrc = (inv.vatType || "").includes("drc");
+      const cisVat = vatEnabled && !isDrc ? parseFloat((cisGross * vatRate / 100).toFixed(2)) : 0;
+      const cisNetTotal = cisGross + cisVat - cisDeduction;
+      return `
     <div class="total-row"><span>Labour</span><span>£${cisLabour.toFixed(2)}</span></div>
-    <div class="total-row"><span>Materials (no CIS deduction)</span><span>£${cisMaterials.toFixed(2)}</span></div>
-    <div class="total-row"><span>Gross Amount</span><span>£${(cisLabour + cisMaterials).toFixed(2)}</span></div>
+    ${cisMaterials > 0 ? `<div class="total-row"><span>Materials (no CIS deduction)</span><span>£${cisMaterials.toFixed(2)}</span></div>` : ""}
+    <div class="total-row"><span>Gross (labour + materials)</span><span>£${cisGross.toFixed(2)}</span></div>
+    ${vatEnabled && !isDrc ? `<div class="total-row"><span>${vatLabel(inv)}</span><span>£${cisVat.toFixed(2)}</span></div>` : ""}
+    ${vatEnabled && isDrc ? `<div class="total-row" style="color:#888"><span>${vatLabel(inv)} — contractor accounts for VAT</span><span>£0.00</span></div>` : ""}
     <div class="total-row" style="color:#c0392b"><span>CIS Deduction @ ${cisRate}% (labour only)</span><span>-£${cisDeduction.toFixed(2)}</span></div>
-    <div class="total-row grand"><span>Net Amount Payable</span><span>£${cisNetPayable.toFixed(2)}</span></div>
-    ` : vatEnabled ? `
+    <div class="total-row grand"><span>Net Amount Payable</span><span>£${cisNetTotal.toFixed(2)}</span></div>`;
+    })() : vatEnabled ? `
     <div class="total-row"><span>Net amount</span><span>£${netAmount.toFixed(2)}</span></div>
-    <div class="total-row"><span>VAT @ ${vatRate}%${inv.vatZeroRated ? " (Zero-rated — new build)" : ""}</span><span>£${vatAmount.toFixed(2)}</span></div>
+    <div class="total-row"><span>${vatLabel(inv)}</span><span>£${vatAmount.toFixed(2)}</span></div>
     <div class="total-row grand"><span>${isQuote ? "Quote Total (inc. VAT)" : "Total Due (inc. VAT)"}</span><span>£${grossAmount.toFixed(2)}</span></div>
     ` : `
     <div class="total-row grand"><span>${isQuote ? "Quote Total" : "Total Due"}</span><span>£${grossAmount.toFixed(2)}</span></div>
@@ -950,16 +967,27 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
   const logoRef = useRef();
   const set = (k) => (e) => setBrand(b => ({ ...b, [k]: e.target.value }));
 
-  // Check connection status on load and from URL params
+  // Check connection status — from Supabase DB on load (persists across reloads)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('xero') === 'connected') { setXeroConnected(true); }
-    if (params.get('qb') === 'connected') { setQbConnected(true); }
-    if (params.get('xero') === 'error') { alert(`Xero connection failed: ${params.get('msg') || 'unknown error'}`); }
-    if (params.get('qb') === 'error') { alert(`QuickBooks connection failed: ${params.get('msg') || 'unknown error'}`); }
-    // Clean URL
-    if (params.has('xero') || params.has('qb')) window.history.replaceState({}, '', window.location.pathname);
-  }, []);
+    if (params.has('xero') || params.has('qb')) {
+      if (params.get('xero') === 'error') alert(`Xero connection failed: ${params.get('msg') || 'unknown error'}`);
+      if (params.get('qb') === 'error') alert(`QuickBooks connection failed: ${params.get('msg') || 'unknown error'}`);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // Always check DB for actual connection status
+    if (!user?.id) return;
+    supabase
+      .from("accounting_connections")
+      .select("provider")
+      .eq("user_id", user.id)
+      .then(({ data }) => {
+        if (data) {
+          setXeroConnected(data.some(r => r.provider === "xero"));
+          setQbConnected(data.some(r => r.provider === "quickbooks"));
+        }
+      });
+  }, [user?.id]);
 
   const handleLogo = (e) => {
     const file = e.target.files[0];
@@ -3600,24 +3628,36 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
     validDays: initialData.due?.replace(/\D/g, "") || "30",
     vatEnabled: initialData.vatEnabled || false,
     vatRate: initialData.vatRate || 20,
+    vatType: initialData.vatType || "income",
     jobRef: initialData.jobRef || "",
     lineItems: initialData.lineItems || [],
-  } : { customer: "", email: "", address: "", amount: "", desc: "", validDays: "30", vatEnabled: false, vatRate: 20, jobRef: "", lineItems: [] });
+    cisEnabled: initialData.cisEnabled || false,
+    cisRate: initialData.cisRate || 20,
+    labour: initialData.cisLabour ? String(initialData.cisLabour) : "",
+    materials: initialData.cisMaterials ? String(initialData.cisMaterials) : "",
+    materialItems: initialData.materialItems || [{ desc: "", amount: "" }],
+  } : { customer: "", email: "", address: "", amount: "", desc: "", validDays: "30", vatEnabled: false, vatRate: 20, vatType: "income", jobRef: "", lineItems: [], cisEnabled: false, cisRate: 20, labour: "", materials: "", materialItems: [{ desc: "", amount: "" }] });
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const isVatRegistered = !!brand.vatNumber;
 
+  const labourAmt = parseFloat(form.labour) || 0;
+  const materialsAmt = parseFloat(form.materials) || 0;
+  const cisDeduction = form.cisEnabled ? parseFloat(((labourAmt * form.cisRate) / 100).toFixed(2)) : 0;
+  const cisGross = form.cisEnabled ? labourAmt + materialsAmt : 0;
+  const cisNetPayable = form.cisEnabled ? parseFloat((cisGross - cisDeduction).toFixed(2)) : 0;
+
   const lineItemsTotal = form.lineItems && form.lineItems.some(l => l.amount && l.amount !== "")
     ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
     : null;
 
-  const grossAmount = lineItemsTotal !== null ? lineItemsTotal : (parseFloat(form.amount) || 0);
+  const grossAmount = form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : (parseFloat(form.amount) || 0));
   const netAmount = form.vatEnabled ? parseFloat((grossAmount / (1 + form.vatRate / 100)).toFixed(2)) : grossAmount;
   const vatAmount = form.vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
 
-  const hasAmount = lineItemsTotal !== null || !!form.amount;
+  const hasAmount = form.cisEnabled ? (form.labour || form.materials) : (lineItemsTotal !== null || !!form.amount);
   const valid = form.customer && hasAmount;
 
   const send = () => {
@@ -3626,13 +3666,18 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
       const finalDesc = form.lineItems && form.lineItems.length > 0
         ? form.lineItems.map(l => l.amount && l.amount !== "" ? `${l.desc || l.description}|${l.amount}` : (l.desc || l.description || "")).filter(Boolean).join("\n")
         : form.desc;
+      const finalAmount = form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount);
       const payload = {
         id, customer: form.customer, email: form.email, address: form.address,
-        amount: lineItemsTotal !== null ? lineItemsTotal : grossAmount,
+        amount: finalAmount,
+        grossAmount: form.cisEnabled ? cisGross : grossAmount,
         due: `Valid for ${form.validDays} days`, status: initialData?.status || "sent",
         description: finalDesc, lineItems: form.lineItems || [], isQuote: true,
-        vatEnabled: form.vatEnabled, vatRate: form.vatRate,
+        vatEnabled: form.vatEnabled, vatRate: form.vatRate, vatType: form.vatType,
         jobRef: form.jobRef || "",
+        cisEnabled: form.cisEnabled, cisRate: form.cisRate,
+        cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
+        materialItems: form.materialItems || [],
       };
       if (isEditing) {
         onSent(payload);
@@ -3680,13 +3725,65 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
                         : <input style={S.input} placeholder={p} value={form[k]} onChange={set(k)} />}
                     </div>
                   ))}
-                  {lineItemsTotal === null ? (
+                  {!form.cisEnabled && lineItemsTotal === null && (
                     <div><label style={S.label}>{form.vatEnabled ? `Total inc. VAT @ ${form.vatRate}% (£)` : "Quote Amount (£)"}</label>
                       <input style={S.input} placeholder="e.g. 480" value={form.amount} onChange={set("amount")} />
                     </div>
-                  ) : (
+                  )}
+                  {!form.cisEnabled && lineItemsTotal !== null && (
                     <div><label style={S.label}>Total from line items</label>
                       <div style={{ ...S.input, color: C.amber, fontWeight: 700, cursor: "default" }}>£{lineItemsTotal.toFixed(2)}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* CIS toggle */}
+                <div style={{ padding: "14px 16px", background: form.cisEnabled ? "#f59e0b11" : C.surfaceHigh, borderRadius: 8, border: `1px solid ${form.cisEnabled ? "#f59e0b66" : C.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: form.cisEnabled ? 14 : 0 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>CIS — Construction Industry Scheme</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>For subcontracting to contractors who deduct CIS tax from labour</div>
+                    </div>
+                    <button onClick={() => setForm(f => ({ ...f, cisEnabled: !f.cisEnabled }))} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, background: form.cisEnabled ? C.amber : C.border, color: form.cisEnabled ? "#000" : C.muted, transition: "all 0.2s", flexShrink: 0, marginLeft: 12 }}>
+                      {form.cisEnabled ? "CIS On ✓" : "Enable CIS"}
+                    </button>
+                  </div>
+                  {form.cisEnabled && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div>
+                        <label style={S.label}>Labour (£)</label>
+                        <input style={S.input} type="number" placeholder="e.g. 400" value={form.labour} onChange={set("labour")} />
+                      </div>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <label style={S.label}>Materials <span style={{ color: C.muted, fontWeight: 400 }}>(no CIS deduction)</span></label>
+                          <button onClick={() => setForm(f => ({ ...f, materialItems: [...(f.materialItems || [{ desc: "", amount: "" }]), { desc: "", amount: "" }] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "3px 10px" }}>+ Add line</button>
+                        </div>
+                        {(form.materialItems || [{ desc: "", amount: "" }]).map((item, i) => (
+                          <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
+                            <input style={{ ...S.input, flex: 1 }} placeholder="e.g. Boiler unit" value={item.desc} onChange={e => setForm(f => { const next = [...(f.materialItems || [])]; next[i] = { ...next[i], desc: e.target.value }; return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} />
+                            <input style={{ ...S.input, width: 90, flexShrink: 0 }} type="number" placeholder="£" value={item.amount} onChange={e => setForm(f => { const next = [...(f.materialItems || [])]; next[i] = { ...next[i], amount: e.target.value }; return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} />
+                            {(form.materialItems || []).length > 1 && <button onClick={() => setForm(f => { const next = f.materialItems.filter((_, j) => j !== i); return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>}
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <label style={S.label}>CIS Deduction Rate</label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {[{ v: 20, l: "20% — Registered" }, { v: 30, l: "30% — Unregistered" }].map(({ v, l }) => (
+                            <button key={v} onClick={() => setForm(f => ({ ...f, cisRate: v }))} style={{ ...S.pill(C.amber, form.cisRate === v), fontSize: 11 }}>{l}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {(labourAmt > 0 || materialsAmt > 0) && (
+                        <div style={{ background: C.surface, borderRadius: 8, padding: "12px 14px", border: `1px solid ${C.border}` }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span style={{ color: C.muted }}>Labour</span><span>£{labourAmt.toFixed(2)}</span></div>
+                          {materialsAmt > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span style={{ color: C.muted }}>Materials</span><span>£{materialsAmt.toFixed(2)}</span></div>}
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}><span style={{ color: C.muted }}>Gross Total</span><span>£{cisGross.toFixed(2)}</span></div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4, color: C.red }}><span>CIS Deduction ({form.cisRate}% of labour)</span><span>-£{cisDeduction.toFixed(2)}</span></div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.green }}><span>Net Payable to You</span><span>£{cisNetPayable.toFixed(2)}</span></div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -4909,7 +5006,10 @@ export default function App() {
               const old = prev.find(i => i.id === inv.id);
               if (JSON.stringify(old) !== JSON.stringify(inv)) {
                 await supabase.from("invoices").update({
-                  status: inv.status, due: inv.due, amount: inv.amount,
+                  customer: inv.customer, amount: inv.amount, due: inv.due,
+                  status: inv.status, description: inv.description || "",
+                  vat_enabled: inv.vatEnabled || false, vat_rate: inv.vatRate || 20,
+                  payment_method: inv.paymentMethod || "both",
                   is_quote: inv.isQuote || false,
                 }).eq("id", inv.id).eq("company_id", companyId);
               }
