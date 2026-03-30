@@ -335,12 +335,18 @@ function downloadInvoicePDF(brand, inv) {
   const showBacs = payMethod === "bacs" || payMethod === "both";
   const showCard = payMethod === "card" || payMethod === "both";
   const vatEnabled = inv.vatEnabled && brand.vatNumber;
-  const vatRate = inv.vatRate || 20;
-  const grossAmount = parseFloat(inv.amount) || 0;
-  const netAmount = vatEnabled ? parseFloat((grossAmount / (1 + vatRate / 100)).toFixed(2)) : grossAmount;
-  const vatAmount = vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
+  const vatRate = inv.vatZeroRated ? 0 : (inv.vatRate || 20);
+  const grossAmount = parseFloat(inv.grossAmount || inv.amount) || 0;
+  const netAmount = (vatEnabled && !inv.vatZeroRated) ? parseFloat((grossAmount / (1 + vatRate / 100)).toFixed(2)) : grossAmount;
+  const vatAmount = (vatEnabled && !inv.vatZeroRated) ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
   const date = inv.date || new Date().toLocaleDateString("en-GB");
   const isQuote = inv.isQuote;
+  const cisEnabled = inv.cisEnabled;
+  const cisLabour = parseFloat(inv.cisLabour) || 0;
+  const cisMaterials = parseFloat(inv.cisMaterials) || 0;
+  const cisDeduction = parseFloat(inv.cisDeduction) || 0;
+  const cisNetPayable = parseFloat(inv.cisNetPayable) || 0;
+  const cisRate = inv.cisRate || 20;
 
   const rawDesc = inv.desc || inv.description || "Service";
 
@@ -499,13 +505,21 @@ function downloadInvoicePDF(brand, inv) {
   </div>
 
   <div class="totals">
-    ${vatEnabled ? `
+    ${cisEnabled ? `
+    <div class="total-row"><span>Labour</span><span>£${cisLabour.toFixed(2)}</span></div>
+    <div class="total-row"><span>Materials (no CIS deduction)</span><span>£${cisMaterials.toFixed(2)}</span></div>
+    <div class="total-row"><span>Gross Amount</span><span>£${(cisLabour + cisMaterials).toFixed(2)}</span></div>
+    <div class="total-row" style="color:#c0392b"><span>CIS Deduction @ ${cisRate}% (labour only)</span><span>-£${cisDeduction.toFixed(2)}</span></div>
+    <div class="total-row grand"><span>Net Amount Payable</span><span>£${cisNetPayable.toFixed(2)}</span></div>
+    ` : vatEnabled ? `
     <div class="total-row"><span>Net amount</span><span>£${netAmount.toFixed(2)}</span></div>
-    <div class="total-row"><span>VAT @ ${vatRate}%</span><span>£${vatAmount.toFixed(2)}</span></div>
+    <div class="total-row"><span>VAT @ ${vatRate}%${inv.vatZeroRated ? " (Zero-rated — new build)" : ""}</span><span>£${vatAmount.toFixed(2)}</span></div>
     <div class="total-row grand"><span>${isQuote ? "Quote Total (inc. VAT)" : "Total Due (inc. VAT)"}</span><span>£${grossAmount.toFixed(2)}</span></div>
     ` : `
     <div class="total-row grand"><span>${isQuote ? "Quote Total" : "Total Due"}</span><span>£${grossAmount.toFixed(2)}</span></div>
     `}
+    ${cisEnabled ? `<div style="font-size:10px;color:#888;margin-top:8px;padding-top:8px;border-top:1px solid #eee">CIS tax deducted by contractor under the Construction Industry Scheme. This statement will be provided by the contractor.</div>` : ""}
+    ${inv.vatZeroRated ? `<div style="font-size:10px;color:#888;margin-top:8px">Zero-rated VAT — new residential construction (VATA 1994, Group 5)</div>` : ""}
   </div>
 
   ${isQuote ? `
@@ -2706,7 +2720,7 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
                   <div style={{ width: 4, height: 44, borderRadius: 2, background: q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
-                    <div style={{ fontSize: 10, color: C.muted }}>{q.id} · {q.due}</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>{q.address || q.id} · {q.due}</div>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>£{q.amount}</div>
                   <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
@@ -2808,23 +2822,43 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
 
 // ─── Invoice Modal ────────────────────────────────────────────────────────────
 function InvoiceModal({ brand, onClose, onSent }) {
-  const [form, setForm] = useState({ customer: "", email: "", address: "", amount: "", desc: "", due: brand.paymentTerms || "30", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20 });
+  const [form, setForm] = useState({ customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatZeroRated: false, cisEnabled: false, cisRate: 20 });
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
-  const valid = form.customer && form.email && form.amount;
+  const valid = form.customer && form.email && (form.cisEnabled ? (form.labour || form.materials) : form.amount);
   const isVatRegistered = !!brand.vatNumber;
 
-  const grossAmount = parseFloat(form.amount) || 0;
-  const netAmount = form.vatEnabled ? parseFloat((grossAmount / (1 + form.vatRate / 100)).toFixed(2)) : grossAmount;
-  const vatAmount = form.vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
+  // CIS calculations
+  const labourAmt = parseFloat(form.labour) || 0;
+  const materialsAmt = parseFloat(form.materials) || 0;
+  const cisDeduction = form.cisEnabled ? parseFloat(((labourAmt * form.cisRate) / 100).toFixed(2)) : 0;
+  const cisGross = form.cisEnabled ? labourAmt + materialsAmt : 0;
+  const cisNetPayable = form.cisEnabled ? parseFloat((cisGross - cisDeduction).toFixed(2)) : 0;
+
+  // Standard amount
+  const grossAmount = form.cisEnabled ? cisGross : (parseFloat(form.amount) || 0);
+  const vatRate = form.vatZeroRated ? 0 : (form.vatRate || 20);
+  const netAmount = (form.vatEnabled && !form.vatZeroRated) ? parseFloat((grossAmount / (1 + vatRate / 100)).toFixed(2)) : grossAmount;
+  const vatAmount = (form.vatEnabled && !form.vatZeroRated) ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
 
   const previewRef = buildRef(brand, { id: "INV-043", customer: form.customer || "Customer Name" });
 
   const send = () => {
     setSent(true);
     setTimeout(() => {
-      onSent({ id: `INV-0${43 + Math.floor(Math.random() * 10)}`, customer: form.customer, amount: grossAmount, due: `Due in ${form.due} days`, status: "sent", vatEnabled: form.vatEnabled, vatRate: form.vatRate });
+      onSent({
+        id: `INV-0${43 + Math.floor(Math.random() * 10)}`,
+        customer: form.customer, email: form.email, address: form.address,
+        amount: form.cisEnabled ? cisNetPayable : grossAmount,
+        grossAmount: grossAmount,
+        due: `Due in ${form.due} days`, status: "sent",
+        description: form.desc,
+        vatEnabled: form.vatEnabled, vatRate: form.vatZeroRated ? 0 : vatRate,
+        vatZeroRated: form.vatZeroRated,
+        cisEnabled: form.cisEnabled, cisRate: form.cisRate,
+        cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
+      });
     }, 1500);
   };
 
@@ -2867,14 +2901,62 @@ function InvoiceModal({ brand, onClose, onSent }) {
                   {[
                     { k: "customer", l: "Customer Name", p: "e.g. James Oliver" },
                     { k: "email", l: "Customer Email", p: "james@email.com" },
-                    { k: "address", l: "Customer Address", p: "5 High Street\nGuildford GU1 3AA" },
-                    { k: "amount", l: form.vatEnabled ? `Amount inc. VAT @ ${form.vatRate}% (£)` : "Amount (£)", p: "e.g. 480" },
+                    { k: "address", l: "Customer Address", p: "5 High Street, Guildford GU1 3AA" },
                   ].map(({ k, l, p }) => (
                     <div key={k}><label style={S.label}>{l}</label>
                       {k === "address" ? <textarea style={{ ...S.input, resize: "none", height: 60 }} placeholder={p} value={form[k]} onChange={set(k)} />
                         : <input style={S.input} placeholder={p} value={form[k]} onChange={set(k)} />}
                     </div>
                   ))}
+                  {!form.cisEnabled && (
+                    <div><label style={S.label}>{form.vatEnabled && !form.vatZeroRated ? `Amount inc. VAT @ ${vatRate}% (£)` : "Amount (£)"}</label>
+                      <input style={S.input} placeholder="e.g. 480" value={form.amount} onChange={set("amount")} />
+                    </div>
+                  )}
+                </div>
+
+                {/* CIS toggle */}
+                <div style={{ padding: "14px 16px", background: form.cisEnabled ? "#f59e0b11" : C.surfaceHigh, borderRadius: 8, border: `1px solid ${form.cisEnabled ? "#f59e0b66" : C.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: form.cisEnabled ? 14 : 0 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>CIS — Construction Industry Scheme</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>For subcontracting to contractors who deduct CIS tax from labour</div>
+                    </div>
+                    <button onClick={() => setForm(f => ({ ...f, cisEnabled: !f.cisEnabled }))} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, background: form.cisEnabled ? C.amber : C.border, color: form.cisEnabled ? "#000" : C.muted, transition: "all 0.2s", flexShrink: 0, marginLeft: 12 }}>
+                      {form.cisEnabled ? "CIS On ✓" : "Enable CIS"}
+                    </button>
+                  </div>
+                  {form.cisEnabled && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div style={S.grid2}>
+                        <div>
+                          <label style={S.label}>Labour (£)</label>
+                          <input style={S.input} type="number" placeholder="e.g. 400" value={form.labour} onChange={set("labour")} />
+                        </div>
+                        <div>
+                          <label style={S.label}>Materials (£) <span style={{ color: C.muted, fontWeight: 400 }}>(no CIS deduction)</span></label>
+                          <input style={S.input} type="number" placeholder="e.g. 80" value={form.materials} onChange={set("materials")} />
+                        </div>
+                      </div>
+                      <div>
+                        <label style={S.label}>CIS Deduction Rate</label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {[{ v: 20, l: "20% — Registered" }, { v: 30, l: "30% — Unregistered" }].map(({ v, l }) => (
+                            <button key={v} onClick={() => setForm(f => ({ ...f, cisRate: v }))} style={{ ...S.pill(C.amber, form.cisRate === v), fontSize: 11 }}>{l}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {(labourAmt > 0 || materialsAmt > 0) && (
+                        <div style={{ background: C.surface, borderRadius: 8, padding: "12px 14px", border: `1px solid ${C.border}` }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span style={{ color: C.muted }}>Labour</span><span>£{labourAmt.toFixed(2)}</span></div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span style={{ color: C.muted }}>Materials</span><span>£{materialsAmt.toFixed(2)}</span></div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}><span style={{ color: C.muted }}>Gross Total</span><span>£{cisGross.toFixed(2)}</span></div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4, color: C.red }}><span>CIS Deduction ({form.cisRate}% of labour)</span><span>-£{cisDeduction.toFixed(2)}</span></div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.green }}><span>Net Payable to You</span><span>£{cisNetPayable.toFixed(2)}</span></div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div><label style={S.label}>Description (one line per item)</label>
@@ -2883,30 +2965,24 @@ function InvoiceModal({ brand, onClose, onSent }) {
 
                 {/* VAT toggle */}
                 {isVatRegistered ? (
-                  <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${form.vatEnabled ? C.amber + "66" : C.border}`, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 180 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3 }}>VAT Invoice</div>
-                      {form.vatEnabled && grossAmount > 0
-                        ? <div style={{ fontSize: 11, color: C.muted }}>Net: £{netAmount.toFixed(2)} + VAT £{vatAmount.toFixed(2)} = Gross £{grossAmount.toFixed(2)}</div>
-                        : <div style={{ fontSize: 11, color: C.muted }}>VAT No: {brand.vatNumber} — toggle to show VAT breakdown</div>
-                      }
+                  <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${(form.vatEnabled || form.vatZeroRated) ? C.amber + "66" : C.border}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>VAT</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: false, vatZeroRated: false }))} style={{ ...S.pill(C.amber, !form.vatEnabled && !form.vatZeroRated), fontSize: 11 }}>No VAT</button>
+                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: false, vatRate: 20 }))} style={{ ...S.pill(C.amber, form.vatEnabled && form.vatRate === 20 && !form.vatZeroRated), fontSize: 11 }}>Standard 20%</button>
+                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: false, vatRate: 5 }))} style={{ ...S.pill(C.amber, form.vatEnabled && form.vatRate === 5 && !form.vatZeroRated), fontSize: 11 }}>Reduced 5%</button>
+                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: true, vatZeroRated: true, vatRate: 0 }))} style={{ ...S.pill(C.green, form.vatZeroRated), fontSize: 11 }}>0% New Build</button>
                     </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                      {form.vatEnabled && (
-                        <div style={{ display: "flex", gap: 6 }}>
-                          {[20, 5, 0].map(r => (
-                            <button key={r} onClick={() => setForm(f => ({ ...f, vatRate: r }))} style={{ ...S.pill(C.amber, form.vatRate === r), fontSize: 11, padding: "4px 10px" }}>{r}%</button>
-                          ))}
-                        </div>
-                      )}
-                      <button onClick={() => setForm(f => ({ ...f, vatEnabled: !f.vatEnabled }))} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, background: form.vatEnabled ? C.amber : C.border, color: form.vatEnabled ? "#000" : C.muted, transition: "all 0.2s" }}>
-                        {form.vatEnabled ? "VAT On ✓" : "Add VAT"}
-                      </button>
-                    </div>
+                    {form.vatZeroRated && (
+                      <div style={{ fontSize: 11, color: C.green, marginTop: 8 }}>✓ Zero-rated — new residential build. VAT shown as £0.00 on invoice. Xero tax code: ZERORATEDOUTPUT</div>
+                    )}
+                    {form.vatEnabled && !form.vatZeroRated && grossAmount > 0 && (
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Net: £{netAmount.toFixed(2)} + VAT £{vatAmount.toFixed(2)} = Gross £{grossAmount.toFixed(2)}</div>
+                    )}
                   </div>
                 ) : (
                   <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 11, color: C.muted }}>
-                    VAT registered? Add your VAT number in Settings to enable VAT invoices.
+                    VAT registered? Add your VAT number in Settings to enable VAT invoices. Zero-rated new build option also available.
                   </div>
                 )}
 
@@ -2989,7 +3065,7 @@ function QuoteModal({ brand, onClose, onSent }) {
     setTimeout(() => {
       const id = `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
       onSent({
-        id, customer: form.customer, amount: grossAmount,
+        id, customer: form.customer, email: form.email, address: form.address, amount: grossAmount,
         due: `Valid for ${form.validDays} days`, status: "sent",
         description: form.desc, isQuote: true,
         vatEnabled: form.vatEnabled, vatRate: form.vatRate,
@@ -3699,7 +3775,7 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
               <div style={{ width: 4, height: 44, borderRadius: 2, background: inv.status === "overdue" ? C.red : C.amber, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
-                <div style={{ fontSize: 10, color: C.muted }}>{inv.id} · {inv.due}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>{inv.address || inv.id} · {inv.due}</div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
               <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
@@ -3719,7 +3795,7 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
               <div style={{ width: 4, height: 44, borderRadius: 2, background: C.green, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
-                <div style={{ fontSize: 10, color: C.muted }}>{inv.id}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>{inv.address || inv.id}</div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
               <div style={S.badge(C.green)}>Paid</div>
@@ -3755,6 +3831,12 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+              {selected.address && (
+                <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Address</div>
+                  <div style={{ fontSize: 13 }}>{selected.address}</div>
+                </div>
+              )}
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Line Items</div>
                 {(selected.lineItems && selected.lineItems.length > 0)
@@ -3780,7 +3862,7 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
 
             <div style={{ display: "flex", gap: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => { setEditForm({ customer: selected.customer, amount: selected.amount, description: selected.description || selected.desc || "", due: selected.due }); setEditing(true); }}>✏ Edit</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => { setEditForm({ customer: selected.customer, amount: selected.amount, address: selected.address || "", description: selected.description || selected.desc || "", due: selected.due }); setEditing(true); }}>✏ Edit</button>
               {selected.status === "overdue" && <button style={S.btn("danger")} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteInvoice(selected.id)}>Delete</button>
             </div>
@@ -3789,22 +3871,23 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
       )}
 
       {/* Edit modal */}
-      {selected && editing && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }}>
+      {editing && selected && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }} onClick={() => setEditing(false)}>
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Invoice · {selected.id}</div>
               <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-              <div><label style={S.label}>Customer</label><input style={S.input} value={editForm.customer || ""} onChange={setF("customer")} /></div>
+              <div><label style={S.label}>Customer Name</label><input style={S.input} value={editForm.customer || ""} onChange={setF("customer")} /></div>
+              <div><label style={S.label}>Address</label><input style={S.input} placeholder="e.g. 5 High Street, Guildford" value={editForm.address || ""} onChange={setF("address")} /></div>
               <div><label style={S.label}>Amount (£)</label><input style={S.input} type="number" value={editForm.amount || ""} onChange={setF("amount")} /></div>
               <div><label style={S.label}>Description</label><textarea style={{ ...S.input, resize: "vertical", minHeight: 72 }} value={editForm.description || ""} onChange={setF("description")} /></div>
               <div><label style={S.label}>Payment Due</label><input style={S.input} value={editForm.due || ""} onChange={setF("due")} /></div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => {
-                const updated = { ...selected, ...editForm, amount: parseFloat(editForm.amount) || selected.amount };
+                const updated = { ...selected, customer: editForm.customer, address: editForm.address, amount: parseFloat(editForm.amount) || selected.amount, description: editForm.description, due: editForm.due };
                 setInvoices(prev => (prev || []).map(i => i.id === selected.id ? updated : i));
                 setSelected(updated);
                 setEditing(false);
@@ -3898,7 +3981,7 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
               <div style={{ width: 4, height: 44, borderRadius: 2, background: q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
-                <div style={{ fontSize: 10, color: C.muted }}>{q.id} · {q.due}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>{q.address || q.id} · {q.due}</div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>£{q.amount}</div>
               <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
