@@ -1908,12 +1908,12 @@ Return only JSON, no other text.` },
       });
       const data = await res.json();
       if (data.success) {
-        setSyncMsg(`\u2713 ${toSync.length} material${toSync.length !== 1 ? "s" : ""} synced to Xero as purchase orders`);
+        setSyncMsg(`✓ ${toSync.length} material${toSync.length !== 1 ? "s" : ""} synced to Xero as purchase orders`);
       } else {
         setSyncMsg(`Error: ${data.error || "Sync failed"}`);
       }
     } catch (e) {
-      setSyncMsg("Connection error \u2014 check Xero is connected in Settings");
+      setSyncMsg("Connection error — check Xero is connected in Settings");
     }
     setSyncing(false);
     setTimeout(() => setSyncMsg(""), 4000);
@@ -1921,18 +1921,20 @@ Return only JSON, no other text.` },
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Materials & Orders</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={S.btn("ghost")} onClick={() => setShowSuppliers(true)}>Suppliers</button>
-          <button style={{ ...S.btn("ghost"), color: "#13B5EA", borderColor: "#13B5EA44" }} onClick={syncToXero} disabled={syncing}>{syncing ? "Syncing..." : "↑ Xero"}</button>
-          {/* Camera button — opens device camera */}
-          <button style={{ ...S.btn("ghost"), color: C.amber }} onClick={() => fileRef.current?.click()} disabled={scanning}>{scanning ? "⏳ Scanning..." : "📷 Scan Receipt"}</button>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Materials & Orders</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={S.btn("ghost")} onClick={() => setShowSuppliers(true)}>Suppliers</button>
+            <button style={{ ...S.btn("ghost"), color: "#13B5EA", borderColor: "#13B5EA44" }} onClick={syncToXero} disabled={syncing}>{syncing ? "Syncing..." : "↑ Xero"}</button>
+            <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add</button>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={{ ...S.btn("ghost"), color: C.amber, flex: 1, justifyContent: "center" }} onClick={() => fileRef.current?.click()} disabled={scanning}>{scanning ? "⏳ Scanning..." : "📷 Scan Receipt"}</button>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => { scanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
-          {/* Upload button — opens file picker / gallery */}
-          <button style={{ ...S.btn("ghost"), color: C.amber }} onClick={() => uploadRef.current?.click()} disabled={scanning}>⬆ Upload Receipt</button>
+          <button style={{ ...S.btn("ghost"), color: C.amber, flex: 1, justifyContent: "center" }} onClick={() => uploadRef.current?.click()} disabled={scanning}>⬆ Upload Receipt</button>
           <input ref={uploadRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { scanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
-          <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Materials</button>
         </div>
       </div>
 
@@ -2027,10 +2029,10 @@ Return only JSON, no other text.` },
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
         {[
-          { l: "To Order", v: (materials || []).filter(m => m.status === "to_order").length, sub: toOrderCost > 0 ? `Est. \u00a3${toOrderCost.toFixed(2)}` : "No prices set", c: C.red },
+          { l: "To Order", v: (materials || []).filter(m => m.status === "to_order").length, sub: toOrderCost > 0 ? `Est. £${toOrderCost.toFixed(2)}` : "No prices set", c: C.red },
           { l: "Ordered", v: (materials || []).filter(m => m.status === "ordered").length, sub: "Awaiting delivery", c: C.amber },
           { l: "Collected", v: (materials || []).filter(m => m.status === "collected").length, sub: "Ready to use", c: C.green },
-          { l: "Total Cost", v: totalCost > 0 ? `\u00a3${totalCost.toFixed(2)}` : "\u2014", sub: "All materials", c: C.text },
+          { l: "Total Cost", v: totalCost > 0 ? `£${totalCost.toFixed(2)}` : "—", sub: "All materials", c: C.text },
         ].map((st, i) => (
           <div key={i} style={S.card}>
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{st.l}</div>
@@ -2052,12 +2054,12 @@ Return only JSON, no other text.` },
           <div style={S.sectionTitle}>Material List ({filtered.length})</div>
           {filterJob !== "all" && totalCost > 0 && (
             <div style={{ fontSize: 11, color: C.muted }}>
-              Job cost: \u00a3{filtered.reduce((s, m) => s + (m.unitPrice || 0) * (m.qty || 1), 0).toFixed(2)}
+              Job cost: £{filtered.reduce((s, m) => s + (m.unitPrice || 0) * (m.qty || 1), 0).toFixed(2)}
             </div>
           )}
         </div>
         {filtered.length === 0
-          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials yet \u2014 tap + Add Materials above or ask the AI Assistant.</div>
+          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials yet — tap + Add Materials above or ask the AI Assistant.</div>
           : filtered.map((m, rawI) => {
             const i = (materials || []).indexOf(m);
             return (
@@ -2066,15 +2068,15 @@ Return only JSON, no other text.` },
                 <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
                   <div style={{ fontSize: 11, color: C.muted }}>
-                    {[m.job && `\ud83d\udccb ${m.job}`, m.supplier && `\ud83c\udfea ${m.supplier}`, m.unitPrice > 0 && `\u00a3${((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)}`].filter(Boolean).join(" \u00b7 ")}
+                    {[m.job && `📋 ${m.job}`, m.supplier && `🏪 ${m.supplier}`, m.unitPrice > 0 && `£${((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)}`].filter(Boolean).join(" · ")}
                   </div>
                 </div>
-                <div style={{ fontSize: 12, color: C.textDim, marginRight: 8, flexShrink: 0 }}>\u00d7{m.qty}</div>
+                <div style={{ fontSize: 12, color: C.textDim, marginRight: 8, flexShrink: 0 }}>×{m.qty}</div>
                 <div style={{ ...S.badge(statusColor[m.status] || C.muted), marginRight: 6, flexShrink: 0 }}>{statusLabel[m.status] || m.status}</div>
                 <button onClick={() => cycleStatus(i)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0 }}>
-                  {m.status === "to_order" ? "\u2192 Ordered" : m.status === "ordered" ? "\u2192 Collected" : "\u21ba Reset"}
+                  {m.status === "to_order" ? "→ Ordered" : m.status === "ordered" ? "→ Collected" : "↺ Reset"}
                 </button>
-                <button onClick={() => deleteMaterial(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginLeft: 4 }}>\u00d7</button>
+                <button onClick={() => deleteMaterial(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginLeft: 4 }}>×</button>
               </div>
             );
           })
@@ -2093,8 +2095,8 @@ Return only JSON, no other text.` },
               {sup.notes && <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>{sup.notes}</div>}
               {sup.phone ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>\ud83d\udcde {sup.phone}</button>
-                  {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 12px", textDecoration: "none", textAlign: "center" }}>\u2709 Email</a>}
+                  <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>📞 {sup.phone}</button>
+                  {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 12px", textDecoration: "none", textAlign: "center" }}>✉ Email</a>}
                 </div>
               ) : (
                 <button onClick={() => { setEditingSupplier(i); setSupplierForm(sup); setShowSuppliers(true); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", width: "100%" }}>Add number</button>
@@ -2110,14 +2112,14 @@ Return only JSON, no other text.` },
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>Add Materials</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Add multiple items at once \u2014 one row per material</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Add multiple items at once — one row per material</div>
               </div>
-              <button onClick={() => { setShowAdd(false); setRows([emptyRow()]); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>\u00d7</button>
+              <button onClick={() => { setShowAdd(false); setRows([emptyRow()]); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
             </div>
             <div style={{ overflowX: "auto" }}>
               <div style={{ minWidth: 560 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "3fr 50px 70px 2fr 2fr 90px 24px", gap: 6, marginBottom: 6 }}>
-                  {["Item", "Qty", "Unit \u00a3", "Job", "Supplier", "Status", ""].map(h => (
+                  {["Item", "Qty", "Unit £", "Job", "Supplier", "Status", ""].map(h => (
                     <div key={h} style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</div>
                   ))}
                 </div>
@@ -2138,7 +2140,7 @@ Return only JSON, no other text.` },
                         <option value="ordered">Ordered</option>
                         <option value="collected">Collected</option>
                       </select>
-                      <button onClick={() => removeRow(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }} disabled={rows.length === 1}>\u00d7</button>
+                      <button onClick={() => removeRow(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }} disabled={rows.length === 1}>×</button>
                     </div>
                   ))}
                 </div>
@@ -2149,11 +2151,11 @@ Return only JSON, no other text.` },
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 {rows.some(r => r.unitPrice > 0) && (
                   <div style={{ fontSize: 11, color: C.muted }}>
-                    Total: \u00a3{rows.reduce((s, r) => s + (parseFloat(r.unitPrice) || 0) * (parseInt(r.qty) || 1), 0).toFixed(2)}
+                    Total: £{rows.reduce((s, r) => s + (parseFloat(r.unitPrice) || 0) * (parseInt(r.qty) || 1), 0).toFixed(2)}
                   </div>
                 )}
                 <button style={S.btn("primary", !rows.some(r => r.item.trim()))} disabled={!rows.some(r => r.item.trim())} onClick={saveAll}>
-                  Save {rows.filter(r => r.item.trim()).length} Item{rows.filter(r => r.item.trim()).length !== 1 ? "s" : ""} \u2192
+                  Save {rows.filter(r => r.item.trim()).length} Item{rows.filter(r => r.item.trim()).length !== 1 ? "s" : ""} →
                 </button>
               </div>
             </div>
@@ -2166,7 +2168,7 @@ Return only JSON, no other text.` },
           <div style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Manage Suppliers</div>
-              <button onClick={() => { setShowSuppliers(false); setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>\u00d7</button>
+              <button onClick={() => { setShowSuppliers(false); setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
               {suppliers.map((sup, i) => (
@@ -2190,11 +2192,11 @@ Return only JSON, no other text.` },
                         {sup.notes && <div style={{ fontSize: 11, color: C.muted }}>{sup.notes}</div>}
                       </div>
                       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        {sup.phone && <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>\ud83d\udcde Call</button>}
-                        {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", textDecoration: "none" }}>\u2709</a>}
+                        {sup.phone && <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>📞 Call</button>}
+                        {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", textDecoration: "none" }}>✉</a>}
                       </div>
                       <button onClick={() => { setEditingSupplier(i); setSupplierForm(sup); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px" }}>Edit</button>
-                      <button onClick={() => deleteSupplier(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>\u00d7</button>
+                      <button onClick={() => deleteSupplier(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>
                     </div>
                   )}
                 </div>
@@ -2207,7 +2209,7 @@ Return only JSON, no other text.` },
                   {[{ k: "name", l: "Name", p: "National Plumbing Supplies" }, { k: "phone", l: "Phone", p: "01234 567890" }, { k: "email", l: "Email", p: "orders@supplier.co.uk" }, { k: "notes", l: "Notes", p: "Good for copper fittings" }].map(({ k, l, p }) => (
                     <div key={k}><label style={S.label}>{l}</label><input style={S.input} placeholder={p} value={supplierForm[k] || ""} onChange={e => setSupplierForm(f => ({ ...f, [k]: e.target.value }))} /></div>
                   ))}
-                  <button style={S.btn("primary", !supplierForm.name)} disabled={!supplierForm.name} onClick={saveSupplier}>Add Supplier \u2192</button>
+                  <button style={S.btn("primary", !supplierForm.name)} disabled={!supplierForm.name} onClick={saveSupplier}>Add Supplier →</button>
                 </div>
               </div>
             )}
