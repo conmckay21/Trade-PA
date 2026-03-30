@@ -1364,9 +1364,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
       <div style={S.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={S.sectionTitle}>Invoice Pipeline</div>
-          <button style={S.btn("ghost")} onClick={() => setView("Payments")}>Manage →</button>
-        </div>
-        {invoices.filter(i => !i.isQuote).length === 0
+          <button style={S.btn("ghost")} onClick={() => setView("Invoices")}>Manage →</button>
           ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No invoices yet — create one in Payments or via the AI Assistant.</div>
           : invoices.filter(i => !i.isQuote).slice(0, 4).map(inv => (
             <div key={inv.id} style={S.row}>
@@ -1387,7 +1385,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
         <div style={S.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div style={S.sectionTitle}>Quotes ({invoices.filter(i => i.isQuote).length})</div>
-            <button style={S.btn("ghost")} onClick={() => setView("Payments")}>Manage →</button>
+            <button style={S.btn("ghost")} onClick={() => setView("Quotes")}>Manage →</button>
           </div>
           {invoices.filter(i => i.isQuote).slice(0, 4).map(q => (
             <div key={q.id} style={S.row}>
@@ -1738,18 +1736,27 @@ const DEFAULT_SUPPLIERS = [
   { name: "Plumb Center", phone: "0330 123 1456", email: "", notes: "Plumbing wholesale" },
 ];
 
-function Materials({ materials, setMaterials }) {
+function Materials({ materials, setMaterials, user }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showSuppliers, setShowSuppliers] = useState(false);
   const [suppliers, setSuppliers] = useState(DEFAULT_SUPPLIERS);
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "", notes: "" });
-  const [form, setForm] = useState({ item: "", qty: 1, supplier: "", job: "", status: "to_order" });
+  const [filterJob, setFilterJob] = useState("all");
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
 
-  const save = () => {
-    if (!form.item) return;
-    setMaterials(prev => [...prev, { ...form, qty: parseInt(form.qty) || 1 }]);
-    setForm({ item: "", qty: 1, supplier: "", job: "", status: "to_order" });
+  const emptyRow = () => ({ item: "", qty: 1, unitPrice: "", supplier: "", job: "", status: "to_order" });
+  const [rows, setRows] = useState([emptyRow()]);
+  const updateRow = (i, k, v) => setRows(prev => prev.map((r, j) => j === i ? { ...r, [k]: v } : r));
+  const addRow = () => setRows(prev => [...prev, emptyRow()]);
+  const removeRow = (i) => setRows(prev => prev.filter((_, j) => j !== i));
+
+  const saveAll = () => {
+    const valid = rows.filter(r => r.item.trim());
+    if (!valid.length) return;
+    setMaterials(prev => [...(prev || []), ...valid.map(r => ({ ...r, qty: parseInt(r.qty) || 1, unitPrice: parseFloat(r.unitPrice) || 0 }))]);
+    setRows([emptyRow()]);
     setShowAdd(false);
   };
 
@@ -1765,10 +1772,36 @@ function Materials({ materials, setMaterials }) {
   };
 
   const deleteSupplier = (i) => setSuppliers(prev => prev.filter((_, j) => j !== i));
+  const dial = (phone) => { if (phone) window.location.href = `tel:${phone.replace(/\s/g, "")}`; };
+  const cycleStatus = (i) => setMaterials(prev => (prev || []).map((x, j) => j === i ? { ...x, status: x.status === "to_order" ? "ordered" : x.status === "ordered" ? "collected" : "to_order" } : x));
+  const deleteMaterial = (i) => setMaterials(prev => (prev || []).filter((_, j) => j !== i));
 
-  const dial = (phone) => {
-    if (!phone) return;
-    window.location.href = `tel:${phone.replace(/\s/g, "")}`;
+  const jobList = [...new Set((materials || []).map(m => m.job).filter(Boolean))];
+  const filtered = filterJob === "all" ? (materials || []) : (materials || []).filter(m => m.job === filterJob);
+  const totalCost = (materials || []).reduce((s, m) => s + (m.unitPrice || 0) * (m.qty || 1), 0);
+  const toOrderCost = (materials || []).filter(m => m.status === "to_order").reduce((s, m) => s + (m.unitPrice || 0) * (m.qty || 1), 0);
+
+  const syncToXero = async () => {
+    const toSync = (materials || []).filter(m => m.unitPrice > 0);
+    if (!toSync.length) { setSyncMsg("No priced materials to sync — add unit prices first"); setTimeout(() => setSyncMsg(""), 3000); return; }
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/xero/create-bills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?.id, materials: toSync }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncMsg(`\u2713 ${toSync.length} material${toSync.length !== 1 ? "s" : ""} synced to Xero as purchase orders`);
+      } else {
+        setSyncMsg(`Error: ${data.error || "Sync failed"}`);
+      }
+    } catch (e) {
+      setSyncMsg("Connection error \u2014 check Xero is connected in Settings");
+    }
+    setSyncing(false);
+    setTimeout(() => setSyncMsg(""), 4000);
   };
 
   return (
@@ -1776,40 +1809,74 @@ function Materials({ materials, setMaterials }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>Materials & Orders</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={S.btn("ghost")} onClick={() => setShowSuppliers(true)}>Manage Suppliers</button>
-          <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Material</button>
+          <button style={S.btn("ghost")} onClick={() => setShowSuppliers(true)}>Suppliers</button>
+          <button style={{ ...S.btn("ghost"), color: "#13B5EA", borderColor: "#13B5EA44" }} onClick={syncToXero} disabled={syncing}>{syncing ? "Syncing..." : "\u2191 Xero"}</button>
+          <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Materials</button>
         </div>
       </div>
 
-      {/* Material list */}
+      {syncMsg && (
+        <div style={{ padding: "10px 14px", background: syncMsg.startsWith("\u2713") ? C.green + "18" : C.red + "18", border: `1px solid ${syncMsg.startsWith("\u2713") ? C.green + "44" : C.red + "44"}`, borderRadius: 8, fontSize: 12, color: syncMsg.startsWith("\u2713") ? C.green : C.red }}>
+          {syncMsg}
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+        {[
+          { l: "To Order", v: (materials || []).filter(m => m.status === "to_order").length, sub: toOrderCost > 0 ? `Est. \u00a3${toOrderCost.toFixed(2)}` : "No prices set", c: C.red },
+          { l: "Ordered", v: (materials || []).filter(m => m.status === "ordered").length, sub: "Awaiting delivery", c: C.amber },
+          { l: "Collected", v: (materials || []).filter(m => m.status === "collected").length, sub: "Ready to use", c: C.green },
+          { l: "Total Cost", v: totalCost > 0 ? `\u00a3${totalCost.toFixed(2)}` : "\u2014", sub: "All materials", c: C.text },
+        ].map((st, i) => (
+          <div key={i} style={S.card}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{st.l}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: st.c }}>{st.v}</div>
+            <div style={{ fontSize: 11, color: C.muted }}>{st.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {jobList.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button onClick={() => setFilterJob("all")} style={S.pill(C.amber, filterJob === "all")}>All Jobs</button>
+          {jobList.map(j => <button key={j} onClick={() => setFilterJob(j)} style={S.pill(C.amber, filterJob === j)}>{j}</button>)}
+        </div>
+      )}
+
       <div style={S.card}>
-        <div style={S.sectionTitle}>Material List</div>
-        {materials.length === 0
-          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials yet — add one above or via the AI Assistant.</div>
-          : materials.map((m, i) => (
-            <div key={i} style={S.row}>
-              <div style={{ width: 4, height: 40, borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
-                <div style={{ fontSize: 11, color: C.muted }}>
-                  {[m.job && `For: ${m.job}`, m.supplier && `Via: ${m.supplier}`].filter(Boolean).join(" · ")}
-                </div>
-              </div>
-              <div style={{ fontSize: 12, color: C.textDim, marginRight: 12, flexShrink: 0 }}>Qty: {m.qty}</div>
-              <div style={S.badge(statusColor[m.status] || C.muted)}>{statusLabel[m.status] || m.status}</div>
-              <button
-                onClick={() => setMaterials(prev => prev.map((x, j) => j === i ? { ...x, status: x.status === "to_order" ? "ordered" : x.status === "ordered" ? "collected" : "to_order" } : x))}
-                style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", marginLeft: 8 }}
-              >
-                {m.status === "to_order" ? "Mark Ordered" : m.status === "ordered" ? "Mark Collected" : "Reset"}
-              </button>
-              <button onClick={() => setMaterials(prev => prev.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginLeft: 6 }}>✕</button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={S.sectionTitle}>Material List ({filtered.length})</div>
+          {filterJob !== "all" && totalCost > 0 && (
+            <div style={{ fontSize: 11, color: C.muted }}>
+              Job cost: \u00a3{filtered.reduce((s, m) => s + (m.unitPrice || 0) * (m.qty || 1), 0).toFixed(2)}
             </div>
-          ))
+          )}
+        </div>
+        {filtered.length === 0
+          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials yet \u2014 tap + Add Materials above or ask the AI Assistant.</div>
+          : filtered.map((m, rawI) => {
+            const i = (materials || []).indexOf(m);
+            return (
+              <div key={i} style={S.row}>
+                <div style={{ width: 4, height: 44, borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>
+                    {[m.job && `\ud83d\udccb ${m.job}`, m.supplier && `\ud83c\udfea ${m.supplier}`, m.unitPrice > 0 && `\u00a3${((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)}`].filter(Boolean).join(" \u00b7 ")}
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: C.textDim, marginRight: 8, flexShrink: 0 }}>\u00d7{m.qty}</div>
+                <div style={{ ...S.badge(statusColor[m.status] || C.muted), marginRight: 6, flexShrink: 0 }}>{statusLabel[m.status] || m.status}</div>
+                <button onClick={() => cycleStatus(i)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0 }}>
+                  {m.status === "to_order" ? "\u2192 Ordered" : m.status === "ordered" ? "\u2192 Collected" : "\u21ba Reset"}
+                </button>
+                <button onClick={() => deleteMaterial(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginLeft: 4 }}>\u00d7</button>
+              </div>
+            );
+          })
         }
       </div>
 
-      {/* Supplier quick dial */}
       <div style={S.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={S.sectionTitle}>Supplier Quick Dial</div>
@@ -1822,92 +1889,88 @@ function Materials({ materials, setMaterials }) {
               {sup.notes && <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>{sup.notes}</div>}
               {sup.phone ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>📞 {sup.phone}</button>
-                  {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 12px", textDecoration: "none", textAlign: "center" }}>✉ Email</a>}
+                  <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>\ud83d\udcde {sup.phone}</button>
+                  {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 12px", textDecoration: "none", textAlign: "center" }}>\u2709 Email</a>}
                 </div>
               ) : (
-                <button
-                  onClick={() => { setEditingSupplier(i); setSupplierForm(sup); setShowSuppliers(true); }}
-                  style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", width: "100%" }}
-                >Add number</button>
+                <button onClick={() => { setEditingSupplier(i); setSupplierForm(sup); setShowSuppliers(true); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", width: "100%" }}>Add number</button>
               )}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Add Material Modal */}
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div style={{ ...S.card, maxWidth: 420, width: "100%", marginBottom: 16 }}>
+          <div style={{ ...S.card, maxWidth: 700, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Material</div>
-              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[
-                { k: "item", l: "Item", p: "e.g. Copper pipe 22mm x 3m" },
-                { k: "qty", l: "Quantity", p: "1" },
-                { k: "job", l: "For Job (optional)", p: "e.g. Boiler service — Smith" },
-              ].map(({ k, l, p }) => (
-                <div key={k}>
-                  <label style={S.label}>{l}</label>
-                  <input style={S.input} placeholder={p} value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} />
-                </div>
-              ))}
               <div>
-                <label style={S.label}>Supplier</label>
-                <select style={{ ...S.input }} value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))}>
-                  <option value="">Select supplier...</option>
-                  {suppliers.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-                  <option value="other">Other</option>
-                </select>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>Add Materials</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Add multiple items at once \u2014 one row per material</div>
               </div>
-              {form.supplier === "other" && (
-                <div>
-                  <label style={S.label}>Supplier Name</label>
-                  <input style={S.input} placeholder="Enter supplier name" onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} />
+              <button onClick={() => { setShowAdd(false); setRows([emptyRow()]); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>\u00d7</button>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <div style={{ minWidth: 560 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "3fr 50px 70px 2fr 2fr 90px 24px", gap: 6, marginBottom: 6 }}>
+                  {["Item", "Qty", "Unit \u00a3", "Job", "Supplier", "Status", ""].map(h => (
+                    <div key={h} style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</div>
+                  ))}
                 </div>
-              )}
-              <div>
-                <label style={S.label}>Status</label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {["to_order", "ordered", "collected"].map(st => (
-                    <button key={st} onClick={() => setForm(f => ({ ...f, status: st }))} style={S.pill(statusColor[st], form.status === st)}>{statusLabel[st]}</button>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                  {rows.map((row, i) => (
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 50px 70px 2fr 2fr 90px 24px", gap: 6, alignItems: "center" }}>
+                      <input style={{ ...S.input, fontSize: 12 }} placeholder="e.g. Copper pipe 22mm" value={row.item} onChange={e => updateRow(i, "item", e.target.value)} />
+                      <input style={{ ...S.input, fontSize: 12 }} type="number" min="1" value={row.qty} onChange={e => updateRow(i, "qty", e.target.value)} />
+                      <input style={{ ...S.input, fontSize: 12 }} type="number" placeholder="0.00" value={row.unitPrice} onChange={e => updateRow(i, "unitPrice", e.target.value)} />
+                      <input style={{ ...S.input, fontSize: 12 }} placeholder="Job name" value={row.job} onChange={e => updateRow(i, "job", e.target.value)} />
+                      <select style={{ ...S.input, fontSize: 11 }} value={row.supplier} onChange={e => updateRow(i, "supplier", e.target.value)}>
+                        <option value="">Supplier...</option>
+                        {suppliers.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                        <option value="other">Other</option>
+                      </select>
+                      <select style={{ ...S.input, fontSize: 11 }} value={row.status} onChange={e => updateRow(i, "status", e.target.value)}>
+                        <option value="to_order">To Order</option>
+                        <option value="ordered">Ordered</option>
+                        <option value="collected">Collected</option>
+                      </select>
+                      <button onClick={() => removeRow(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }} disabled={rows.length === 1}>\u00d7</button>
+                    </div>
                   ))}
                 </div>
               </div>
-              <button style={S.btn("primary", !form.item)} disabled={!form.item} onClick={save}>Save →</button>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <button onClick={addRow} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Add Row</button>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                {rows.some(r => r.unitPrice > 0) && (
+                  <div style={{ fontSize: 11, color: C.muted }}>
+                    Total: \u00a3{rows.reduce((s, r) => s + (parseFloat(r.unitPrice) || 0) * (parseInt(r.qty) || 1), 0).toFixed(2)}
+                  </div>
+                )}
+                <button style={S.btn("primary", !rows.some(r => r.item.trim()))} disabled={!rows.some(r => r.item.trim())} onClick={saveAll}>
+                  Save {rows.filter(r => r.item.trim()).length} Item{rows.filter(r => r.item.trim()).length !== 1 ? "s" : ""} \u2192
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Manage Suppliers Modal */}
       {showSuppliers && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
           <div style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Manage Suppliers</div>
-              <button onClick={() => { setShowSuppliers(false); setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <button onClick={() => { setShowSuppliers(false); setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>\u00d7</button>
             </div>
-
-            {/* Existing suppliers */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
               {suppliers.map((sup, i) => (
                 <div key={i} style={{ ...S.card, padding: "12px 14px", background: editingSupplier === i ? C.amber + "11" : C.surfaceHigh, borderColor: editingSupplier === i ? C.amber + "66" : C.border }}>
                   {editingSupplier === i ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[
-                        { k: "name", l: "Name", p: "e.g. City Plumbing" },
-                        { k: "phone", l: "Phone Number", p: "e.g. 01483 123456" },
-                        { k: "email", l: "Email Address", p: "e.g. orders@cityplumbing.co.uk" },
-                        { k: "notes", l: "Notes", p: "e.g. Main plumbing supplies" },
-                      ].map(({ k, l, p }) => (
-                        <div key={k}>
-                          <label style={S.label}>{l}</label>
-                          <input style={S.input} placeholder={p} value={supplierForm[k] || ""} onChange={e => setSupplierForm(f => ({ ...f, [k]: e.target.value }))} />
-                        </div>
+                      {[{ k: "name", l: "Name", p: "City Plumbing" }, { k: "phone", l: "Phone", p: "01483 123456" }, { k: "email", l: "Email", p: "orders@cityplumbing.co.uk" }, { k: "notes", l: "Notes", p: "Main plumbing supplies" }].map(({ k, l, p }) => (
+                        <div key={k}><label style={S.label}>{l}</label><input style={S.input} placeholder={p} value={supplierForm[k] || ""} onChange={e => setSupplierForm(f => ({ ...f, [k]: e.target.value }))} /></div>
                       ))}
                       <div style={{ display: "flex", gap: 8 }}>
                         <button style={S.btn("primary", !supplierForm.name)} disabled={!supplierForm.name} onClick={saveSupplier}>Save</button>
@@ -1923,34 +1986,24 @@ function Materials({ materials, setMaterials }) {
                         {sup.notes && <div style={{ fontSize: 11, color: C.muted }}>{sup.notes}</div>}
                       </div>
                       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        {sup.phone && <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>📞 Call</button>}
-                        {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", textDecoration: "none" }}>✉</a>}
+                        {sup.phone && <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>\ud83d\udcde Call</button>}
+                        {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", textDecoration: "none" }}>\u2709</a>}
                       </div>
                       <button onClick={() => { setEditingSupplier(i); setSupplierForm(sup); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px" }}>Edit</button>
-                      <button onClick={() => deleteSupplier(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>✕</button>
+                      <button onClick={() => deleteSupplier(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>\u00d7</button>
                     </div>
                   )}
                 </div>
               ))}
             </div>
-
-            {/* Add new supplier */}
             {editingSupplier === null && (
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 12 }}>Add New Supplier</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {[
-                    { k: "name", l: "Name", p: "e.g. National Plumbing Supplies" },
-                    { k: "phone", l: "Phone Number", p: "e.g. 01234 567890" },
-                    { k: "email", l: "Email Address", p: "e.g. orders@supplier.co.uk" },
-                    { k: "notes", l: "Notes (optional)", p: "e.g. Good for copper fittings" },
-                  ].map(({ k, l, p }) => (
-                    <div key={k}>
-                      <label style={S.label}>{l}</label>
-                      <input style={S.input} placeholder={p} value={supplierForm[k] || ""} onChange={e => setSupplierForm(f => ({ ...f, [k]: e.target.value }))} />
-                    </div>
+                  {[{ k: "name", l: "Name", p: "National Plumbing Supplies" }, { k: "phone", l: "Phone", p: "01234 567890" }, { k: "email", l: "Email", p: "orders@supplier.co.uk" }, { k: "notes", l: "Notes", p: "Good for copper fittings" }].map(({ k, l, p }) => (
+                    <div key={k}><label style={S.label}>{l}</label><input style={S.input} placeholder={p} value={supplierForm[k] || ""} onChange={e => setSupplierForm(f => ({ ...f, [k]: e.target.value }))} /></div>
                   ))}
-                  <button style={S.btn("primary", !supplierForm.name)} disabled={!supplierForm.name} onClick={saveSupplier}>Add Supplier →</button>
+                  <button style={S.btn("primary", !supplierForm.name)} disabled={!supplierForm.name} onClick={saveSupplier}>Add Supplier \u2192</button>
                 </div>
               </div>
             )}
@@ -1960,7 +2013,6 @@ function Materials({ materials, setMaterials }) {
     </div>
   );
 }
-
 function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user }) {
   const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can handle everything in the app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Quote Sarah Chen £450 for new bathroom"\n• "Invoice Kevin Nash £85 for leak repair"\n• "Mark the invoice for Kevin as paid"\n• "Convert Sarah's quote to an invoice"\n• "Confirm the boiler service for John"\n• "Mark copper pipe as ordered"\n• "Delete the enquiry from Dave"\n• "Save Emma Taylor, 07700 900123, emma@email.com"\n\nOr tap 🎙 and speak naturally.` }]);
 
@@ -3984,7 +4036,7 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
         {allQuotes.length === 0
           ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No quotes yet — tap + New Quote or ask the AI Assistant.</div>
           : allQuotes.map(q => (
-            <div key={q.id} onClick={() => { setSelected(q); setEditing(false); }} style={{ ...S.row, cursor: "pointer" }}>
+            <div key={q.id} onClick={() => setSelected(q)} style={{ ...S.row, cursor: "pointer" }}>
               <div style={{ width: 4, height: 44, borderRadius: 2, background: q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
@@ -4002,7 +4054,7 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
       </div>
 
       {/* Detail modal */}
-      {selected && !editing && (
+      {selected && !editingQuote && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelected(null)}>
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
@@ -4520,7 +4572,7 @@ export default function App() {
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} />}
         {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} />}
-        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} />}
+        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} />}
