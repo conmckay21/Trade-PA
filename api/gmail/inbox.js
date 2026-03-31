@@ -1,17 +1,14 @@
-import { getValidToken } from "./_token.js";
+const { getValidToken } = require("./_token.js");
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { userId, pageToken, label = "INBOX" } = req.query;
   if (!userId) return res.status(400).json({ error: "userId required" });
 
   try {
     const token = await getValidToken(userId);
 
-    const params = new URLSearchParams({
-      maxResults: "20",
-      labelIds: label,
-      ...(pageToken && { pageToken }),
-    });
+    const params = new URLSearchParams({ maxResults: "20", labelIds: label });
+    if (pageToken) params.set("pageToken", pageToken);
 
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/threads?${params}`,
@@ -19,9 +16,7 @@ export default async function handler(req, res) {
     );
     const list = await listRes.json();
 
-    if (!list.threads?.length) {
-      return res.json({ threads: [], nextPageToken: null });
-    }
+    if (!list.threads?.length) return res.json({ threads: [], nextPageToken: null });
 
     const threads = await Promise.all(
       list.threads.map(async (t) => {
@@ -52,4 +47,4 @@ export default async function handler(req, res) {
     console.error("Gmail inbox error:", err.message);
     res.status(500).json({ error: err.message });
   }
-}
+};
