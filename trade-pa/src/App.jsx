@@ -6275,6 +6275,888 @@ ${html.replace(/<!DOCTYPE.*?<body>/s, "").replace(/<\/body>.*$/s, "")}`;
   }
 }
 
+// ─── Signature Pad ────────────────────────────────────────────────────────────
+function SignaturePad({ onSave, onCancel, title = "Customer Signature" }) {
+  const canvasRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasSig, setHasSig] = useState(false);
+  const lastPos = useRef(null);
+
+  function getPos(e, canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if (e.touches) {
+      return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  }
+
+  function startDraw(e) {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const pos = getPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    lastPos.current = pos;
+    setIsDrawing(true);
+    setHasSig(true);
+  }
+
+  function draw(e) {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const pos = getPos(e, canvas);
+    ctx.strokeStyle = "#1a1a1a";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    lastPos.current = pos;
+  }
+
+  function endDraw(e) { e.preventDefault(); setIsDrawing(false); }
+
+  function clear() {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSig(false);
+  }
+
+  function save() {
+    const canvas = canvasRef.current;
+    const data = canvas.toDataURL("image/png");
+    onSave(data);
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 16, fontFamily: "'DM Mono',monospace" }}>
+      <div style={{ background: "#fff", borderRadius: 12, padding: 20, maxWidth: 380, width: "100%" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{title}</div>
+          <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#999" }}>×</button>
+        </div>
+        <div style={{ fontSize: 11, color: "#999", marginBottom: 8 }}>Sign in the box below</div>
+        <div style={{ border: "2px solid #e5e5e5", borderRadius: 8, overflow: "hidden", touchAction: "none", background: "#fafafa" }}>
+          <canvas
+            ref={canvasRef}
+            width={560} height={200}
+            style={{ width: "100%", height: 120, display: "block", cursor: "crosshair" }}
+            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
+          />
+        </div>
+        <div style={{ borderTop: "1px dashed #ccc", marginTop: 0, marginBottom: 12, marginLeft: 16, marginRight: 16 }} />
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button onClick={clear} style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid #e5e5e5", background: "#fff", color: "#666", cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace" }}>Clear</button>
+          <button onClick={save} disabled={!hasSig} style={{ flex: 1, padding: "10px", borderRadius: 6, border: "none", background: hasSig ? "#10b981" : "#e5e5e5", color: hasSig ? "#fff" : "#999", cursor: hasSig ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+            ✓ Confirm Signature
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Trade Certificates ───────────────────────────────────────────────────────
+const CERT_CATEGORIES = [
+  {
+    category: "Gas",
+    icon: "🔥",
+    certs: [
+      { id: "cp12", label: "CP12 — Landlord Gas Safety Record", short: "CP12" },
+      { id: "smr", label: "Service & Maintenance Record", short: "SMR" },
+      { id: "pad17", label: "Commissioning Record (Pad 17)", short: "Pad 17" },
+      { id: "gas_warning", label: "Gas Warning/Advice Notice", short: "Warning" },
+    ],
+  },
+  {
+    category: "Electrical",
+    icon: "⚡",
+    certs: [
+      { id: "eicr", label: "EICR — Electrical Installation Condition Report", short: "EICR" },
+      { id: "eic", label: "EIC — Electrical Installation Certificate", short: "EIC" },
+      { id: "meic", label: "MEIC — Minor Electrical Works Certificate", short: "MEIC" },
+      { id: "pat", label: "PAT Testing Record", short: "PAT" },
+    ],
+  },
+  {
+    category: "Plumbing & Heating",
+    icon: "🔧",
+    certs: [
+      { id: "pressure_test", label: "Pressure Test Certificate", short: "Pressure" },
+      { id: "unvented_hw", label: "Unvented Hot Water Commissioning", short: "UHW" },
+    ],
+  },
+  {
+    category: "Oil",
+    icon: "🛢",
+    certs: [
+      { id: "cd11", label: "CD/11 — Oil Installation Commissioning", short: "CD/11" },
+      { id: "cd12", label: "CD/12 — Oil Safety Certificate", short: "CD/12" },
+    ],
+  },
+  {
+    category: "General",
+    icon: "📋",
+    certs: [
+      { id: "part_p", label: "Part P Building Regulations Certificate", short: "Part P" },
+      { id: "custom", label: "Custom Certificate", short: "Custom" },
+    ],
+  },
+];
+
+// Flatten for easy lookup
+const ALL_CERTS = CERT_CATEGORIES.flatMap(cat => cat.certs);
+
+function buildCertHTML(cert, brand, job, sig) {
+  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const accentColor = {
+    cp12: "#f59e0b", smr: "#f59e0b", pad17: "#f59e0b", gas_warning: "#ef4444",
+    eicr: "#3b82f6", eic: "#3b82f6", meic: "#3b82f6", pat: "#3b82f6",
+    pressure_test: "#10b981", unvented_hw: "#10b981",
+    cd11: "#8b5cf6", cd12: "#8b5cf6",
+    part_p: "#6b7280", custom: "#6b7280",
+  }[cert.id] || "#f59e0b";
+
+  const regLine = cert.id.startsWith("cp12") || cert.id === "smr" || cert.id === "pad17" || cert.id === "gas_warning"
+    ? (brand.gasSafeNumber ? `Gas Safe Reg: <strong>${brand.gasSafeNumber}</strong>` : "")
+    : cert.id.startsWith("e") || cert.id === "meic" || cert.id === "pat"
+    ? (cert.niceicNumber ? `NICEIC/NAPIT No: <strong>${cert.niceicNumber}</strong>` : "")
+    : "";
+
+  const header = `<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#1a1a1a;font-size:13px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${accentColor};padding-bottom:16px;margin-bottom:20px">
+      <div>
+        <div style="font-size:22px;font-weight:700">${brand.tradingName || ""}</div>
+        <div style="color:#666;font-size:12px;margin-top:4px">${brand.address || ""}${brand.phone ? ` · ${brand.phone}` : ""}${brand.email ? ` · ${brand.email}` : ""}</div>
+        ${regLine ? `<div style="font-size:12px;color:#666;margin-top:2px">${regLine}</div>` : ""}
+        ${brand.utrNumber ? `<div style="font-size:12px;color:#666">UTR: ${brand.utrNumber}</div>` : ""}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:${accentColor}">${cert.short}</div>
+        <div style="font-size:11px;color:#666">${cert.label}</div>
+        <div style="font-size:11px;color:#666;margin-top:4px">Date: ${today}</div>
+        ${cert.certNumber ? `<div style="font-size:11px;color:#666">Cert No: ${cert.certNumber}</div>` : ""}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div style="background:#f9f9f9;padding:14px;border-radius:8px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Property / Client</div>
+        <div style="font-weight:600">${cert.customer || job?.customer || ""}</div>
+        <div style="color:#666;margin-top:4px">${cert.address || job?.address || ""}</div>
+        ${cert.landlord ? `<div style="color:#666;margin-top:4px;font-size:12px">Landlord: ${cert.landlord}</div>` : ""}
+      </div>
+      <div style="background:#f9f9f9;padding:14px;border-radius:8px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Engineer / Contractor</div>
+        <div style="font-weight:600">${cert.engineer || brand.tradingName || ""}</div>
+        ${regLine ? `<div style="color:#666;margin-top:4px;font-size:12px">${regLine}</div>` : ""}
+      </div>
+    </div>`;
+
+  // Certificate-specific body
+  let body = "";
+
+  // GAS
+  if (cert.id === "cp12") {
+    body = `<div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:10px">Appliance Inspection</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#f5f5f5">${["Location","Appliance","Make/Model","Flue Type","Safe to Use"].map(h=>`<th style="padding:8px;text-align:left;border:1px solid #e5e5e5">${h}</th>`).join("")}</tr></thead>
+        <tbody><tr>${[cert.applianceLocation||"",cert.applianceType||"",cert.makeModel||"",cert.flueType||"Open flued",cert.safeToUse!==false?"Yes ✓":"No ✗"].map(v=>`<td style="padding:8px;border:1px solid #e5e5e5">${v}</td>`).join("")}</tr></tbody>
+      </table>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:16px">
+      ${["Gas tightness","Flue flow test","Burner pressure","Safety devices","CO detector","Adequate ventilation"].map(c=>`<div style="background:#f9f9f9;padding:8px 12px;border-radius:4px;display:flex;justify-content:space-between"><span>${c}</span><span style="color:#10b981;font-weight:700">✓</span></div>`).join("")}
+    </div>
+    ${cert.defects?`<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:12px;margin-bottom:16px"><strong>⚠ Defects/Action Required:</strong> ${cert.defects}</div>`:""}`;
+  }
+
+  if (cert.id === "smr") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Service Record</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Appliance",cert.applianceType||""],["Make/Model",cert.makeModel||""],["Serial No.",cert.serialNo||""],["Next Service",cert.nextServiceDate||""]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+      ${cert.serviceNotes?`<div style="margin-top:10px;font-size:12px;color:#444">${cert.serviceNotes}</div>`:""}
+    </div>`;
+  }
+
+  if (cert.id === "pad17") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Commissioning Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Appliance",cert.applianceType||""],["Make/Model",cert.makeModel||""],["Serial No.",cert.serialNo||""],["Gas Type","Natural Gas"],["Inlet Pressure",cert.inletPressure||""],["Heat Input",cert.heatInput||""]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  if (cert.id === "gas_warning") {
+    body = `<div style="background:#fff3cd;border:2px solid #f59e0b;border-radius:8px;padding:16px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">⚠ Gas Warning/Advice Notice</div>
+      <div style="font-size:12px"><strong>Condition Found:</strong> ${cert.warningCondition||""}</div>
+      ${cert.warningAction?`<div style="font-size:12px;margin-top:6px"><strong>Action Taken:</strong> ${cert.warningAction}</div>`:""}
+      ${cert.warningAdvice?`<div style="font-size:12px;margin-top:6px"><strong>Advice:</strong> ${cert.warningAdvice}</div>`:""}
+    </div>`;
+  }
+
+  // ELECTRICAL
+  if (cert.id === "eicr") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">EICR Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Overall Result",cert.eicrResult||"Satisfactory"],["Number of Circuits",cert.numCircuits||""],["Earthing Arrangement",cert.earthing||"TN-C-S (PME)"],["Next Inspection Due",cert.nextInspection||""],["Max Demand",cert.maxDemand||""],["Supply Voltage",cert.supplyVoltage||"230V"]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong style="color:${l==="Overall Result"?(v==="Satisfactory"?"#10b981":"#ef4444"):"inherit"}">${v}</strong></div>`).join("")}
+      </div>
+      ${cert.observations?`<div style="margin-top:12px"><strong style="font-size:12px">Observations / Codes:</strong><div style="font-size:12px;color:#444;margin-top:4px">${cert.observations}</div></div>`:""}
+    </div>`;
+  }
+
+  if (cert.id === "eic") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Installation Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Description of Work",cert.workDescription||""],["Number of Circuits",cert.numCircuits||""],["Earthing",cert.earthing||"TN-C-S (PME)"],["Supply Voltage","230V"],["Test Method",cert.testMethod||""],["Overall Result","Satisfactory ✓"]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  if (cert.id === "meic") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Minor Works Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Description",cert.workDescription||""],["Location",cert.workLocation||""],["Circuit Details",cert.circuitDetails||""],["Test Results","Satisfactory ✓"]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  if (cert.id === "pat") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">PAT Testing Summary</div>
+      <div style="font-size:12px"><strong>Total Items Tested:</strong> ${cert.totalItems||""}</div>
+      <div style="font-size:12px;margin-top:4px"><strong>Pass:</strong> ${cert.itemsPass||""} &nbsp; <strong>Fail:</strong> ${cert.itemsFail||"0"}</div>
+      ${cert.patNotes?`<div style="margin-top:8px;font-size:12px;color:#444">${cert.patNotes}</div>`:""}
+    </div>`;
+  }
+
+  // PLUMBING
+  if (cert.id === "pressure_test") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Pressure Test Results</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["System",cert.systemType||""],["Test Pressure",cert.testPressure||""],["Duration",cert.testDuration||""],["Final Reading",cert.finalReading||""],["Pass/Fail",cert.pressureResult||"Pass ✓"]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  if (cert.id === "unvented_hw") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Unvented Hot Water System</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Cylinder Make/Model",cert.makeModel||""],["Serial No.",cert.serialNo||""],["Capacity",cert.capacity||""],["Max Working Pressure",cert.maxPressure||""],["Temperature Setting",cert.tempSetting||"60°C"],["Commissioned By",brand.tradingName||""]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  // OIL
+  if (cert.id === "cd11" || cert.id === "cd12") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">${cert.id === "cd11" ? "Oil Installation Commissioning" : "Oil Safety Assessment"}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Appliance",cert.applianceType||""],["Make/Model",cert.makeModel||""],["Serial No.",cert.serialNo||""],["Oil Type",cert.oilType||"Kerosene 28s"],["Result",cert.oilResult||"Satisfactory ✓"]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  // GENERAL
+  if (cert.id === "part_p") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Part P Notification</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Work Description",cert.workDescription||""],["Location",cert.workLocation||""],["Notification No.",cert.notificationNo||""],["Building Control",cert.buildingControl||""]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  if (cert.id === "custom") {
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:12px;white-space:pre-wrap">${cert.customBody||""}</div>
+    </div>`;
+  }
+
+  const sigSection = sig ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5">
+      <div><div style="font-size:11px;color:#999;margin-bottom:8px">ENGINEER / CONTRACTOR</div>
+        <img src="${sig}" style="height:50px;border-bottom:1px solid #333;padding-bottom:4px" alt="sig"/>
+        <div style="font-size:11px;color:#666;margin-top:4px">${brand.tradingName||""} — ${today}</div>
+      </div>
+      <div><div style="font-size:11px;color:#999;margin-bottom:8px">CLIENT SIGNATURE</div>
+        <div style="height:50px;border-bottom:1px solid #333;margin-bottom:4px"></div>
+        <div style="font-size:11px;color:#666">Print name: ______________________</div>
+      </div>
+    </div>` : `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5">
+      <div><div style="font-size:11px;color:#999;margin-bottom:4px">ENGINEER</div><div style="height:50px;border-bottom:1px solid #333"></div></div>
+      <div><div style="font-size:11px;color:#999;margin-bottom:4px">CLIENT</div><div style="height:50px;border-bottom:1px solid #333"></div></div>
+    </div>`;
+
+  return header + body + sigSection + `<div style="margin-top:16px;font-size:10px;color:#999;text-align:center">${brand.tradingName} · ${brand.phone||""} · Issued ${today}</div></div>`;
+}
+
+// ─── Certificates Tab (all trades) ────────────────────────────────────────────
+function CertificatesTab({ job, brand, customers, user, connection }) {
+  const [certs, setCerts] = useState([]);
+  const [showForm, setShowForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [showSig, setShowSig] = useState(false);
+  const [pendingSig, setPendingSig] = useState(null);
+  const [expandedCat, setExpandedCat] = useState("Gas");
+  const [form, setForm] = useState({
+    customer: job?.customer || "", address: job?.address || "", engineer: brand?.tradingName || "",
+    landlord: "", certNumber: "", niceicNumber: "",
+    applianceType: "", applianceLocation: "", makeModel: "", serialNo: "",
+    flueType: "Open flued", safeToUse: true, defects: "", serviceNotes: "", nextServiceDate: "",
+    warningCondition: "", warningAction: "", warningAdvice: "",
+    inletPressure: "", heatInput: "",
+    eicrResult: "Satisfactory", numCircuits: "", earthing: "TN-C-S (PME)", nextInspection: "",
+    maxDemand: "", supplyVoltage: "230V", observations: "",
+    workDescription: "", workLocation: "", circuitDetails: "", testMethod: "",
+    totalItems: "", itemsPass: "", itemsFail: "0", patNotes: "",
+    systemType: "", testPressure: "", testDuration: "", finalReading: "", pressureResult: "Pass",
+    capacity: "", maxPressure: "", tempSetting: "60°C",
+    oilType: "Kerosene 28s", oilResult: "Satisfactory",
+    notificationNo: "", buildingControl: "", customBody: "",
+  });
+
+  useEffect(() => { loadCerts(); }, [job?.id]);
+  useEffect(() => { setForm(f => ({ ...f, customer: job?.customer || "", address: job?.address || "", engineer: brand?.tradingName || "" })); }, [job, brand]);
+
+  async function loadCerts() {
+    if (!user || !job?.id) return;
+    const { data } = await supabase.from("gas_safe_certs").select("*").eq("job_id", job.id).order("created_at", { ascending: false });
+    setCerts(data || []);
+  }
+
+  async function saveCert(sigData) {
+    if (!showForm) return;
+    setSaving(true);
+    const certType = ALL_CERTS.find(c => c.id === showForm);
+    const certData = { ...form, id: showForm, label: certType?.label || "", short: certType?.short || "", signature: sigData };
+    const html = buildCertHTML(certData, brand, job, sigData);
+    const { data } = await supabase.from("gas_safe_certs").insert({ job_id: job.id, user_id: user.id, cert_type: showForm, cert_label: certType?.label || "", cert_data: certData, html_content: html, signature: sigData || null, created_at: new Date().toISOString() }).select().single();
+    if (data) setCerts(prev => [data, ...prev]);
+    setShowForm(null);
+    setSaving(false);
+  }
+
+  async function emailCert(cert) {
+    if (!connection) { alert("No email connected. Go to Inbox to connect Gmail or Outlook."); return; }
+    const customer = (customers || []).find(c => c.name?.toLowerCase() === job?.customer?.toLowerCase());
+    let toEmail = customer?.email || "";
+    if (!toEmail) { toEmail = prompt(`Email address for ${job?.customer}:`); if (!toEmail) return; }
+    const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+    const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id, to: toEmail, subject: `${cert.cert_label} — ${brand.tradingName}`, body: `<p>Dear ${job?.customer},</p><p>Please find your ${cert.cert_label} below.</p>${cert.html_content}<p>Many thanks,<br>${brand.tradingName}</p>` }) });
+    const d = await res.json();
+    if (d.error) alert(`Failed: ${d.error}`); else alert(`✓ Certificate sent to ${toEmail}`);
+  }
+
+  const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  // Cert-specific form fields
+  function CertFormFields({ id }) {
+    const gas = ["cp12","smr","pad17","gas_warning"].includes(id);
+    const elec = ["eicr","eic","meic","pat"].includes(id);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div><label style={S.label}>Customer Name</label><input style={S.input} value={form.customer} onChange={setF("customer")} /></div>
+          <div><label style={S.label}>Property Address</label><input style={S.input} value={form.address} onChange={setF("address")} /></div>
+          <div><label style={S.label}>Certificate No.</label><input style={S.input} placeholder="e.g. GS-2024-001" value={form.certNumber} onChange={setF("certNumber")} /></div>
+          {id === "cp12" && <div><label style={S.label}>Landlord Name</label><input style={S.input} value={form.landlord} onChange={setF("landlord")} /></div>}
+          {elec && <div><label style={S.label}>NICEIC/NAPIT No.</label><input style={S.input} value={form.niceicNumber} onChange={setF("niceicNumber")} /></div>}
+        </div>
+
+        {gas && id !== "gas_warning" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div><label style={S.label}>Appliance Type</label><input style={S.input} placeholder="e.g. Boiler, Gas Fire" value={form.applianceType} onChange={setF("applianceType")} /></div>
+            <div><label style={S.label}>Make / Model</label><input style={S.input} value={form.makeModel} onChange={setF("makeModel")} /></div>
+            {["smr","pad17"].includes(id) && <div><label style={S.label}>Serial No.</label><input style={S.input} value={form.serialNo} onChange={setF("serialNo")} /></div>}
+            {id === "cp12" && <div><label style={S.label}>Location</label><input style={S.input} placeholder="e.g. Kitchen" value={form.applianceLocation} onChange={setF("applianceLocation")} /></div>}
+            {id === "cp12" && <div><label style={S.label}>Flue Type</label><select style={S.input} value={form.flueType} onChange={setF("flueType")}>{["Open flued","Room sealed","Balanced flue","Fan flue","Flueless"].map(f=><option key={f}>{f}</option>)}</select></div>}
+            {id === "pad17" && <><div><label style={S.label}>Inlet Pressure</label><input style={S.input} placeholder="mbar" value={form.inletPressure} onChange={setF("inletPressure")} /></div><div><label style={S.label}>Heat Input</label><input style={S.input} placeholder="kW" value={form.heatInput} onChange={setF("heatInput")} /></div></>}
+            {id === "smr" && <div><label style={S.label}>Next Service Due</label><input type="date" style={S.input} value={form.nextServiceDate} onChange={setF("nextServiceDate")} /></div>}
+          </div>
+        )}
+        {id === "smr" && <div><label style={S.label}>Service Notes</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} value={form.serviceNotes} onChange={setF("serviceNotes")} /></div>}
+        {id === "cp12" && <div><label style={S.label}>Defects / Remedial Action</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} placeholder="None found, or describe issues..." value={form.defects} onChange={setF("defects")} /></div>}
+        {id === "gas_warning" && (
+          <>
+            <div><label style={S.label}>Condition Found</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} value={form.warningCondition} onChange={setF("warningCondition")} /></div>
+            <div><label style={S.label}>Action Taken</label><input style={S.input} value={form.warningAction} onChange={setF("warningAction")} /></div>
+            <div><label style={S.label}>Advice Given</label><input style={S.input} value={form.warningAdvice} onChange={setF("warningAdvice")} /></div>
+          </>
+        )}
+        {id === "eicr" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div><label style={S.label}>Overall Result</label><select style={S.input} value={form.eicrResult} onChange={setF("eicrResult")}><option>Satisfactory</option><option>Unsatisfactory</option></select></div>
+            <div><label style={S.label}>No. of Circuits</label><input style={S.input} value={form.numCircuits} onChange={setF("numCircuits")} /></div>
+            <div><label style={S.label}>Earthing</label><input style={S.input} value={form.earthing} onChange={setF("earthing")} /></div>
+            <div><label style={S.label}>Next Inspection Due</label><input type="date" style={S.input} value={form.nextInspection} onChange={setF("nextInspection")} /></div>
+            <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Observations / Codes</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} placeholder="e.g. C1: Danger present..." value={form.observations} onChange={setF("observations")} /></div>
+          </div>
+        )}
+        {(id === "eic" || id === "meic") && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Description of Work</label><input style={S.input} value={form.workDescription} onChange={setF("workDescription")} /></div>
+            <div><label style={S.label}>Location</label><input style={S.input} value={form.workLocation} onChange={setF("workLocation")} /></div>
+            {id === "eic" && <><div><label style={S.label}>No. of Circuits</label><input style={S.input} value={form.numCircuits} onChange={setF("numCircuits")} /></div><div><label style={S.label}>Earthing</label><input style={S.input} value={form.earthing} onChange={setF("earthing")} /></div></>}
+            {id === "meic" && <div><label style={S.label}>Circuit Details</label><input style={S.input} value={form.circuitDetails} onChange={setF("circuitDetails")} /></div>}
+          </div>
+        )}
+        {id === "pat" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div><label style={S.label}>Total Items Tested</label><input type="number" style={S.input} value={form.totalItems} onChange={setF("totalItems")} /></div>
+            <div><label style={S.label}>Items Passed</label><input type="number" style={S.input} value={form.itemsPass} onChange={setF("itemsPass")} /></div>
+            <div><label style={S.label}>Items Failed</label><input type="number" style={S.input} value={form.itemsFail} onChange={setF("itemsFail")} /></div>
+            <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Notes</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} value={form.patNotes} onChange={setF("patNotes")} /></div>
+          </div>
+        )}
+        {id === "pressure_test" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div><label style={S.label}>System</label><input style={S.input} placeholder="e.g. CH, DHW" value={form.systemType} onChange={setF("systemType")} /></div>
+            <div><label style={S.label}>Test Pressure (bar)</label><input style={S.input} value={form.testPressure} onChange={setF("testPressure")} /></div>
+            <div><label style={S.label}>Duration (mins)</label><input style={S.input} value={form.testDuration} onChange={setF("testDuration")} /></div>
+            <div><label style={S.label}>Final Reading (bar)</label><input style={S.input} value={form.finalReading} onChange={setF("finalReading")} /></div>
+          </div>
+        )}
+        {id === "unvented_hw" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div><label style={S.label}>Cylinder Make/Model</label><input style={S.input} value={form.makeModel} onChange={setF("makeModel")} /></div>
+            <div><label style={S.label}>Serial No.</label><input style={S.input} value={form.serialNo} onChange={setF("serialNo")} /></div>
+            <div><label style={S.label}>Capacity (litres)</label><input style={S.input} value={form.capacity} onChange={setF("capacity")} /></div>
+            <div><label style={S.label}>Max Working Pressure</label><input style={S.input} value={form.maxPressure} onChange={setF("maxPressure")} /></div>
+            <div><label style={S.label}>Temp Setting</label><input style={S.input} value={form.tempSetting} onChange={setF("tempSetting")} /></div>
+          </div>
+        )}
+        {(id === "cd11" || id === "cd12") && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div><label style={S.label}>Appliance</label><input style={S.input} value={form.applianceType} onChange={setF("applianceType")} /></div>
+            <div><label style={S.label}>Make/Model</label><input style={S.input} value={form.makeModel} onChange={setF("makeModel")} /></div>
+            <div><label style={S.label}>Serial No.</label><input style={S.input} value={form.serialNo} onChange={setF("serialNo")} /></div>
+            <div><label style={S.label}>Oil Type</label><select style={S.input} value={form.oilType} onChange={setF("oilType")}><option>Kerosene 28s</option><option>Gas Oil 35s</option></select></div>
+          </div>
+        )}
+        {id === "part_p" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Description of Work</label><input style={S.input} value={form.workDescription} onChange={setF("workDescription")} /></div>
+            <div><label style={S.label}>Notification No.</label><input style={S.input} value={form.notificationNo} onChange={setF("notificationNo")} /></div>
+            <div><label style={S.label}>Building Control</label><input style={S.input} value={form.buildingControl} onChange={setF("buildingControl")} /></div>
+          </div>
+        )}
+        {id === "custom" && (
+          <>
+            <div><label style={S.label}>Certificate Title</label><input style={S.input} placeholder="e.g. Scope of Works Certificate" value={form.certTitle} onChange={setF("certTitle")} /></div>
+            <div><label style={S.label}>Body Text</label><textarea style={{ ...S.input, minHeight: 100, resize: "vertical" }} placeholder="Describe the work, findings, results..." value={form.customBody} onChange={setF("customBody")} /></div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {!showForm && (
+        <div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+            Create professional trade certificates pre-filled with job details. Capture signatures on-screen and email directly to the customer.
+          </div>
+
+          {/* Category accordion */}
+          {CERT_CATEGORIES.map(cat => (
+            <div key={cat.category} style={{ marginBottom: 8 }}>
+              <button onClick={() => setExpandedCat(expandedCat === cat.category ? null : cat.category)}
+                style={{ ...S.btn("ghost"), width: "100%", justifyContent: "space-between", padding: "10px 14px" }}>
+                <span style={{ fontWeight: 700 }}>{cat.icon} {cat.category}</span>
+                <span style={{ color: C.muted }}>{expandedCat === cat.category ? "▲" : "▼"}</span>
+              </button>
+              {expandedCat === cat.category && (
+                <div style={{ background: C.surfaceHigh, borderRadius: "0 0 8px 8px", overflow: "hidden" }}>
+                  {cat.certs.map((c, i) => (
+                    <button key={c.id} onClick={() => setShowForm(c.id)}
+                      style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "transparent", border: "none", borderTop: i > 0 ? `1px solid ${C.border}` : "none", cursor: "pointer", fontFamily: "'DM Mono',monospace", fontSize: 12, color: C.text }}>
+                      <span>{c.label}</span>
+                      <span style={{ color: C.amber, fontWeight: 700, fontSize: 11 }}>Create →</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Issued certs */}
+          {certs.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={S.sectionTitle}>Issued Certificates ({certs.length})</div>
+              {certs.map(cert => (
+                <div key={cert.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>{cert.cert_label}</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>{new Date(cert.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>
+                  </div>
+                  {cert.signature && <div style={{ fontSize: 11, color: C.green, marginBottom: 6 }}>✓ Signed</div>}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => { const w = window.open("","_blank"); w.document.write(cert.html_content); w.document.close(); }}>⬇ View/Print</button>
+                    <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.blue }} onClick={() => emailCert(cert)}>✉ Email</button>
+                    {!cert.signature && <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green }} onClick={() => { setPendingSig(cert); setShowSig(true); }}>✍ Sign</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Certificate form */}
+      {showForm && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => setShowForm(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20, padding: 0 }}>←</button>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{ALL_CERTS.find(c => c.id === showForm)?.label}</div>
+            </div>
+            <VoiceFillButton
+              form={form}
+              setForm={setForm}
+              fieldDescriptions="customer (customer name), address (property address), applianceType (e.g. boiler or gas fire), makeModel (make and model), serialNo (serial number), flueType (flue type), defects (any defects found), serviceNotes (service notes), nextServiceDate (next service date YYYY-MM-DD), eicrResult (Satisfactory or Unsatisfactory), numCircuits (number of circuits), nextInspection (next inspection date YYYY-MM-DD), observations (any observations or codes), workDescription (description of work), totalItems (number of items PAT tested), itemsPass (number passed), testPressure (test pressure in bar), customBody (certificate body text)"
+            />
+          </div>
+          <CertFormFields id={showForm} />
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} disabled={saving} onClick={() => { setPendingSig(null); setShowSig(true); }}>✍ Sign & Save</button>
+            <button style={S.btn("ghost")} disabled={saving} onClick={() => saveCert(null)}>{saving ? "Saving..." : "Save without signature"}</button>
+          </div>
+        </div>
+      )}
+
+      {showSig && (
+        <SignaturePad
+          title="Engineer Signature"
+          onSave={async (sigData) => {
+            setShowSig(false);
+            if (pendingSig) {
+              const certData = { ...pendingSig.cert_data, signature: sigData };
+              const html = buildCertHTML(certData, brand, job, sigData);
+              await supabase.from("gas_safe_certs").update({ signature: sigData, html_content: html }).eq("id", pendingSig.id);
+              setCerts(prev => prev.map(c => c.id === pendingSig.id ? { ...c, signature: sigData, html_content: html } : c));
+              setPendingSig(null);
+            } else {
+              await saveCert(sigData);
+            }
+          }}
+          onCancel={() => { setShowSig(false); setPendingSig(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function buildGasSafeCertHTML(cert, brand, job, sig) {
+  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const base = `
+    <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#1a1a1a;font-size:13px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #f59e0b;padding-bottom:16px;margin-bottom:20px">
+      <div>
+        <div style="font-size:22px;font-weight:700">${brand.tradingName || ""}</div>
+        <div style="color:#666;font-size:12px;margin-top:4px">${brand.address || ""}${brand.phone ? ` · ${brand.phone}` : ""}${brand.email ? ` · ${brand.email}` : ""}</div>
+        ${brand.gasSafeNumber ? `<div style="font-size:12px;color:#666;margin-top:2px">Gas Safe Reg No: <strong>${brand.gasSafeNumber}</strong></div>` : ""}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:#f59e0b">${cert.short}</div>
+        <div style="font-size:11px;color:#666">${cert.label}</div>
+        <div style="font-size:11px;color:#666;margin-top:4px">Date: ${today}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div style="background:#f9f9f9;padding:14px;border-radius:8px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Property / Customer</div>
+        <div style="font-weight:600">${cert.customer || job?.customer || ""}</div>
+        <div style="color:#666;margin-top:4px">${cert.address || job?.address || ""}</div>
+      </div>
+      <div style="background:#f9f9f9;padding:14px;border-radius:8px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Engineer Details</div>
+        <div style="font-weight:600">${cert.engineer || brand.tradingName || ""}</div>
+        ${brand.gasSafeNumber ? `<div style="color:#666;margin-top:4px">Gas Safe: ${brand.gasSafeNumber}</div>` : ""}
+        ${brand.utrNumber ? `<div style="color:#666">UTR: ${brand.utrNumber}</div>` : ""}
+      </div>
+    </div>`;
+
+  const cp12Fields = `
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:10px">Appliance Details</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#f5f5f5">
+          ${["Location","Appliance","Make/Model","Flue Type","Inspected","Safe to Use"].map(h => `<th style="padding:8px;text-align:left;border:1px solid #e5e5e5">${h}</th>`).join("")}
+        </tr></thead>
+        <tbody>
+          ${(cert.appliances || [{ location: cert.applianceLocation || "", type: cert.applianceType || "", makeModel: cert.makeModel || "", flueType: cert.flueType || "Open flued", inspected: "✓", safe: cert.safeToUse !== false ? "Yes" : "No" }]).map(a => `<tr>
+            ${[a.location,a.type,a.makeModel,a.flueType,a.inspected,a.safe].map(v => `<td style="padding:8px;border:1px solid #e5e5e5">${v||""}</td>`).join("")}
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+    ${cert.defects ? `<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:12px;margin-bottom:16px"><strong>⚠ Defects / Remedial Action Required:</strong><br>${cert.defects}</div>` : ""}
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Safety Checks</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${["Gas tightness","Flue flow","Burner pressure","Heat input","Safety devices","CO detector"].map(c => `<div style="background:#f9f9f9;padding:8px 12px;border-radius:4px;display:flex;justify-content:space-between"><span>${c}</span><span style="color:#10b981;font-weight:700">✓</span></div>`).join("")}
+      </div>
+    </div>`;
+
+  const smrFields = `
+    <div style="margin-bottom:16px;background:#f9f9f9;padding:14px;border-radius:8px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Service Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Appliance", cert.applianceType || ""],["Make/Model", cert.makeModel || ""],["Serial No.", cert.serialNo || ""],["Next Service Due", cert.nextServiceDate || ""]].map(([l,v]) => `<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+      ${cert.serviceNotes ? `<div style="margin-top:10px;font-size:12px;color:#666">${cert.serviceNotes}</div>` : ""}
+    </div>`;
+
+  const warningFields = `
+    <div style="background:#fff3cd;border:2px solid #f59e0b;border-radius:8px;padding:16px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">⚠ Gas Warning/Advice Notice</div>
+      <div style="font-size:12px"><strong>Condition Found:</strong> ${cert.warningCondition || ""}</div>
+      ${cert.warningAction ? `<div style="font-size:12px;margin-top:6px"><strong>Action Taken:</strong> ${cert.warningAction}</div>` : ""}
+      ${cert.warningAdvice ? `<div style="font-size:12px;margin-top:6px"><strong>Advice Given:</strong> ${cert.warningAdvice}</div>` : ""}
+    </div>`;
+
+  const commissionFields = `
+    <div style="margin-bottom:16px;background:#f9f9f9;padding:14px;border-radius:8px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Installation Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Appliance", cert.applianceType || ""],["Make/Model", cert.makeModel || ""],["Serial No.", cert.serialNo || ""],["Gas Type", "Natural Gas"],["Installation Date", today],["Commissioned By", brand.tradingName || ""]].map(([l,v]) => `<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+    </div>`;
+
+  const fields = cert.id === "cp12" ? cp12Fields : cert.id === "smr" ? smrFields : cert.id === "warning" ? warningFields : commissionFields;
+
+  const sigSection = sig ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5">
+      <div>
+        <div style="font-size:11px;color:#999;margin-bottom:8px">ENGINEER SIGNATURE</div>
+        <img src="${sig}" style="height:50px;border-bottom:1px solid #333;padding-bottom:4px" alt="Engineer signature"/>
+        <div style="font-size:11px;color:#666;margin-top:4px">${brand.tradingName || ""} — ${today}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#999;margin-bottom:8px">CUSTOMER SIGNATURE</div>
+        <div style="height:50px;border-bottom:1px solid #333;margin-bottom:4px"></div>
+        <div style="font-size:11px;color:#666">Name: ______________________</div>
+      </div>
+    </div>` : `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5">
+      <div><div style="font-size:11px;color:#999;margin-bottom:4px">ENGINEER SIGNATURE</div><div style="height:50px;border-bottom:1px solid #333"></div></div>
+      <div><div style="font-size:11px;color:#999;margin-bottom:4px">CUSTOMER SIGNATURE</div><div style="height:50px;border-bottom:1px solid #333"></div></div>
+    </div>`;
+
+  return base + fields + sigSection + `<div style="margin-top:16px;font-size:10px;color:#999;text-align:center">${brand.tradingName} — Gas Safe Reg No: ${brand.gasSafeNumber || "—"} — Issued ${today}</div></div>`;
+}
+
+// ─── Gas Safe Certificate Tab ─────────────────────────────────────────────────
+function GasSafeCertTab({ job, brand, customers, user, connection }) {
+  const [certs, setCerts] = useState([]);
+  const [showForm, setShowForm] = useState(null); // cert type id
+  const [saving, setSaving] = useState(false);
+  const [showSig, setShowSig] = useState(false);
+  const [pendingSig, setPendingSig] = useState(null); // cert being signed
+  const [form, setForm] = useState({
+    customer: job?.customer || "", address: job?.address || "",
+    engineer: brand?.tradingName || "",
+    applianceType: "", applianceLocation: "", makeModel: "", serialNo: "",
+    flueType: "Open flued", safeToUse: true,
+    defects: "", serviceNotes: "",
+    warningCondition: "", warningAction: "", warningAdvice: "",
+    nextServiceDate: "",
+  });
+
+  useEffect(() => { loadCerts(); }, [job?.id]);
+  useEffect(() => { setForm(f => ({ ...f, customer: job?.customer || "", address: job?.address || "", engineer: brand?.tradingName || "" })); }, [job, brand]);
+
+  async function loadCerts() {
+    if (!user || !job?.id) return;
+    const { data } = await supabase.from("gas_safe_certs").select("*").eq("job_id", job.id).order("created_at", { ascending: false });
+    setCerts(data || []);
+  }
+
+  async function saveCert(sigData) {
+    if (!showForm) return;
+    setSaving(true);
+    const certType = GAS_SAFE_CERTS.find(c => c.id === showForm);
+    const certData = { ...form, id: showForm, label: certType?.label || "", signature: sigData };
+    const html = buildGasSafeCertHTML(certData, brand, job, sigData);
+    const { data } = await supabase.from("gas_safe_certs").insert({
+      job_id: job.id, user_id: user.id,
+      cert_type: showForm, cert_label: certType?.label || "",
+      cert_data: certData,
+      html_content: html,
+      signature: sigData || null,
+      created_at: new Date().toISOString(),
+    }).select().single();
+    if (data) setCerts(prev => [data, ...prev]);
+    setShowForm(null);
+    setSaving(false);
+  }
+
+  async function emailCert(cert) {
+    if (!connection) { alert("No email connected. Go to Inbox to connect Gmail or Outlook."); return; }
+    const customer = (customers || []).find(c => c.name?.toLowerCase() === job?.customer?.toLowerCase());
+    let toEmail = customer?.email || "";
+    if (!toEmail) { toEmail = prompt(`Email address for ${job?.customer}:`); if (!toEmail) return; }
+    const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: user.id, to: toEmail,
+        subject: `${cert.cert_label} — ${brand.tradingName}`,
+        body: `<p>Dear ${job?.customer},</p><p>Please find your ${cert.cert_label} below.</p>${cert.html_content}<p>Many thanks,<br>${brand.tradingName}${brand.phone ? `<br>${brand.phone}` : ""}</p>`,
+      }),
+    });
+    const d = await res.json();
+    if (d.error) alert(`Failed: ${d.error}`);
+    else alert(`✓ Certificate sent to ${toEmail}`);
+  }
+
+  const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  return (
+    <div>
+      {/* Certificate type picker */}
+      {!showForm && (
+        <div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
+            Create official Gas Safe certificates pre-filled with job and customer details. Capture signatures and email directly to the customer.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+            {GAS_SAFE_CERTS.map(c => (
+              <button key={c.id} onClick={() => setShowForm(c.id)}
+                style={{ ...S.btn("ghost"), justifyContent: "space-between", padding: "12px 16px", textAlign: "left" }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{c.label}</span>
+                <span style={{ color: C.amber }}>Create →</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Saved certs */}
+          {certs.length > 0 && (
+            <div>
+              <div style={S.sectionTitle}>Issued Certificates ({certs.length})</div>
+              {certs.map(cert => (
+                <div key={cert.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>{cert.cert_label}</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>{new Date(cert.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>
+                  </div>
+                  {cert.signature && <div style={{ fontSize: 11, color: C.green, marginBottom: 6 }}>✓ Signed</div>}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => { const w = window.open("","_blank"); w.document.write(cert.html_content); w.document.close(); }}>⬇ View / Print</button>
+                    <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.blue }} onClick={() => emailCert(cert)}>✉ Email</button>
+                    {!cert.signature && <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green }} onClick={() => { setPendingSig(cert); setShowSig(true); }}>✍ Sign</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Certificate form */}
+      {showForm && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <button onClick={() => setShowForm(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20, padding: 0 }}>←</button>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{GAS_SAFE_CERTS.find(c => c.id === showForm)?.label}</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div><label style={S.label}>Customer</label><input style={S.input} value={form.customer} onChange={setF("customer")} /></div>
+              <div><label style={S.label}>Address</label><input style={S.input} value={form.address} onChange={setF("address")} /></div>
+            </div>
+            {["cp12","smr","commission","warning"].includes(showForm) && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div><label style={S.label}>Appliance Type</label><input style={S.input} placeholder="e.g. Boiler, Gas Fire" value={form.applianceType} onChange={setF("applianceType")} /></div>
+                <div><label style={S.label}>Make / Model</label><input style={S.input} placeholder="e.g. Worcester Bosch 8000" value={form.makeModel} onChange={setF("makeModel")} /></div>
+                {["smr","commission"].includes(showForm) && <div><label style={S.label}>Serial No.</label><input style={S.input} value={form.serialNo} onChange={setF("serialNo")} /></div>}
+                {showForm === "cp12" && <div><label style={S.label}>Location</label><input style={S.input} placeholder="e.g. Kitchen, Airing cupboard" value={form.applianceLocation} onChange={setF("applianceLocation")} /></div>}
+                {showForm === "cp12" && (
+                  <div><label style={S.label}>Flue Type</label>
+                    <select style={S.input} value={form.flueType} onChange={setF("flueType")}>
+                      {["Open flued","Room sealed","Balanced flue","Fan flue","Flueless"].map(f => <option key={f}>{f}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+            {showForm === "cp12" && (
+              <div>
+                <label style={S.label}>Defects / Remedial Action</label>
+                <textarea style={{ ...S.input, minHeight: 60, resize: "none" }} placeholder="None found, or describe any issues..." value={form.defects} onChange={setF("defects")} />
+              </div>
+            )}
+            {showForm === "smr" && (
+              <div>
+                <label style={S.label}>Service Notes</label>
+                <textarea style={{ ...S.input, minHeight: 60, resize: "none" }} placeholder="Work carried out..." value={form.serviceNotes} onChange={setF("serviceNotes")} />
+              </div>
+            )}
+            {showForm === "smr" && (
+              <div><label style={S.label}>Next Service Due</label><input type="date" style={S.input} value={form.nextServiceDate} onChange={setF("nextServiceDate")} /></div>
+            )}
+            {showForm === "warning" && (
+              <>
+                <div><label style={S.label}>Condition Found</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} value={form.warningCondition} onChange={setF("warningCondition")} /></div>
+                <div><label style={S.label}>Action Taken</label><input style={S.input} value={form.warningAction} onChange={setF("warningAction")} /></div>
+                <div><label style={S.label}>Advice Given</label><input style={S.input} value={form.warningAdvice} onChange={setF("warningAdvice")} /></div>
+              </>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} disabled={saving} onClick={() => { setPendingSig(null); setShowSig(true); }}>
+                ✍ Add Signature & Save
+              </button>
+              <button style={S.btn("ghost")} disabled={saving} onClick={() => saveCert(null)}>
+                {saving ? "Saving..." : "Save without signature"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Signature capture */}
+      {showSig && (
+        <SignaturePad
+          title="Engineer Signature"
+          onSave={async (sigData) => {
+            setShowSig(false);
+            if (pendingSig) {
+              // Sign existing cert
+              const html = buildGasSafeCertHTML({ ...pendingSig.cert_data, signature: sigData }, brand, job, sigData);
+              await supabase.from("gas_safe_certs").update({ signature: sigData, html_content: html }).eq("id", pendingSig.id);
+              setCerts(prev => prev.map(c => c.id === pendingSig.id ? { ...c, signature: sigData, html_content: html } : c));
+              setPendingSig(null);
+            } else {
+              // Save new cert with signature
+              await saveCert(sigData);
+            }
+          }}
+          onCancel={() => { setShowSig(false); setPendingSig(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Jobs Tab ─────────────────────────────────────────────────────────────────
 const JOB_STATUSES = [
   { value: "enquiry", label: "Enquiry", color: C.muted },
@@ -6311,6 +7193,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, conne
   const [addDoc, setAddDoc] = useState({ doc_type: "", doc_number: "", issued_date: "", expiry_date: "", notes: "" });
   const [addDaysheet, setAddDaysheet] = useState({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" });
   const [emailConnection, setEmailConnection] = useState(null);
+  const [showSignature, setShowSignature] = useState(false);
   const photoRef = useRef();
 
   useEffect(() => { loadJobs(); loadEmailConn(); }, [user]);
@@ -6610,7 +7493,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, conne
 
             {/* Sub-tabs */}
             <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: "auto" }}>
-              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["daywork","Daywork"]].map(([v,l]) => (
+              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"]].map(([v,l]) => (
                 <button key={v} onClick={() => setTab(v)}
                   style={{ padding: "8px 14px", border: "none", borderBottom: tab === v ? `2px solid ${C.amber}` : "2px solid transparent", background: "transparent", color: tab === v ? C.amber : C.muted, fontSize: 11, fontWeight: tab === v ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'DM Mono',monospace" }}>
                   {l}
@@ -6797,18 +7680,45 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, conne
                   ))}
                 </div>
               )}
+
+              {/* GAS SAFE CERTIFICATES */}
+              {tab === "certs" && (
+                <CertificatesTab job={selected} brand={brand} customers={customers} user={user} connection={emailConnection} />
+              )}
             </div>
 
             {/* Footer */}
             <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}`, flexShrink: 0, display: "flex", gap: 8 }}>
               {selected.invoice_id && <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => { setSelected(null); setView("Invoices"); }}>View Invoice</button>}
               {selected.quote_id && <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => { setSelected(null); setView("Quotes"); }}>View Quote</button>}
+              {selected.address && <a href={`https://maps.google.com/?q=${encodeURIComponent(selected.address)}`} target="_blank" rel="noreferrer" style={{ ...S.btn("ghost"), fontSize: 11, textDecoration: "none" }}>📍 Navigate</a>}
+              <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => setShowSignature(true)}>✍ Get Signature</button>
               <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.red, marginLeft: "auto" }} onClick={() => deleteJob(selected.id)}>Delete Job</button>
             </div>
           </div>
         </div>
       )}
-    </div>
+
+      {/* Signature modal */}
+      {showSignature && selected && (
+        <SignaturePad
+          title={`Customer sign-off — ${selected.customer}`}
+          onSave={async (sigData) => {
+            // Save signature against the job
+            await supabase.from("job_cards").update({ customer_signature: sigData, status: "completed", completion_date: new Date().toISOString() }).eq("id", selected.id);
+            setJobCards(prev => prev.map(j => j.id === selected.id ? { ...j, customer_signature: sigData, status: "completed" } : j));
+            setSelected(s => ({ ...s, customer_signature: sigData, status: "completed" }));
+            setShowSignature(false);
+            // Trigger annual service check
+            if (selected.annual_service) {
+              const nextService = new Date();
+              nextService.setDate(nextService.getDate() + 350);
+              await supabase.from("job_cards").update({ next_service_date: nextService.toISOString().slice(0,10), service_reminder_sent: false }).eq("id", selected.id);
+            }
+          }}
+          onCancel={() => setShowSignature(false)}
+        />
+      )}
   );
 }
 
