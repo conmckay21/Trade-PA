@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Privacy Policy — Trade PA</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --amber: #f59e0b;
+    --amber-dim: #92400e;
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface-high: #242424;
+    --border: #2a2a2a;
+    --text: #e5e5e5;
+    --muted: #6b7280;
+    --green: #10b981;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Mono', 'Courier New', monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 14px;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.05em;
+    color: var(--amber);
+    text-decoration: none;
+  }
+
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    background: var(--amber);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+
+  .header-badge {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  .page-header {
+    margin-bottom: 48px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .page-header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+
+  .meta {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+
+  .meta-item {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .meta-item span {
+    color: var(--amber);
+    font-weight: 700;
+  }
+
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 40px;
+  }
+
+  .toc-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  .toc ol {
+    list-style: none;
+    counter-reset: toc;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .toc li {
+    counter-increment: toc;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .toc li::before {
+    content: counter(toc, decimal-leading-zero);
+    font-size: 10px;
+    color: var(--amber);
+    font-weight: 700;
+    min-width: 20px;
+  }
+
+  .toc a {
+    color: var(--text);
+    text-decoration: none;
+    font-size: 12px;
+    transition: color 0.15s;
+  }
+
+  .toc a:hover { color: var(--amber); }
+
+  section {
+    margin-bottom: 44px;
+    scroll-margin-top: 72px;
+  }
+
+  section h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  section h2::before {
+    content: attr(data-num);
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 400;
+    min-width: 22px;
+  }
+
+  section p {
+    color: var(--text);
+    margin-bottom: 14px;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  section p:last-child { margin-bottom: 0; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+  }
+
+  .card-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  ul.data-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  ul.data-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  ul.data-list li::before {
+    content: "→";
+    color: var(--amber);
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .highlight {
+    border-left: 2px solid var(--amber);
+    padding: 12px 16px;
+    background: rgba(245, 158, 11, 0.06);
+    border-radius: 0 6px 6px 0;
+    margin: 16px 0;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  .contact-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .contact-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 12px;
+  }
+
+  .contact-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    min-width: 60px;
+  }
+
+  .contact-value {
+    color: var(--amber);
+  }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  footer a {
+    color: var(--amber);
+    text-decoration: none;
+  }
+
+  @media (max-width: 600px) {
+    main { padding: 32px 16px 60px; }
+    .page-header h1 { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="https://trade-pa-id3s.vercel.app" class="logo">
+    <div class="logo-icon">TP</div>
+    TRADE PA
+  </a>
+  <div class="header-badge">Privacy Policy</div>
+</header>
+
+<main>
+  <div class="page-header">
+    <h1>Privacy Policy</h1>
+    <p style="color: var(--muted); font-size: 13px; margin-top: 8px;">
+      This policy explains how Trade PA collects, uses, and protects your information.
+    </p>
+    <div class="meta">
+      <div class="meta-item">Effective: <span>31 March 2026</span></div>
+      <div class="meta-item">Last updated: <span>31 March 2026</span></div>
+      <div class="meta-item">Operator: <span>Trade PA</span></div>
+    </div>
+  </div>
+
+  <div class="toc">
+    <div class="toc-title">Contents</div>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#data-collected">Data we collect</a></li>
+      <li><a href="#gmail">Gmail &amp; email access</a></li>
+      <li><a href="#how-we-use">How we use your data</a></li>
+      <li><a href="#sharing">Data sharing</a></li>
+      <li><a href="#storage">Data storage &amp; security</a></li>
+      <li><a href="#retention">Data retention</a></li>
+      <li><a href="#rights">Your rights</a></li>
+      <li><a href="#cookies">Cookies</a></li>
+      <li><a href="#changes">Changes to this policy</a></li>
+      <li><a href="#contact">Contact us</a></li>
+    </ol>
+  </div>
+
+  <section id="overview">
+    <h2 data-num="01">Overview</h2>
+    <p>Trade PA is an administration tool for sole-trader tradespeople in the United Kingdom. It helps tradespeople manage jobs, invoices, quotes, materials, customers, reminders, and email communications from a single app.</p>
+    <p>We are committed to protecting your personal data and handling it responsibly. This policy explains what data we collect, why we collect it, and how we protect it.</p>
+    <div class="highlight">
+      Trade PA is designed so that your business data belongs to you. We do not sell your data, share it with advertisers, or use it for any purpose other than operating the service you have signed up for.
+    </div>
+  </section>
+
+  <section id="data-collected">
+    <h2 data-num="02">Data we collect</h2>
+    <p>We collect only the data necessary to operate the app. This falls into three categories:</p>
+
+    <div class="card">
+      <div class="card-title">Account data</div>
+      <ul class="data-list">
+        <li>Email address and password (used for login via Supabase Auth)</li>
+        <li>Business name and trading name</li>
+        <li>Business address, phone number, and email</li>
+        <li>Bank details you enter for display on invoices (stored securely, never used for transactions)</li>
+        <li>VAT number and Gas Safe number if provided</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Business data</div>
+      <ul class="data-list">
+        <li>Jobs, schedules, and appointment details</li>
+        <li>Invoices and quotes including customer names and addresses</li>
+        <li>Materials lists and supplier information</li>
+        <li>Customer contact records</li>
+        <li>Reminders and notes</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Technical data</div>
+      <ul class="data-list">
+        <li>IP address and browser type (collected automatically by our hosting provider)</li>
+        <li>App usage activity for the purpose of diagnosing errors</li>
+        <li>OAuth tokens if you connect a Gmail or Outlook account (see section 03)</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="gmail">
+    <h2 data-num="03">Gmail &amp; email access</h2>
+    <p>Trade PA offers an optional feature to connect your Gmail or Microsoft Outlook account. This connection is entirely optional — the core app functions fully without it.</p>
+    <p>If you choose to connect your email account, Trade PA will request the following permissions:</p>
+
+    <div class="card">
+      <div class="card-title">Gmail permissions requested</div>
+      <ul class="data-list">
+        <li><strong>gmail.readonly</strong> — to read your inbox so you can view emails inside Trade PA</li>
+        <li><strong>gmail.send</strong> — to send invoices, quotes, and payment chasers directly from the app</li>
+        <li><strong>gmail.modify</strong> — to mark emails as read when you open them inside Trade PA</li>
+      </ul>
+    </div>
+
+    <div class="highlight">
+      Trade PA's use of data obtained from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" style="color: var(--amber);">Google API Services User Data Policy</a>, including the Limited Use requirements. We do not use your Gmail data to develop, improve, or train generalised AI or machine learning models.
+    </div>
+
+    <p>Your Gmail OAuth tokens are stored securely in our database (Supabase, hosted in the EU) and are used only to fetch and send emails on your explicit instruction within the app. We do not read, store, or process the content of your emails for any purpose other than displaying them to you.</p>
+    <p>You can disconnect your Gmail or Outlook account at any time from within the app settings. When disconnected, your OAuth tokens are deleted from our systems immediately.</p>
+  </section>
+
+  <section id="how-we-use">
+    <h2 data-num="04">How we use your data</h2>
+    <p>We use your data solely to provide and improve the Trade PA service:</p>
+    <ul class="data-list" style="margin-top: 8px;">
+      <li>To authenticate you and keep your account secure</li>
+      <li>To store and display your jobs, invoices, customers, and other business records</li>
+      <li>To generate invoice and quote PDFs</li>
+      <li>To send emails on your instruction via your connected email account</li>
+      <li>To sync invoices with connected accounting software (Xero, QuickBooks) if you have enabled this</li>
+      <li>To process voice notes via OpenAI Whisper transcription (audio is sent to OpenAI and immediately discarded after transcription)</li>
+      <li>To power AI assistant features via the Anthropic Claude API (your prompts and context are sent to Anthropic for processing and are subject to Anthropic's privacy policy)</li>
+    </ul>
+  </section>
+
+  <section id="sharing">
+    <h2 data-num="05">Data sharing</h2>
+    <p>We do not sell your personal data. We share data only with the third-party services necessary to run Trade PA:</p>
+
+    <div class="card">
+      <div class="card-title">Third-party processors</div>
+      <ul class="data-list">
+        <li><strong>Supabase</strong> — database and authentication (EU-hosted). <a href="https://supabase.com/privacy" style="color: var(--amber);">Privacy policy →</a></li>
+        <li><strong>Vercel</strong> — hosting and serverless functions. <a href="https://vercel.com/legal/privacy-policy" style="color: var(--amber);">Privacy policy →</a></li>
+        <li><strong>Anthropic</strong> — AI assistant (Claude API). <a href="https://www.anthropic.com/privacy" style="color: var(--amber);">Privacy policy →</a></li>
+        <li><strong>OpenAI</strong> — voice transcription (Whisper API). <a href="https://openai.com/policies/privacy-policy" style="color: var(--amber);">Privacy policy →</a></li>
+        <li><strong>Google</strong> — Gmail OAuth (if you connect your Gmail). <a href="https://policies.google.com/privacy" style="color: var(--amber);">Privacy policy →</a></li>
+        <li><strong>Microsoft</strong> — Outlook OAuth (if you connect your Outlook). <a href="https://privacy.microsoft.com/en-gb/privacystatement" style="color: var(--amber);">Privacy policy →</a></li>
+        <li><strong>Xero / QuickBooks</strong> — accounting sync (if you connect these services)</li>
+      </ul>
+    </div>
+
+    <p>We do not share your data with any other third parties, advertisers, or data brokers.</p>
+  </section>
+
+  <section id="storage">
+    <h2 data-num="06">Data storage &amp; security</h2>
+    <p>Your data is stored in Supabase, which is hosted within the European Union. All data in transit is encrypted using TLS. All data at rest is encrypted by Supabase.</p>
+    <p>Access to your data is protected by Supabase Row Level Security — this means your data is only accessible when authenticated as you. No other Trade PA user can access your business records.</p>
+    <p>We use industry-standard security practices but no system is completely immune to risk. We recommend using a strong, unique password for your Trade PA account.</p>
+  </section>
+
+  <section id="retention">
+    <h2 data-num="07">Data retention</h2>
+    <p>We retain your data for as long as your account is active. If you delete your account, all your personal data and business records are permanently deleted from our systems within 30 days.</p>
+    <p>Backups may retain data for up to 90 days after deletion, after which they are permanently purged.</p>
+    <p>OAuth tokens for connected email accounts are deleted immediately when you disconnect the account.</p>
+  </section>
+
+  <section id="rights">
+    <h2 data-num="08">Your rights</h2>
+    <p>Under UK GDPR and the Data Protection Act 2018, you have the following rights:</p>
+    <ul class="data-list" style="margin-top: 8px;">
+      <li><strong>Right of access</strong> — you can request a copy of all data we hold about you</li>
+      <li><strong>Right to rectification</strong> — you can correct inaccurate data directly in the app or by contacting us</li>
+      <li><strong>Right to erasure</strong> — you can request deletion of your account and all associated data</li>
+      <li><strong>Right to portability</strong> — you can request your data in a machine-readable format</li>
+      <li><strong>Right to object</strong> — you can object to how we process your data</li>
+    </ul>
+    <p style="margin-top: 16px;">To exercise any of these rights, contact us at the address in section 11.</p>
+  </section>
+
+  <section id="cookies">
+    <h2 data-num="09">Cookies</h2>
+    <p>Trade PA uses only essential cookies required for authentication and session management. We do not use advertising cookies, tracking cookies, or third-party analytics cookies.</p>
+    <p>The authentication session cookie is set by Supabase and is necessary for you to remain logged in to the app.</p>
+  </section>
+
+  <section id="changes">
+    <h2 data-num="10">Changes to this policy</h2>
+    <p>We may update this privacy policy from time to time. When we make material changes, we will update the "Last updated" date at the top of this page and, where appropriate, notify you by email.</p>
+    <p>Continued use of Trade PA after changes to this policy constitutes acceptance of the updated terms.</p>
+  </section>
+
+  <section id="contact">
+    <h2 data-num="11">Contact us</h2>
+    <p>If you have any questions about this privacy policy, or wish to exercise your data rights, please contact us:</p>
+    <div class="contact-card">
+      <div class="contact-row">
+        <div class="contact-label">Product</div>
+        <div class="contact-value">Trade PA</div>
+      </div>
+      <div class="contact-row">
+        <div class="contact-label">Email</div>
+        <div class="contact-value">thetradepa@gmail.com</div>
+      </div>
+      <div class="contact-row">
+        <div class="contact-label">Country</div>
+        <div style="font-size: 12px; color: var(--text);">United Kingdom</div>
+      </div>
+    </div>
+    <p style="margin-top: 16px;">We aim to respond to all data-related requests within 30 days as required by UK GDPR.</p>
+  </section>
+</main>
+
+<footer>
+  <p>© 2026 Trade PA · <a href="https://trade-pa-id3s.vercel.app">Return to app</a></p>
+</footer>
+
+</body>
+</html>
