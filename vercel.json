@@ -21,6 +21,7 @@
     { "source": "/api/outlook/thread", "destination": "/api/email" },
     { "source": "/api/outlook/send", "destination": "/api/email" },
     { "source": "/api/outlook/parse-supplier", "destination": "/api/email" },
+    { "source": "/api/email/check", "destination": "/api/email" },
     { "source": "/api/email/actions", "destination": "/api/email" },
     { "source": "/api/email/actions/approve", "destination": "/api/email" },
     { "source": "/api/email/actions/reject", "destination": "/api/email" }
