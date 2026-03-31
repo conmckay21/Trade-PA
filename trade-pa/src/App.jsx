@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabase.js";
+window._supabase = supabase;
 
 // ─── Sync invoice to accounting software ─────────────────────────────────────
 async function syncInvoiceToAccounting(userId, invoice) {
@@ -4885,7 +4886,313 @@ function LineItemsDisplay({ inv }) {
   );
 }
 
-const VIEWS = ["Dashboard", "Schedule", "Customers", "Invoices", "Quotes", "Materials", "AI Assistant", "Reminders", "Payments", "Settings"];
+// ─── InboxView ────────────────────────────────────────────────────────────────
+function InboxView({ user, brand, invoices, materials, setMaterials, setLastAction }) {
+  const IC = {
+    amber: "#f59e0b", amberLight: "#fef3c7", amberDark: "#92400e",
+    green: "#10b981", greenLight: "#d1fae5",
+    red: "#ef4444", redLight: "#fee2e2",
+    blue: "#3b82f6",
+    muted: "var(--color-text-secondary, #6b7280)",
+    border: "#2a2a2a",
+    bg2: "#1a1a1a",
+    text: "#e5e5e5",
+  };
+
+  const [provider, setProvider] = useState(null);
+  const [connectedEmail, setConnectedEmail] = useState(null);
+  const [threads, setThreads] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [composing, setComposing] = useState(false);
+  const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" });
+  const [sending, setSending] = useState(false);
+  const [parseStatus, setParseStatus] = useState({});
+  const [nextPage, setNextPage] = useState(null);
+
+  const apiInbox = (p) => p === "outlook" ? "/api/outlook/inbox" : "/api/gmail/inbox";
+  const apiThread = (p) => p === "outlook" ? "/api/outlook/thread" : "/api/gmail/thread";
+  const apiSend = (p) => p === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+  const apiParse = (p) => p === "outlook" ? "/api/outlook/parse-supplier" : "/api/gmail/parse-supplier";
+
+  useEffect(() => {
+    checkConnections();
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("email_connected");
+    if (connected) {
+      window.history.replaceState({}, "", window.location.pathname);
+      checkConnections();
+    }
+  }, []);
+
+  async function checkConnections() {
+    if (!user) return;
+    try {
+      const { data } = await window._supabase
+        .from("email_connections")
+        .select("provider, email")
+        .eq("user_id", user.id);
+      if (data?.length) {
+        setProvider(data[0].provider);
+        setConnectedEmail(data[0].email);
+        loadInbox(data[0].provider);
+      }
+    } catch (e) { console.error(e); }
+  }
+
+  async function loadInbox(prov, page = null) {
+    const p = prov || provider;
+    if (!p) return;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ userId: user.id });
+      if (page) params.set("pageToken", page);
+      const res = await fetch(`${apiInbox(p)}?${params}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setThreads(page ? (prev) => [...prev, ...(data.threads || [])] : (data.threads || []));
+      setNextPage(data.nextPageToken || null);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  }
+
+  async function openThread(thread) {
+    setSelected(thread);
+    setThreadLoading(true);
+    setMessages([]);
+    try {
+      const params = new URLSearchParams({ userId: user.id });
+      params.set(provider === "outlook" ? "messageId" : "threadId", thread.messageId || thread.id);
+      const res = await fetch(`${apiThread(provider)}?${params}`);
+      const data = await res.json();
+      setMessages(data.messages || []);
+      setThreads((prev) => prev.map((t) => t.id === thread.id ? { ...t, unread: false } : t));
+    } catch (err) { console.error(err); }
+    finally { setThreadLoading(false); }
+  }
+
+  async function sendEmail(to, subject, htmlBody, attachmentBase64 = null, attachmentName = null, replyId = null) {
+    setSending(true);
+    try {
+      const body = { userId: user.id, to, subject, body: htmlBody,
+        ...(attachmentBase64 && { attachmentBase64, attachmentName }),
+        ...(replyId && (provider === "outlook" ? { replyToId: replyId } : { threadId: replyId })),
+      };
+      const res = await fetch(apiSend(provider), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return true;
+    } catch (err) { alert("Send failed: " + err.message); return false; }
+    finally { setSending(false); }
+  }
+
+  async function sendInvoiceDirect(inv) {
+    const email = prompt(`Send invoice ${inv.id} to:`, inv.customerEmail || "");
+    if (!email) return;
+    const subject = `Invoice ${inv.id} from ${brand.tradingName} — £${inv.amount}`;
+    const body = `<p>Dear ${inv.customer},</p><p>Please find your invoice ${inv.id} for £${inv.amount} attached.</p><p>Sort code: ${brand.sortCode || ""}<br>Account: ${brand.accountNumber || ""}<br>Reference: ${inv.id}</p><p>Many thanks,<br>${brand.tradingName}</p>`;
+    const ok = await sendEmail(email, subject, body, inv.pdfBase64 || null, `Invoice-${inv.id}.pdf`);
+    if (ok) setLastAction({ type: "invoice", label: `Invoice ${inv.id} emailed to ${email}`, view: "Inbox" });
+  }
+
+  async function chasePayment(inv) {
+    const email = prompt(`Send payment chaser for ${inv.id} to:`, inv.customerEmail || "");
+    if (!email) return;
+    const subject = `Payment reminder — Invoice ${inv.id} — ${brand.tradingName}`;
+    const body = `<p>Dear ${inv.customer},</p><p>This is a friendly reminder that invoice ${inv.id} for £${inv.amount} remains outstanding.</p><p>Sort code: ${brand.sortCode || ""}<br>Account: ${brand.accountNumber || ""}<br>Reference: ${inv.id}</p><p>Many thanks,<br>${brand.tradingName}</p>`;
+    const ok = await sendEmail(email, subject, body);
+    if (ok) setLastAction({ type: "invoice", label: `Payment chaser sent for ${inv.id}`, view: "Inbox" });
+  }
+
+  async function parseSupplierInvoice(msg, att) {
+    const key = `${msg.id}_${att.id}`;
+    setParseStatus((prev) => ({ ...prev, [key]: "parsing" }));
+    try {
+      const res = await fetch(apiParse(provider), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id, messageId: msg.id, attachmentId: att.id }) });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (!data.items?.length) throw new Error("No items found");
+      const newMaterials = data.items.map((item) => ({ id: `MAT-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, item: item.item, qty: item.qty || 1, unit: item.unit || "each", unitPrice: item.unitPrice || 0, total: item.total || 0, status: "to_order", source: "email", supplier: msg.from }));
+      setMaterials((prev) => [...newMaterials, ...prev]);
+      setLastAction({ type: "material", label: `${newMaterials.length} items added from supplier invoice`, view: "Materials" });
+      setParseStatus((prev) => ({ ...prev, [key]: "done" }));
+    } catch (err) { setParseStatus((prev) => ({ ...prev, [key]: "error: " + err.message })); }
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    const diff = Date.now() - d;
+    if (diff < 86400000) return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    if (diff < 604800000) return d.toLocaleDateString("en-GB", { weekday: "short" });
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  }
+
+  function fromName(from) {
+    if (!from) return "Unknown";
+    const match = from.match(/^(.+?)\s*</);
+    return match ? match[1].replace(/"/g, "") : from.split("@")[0];
+  }
+
+  const IS = {
+    sidebar: { width: 300, borderRight: `1px solid ${IC.border}`, display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, background: IC.bg2 },
+    sidebarHeader: { padding: "12px 14px", borderBottom: `1px solid ${IC.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" },
+    threadItem: (active, unread) => ({ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${IC.border}`, background: active ? IC.amberLight + "22" : unread ? "#242424" : "transparent" }),
+    main: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
+    msgBody: { flex: 1, overflowY: "auto", padding: "16px 20px" },
+    msgCard: { background: "#242424", borderRadius: 8, padding: 16, marginBottom: 12, border: `1px solid ${IC.border}` },
+    btn: (v = "default") => ({ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "none", fontFamily: "'DM Mono',monospace", background: v === "amber" ? IC.amber : v === "green" ? IC.green : v === "red" ? "#7f1d1d" : "#242424", color: v === "amber" ? "#000" : v === "green" ? "#fff" : v === "red" ? IC.red : IC.text }),
+    input: { width: "100%", padding: "7px 10px", borderRadius: 6, border: `1px solid ${IC.border}`, background: "#242424", color: IC.text, fontSize: 12, marginBottom: 8, boxSizing: "border-box", fontFamily: "'DM Mono',monospace" },
+    textarea: { width: "100%", padding: "7px 10px", borderRadius: 6, border: `1px solid ${IC.border}`, background: "#242424", color: IC.text, fontSize: 12, minHeight: 80, resize: "vertical", boxSizing: "border-box", fontFamily: "'DM Mono',monospace" },
+    provBadge: (p) => ({ display: "inline-block", fontSize: 9, padding: "2px 6px", borderRadius: 6, marginLeft: 6, background: p === "gmail" ? "#7f1d1d" : "#1e3a5f", color: p === "gmail" ? "#fca5a5" : "#93c5fd" }),
+    attBtn: (status) => ({ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 10, fontSize: 11, cursor: status ? "default" : "pointer", border: "none", marginRight: 6, marginTop: 4, fontFamily: "'DM Mono',monospace", background: status === "done" ? "#064e3b" : status?.startsWith("error") ? "#7f1d1d" : "#92400e", color: status === "done" ? "#6ee7b7" : status?.startsWith("error") ? "#fca5a5" : "#fef3c7" }),
+  };
+
+  if (!provider) {
+    return (
+      <div style={{ padding: 48, textAlign: "center", fontFamily: "'DM Mono',monospace" }}>
+        <div style={{ fontSize: 36, marginBottom: 16 }}>✉</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: IC.text, marginBottom: 8 }}>Connect your inbox</div>
+        <div style={{ fontSize: 13, color: IC.muted, maxWidth: 360, margin: "0 auto 28px", lineHeight: 1.6 }}>
+          Link your email to send invoices directly, chase payments, and auto-import supplier invoices into your materials list.
+        </div>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+          <button style={{ ...IS.btn("default"), padding: "10px 20px", fontSize: 13 }} onClick={() => { window.location.href = `/api/auth/gmail/connect?userId=${user.id}`; }}>
+            <span style={{ color: "#ef4444", fontWeight: 700 }}>G</span> Connect Gmail
+          </button>
+          <button style={{ ...IS.btn("default"), padding: "10px 20px", fontSize: 13 }} onClick={() => { window.location.href = `/api/auth/outlook/connect?userId=${user.id}`; }}>
+            <span style={{ color: "#3b82f6", fontWeight: 700 }}>✉</span> Connect Outlook
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: IC.muted, marginTop: 16 }}>Works with Gmail, Google Workspace, Outlook and Microsoft 365</div>
+      </div>
+    );
+  }
+
+  const overdueInvoices = invoices.filter((i) => !i.isQuote && i.status === "overdue");
+
+  return (
+    <div style={{ fontFamily: "'DM Mono',monospace" }}>
+      {overdueInvoices.length > 0 && (
+        <div style={{ background: "#7f1d1d", padding: "8px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${IC.border}`, flexWrap: "wrap", gap: 8, marginBottom: 8, borderRadius: 8 }}>
+          <span style={{ fontSize: 13, color: IC.red, fontWeight: 600 }}>{overdueInvoices.length} overdue invoice{overdueInvoices.length > 1 ? "s" : ""}</span>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {overdueInvoices.slice(0, 3).map((inv) => (
+              <button key={inv.id} style={IS.btn("red")} onClick={() => chasePayment(inv)}>Chase {inv.id}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{ display: "flex", height: "calc(100vh - 160px)", overflow: "hidden", borderRadius: 8, border: `1px solid ${IC.border}` }}>
+        <div style={IS.sidebar}>
+          <div style={IS.sidebarHeader}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: IC.text, display: "flex", alignItems: "center" }}>
+                Inbox <span style={IS.provBadge(provider)}>{provider}</span>
+              </div>
+              <div style={{ fontSize: 10, color: IC.muted }}>{connectedEmail}</div>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button style={IS.btn()} onClick={() => loadInbox(provider)} title="Refresh">↻</button>
+              <button style={IS.btn("amber")} onClick={() => { setComposing(true); setSelected(null); }}>+ New</button>
+            </div>
+          </div>
+          {invoices.filter((i) => !i.isQuote && i.status !== "paid").length > 0 && (
+            <div style={{ padding: "6px 12px", borderBottom: `1px solid ${IC.border}`, display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {invoices.filter((i) => !i.isQuote && i.status !== "paid").slice(0, 4).map((inv) => (
+                <button key={inv.id} style={{ ...IS.btn(inv.status === "overdue" ? "red" : "default"), fontSize: 10, padding: "3px 7px" }} onClick={() => sendInvoiceDirect(inv)}>Send {inv.id}</button>
+              ))}
+            </div>
+          )}
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            {loading && threads.length === 0 && <div style={{ padding: 24, textAlign: "center", color: IC.muted, fontSize: 12 }}>Loading...</div>}
+            {!loading && threads.length === 0 && <div style={{ padding: 24, textAlign: "center", color: IC.muted, fontSize: 12 }}>No emails found</div>}
+            {threads.map((t) => (
+              <div key={t.id + (t.messageId || "")} style={IS.threadItem(selected?.id === t.id, t.unread)} onClick={() => openThread(t)}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ fontSize: 12, fontWeight: t.unread ? 700 : 400, color: IC.text, marginBottom: 2 }}>{fromName(t.from)}</div>
+                  <div style={{ fontSize: 9, color: IC.muted, flexShrink: 0, marginLeft: 6 }}>{formatDate(t.date)}</div>
+                </div>
+                <div style={{ fontSize: 11, fontWeight: t.unread ? 600 : 400, color: t.unread ? IC.amber : IC.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 2 }}>
+                  {t.unread && <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: IC.amber, marginRight: 4, verticalAlign: "middle" }} />}
+                  {t.subject}{t.hasAttachment && " 📎"}
+                </div>
+                <div style={{ fontSize: 10, color: IC.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.snippet}</div>
+              </div>
+            ))}
+            {nextPage && <div style={{ padding: 10, textAlign: "center" }}><button style={IS.btn()} onClick={() => loadInbox(provider, nextPage)}>Load more</button></div>}
+          </div>
+        </div>
+        <div style={IS.main}>
+          {composing && (
+            <div style={{ padding: 16, borderBottom: `1px solid ${IC.border}`, background: IC.bg2 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: IC.text, marginBottom: 10 }}>New email</div>
+              <input style={IS.input} placeholder="To" value={composeData.to} onChange={(e) => setComposeData((p) => ({ ...p, to: e.target.value }))} />
+              <input style={IS.input} placeholder="Subject" value={composeData.subject} onChange={(e) => setComposeData((p) => ({ ...p, subject: e.target.value }))} />
+              <textarea style={IS.textarea} placeholder="Message..." value={composeData.body} onChange={(e) => setComposeData((p) => ({ ...p, body: e.target.value }))} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={IS.btn("amber")} disabled={sending} onClick={async () => {
+                  if (!composeData.to || !composeData.subject) return alert("To and Subject required");
+                  const ok = await sendEmail(composeData.to, composeData.subject, `<p>${composeData.body.replace(/\n/g, "<br>")}</p>`);
+                  if (ok) { setComposing(false); setComposeData({ to: "", subject: "", body: "" }); loadInbox(provider); }
+                }}>{sending ? "Sending..." : "Send"}</button>
+                <button style={IS.btn()} onClick={() => setComposing(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {!selected && !composing && (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: IC.muted, fontSize: 13 }}>Select an email to read</div>
+          )}
+          {selected && (
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+              <div style={{ padding: "14px 20px", borderBottom: `1px solid ${IC.border}`, background: IC.bg2 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: IC.text, marginBottom: 8 }}>{selected.subject}</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={IS.btn()} onClick={() => { const last = messages[messages.length - 1]; setComposing(true); setComposeData({ to: last?.from?.match(/<(.+)>/)?.[1] || last?.from || "", subject: `Re: ${selected.subject}`, body: "" }); }}>Reply</button>
+                  <button style={IS.btn()} onClick={() => { setComposing(true); setComposeData({ to: "", subject: `Fwd: ${selected.subject}`, body: "" }); }}>Forward</button>
+                </div>
+              </div>
+              <div style={IS.msgBody}>
+                {threadLoading && <div style={{ color: IC.muted, fontSize: 12 }}>Loading...</div>}
+                {messages.map((msg) => (
+                  <div key={msg.id} style={IS.msgCard}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: IC.text }}>{fromName(msg.from)}</div>
+                      <div style={{ fontSize: 10, color: IC.muted }}>{formatDate(msg.date)}</div>
+                    </div>
+                    <div style={{ fontSize: 11, color: IC.muted, marginBottom: 10 }}>to {msg.to}</div>
+                    <div style={{ fontSize: 13, color: IC.text, lineHeight: 1.6 }}>
+                      {msg.isHtml ? <div dangerouslySetInnerHTML={{ __html: msg.body }} /> : <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", margin: 0 }}>{msg.body}</pre>}
+                    </div>
+                    {msg.attachments?.length > 0 && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${IC.border}` }}>
+                        <div style={{ fontSize: 10, color: IC.muted, marginBottom: 6 }}>Attachments</div>
+                        {msg.attachments.map((att) => {
+                          const key = `${msg.id}_${att.id}`;
+                          const status = parseStatus[key];
+                          const isPdf = att.mimeType?.includes("pdf");
+                          return (
+                            <button key={att.id} style={IS.attBtn(isPdf ? status : "na")} onClick={() => isPdf && !status && parseSupplierInvoice(msg, att)}>
+                              📎 {att.filename}{isPdf && !status && " — add to materials"}{status === "parsing" && " — reading..."}{status === "done" && " — added ✓"}{status?.startsWith("error") && " — failed"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const VIEWS = ["Dashboard", "Schedule", "Customers", "Invoices", "Quotes", "Materials", "AI Assistant", "Reminders", "Payments", "Inbox", "Settings"];
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -5354,6 +5661,7 @@ export default function App() {
         {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} />}
+        {view === "Inbox" && <InboxView user={user} brand={brand} invoices={invoices} materials={materials} setMaterials={setMaterials} setLastAction={() => {}} />}
         {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} />}
       </main>
     </div>
