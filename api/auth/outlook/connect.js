@@ -1,4 +1,4 @@
-module.exports = function handler(req, res) {
+export default function handler(req, res) {
   const clientId = process.env.OUTLOOK_CLIENT_ID;
   const redirectUri = process.env.OUTLOOK_REDIRECT_URI;
   const { userId } = req.query;
@@ -19,4 +19,4 @@ module.exports = function handler(req, res) {
   });
 
   res.redirect(`https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`);
-};
+}
