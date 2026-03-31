@@ -234,7 +234,7 @@ async function chaseOverdueInvoices(conn, token) {
           body: JSON.stringify({ message: { subject: `Payment Reminder — Invoice ${inv.id}`, body: { contentType: "HTML", content: body }, toRecipients: [{ emailAddress: { address: customer.email } }] }, saveToSentItems: true }),
         });
       } else {
-        const raw = btoa(`To: ${customer.email}\nSubject: Payment Reminder — Invoice ${inv.id}\nContent-Type: text/html\n\n${body}`).replace(/\+/g,"-").replace(/\//g,"_");
+        const raw = Buffer.from(`To: ${customer.email}\nSubject: Payment Reminder — Invoice ${inv.id}\nContent-Type: text/html\n\n${body}`).toString("base64").replace(/\+/g,"-").replace(/\//g,"_");
         await fetch(endpoint, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ raw }) });
       }
 
