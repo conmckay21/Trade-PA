@@ -5123,10 +5123,156 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
   async function executeAction(action) {
     const d = action.action_data || {};
     switch (action.action_type) {
-      case "create_job": setJobs(prev => [...(prev || []), { id: Date.now(), customer: d.customer || "Unknown", address: d.address || "", type: d.type || "Job", date: new Date().toLocaleDateString("en-GB"), dateObj: new Date().toISOString(), status: "pending", value: 0, notes: d.notes || `From email: ${action.email_subject}` }]); break;
-      case "create_enquiry": setEnquiries(prev => [{ name: d.name || d.customer || "Unknown", source: "Email", msg: d.message || action.email_snippet, time: "Just now", urgent: d.urgent || false }, ...(prev || [])]); break;
+      case "create_job": {
+        // Add job to schedule — use TBC if no date mentioned
+        const hasDate = !!(d.date_text && d.date_text.trim());
+        setJobs(prev => [...(prev || []), {
+          id: Date.now(),
+          customer: d.customer || d.sender_name || "Unknown",
+          address: d.address || "",
+          type: d.type || "Job",
+          date: hasDate ? d.date_text : "TBC",
+          dateObj: new Date().toISOString(),
+          status: "pending",
+          value: 0,
+          notes: d.notes || `From email: ${action.email_subject}`,
+        }]);
+
+        // Check if customer already exists
+        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+        const senderName = d.sender_name || d.customer || "there";
+        const existingCustomer = (customers || []).find(c =>
+          c.name?.toLowerCase().includes((d.customer || "").toLowerCase()) ||
+          c.email?.toLowerCase() === replyTo.toLowerCase()
+        );
+
+        if (replyTo && connection && !existingCustomer) {
+          // New customer — add partial record with email and send reply asking for details
+          setCustomers(prev => [...(prev || []), {
+            id: Date.now(),
+            name: d.customer || d.sender_name || "Unknown",
+            email: replyTo,
+            phone: "",
+            address: "",
+            notes: `Added from email booking request`,
+          }]);
+
+          const jobDesc = d.type || "the work";
+          const dateText = hasDate ? ` on ${d.date_text}` : "";
+          const replyBody = `<p>Hi ${senderName},</p>
+<p>Thank you for getting in touch. I've added your ${jobDesc} request${dateText} to my diary and will be in touch to confirm the appointment.</p>
+<p>To get you set up ahead of the scheduled appointment, could you please provide the following details:</p>
+<ul>
+<li><strong>Full name</strong></li>
+<li><strong>Phone number</strong></li>
+<li><strong>Address where the work is needed</strong></li>
+${!hasDate ? "<li><strong>Preferred date and time</strong></li>" : ""}
+</ul>
+<p>Once I have these I'll send you a full confirmation.</p>
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+
+          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+          }).catch(err => console.error("Reply failed:", err.message));
+        }
+
+          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+          }).catch(err => console.error("Reply failed:", err.message));
+        }
+        break;
+      }
+      case "create_enquiry": {
+        setEnquiries(prev => [{
+          name: d.name || d.customer || d.sender_name || "Unknown",
+          source: "Email",
+          msg: d.message || action.email_snippet,
+          time: "Just now",
+          urgent: d.urgent || false,
+        }, ...(prev || [])]);
+
+        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+        const senderName = d.sender_name || d.customer || "there";
+        const existingCustomer = (customers || []).find(c =>
+          c.name?.toLowerCase().includes((d.customer || "").toLowerCase()) ||
+          c.email?.toLowerCase() === replyTo.toLowerCase()
+        );
+
+        if (replyTo && connection && !existingCustomer) {
+          setCustomers(prev => [...(prev || []), {
+            id: Date.now(),
+            name: d.name || d.customer || d.sender_name || "Unknown",
+            email: replyTo,
+            phone: "",
+            address: "",
+            notes: "Added from email enquiry",
+          }]);
+
+          const replyBody = `<p>Hi ${senderName},</p>
+<p>Thank you for your enquiry. I've logged your request and will be in touch shortly with more information.</p>
+<p>In the meantime, ahead of the scheduled appointment, could you please provide:</p>
+<ul>
+<li><strong>Full name</strong></li>
+<li><strong>Phone number</strong></li>
+<li><strong>Address where the work is needed</strong></li>
+</ul>
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+
+          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+          }).catch(err => console.error("Enquiry reply failed:", err.message));
+        }
+        break;
+      }
       case "save_customer": { const ex = (customers || []).find(c => c.name?.toLowerCase() === (d.name || d.customer || "").toLowerCase()); if (!ex) setCustomers(prev => [...(prev || []), { id: Date.now(), name: d.name || d.customer || "Unknown", email: d.email || d.reply_to || "", phone: d.phone || "", address: "", notes: "" }]); break; }
-      case "add_materials": setMaterials(prev => [...(prev || []), { id: Date.now(), item: `Items from ${d.supplier || "supplier"}`, qty: 1, unitPrice: 0, supplier: d.supplier || "", job: "", status: "to_order" }]); break;
+      case "add_materials": {
+        // If we have attachment info, parse the PDF to extract line items
+        if (d.message_id && d.attachment_id) {
+          try {
+            const isOutlook = connection?.provider === "outlook";
+            const endpoint = isOutlook ? "/api/outlook/parse-supplier" : "/api/gmail/parse-supplier";
+            const parseRes = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId: user.id, messageId: d.message_id, attachmentId: d.attachment_id }),
+            });
+            const parseData = await parseRes.json();
+            if (parseData.items?.length > 0) {
+              const newMaterials = parseData.items.map((item, i) => ({
+                id: Date.now() + i,
+                item: item.item || item.description || "Unknown item",
+                qty: item.qty || 1,
+                unitPrice: item.unitPrice || item.unit_price || 0,
+                supplier: d.supplier || action.email_from?.match(/^(.+?)\s*</)?.[1]?.replace(/"/g, "") || "Supplier",
+                job: "",
+                status: "to_order",
+              }));
+              setMaterials(prev => [...newMaterials, ...(prev || [])]);
+              break;
+            }
+          } catch (err) {
+            console.error("PDF parse failed:", err.message);
+          }
+        }
+        // Fallback if no attachment or parse failed
+        setMaterials(prev => [...(prev || []), {
+          id: Date.now(),
+          item: `Items from ${d.supplier || d.attachment_filename || "supplier invoice"}`,
+          qty: 1, unitPrice: 0,
+          supplier: d.supplier || "",
+          job: "", status: "to_order",
+        }]);
+        break;
+      }
       case "mark_invoice_paid": { const inv = (invoices || []).find(i => !i.isQuote && i.status !== "paid" && i.customer?.toLowerCase().includes((d.customer || "").toLowerCase())); if (inv) setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, status: "paid" } : i)); break; }
       case "accept_quote": {
         // Find matching quote by customer name or address
