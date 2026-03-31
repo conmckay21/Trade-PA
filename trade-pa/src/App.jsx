@@ -4888,7 +4888,338 @@ function LineItemsDisplay({ inv }) {
 
 // ─── InboxView (AI Email Agent) ───────────────────────────────────────────────
 function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, setLastAction }) {
-  const IC = { amber: "#f59e0b", amberLight: "#fef3c766", green: "#10b981", greenLight: "#064e3b", red: "#ef4444", redLight: "#7f1d1d", blue: "#3b82f6", muted: "#6b7280", border: "#2a2a2a", bg2: "#1a1a1a", bg3: "#242424", text: "#e5e5e5" };
+  const IC = { amber: "#f59e0b", amberLight: "#fef3c766", green: "#10b981", red: "#ef4444", blue: "#3b82f6", muted: "#6b7280", border: "#2a2a2a", bg2: "#1a1a1a", bg3: "#242424", text: "#e5e5e5" };
+
+  const [connection, setConnection] = useState(null);
+  const [pendingActions, setPendingActions] = useState([]);
+  const [recentActions, setRecentActions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState({});
+  const [tab, setTab] = useState("pending");
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  // Email reader state
+  const [threads, setThreads] = useState([]);
+  const [selectedThread, setSelectedThread] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [composing, setComposing] = useState(false);
+  const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" });
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => { if (user) { checkConnection(); loadActions(); } }, [user]);
+
+  async function checkConnection() {
+    try {
+      const { data } = await window._supabase.from("email_connections").select("provider, email, last_checked").eq("user_id", user.id);
+      if (data?.length) { setConnection(data[0]); loadInbox(data[0]); }
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  }
+
+  async function loadActions() {
+    try {
+      const [pendRes, doneRes] = await Promise.all([
+        fetch(`/api/email/actions?userId=${user.id}&status=pending`),
+        fetch(`/api/email/actions?userId=${user.id}&status=approved`),
+      ]);
+      const [pend, done] = await Promise.all([pendRes.json(), doneRes.json()]);
+      setPendingActions(pend.actions || []);
+      setRecentActions(done.actions || []);
+    } catch (e) { console.error(e); }
+  }
+
+  async function loadInbox(conn) {
+    const c = conn || connection;
+    if (!c) return;
+    setInboxLoading(true);
+    try {
+      const res = await fetch(`/api/${c.provider === "outlook" ? "outlook" : "gmail"}/inbox?userId=${user.id}`);
+      const data = await res.json();
+      setThreads(data.threads || []);
+    } catch (e) { console.error(e); }
+    setInboxLoading(false);
+  }
+
+  async function openThread(thread) {
+    setSelectedThread(thread);
+    setThreadLoading(true);
+    setMessages([]);
+    try {
+      const isOutlook = connection?.provider === "outlook";
+      const param = isOutlook ? `messageId=${thread.messageId || thread.id}` : `threadId=${thread.id}`;
+      const res = await fetch(`/api/${isOutlook ? "outlook" : "gmail"}/thread?userId=${user.id}&${param}`);
+      const data = await res.json();
+      setMessages(data.messages || []);
+      setThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t));
+    } catch (e) { console.error(e); }
+    setThreadLoading(false);
+  }
+
+  async function sendEmail() {
+    if (!composeData.to || !composeData.subject) return alert("To and Subject required");
+    setSending(true);
+    try {
+      const isOutlook = connection?.provider === "outlook";
+      await fetch(`/api/${isOutlook ? "outlook" : "gmail"}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, ...composeData, body: `<p>${composeData.body.replace(/\n/g, "<br>")}</p>` }),
+      });
+      setComposing(false);
+      setComposeData({ to: "", subject: "", body: "" });
+      loadInbox();
+    } catch (e) { console.error(e); }
+    setSending(false);
+  }
+
+  async function disconnect() {
+    if (!confirm("Disconnect this email account? You can reconnect at any time.")) return;
+    setDisconnecting(true);
+    try {
+      await window._supabase.from("email_connections").delete().eq("user_id", user.id);
+      setConnection(null);
+      setThreads([]);
+      setSelectedThread(null);
+      setMessages([]);
+    } catch (e) { console.error(e); }
+    setDisconnecting(false);
+  }
+
+  async function approve(action) {
+    setProcessing(p => ({ ...p, [action.id]: true }));
+    try {
+      executeAction(action);
+      await fetch("/api/email/actions/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
+      setPendingActions(prev => prev.filter(a => a.id !== action.id));
+      setRecentActions(prev => [{ ...action, status: "approved" }, ...prev]);
+    } catch (e) { console.error(e); }
+    setProcessing(p => ({ ...p, [action.id]: false }));
+  }
+
+  async function reject(action) {
+    setProcessing(p => ({ ...p, [action.id]: true }));
+    try {
+      await fetch("/api/email/actions/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
+      setPendingActions(prev => prev.filter(a => a.id !== action.id));
+    } catch (e) { console.error(e); }
+    setProcessing(p => ({ ...p, [action.id]: false }));
+  }
+
+  function executeAction(action) {
+    const d = action.action_data || {};
+    switch (action.action_type) {
+      case "create_job": setJobs(prev => [...(prev || []), { id: Date.now(), customer: d.customer || "Unknown", address: d.address || "", type: d.type || "Job", date: new Date().toLocaleDateString("en-GB"), dateObj: new Date().toISOString(), status: "pending", value: 0, notes: d.notes || `From email: ${action.email_subject}` }]); break;
+      case "create_enquiry": setEnquiries(prev => [{ name: d.name || "Unknown", source: "Email", msg: d.message || action.email_snippet, time: "Just now", urgent: d.urgent || false }, ...(prev || [])]); break;
+      case "save_customer": { const ex = (customers || []).find(c => c.name?.toLowerCase() === (d.name || "").toLowerCase()); if (!ex) setCustomers(prev => [...(prev || []), { id: Date.now(), name: d.name || "Unknown", email: d.email || "", phone: d.phone || "", address: "", notes: "" }]); break; }
+      case "add_materials": setMaterials(prev => [...(prev || []), { id: Date.now(), item: `Items from ${d.supplier || "supplier"}`, qty: 1, unitPrice: 0, supplier: d.supplier || "", job: "", status: "to_order" }]); break;
+      case "mark_invoice_paid": { const inv = (invoices || []).find(i => !i.isQuote && i.status !== "paid" && i.customer?.toLowerCase().includes((d.customer || "").toLowerCase())); if (inv) setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, status: "paid" } : i)); break; }
+    }
+  }
+
+  function actionIcon(type) { return { create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", add_materials: "🔧", save_customer: "👤" }[type] || "⚡"; }
+  function actionColor(type) { return { create_job: IC.green, create_enquiry: IC.blue, mark_invoice_paid: IC.green, add_materials: IC.amber, save_customer: "#8b5cf6" }[type] || IC.amber; }
+  function formatTime(ts) { if (!ts) return ""; const d = new Date(ts), diff = Date.now() - d; if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`; return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
+  function fromName(from) { if (!from) return "Unknown"; const m = from.match(/^(.+?)\s*</); return m ? m[1].replace(/"/g, "") : from.split("@")[0]; }
+
+  const IS = {
+    card: { background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 10, padding: 16, marginBottom: 12 },
+    btn: (v) => ({ padding: "7px 14px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", border: v === "ghost" ? `1px solid ${IC.border}` : "none", fontFamily: "'DM Mono',monospace", background: v === "approve" ? IC.green : v === "amber" ? IC.amber : v === "red" ? "#7f1d1d" : v === "ghost" ? "transparent" : IC.bg3, color: v === "approve" ? "#fff" : v === "amber" ? "#000" : v === "red" ? IC.red : IC.text }),
+    tab: (a) => ({ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11, fontWeight: a ? 700 : 400, fontFamily: "'DM Mono',monospace", background: a ? IC.amber : "transparent", color: a ? "#000" : IC.muted }),
+    input: { width: "100%", padding: "7px 10px", borderRadius: 6, border: `1px solid ${IC.border}`, background: IC.bg3, color: IC.text, fontSize: 12, marginBottom: 8, boxSizing: "border-box", fontFamily: "'DM Mono',monospace" },
+  };
+
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: IC.muted, fontFamily: "'DM Mono',monospace" }}>Loading...</div>;
+
+  if (!connection) {
+    return (
+      <div style={{ padding: 48, textAlign: "center", fontFamily: "'DM Mono',monospace" }}>
+        <div style={{ fontSize: 36, marginBottom: 16 }}>✉</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: IC.text, marginBottom: 8 }}>Connect your inbox</div>
+        <div style={{ fontSize: 13, color: IC.muted, maxWidth: 380, margin: "0 auto 28px", lineHeight: 1.6 }}>Link your email and Claude will automatically review incoming emails every hour — suggesting jobs, enquiries, material orders and more for your approval.</div>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center", marginBottom: 12 }}>
+          <button style={{ ...IS.btn("default"), padding: "10px 20px", fontSize: 13 }} onClick={() => { window.location.href = `/api/auth/gmail/connect?userId=${user.id}`; }}>
+            <span style={{ color: "#ef4444", fontWeight: 700 }}>G</span> Connect Gmail
+          </button>
+          <button style={{ ...IS.btn("default"), padding: "10px 20px", fontSize: 13 }} onClick={() => { window.location.href = `/api/auth/outlook/connect?userId=${user.id}`; }}>
+            <span style={{ color: "#3b82f6", fontWeight: 700 }}>✉</span> Connect Outlook
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: IC.muted }}>Works with Gmail, Google Workspace, Outlook and Microsoft 365</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ fontFamily: "'DM Mono',monospace", display: "flex", flexDirection: "column", gap: 12 }}>
+
+      {/* Status bar */}
+      <div style={{ ...IS.card, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: IC.green, flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: IC.text }}>{connection.email}</div>
+            <div style={{ fontSize: 11, color: IC.muted }}>{connection.provider} · AI checks every hour · {connection.last_checked ? `Last checked ${formatTime(connection.last_checked)}` : "Not checked yet"}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {pendingActions.length > 0 && <div style={{ background: IC.red, color: "#fff", borderRadius: 10, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>{pendingActions.length} pending</div>}
+          <button style={IS.btn("ghost")} onClick={() => { setConnection(null); window.location.href = `/api/auth/gmail/connect?userId=${user.id}`; }} title="Switch to Gmail">
+            <span style={{ color: "#ef4444", fontWeight: 700, fontSize: 12 }}>G</span>
+          </button>
+          <button style={IS.btn("ghost")} onClick={() => { setConnection(null); window.location.href = `/api/auth/outlook/connect?userId=${user.id}`; }} title="Switch to Outlook">
+            <span style={{ color: "#3b82f6", fontWeight: 700, fontSize: 12 }}>✉</span>
+          </button>
+          <button style={{ ...IS.btn("red"), fontSize: 10, padding: "5px 10px" }} onClick={disconnect} disabled={disconnecting}>
+            {disconnecting ? "..." : "Disconnect"}
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4 }}>
+        <button style={IS.tab(tab === "pending")} onClick={() => setTab("pending")}>AI Actions {pendingActions.length > 0 && `(${pendingActions.length})`}</button>
+        <button style={IS.tab(tab === "inbox")} onClick={() => setTab("inbox")}>Inbox</button>
+        <button style={IS.tab(tab === "recent")} onClick={() => setTab("recent")}>History</button>
+      </div>
+
+      {/* ── AI Actions tab ── */}
+      {tab === "pending" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: IC.muted }}>Claude reviews your inbox every hour and suggests actions for your approval.</div>
+            <button style={IS.btn("amber")} onClick={loadActions}>↻ Refresh</button>
+          </div>
+          {pendingActions.length === 0 ? (
+            <div style={{ ...IS.card, textAlign: "center", padding: 40 }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>✓</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: IC.text, marginBottom: 6 }}>All caught up</div>
+              <div style={{ fontSize: 12, color: IC.muted, lineHeight: 1.6 }}>No pending actions. Claude will check your inbox again on the next hour and suggest actions for any new emails.</div>
+            </div>
+          ) : pendingActions.map(action => (
+            <div key={action.id} style={{ ...IS.card, borderLeft: `3px solid ${actionColor(action.action_type)}` }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+                <div style={{ fontSize: 22, flexShrink: 0 }}>{actionIcon(action.action_type)}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: IC.text, marginBottom: 4 }}>{action.action_description}</div>
+                  <div style={{ fontSize: 11, color: IC.muted, marginBottom: 2 }}>From: {action.email_from}</div>
+                  <div style={{ fontSize: 11, color: IC.muted, marginBottom: 6 }}>Re: {action.email_subject}</div>
+                  <div style={{ fontSize: 11, color: IC.muted, background: IC.bg3, padding: "6px 10px", borderRadius: 6, fontStyle: "italic", lineHeight: 1.5 }}>"{action.email_snippet?.slice(0, 120)}..."</div>
+                </div>
+                <div style={{ fontSize: 10, color: IC.muted, flexShrink: 0 }}>{formatTime(action.created_at)}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={IS.btn("approve")} disabled={processing[action.id]} onClick={() => approve(action)}>{processing[action.id] ? "..." : "✓ Approve"}</button>
+                <button style={IS.btn("default")} disabled={processing[action.id]} onClick={() => reject(action)}>Dismiss</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Inbox tab ── */}
+      {tab === "inbox" && (
+        <div style={{ display: "flex", gap: 12, height: "calc(100vh - 240px)", overflow: "hidden" }}>
+          {/* Thread list */}
+          <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 10 }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${IC.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: IC.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>Inbox</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button style={IS.btn("default")} onClick={() => loadInbox()} title="Refresh">↻</button>
+                <button style={IS.btn("amber")} onClick={() => { setComposing(true); setSelectedThread(null); }}>+ New</button>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {inboxLoading && <div style={{ padding: 20, textAlign: "center", color: IC.muted, fontSize: 12 }}>Loading...</div>}
+              {!inboxLoading && threads.length === 0 && <div style={{ padding: 20, textAlign: "center", color: IC.muted, fontSize: 12 }}>No emails found</div>}
+              {threads.map(t => (
+                <div key={t.id + (t.messageId || "")} onClick={() => openThread(t)}
+                  style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${IC.border}`, background: selectedThread?.id === t.id ? IC.amberLight : "transparent" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 12, fontWeight: t.unread ? 700 : 400, color: IC.text, marginBottom: 2 }}>{fromName(t.from)}</div>
+                    <div style={{ fontSize: 9, color: IC.muted }}>{formatTime(t.date)}</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: t.unread ? IC.amber : IC.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 2 }}>
+                    {t.unread && <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: IC.amber, marginRight: 4, verticalAlign: "middle" }} />}
+                    {t.subject}{t.hasAttachment && " 📎"}
+                  </div>
+                  <div style={{ fontSize: 10, color: IC.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.snippet}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Message view */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 10 }}>
+            {composing && (
+              <div style={{ padding: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: IC.text, marginBottom: 10 }}>New email</div>
+                <input style={IS.input} placeholder="To" value={composeData.to} onChange={e => setComposeData(p => ({ ...p, to: e.target.value }))} />
+                <input style={IS.input} placeholder="Subject" value={composeData.subject} onChange={e => setComposeData(p => ({ ...p, subject: e.target.value }))} />
+                <textarea style={{ ...IS.input, minHeight: 100, resize: "vertical" }} placeholder="Message..." value={composeData.body} onChange={e => setComposeData(p => ({ ...p, body: e.target.value }))} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={IS.btn("amber")} disabled={sending} onClick={sendEmail}>{sending ? "Sending..." : "Send"}</button>
+                  <button style={IS.btn("default")} onClick={() => setComposing(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
+            {!selectedThread && !composing && (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: IC.muted, fontSize: 13 }}>Select an email to read</div>
+            )}
+            {selectedThread && !composing && (
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+                <div style={{ padding: "12px 16px", borderBottom: `1px solid ${IC.border}` }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: IC.text, marginBottom: 8 }}>{selectedThread.subject}</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button style={IS.btn("default")} onClick={() => { const last = messages[messages.length - 1]; setComposing(true); setComposeData({ to: last?.from?.match(/<(.+)>/)?.[1] || last?.from || "", subject: `Re: ${selectedThread.subject}`, body: "" }); }}>Reply</button>
+                    <button style={IS.btn("default")} onClick={() => { setComposing(true); setComposeData({ to: "", subject: `Fwd: ${selectedThread.subject}`, body: "" }); }}>Forward</button>
+                  </div>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+                  {threadLoading && <div style={{ color: IC.muted, fontSize: 12 }}>Loading...</div>}
+                  {messages.map(msg => (
+                    <div key={msg.id} style={{ background: IC.bg3, borderRadius: 8, padding: 14, marginBottom: 10, border: `1px solid ${IC.border}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: IC.text }}>{fromName(msg.from)}</div>
+                        <div style={{ fontSize: 10, color: IC.muted }}>{formatTime(msg.date)}</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: IC.muted, marginBottom: 10 }}>to {msg.to}</div>
+                      <div style={{ fontSize: 13, color: IC.text, lineHeight: 1.6 }}>
+                        {msg.isHtml ? <div dangerouslySetInnerHTML={{ __html: msg.body }} /> : <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", margin: 0 }}>{msg.body}</pre>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── History tab ── */}
+      {tab === "recent" && (
+        <div>
+          {recentActions.length === 0
+            ? <div style={{ ...IS.card, textAlign: "center", padding: 32, color: IC.muted, fontSize: 13 }}>No history yet.</div>
+            : recentActions.map(action => (
+              <div key={action.id} style={{ ...IS.card, opacity: 0.8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ fontSize: 18 }}>{actionIcon(action.action_type)}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: IC.text }}>{action.action_description}</div>
+                    <div style={{ fontSize: 11, color: IC.muted }}>{action.email_from} · {formatTime(action.processed_at)}</div>
+                  </div>
+                  <div style={{ fontSize: 10, color: IC.green, fontWeight: 700 }}>✓ Done</div>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      )}
+    </div>
+  );
+}
 
   const [connection, setConnection] = useState(null);
   const [pendingActions, setPendingActions] = useState([]);
