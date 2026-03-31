@@ -5117,6 +5117,15 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
   const [processing, setProcessing] = useState({});
   const [tab, setTab] = useState("pending");
   const [disconnecting, setDisconnecting] = useState(false);
+  const [feedbackAction, setFeedbackAction] = useState(null); // action awaiting dismiss reason
+
+  const DISMISS_REASONS = [
+    { id: "wrong_type", label: "Wrong action type" },
+    { id: "not_relevant", label: "Not relevant" },
+    { id: "wrong_customer", label: "Wrong customer" },
+    { id: "already_done", label: "Already handled" },
+    { id: "spam", label: "Spam / ignore always" },
+  ];
   const [urlError, setUrlError] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const err = params.get("email_error");
@@ -5257,17 +5266,73 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
       await fetch("/api/email/actions/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
       setPendingActions(prev => prev.filter(a => a.id !== action.id));
       setRecentActions(prev => [{ ...action, status: "approved" }, ...prev]);
+      // Update AI context with what was learned from this approval
+      await updateAIContext(action);
     } catch (e) { console.error(e); }
     setProcessing(p => ({ ...p, [action.id]: false }));
   }
 
-  async function reject(action) {
+  // Show reason picker before dismissing
+  function startReject(action) {
+    setFeedbackAction(action);
+  }
+
+  async function confirmReject(action, reason) {
+    setFeedbackAction(null);
     setProcessing(p => ({ ...p, [action.id]: true }));
     try {
+      // Save feedback for AI learning
+      await window._supabase.from("ai_feedback").insert({
+        user_id: user.id,
+        email_id: action.email_id,
+        email_from: action.email_from,
+        email_subject: action.email_subject,
+        action_suggested: action.action_type,
+        reason,
+      });
       await fetch("/api/email/actions/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
       setPendingActions(prev => prev.filter(a => a.id !== action.id));
     } catch (e) { console.error(e); }
     setProcessing(p => ({ ...p, [action.id]: false }));
+  }
+
+  // Update AI context with patterns learned from approved actions
+  async function updateAIContext(action) {
+    const d = action.action_data || {};
+    try {
+      // Load existing context
+      const { data: existing } = await window._supabase.from("ai_context").select("*").eq("user_id", user.id).single();
+      const ctx = existing || { suppliers: [], contractors: [], customers: [], job_types: [] };
+
+      // Add what we learned
+      if (action.action_type === "add_materials" && d.supplier) {
+        if (!ctx.suppliers.find(s => s.name?.toLowerCase() === d.supplier.toLowerCase())) {
+          ctx.suppliers = [...(ctx.suppliers || []), { name: d.supplier, type: "materials", from: action.email_from?.match(/<(.+)>/)?.[1] || action.email_from }];
+        }
+      }
+      if (action.action_type === "add_cis_statement" && d.contractor_name) {
+        if (!ctx.contractors.find(c => c.name?.toLowerCase() === d.contractor_name.toLowerCase())) {
+          ctx.contractors = [...(ctx.contractors || []), { name: d.contractor_name, type: "cis", from: action.email_from?.match(/<(.+)>/)?.[1] || action.email_from }];
+        }
+      }
+      if ((action.action_type === "create_job" || action.action_type === "create_enquiry" || action.action_type === "accept_quote") && d.customer) {
+        if (!ctx.customers.find(c => c.name?.toLowerCase() === d.customer.toLowerCase())) {
+          ctx.customers = [...(ctx.customers || []), { name: d.customer, from: action.email_from?.match(/<(.+)>/)?.[1] || action.email_from }];
+        }
+      }
+      if (action.action_type === "create_job" && d.type) {
+        if (!ctx.job_types.find(t => t.toLowerCase() === d.type.toLowerCase())) {
+          ctx.job_types = [...(ctx.job_types || []), d.type];
+        }
+      }
+
+      // Upsert context
+      await window._supabase.from("ai_context").upsert({
+        user_id: user.id,
+        ...ctx,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+    } catch (e) { console.error("AI context update failed:", e.message); }
   }
 
   async function executeAction(action) {
@@ -5708,7 +5773,7 @@ ${availabilityLine}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button style={IS.btn("approve")} disabled={processing[action.id]} onClick={() => approve(action)}>{processing[action.id] ? "..." : "✓ Approve"}</button>
-                <button style={IS.btn("default")} disabled={processing[action.id]} onClick={() => reject(action)}>Dismiss</button>
+                <button style={IS.btn("default")} disabled={processing[action.id]} onClick={() => startReject(action)}>Dismiss</button>
               </div>
             </div>
           ))}
@@ -5863,6 +5928,29 @@ ${availabilityLine}
               </div>
             ))
           }
+        </div>
+      )}
+
+      {/* ── Dismiss reason modal ── */}
+      {feedbackAction && (
+        <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 24 }}>
+          <div style={{ background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 12, padding: 24, maxWidth: 340, width: "100%", fontFamily: "'DM Mono',monospace" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: IC.text, marginBottom: 6 }}>Why dismiss this?</div>
+            <div style={{ fontSize: 12, color: IC.muted, marginBottom: 20, lineHeight: 1.5 }}>
+              Your feedback helps the AI improve — it won't make this mistake again.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {DISMISS_REASONS.map(r => (
+                <button key={r.id} onClick={() => confirmReject(feedbackAction, r.id)}
+                  style={{ padding: "10px 14px", borderRadius: 8, border: `1px solid ${IC.border}`, background: IC.bg3, color: IC.text, cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", textAlign: "left", fontWeight: 500 }}>
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setFeedbackAction(null)} style={{ marginTop: 12, width: "100%", padding: "8px", borderRadius: 8, border: "none", background: "transparent", color: IC.muted, cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace" }}>
+              Cancel
+            </button>
+          </div>
         </div>
       )}
     </div>
