@@ -1,4 +1,4 @@
-const { getValidToken } = require("./_token.js");
+import { getValidToken } from "./_token.js";
 
 function decodeBody(data) {
   if (!data) return "";
@@ -16,7 +16,7 @@ function extractParts(payload, parts = [], attachments = []) {
   return { parts, attachments };
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const { userId, threadId } = req.query;
   if (!userId || !threadId) return res.status(400).json({ error: "userId and threadId required" });
 
@@ -63,4 +63,4 @@ module.exports = async function handler(req, res) {
     console.error("Gmail thread error:", err.message);
     res.status(500).json({ error: err.message });
   }
-};
+}
