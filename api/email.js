@@ -279,13 +279,14 @@ export default async function handler(req, res) {
     } catch (err) { return res.status(500).json({ error: err.message }); }
   }
 
-  // ── Reject Action (DELETE so email can be reprocessed next check) ─────────
+  // ── Reject Action (mark dismissed — stays in DB so email won't reappear) ──
   if (path === "/api/email/actions/reject") {
     const { actionId } = req.body;
     try {
       await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions?id=eq.${actionId}`, {
-        method: "DELETE",
-        headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}` },
+        method: "PATCH",
+        headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "dismissed", processed_at: new Date().toISOString() }),
       });
       return res.json({ success: true });
     } catch (err) { return res.status(500).json({ error: err.message }); }
