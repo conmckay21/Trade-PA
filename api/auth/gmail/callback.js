@@ -1,11 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
+const { createClient } = require("@supabase/supabase-js");
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { code, state: userId, error } = req.query;
 
   if (error) {
@@ -30,30 +30,4 @@ export default async function handler(req, res) {
     });
 
     const tokens = await tokenRes.json();
-
-    if (tokens.error) {
-      throw new Error(tokens.error_description || tokens.error);
-    }
-
-    const profileRes = await fetch(
-      "https://www.googleapis.com/oauth2/v2/userinfo",
-      { headers: { Authorization: `Bearer ${tokens.access_token}` } }
-    );
-    const profile = await profileRes.json();
-
-    await supabase.from("email_connections").upsert({
-      user_id: userId,
-      provider: "gmail",
-      email: profile.email,
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id,provider" });
-
-    res.redirect(`${process.env.APP_URL}?email_connected=gmail`);
-  } catch (err) {
-    console.error("Gmail callback error:", err.message);
-    res.redirect(`${process.env.APP_URL}?email_error=${err.message}`);
-  }
-}
+    if (tokens.error) throw new Error(tokens.error_description || tokens.error);
