@@ -1425,7 +1425,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={S.grid3}>
+      <div style={S.grid4}>
         {[
           { label: "Total Quote Value", value: `£${totalQuoteValue.toLocaleString()}`, sub: `${allQuotes.length} quote${allQuotes.length !== 1 ? "s" : ""}`, color: C.blue, onClick: () => setView("Quotes") },
           { label: "Total Invoice Value", value: `£${totalInvoiceValue.toLocaleString()}`, sub: `${allInvoices.filter(i => i.status !== "paid").length} outstanding`, color: C.amber, onClick: () => setView("Invoices") },
@@ -6224,15 +6224,17 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, conne
   const [addDaysheet, setAddDaysheet] = useState({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" });
   const [emailConnection, setEmailConnection] = useState(null);
   const photoRef = useRef();
+
+  useEffect(() => { loadJobs(); loadEmailConn(); }, [user]);
   const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
-  useEffect(() => { loadJobs(); }, [user]);
   useEffect(() => {
     if (selected) { loadJobDetails(selected.id); }
   }, [selected?.id]);
 
-  // Check for annual service reminders on load
+  // Check for annual service reminders — only when jobs are actually loaded
   useEffect(() => {
+    if (!jobs.length || loading) return;
     const today = new Date();
     jobs.forEach(j => {
       if (j.annual_service && j.next_service_date && !j.service_reminder_sent) {
@@ -6243,7 +6245,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, conne
         }
       }
     });
-  }, [jobs]);
+  }, [jobs, loading]);
 
   async function sendServiceReminder(job) {
     // Find customer email
@@ -6267,6 +6269,12 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, conne
         body: `<p>Dear ${job.customer},</p><p>Your annual boiler service is now due. Regular servicing keeps your boiler running safely and efficiently, and is often required to maintain your warranty.</p><p>Would you like to get booked in? Simply reply to this email or give us a call and we'll arrange a convenient time.</p><p>Many thanks,<br>${brand.tradingName}${brand.phone ? `<br>${brand.phone}` : ""}${brand.email ? `<br>${brand.email}` : ""}</p>`,
       }),
     }).catch(console.error);
+  }
+
+  async function loadEmailConn() {
+    if (!user) return;
+    const { data } = await supabase.from("email_connections").select("provider, email").eq("user_id", user.id);
+    if (data?.length) setEmailConnection(data[0]);
   }
 
   async function loadJobs() {
@@ -7313,7 +7321,7 @@ export default function App() {
           await supabase.from("enquiries").delete().eq("company_id", companyId);
           if (next.length > 0) {
             await supabase.from("enquiries").insert(
-              next.map(e => ({ company_id: companyId, user_id: user.id, name: e.name, source: e.source, msg: e.msg, time: e.time, urgent: e.urgent || false }))
+              next.map(e => ({ company_id: companyId, user_id: user.id, name: e.name, source: e.source, msg: e.msg, time: e.time, urgent: e.urgent || false, status: e.status || "new", phone: e.phone || "", email: e.email || "", address: e.address || "" }))
             );
           }
         } catch (e) { console.error("Enquiries sync:", e); }
@@ -7331,7 +7339,7 @@ export default function App() {
           await supabase.from("materials").delete().eq("company_id", companyId);
           if (next.length > 0) {
             await supabase.from("materials").insert(
-              next.map(m => ({ company_id: companyId, user_id: user.id, item: m.item, qty: m.qty || 1, supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" }))
+              next.map(m => ({ company_id: companyId, user_id: user.id, item: m.item, qty: m.qty || 1, unit_price: m.unitPrice || 0, supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order", receipt_id: m.receiptId || "", receipt_source: m.receiptSource || "", receipt_filename: m.receiptFilename || "" }))
             );
           }
         } catch (e) { console.error("Materials sync:", e); }
