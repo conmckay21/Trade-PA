@@ -125,17 +125,22 @@ ${email.pdfAttachments?.length > 0 ? `PDF files: ${email.pdfAttachments.map(a =>
 ACTION RULES:
 1. BOOKING REQUEST — customer asking to book/schedule work (no prior quote mentioned) → "create_job"
 2. PAYMENT CONFIRMATION — customer says they have paid → "mark_invoice_paid"
-3. QUOTE ACCEPTANCE — customer saying yes to a quote, wants to proceed, going ahead with work → "accept_quote" (NOT create_job — this needs the quote converted to invoice AND a reply sent)
-4. SUPPLIER PDF INVOICE — supplier sending material invoice/receipt with PDF → "add_materials"
-5. NEW ENQUIRY — potential customer asking about work/prices → "create_enquiry"
-6. SAVE CONTACT — someone providing contact details → "save_customer"
-7. IGNORE — newsletters, marketing, automated system emails only → "ignore"
+3. QUOTE ACCEPTANCE — customer saying yes to a quote, wants to proceed, going ahead with work → "accept_quote"
+4. SUPPLIER MATERIAL INVOICE — supplier (Screwfix, Toolstation, City Plumbing, Travis Perkins, Wolseley, BSS, Plumb Center etc) sending material invoice/receipt with PDF → "add_materials"
+5. CIS MONTHLY STATEMENT — main contractor sending a CIS monthly statement or deduction statement PDF showing gross pay, CIS deduction, net amount → "add_cis_statement"
+6. NEW ENQUIRY — potential customer asking about work/prices → "create_enquiry"
+7. SAVE CONTACT — someone providing their contact details → "save_customer"
+8. IGNORE — newsletters, marketing, automated system emails, Google/Microsoft alerts → "ignore"
 
-For accept_quote, extract: customer name, job/address mentioned, the sender's email address so we can reply.
-For create_job and create_enquiry, always set reply_to to the sender's email address so we can send a confirmation reply.
+IMPORTANT DISTINCTIONS:
+- "add_materials" = supplier invoice for physical goods/materials with a PDF
+- "add_cis_statement" = monthly CIS deduction statement from a main contractor (shows gross, deduction, net)
+- If unsure between materials and CIS statement, look at: is it from a building/construction contractor (CIS) or a merchant/supplier (materials)?
+
+For accept_quote and create_job/create_enquiry, always set reply_to to the sender's email address.
 
 Respond ONLY with JSON:
-{"action_type":"create_job"|"accept_quote"|"create_enquiry"|"mark_invoice_paid"|"add_materials"|"save_customer"|"ignore","action_description":"One sentence describing what will happen","action_data":{"customer":"name extracted from email signature or body","type":"job type e.g. Boiler Service","date_text":"date/time mentioned","address":"address if mentioned","notes":"key details","source":"Email","message":"summary for enquiry","urgent":false,"supplier":"supplier name for materials","name":"name for contact","email":"email for contact","reply_to":"sender email address","sender_name":"first name of sender"}}`;
+{"action_type":"create_job"|"accept_quote"|"create_enquiry"|"mark_invoice_paid"|"add_materials"|"add_cis_statement"|"save_customer"|"ignore","action_description":"One sentence describing what will happen","action_data":{"customer":"name from email","type":"job type","date_text":"date/time mentioned","address":"address if mentioned","notes":"key details","source":"Email","message":"summary for enquiry","urgent":false,"supplier":"supplier name for materials","contractor_name":"contractor company name for CIS","tax_month":"YYYY-MM format for CIS","gross_amount":"gross amount as number for CIS","deduction_amount":"deduction as number for CIS","name":"name for contact","email":"email for contact","reply_to":"sender email address","sender_name":"first name of sender"}}`;
 
       const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -150,8 +155,8 @@ Respond ONLY with JSON:
       debugLog.push(`"${email.subject}" → ${analysis.action_type}: ${analysis.action_description || "no description"}`);
 
       if (analysis.action_type !== "ignore") {
-        // For add_materials, store the attachment info so we can parse the PDF on approval
-        if (analysis.action_type === "add_materials" && email.pdfAttachments?.length > 0) {
+        // For add_materials and add_cis_statement, store the attachment info so we can parse the PDF on approval
+        if ((analysis.action_type === "add_materials" || analysis.action_type === "add_cis_statement") && email.pdfAttachments?.length > 0) {
           analysis.action_data = {
             ...analysis.action_data,
             message_id: email.id,
