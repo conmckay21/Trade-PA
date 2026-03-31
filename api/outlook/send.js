@@ -1,6 +1,6 @@
-import { getValidOutlookToken } from "./_token.js";
+const { getValidOutlookToken } = require("./_token.js");
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
   const { userId, to, subject, body, attachmentBase64, attachmentName, replyToId } = req.body;
@@ -18,19 +18,15 @@ export default async function handler(req, res) {
     };
 
     if (attachmentBase64) {
-      message.attachments = [
-        {
-          "@odata.type": "#microsoft.graph.fileAttachment",
-          name: attachmentName || "invoice.pdf",
-          contentType: "application/pdf",
-          contentBytes: attachmentBase64,
-        },
-      ];
+      message.attachments = [{
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: attachmentName || "invoice.pdf",
+        contentType: "application/pdf",
+        contentBytes: attachmentBase64,
+      }];
     }
 
-    let url;
-    let payload;
-
+    let url, payload;
     if (replyToId) {
       url = `https://graph.microsoft.com/v1.0/me/messages/${replyToId}/reply`;
       payload = { message, comment: "" };
@@ -41,10 +37,7 @@ export default async function handler(req, res) {
 
     const sendRes = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
@@ -58,4 +51,4 @@ export default async function handler(req, res) {
     console.error("Outlook send error:", err.message);
     res.status(500).json({ error: err.message });
   }
-}
+};
