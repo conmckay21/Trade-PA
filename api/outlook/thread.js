@@ -1,6 +1,6 @@
-const { getValidOutlookToken } = require("./_token.js");
+import { getValidOutlookToken } from "./_token.js";
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const { userId, messageId } = req.query;
   if (!userId || !messageId) {
     return res.status(400).json({ error: "userId and messageId required" });
@@ -57,4 +57,4 @@ module.exports = async function handler(req, res) {
     console.error("Outlook thread error:", err.message);
     res.status(500).json({ error: err.message });
   }
-};
+}
