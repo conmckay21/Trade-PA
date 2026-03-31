@@ -1,9 +1,8 @@
-import { getValidToken } from "./_token.js";
+const { getValidToken } = require("./_token.js");
 
 function makeRaw({ to, from, subject, body, attachmentBase64, attachmentName }) {
   const boundary = `boundary_${Date.now()}`;
   let raw;
-
   if (attachmentBase64) {
     raw = [
       `From: ${from}`,
@@ -37,11 +36,10 @@ function makeRaw({ to, from, subject, body, attachmentBase64, attachmentName }) 
       body,
     ].join("\r\n");
   }
-
   return Buffer.from(raw).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
   const { userId, to, subject, body, attachmentBase64, attachmentName, threadId } = req.body;
@@ -57,10 +55,8 @@ export default async function handler(req, res) {
       { headers: { Authorization: `Bearer ${token}` } }
     );
     const profile = await profileRes.json();
-    const from = profile.emailAddress;
 
-    const raw = makeRaw({ to, from, subject, body, attachmentBase64, attachmentName });
-
+    const raw = makeRaw({ to, from: profile.emailAddress, subject, body, attachmentBase64, attachmentName });
     const payload = { raw };
     if (threadId) payload.threadId = threadId;
 
@@ -81,4 +77,4 @@ export default async function handler(req, res) {
     console.error("Gmail send error:", err.message);
     res.status(500).json({ error: err.message });
   }
-}
+};
