@@ -1770,7 +1770,10 @@ function Schedule({ jobs, setJobs }) {
           <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Job</div>
-              <button onClick={() => setEditingJob(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="customer (full name), address (property address), type (job type e.g. Boiler Service), value (£ amount), notes (any details)" />
+                <button onClick={() => setEditingJob(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[
@@ -6126,14 +6129,22 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-              {selected.phone && <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+              {/* Phone — always shown, editable inline */}
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Phone</div>
-                <a href={`tel:${selected.phone}`} style={{ fontSize: 14, color: C.blue, textDecoration: "none" }}>{selected.phone}</a>
-              </div>}
-              {selected.email && <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                {selected.phone
+                  ? <a href={`tel:${selected.phone}`} style={{ fontSize: 14, color: C.blue, textDecoration: "none", display: "block" }}>{selected.phone}</a>
+                  : <input style={{ ...S.input, padding: "4px 8px", fontSize: 13, background: "transparent", border: `1px dashed ${C.border}` }} placeholder="Add phone number..." onBlur={async e => { if (e.target.value.trim()) { setEnquiries(prev => prev.map(en => en.id === selected.id ? { ...en, phone: e.target.value.trim() } : en)); setSelected(s => ({ ...s, phone: e.target.value.trim() })); } }} />
+                }
+              </div>
+              {/* Email — always shown, editable inline */}
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Email</div>
-                <div style={{ fontSize: 13 }}>{selected.email}</div>
-              </div>}
+                {selected.email
+                  ? <a href={`mailto:${selected.email}`} style={{ fontSize: 13, color: C.blue, textDecoration: "none", display: "block" }}>{selected.email}</a>
+                  : <input style={{ ...S.input, padding: "4px 8px", fontSize: 13, background: "transparent", border: `1px dashed ${C.border}` }} placeholder="Add email address..." onBlur={async e => { if (e.target.value.trim()) { setEnquiries(prev => prev.map(en => en.id === selected.id ? { ...en, email: e.target.value.trim() } : en)); setSelected(s => ({ ...s, email: e.target.value.trim() })); } }} />
+                }
+              </div>
               {selected.address && <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Address</div>
                 <div style={{ fontSize: 13 }}>{selected.address}</div>
@@ -6163,8 +6174,8 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
 
             <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "12px", marginBottom: 8 }} onClick={() => convertToQuote(selected)}>→ Convert to Quote</button>
             <div style={{ display: "flex", gap: 8 }}>
-              {selected.phone && <a href={`tel:${selected.phone}`} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", textDecoration: "none" }}>📞 Call</a>}
-              {selected.email && <a href={`mailto:${selected.email}`} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", textDecoration: "none" }}>✉ Email</a>}
+              <a href={selected.phone ? `tel:${selected.phone}` : "#"} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", textDecoration: "none", opacity: selected.phone ? 1 : 0.4, pointerEvents: selected.phone ? "auto" : "none" }}>📞 Call</a>
+              <a href={selected.email ? `mailto:${selected.email}` : "#"} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", textDecoration: "none", opacity: selected.email ? 1 : 0.4, pointerEvents: selected.email ? "auto" : "none" }}>✉ Email</a>
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteEnquiry(selected.id)}>Delete</button>
             </div>
           </div>
@@ -6934,6 +6945,8 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   const [addDaysheet, setAddDaysheet] = useState({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" });
   const [emailConnection, setEmailConnection] = useState(null);
   const [showSignature, setShowSignature] = useState(false);
+  const [editingJob, setEditingJob] = useState(false);
+  const [editForm, setEditForm] = useState({});
   const photoRef = useRef();
   const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -7129,7 +7142,10 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                   <div style={{ fontSize: 16, fontWeight: 700 }}>{selected.title || selected.type || "Job"}</div>
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{selected.customer}{selected.address ? ` · ${selected.address}` : ""}</div>
                 </div>
-                <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>×</button>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => { setEditForm({ title: selected.title || "", customer: selected.customer || "", address: selected.address || "", type: selected.type || "", status: selected.status || "enquiry", value: selected.value || "", po_number: selected.po_number || "", notes: selected.notes || "", annual_service: selected.annual_service || false }); setEditingJob(true); }}>Edit</button>
+                  <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>×</button>
+                </div>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                 <span style={S.badge(statusColor[selected.status] || C.muted)}>{(selected.status || "").replace("_"," ")}</span>
@@ -7332,6 +7348,53 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               {selected.address && <a href={`https://maps.google.com/?q=${encodeURIComponent(selected.address)}`} target="_blank" rel="noreferrer" style={{ ...S.btn("ghost"), fontSize: 11, textDecoration: "none" }}>📍 Navigate</a>}
               <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => setShowSignature(true)}>✍ Get Signature</button>
               <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.red, marginLeft: "auto" }} onClick={() => deleteJob(selected.id)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit job modal */}
+      {editingJob && selected && (
+        <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 460, width: "100%", maxHeight: "85vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Job</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <VoiceFillButton form={editForm} setForm={setEditForm} fieldDescriptions="title (job title), customer (customer name), address (property address), type (job type e.g. boiler service), status (enquiry/quoted/accepted/in_progress/completed), value (job value in pounds), po_number (PO number), notes (any notes)" />
+                <button onClick={() => setEditingJob(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div><label style={S.label}>Job Title</label><input style={S.input} value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} /></div>
+                <div><label style={S.label}>Customer</label><input style={S.input} value={editForm.customer} onChange={e => setEditForm(f => ({ ...f, customer: e.target.value }))} /></div>
+                <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Address</label><input style={S.input} value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} /></div>
+                <div><label style={S.label}>Job Type</label><input style={S.input} value={editForm.type} onChange={e => setEditForm(f => ({ ...f, type: e.target.value }))} /></div>
+                <div><label style={S.label}>Value (£)</label><input type="number" style={S.input} value={editForm.value} onChange={e => setEditForm(f => ({ ...f, value: e.target.value }))} /></div>
+                <div><label style={S.label}>PO Number</label><input style={S.input} value={editForm.po_number} onChange={e => setEditForm(f => ({ ...f, po_number: e.target.value }))} /></div>
+                <div><label style={S.label}>Status</label>
+                  <select style={S.input} value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
+                    {["enquiry","quoted","accepted","in_progress","completed","on_hold"].map(s => <option key={s} value={s}>{s.replace("_"," ")}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div><label style={S.label}>Notes</label><textarea style={{ ...S.input, minHeight: 72, resize: "none" }} value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} /></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, cursor: "pointer" }} onClick={() => setEditForm(f => ({ ...f, annual_service: !f.annual_service }))}>
+                <div style={{ width: 36, height: 20, borderRadius: 10, background: editForm.annual_service ? C.amber : C.border, position: "relative", flexShrink: 0, transition: "all 0.2s" }}>
+                  <div style={{ position: "absolute", top: 2, left: editForm.annual_service ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "all 0.2s" }} />
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>Annual Service Job</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={{ ...S.btn("primary"), flex: 1 }} onClick={async () => {
+                  const updates = { ...editForm, value: parseFloat(editForm.value) || 0, updated_at: new Date().toISOString() };
+                  await supabase.from("job_cards").update(updates).eq("id", selected.id);
+                  setJobCards(prev => prev.map(j => j.id === selected.id ? { ...j, ...updates } : j));
+                  setSelected(s => ({ ...s, ...updates }));
+                  setEditingJob(false);
+                }}>Save Changes →</button>
+                <button style={S.btn("ghost")} onClick={() => setEditingJob(false)}>Cancel</button>
+              </div>
             </div>
           </div>
         </div>
