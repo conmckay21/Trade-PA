@@ -1,6 +1,6 @@
-const { getValidOutlookToken } = require("./_token.js");
+import { getValidOutlookToken } from "./_token.js";
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
   const { userId, to, subject, body, attachmentBase64, attachmentName, replyToId } = req.body;
@@ -51,4 +51,4 @@ module.exports = async function handler(req, res) {
     console.error("Outlook send error:", err.message);
     res.status(500).json({ error: err.message });
   }
-};
+}
