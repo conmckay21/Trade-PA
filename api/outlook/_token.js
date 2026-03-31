@@ -1,11 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
+const { createClient } = require("@supabase/supabase-js");
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
-export async function getValidOutlookToken(userId) {
+async function getValidOutlookToken(userId) {
   const { data, error } = await supabase
     .from("email_connections")
     .select("*")
@@ -48,3 +48,5 @@ export async function getValidOutlookToken(userId) {
 
   return tokens.access_token;
 }
+
+module.exports = { getValidOutlookToken };
