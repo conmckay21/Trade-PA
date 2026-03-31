@@ -5178,14 +5178,6 @@ ${!hasDate ? "<li><strong>Preferred date and time</strong></li>" : ""}
             body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
           }).catch(err => console.error("Reply failed:", err.message));
         }
-
-          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-          await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
-          }).catch(err => console.error("Reply failed:", err.message));
-        }
         break;
       }
       case "create_enquiry": {
