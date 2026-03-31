@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Terms of Service — Trade PA</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --amber: #f59e0b; --bg: #0f0f0f; --surface: #1a1a1a;
+    --border: #2a2a2a; --text: #e5e5e5; --muted: #6b7280;
+  }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'DM Mono', 'Courier New', monospace; background: var(--bg); color: var(--text); line-height: 1.7; font-size: 14px; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; letter-spacing: 0.05em; color: var(--amber); text-decoration: none; }
+  .logo-icon { width: 28px; height: 28px; background: var(--amber); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #000; font-size: 10px; font-weight: 900; letter-spacing: -0.02em; }
+  .header-badge { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid var(--border); padding: 3px 10px; border-radius: 20px; }
+  main { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+  .page-header { margin-bottom: 48px; padding-bottom: 32px; border-bottom: 1px solid var(--border); }
+  .page-header h1 { font-size: 26px; font-weight: 700; color: var(--text); margin-bottom: 8px; letter-spacing: -0.02em; }
+  .meta { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; }
+  .meta-item { font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .meta-item span { color: var(--amber); font-weight: 700; }
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 40px; }
+  .toc-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+  .toc ol { list-style: none; counter-reset: toc; display: flex; flex-direction: column; gap: 6px; }
+  .toc li { counter-increment: toc; display: flex; align-items: center; gap: 10px; }
+  .toc li::before { content: counter(toc, decimal-leading-zero); font-size: 10px; color: var(--amber); font-weight: 700; min-width: 20px; }
+  .toc a { color: var(--text); text-decoration: none; font-size: 12px; transition: color 0.15s; }
+  .toc a:hover { color: var(--amber); }
+  section { margin-bottom: 44px; scroll-margin-top: 72px; }
+  section h2 { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  section h2::before { content: attr(data-num); font-size: 10px; color: var(--muted); font-weight: 400; min-width: 22px; }
+  section p { color: var(--text); margin-bottom: 14px; font-size: 13px; line-height: 1.8; }
+  section p:last-child { margin-bottom: 0; }
+  .highlight { border-left: 2px solid var(--amber); padding: 12px 16px; background: rgba(245, 158, 11, 0.06); border-radius: 0 6px 6px 0; margin: 16px 0; font-size: 12px; color: var(--text); line-height: 1.7; }
+  ul.list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+  ul.list li { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: var(--text); line-height: 1.6; }
+  ul.list li::before { content: "→"; color: var(--amber); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .contact-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px; }
+  .contact-row { display: flex; gap: 12px; align-items: center; font-size: 12px; }
+  .contact-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); min-width: 60px; }
+  .contact-value { color: var(--amber); }
+  footer { border-top: 1px solid var(--border); padding: 24px; text-align: center; font-size: 11px; color: var(--muted); }
+  footer a { color: var(--amber); text-decoration: none; }
+  @media (max-width: 600px) { main { padding: 32px 16px 60px; } .page-header h1 { font-size: 20px; } }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="https://trade-pa-id3s.vercel.app" class="logo">
+    <div class="logo-icon">TP</div>
+    TRADE PA
+  </a>
+  <div class="header-badge">Terms of Service</div>
+</header>
+
+<main>
+  <div class="page-header">
+    <h1>Terms of Service</h1>
+    <p style="color: var(--muted); font-size: 13px; margin-top: 8px;">Please read these terms carefully before using Trade PA.</p>
+    <div class="meta">
+      <div class="meta-item">Effective: <span>31 March 2026</span></div>
+      <div class="meta-item">Last updated: <span>31 March 2026</span></div>
+      <div class="meta-item">Operator: <span>Trade PA</span></div>
+    </div>
+  </div>
+
+  <div class="toc">
+    <div class="toc-title">Contents</div>
+    <ol>
+      <li><a href="#acceptance">Acceptance of terms</a></li>
+      <li><a href="#service">The service</a></li>
+      <li><a href="#accounts">Accounts</a></li>
+      <li><a href="#acceptable-use">Acceptable use</a></li>
+      <li><a href="#data">Your data</a></li>
+      <li><a href="#email-access">Email access</a></li>
+      <li><a href="#payments">Payments &amp; subscriptions</a></li>
+      <li><a href="#availability">Service availability</a></li>
+      <li><a href="#liability">Limitation of liability</a></li>
+      <li><a href="#termination">Termination</a></li>
+      <li><a href="#changes">Changes to these terms</a></li>
+      <li><a href="#law">Governing law</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ol>
+  </div>
+
+  <section id="acceptance">
+    <h2 data-num="01">Acceptance of terms</h2>
+    <p>By creating an account or using Trade PA, you agree to be bound by these Terms of Service. If you do not agree to these terms, do not use the service.</p>
+    <p>These terms constitute a legally binding agreement between you and Trade PA. We recommend you save or print a copy for your records.</p>
+  </section>
+
+  <section id="service">
+    <h2 data-num="02">The service</h2>
+    <p>Trade PA is a business administration tool designed for sole-trader tradespeople in the United Kingdom. The service provides tools for job scheduling, invoice and quote creation, customer management, materials tracking, reminders, and optional email inbox integration.</p>
+    <p>The service is provided as a software-as-a-service (SaaS) web application, accessible via any modern web browser and as a Progressive Web App (PWA) on mobile devices.</p>
+  </section>
+
+  <section id="accounts">
+    <h2 data-num="03">Accounts</h2>
+    <p>You must create an account to use Trade PA. You are responsible for:</p>
+    <ul class="list">
+      <li>Maintaining the confidentiality of your password</li>
+      <li>All activity that occurs under your account</li>
+      <li>Ensuring the information you provide is accurate and kept up to date</li>
+      <li>Notifying us immediately of any unauthorised access to your account</li>
+    </ul>
+    <p>You must be at least 18 years old to create an account. Accounts are for individual business use and may not be shared with third parties outside your business.</p>
+  </section>
+
+  <section id="acceptable-use">
+    <h2 data-num="04">Acceptable use</h2>
+    <p>You agree not to use Trade PA to:</p>
+    <ul class="list">
+      <li>Violate any applicable law or regulation</li>
+      <li>Store or transmit fraudulent, defamatory, or illegal content</li>
+      <li>Attempt to gain unauthorised access to our systems or another user's account</li>
+      <li>Interfere with or disrupt the integrity or performance of the service</li>
+      <li>Use the service to send spam or unsolicited communications</li>
+      <li>Reverse engineer, decompile, or attempt to extract the source code of the application</li>
+    </ul>
+    <p>We reserve the right to suspend or terminate accounts that violate these terms without notice.</p>
+  </section>
+
+  <section id="data">
+    <h2 data-num="05">Your data</h2>
+    <p>You retain full ownership of all data you enter into Trade PA — your jobs, customers, invoices, and business records belong to you.</p>
+    <p>By using the service, you grant Trade PA a limited licence to store, process, and display your data solely for the purpose of providing the service to you.</p>
+    <p>We do not claim any ownership over your business data and will not use it for any purpose other than operating Trade PA. Please see our <a href="/privacy-policy.html" style="color: var(--amber);">Privacy Policy</a> for full details on how we handle your data.</p>
+    <div class="highlight">
+      You are responsible for ensuring that any personal data you enter about your customers (names, addresses, contact details) is handled in compliance with UK GDPR and applicable data protection law. As the data controller for your customers' information, you should have a lawful basis for storing and processing that data.
+    </div>
+  </section>
+
+  <section id="email-access">
+    <h2 data-num="06">Email access</h2>
+    <p>Trade PA offers an optional feature to connect your Gmail or Microsoft Outlook account. By connecting your email account you authorise Trade PA to read, send, and modify emails on your behalf as described in our Privacy Policy.</p>
+    <p>You may revoke this access at any time from within the app. Trade PA will not access your email account for any purpose other than the features explicitly provided within the app.</p>
+    <p>Trade PA's use of information received from Google APIs complies with the Google API Services User Data Policy, including the Limited Use requirements.</p>
+  </section>
+
+  <section id="payments">
+    <h2 data-num="07">Payments &amp; subscriptions</h2>
+    <p>Trade PA may offer paid subscription plans. Where a paid plan is offered:</p>
+    <ul class="list">
+      <li>Subscription fees are billed in advance on a monthly or annual basis</li>
+      <li>All prices are quoted in GBP and are inclusive of VAT where applicable</li>
+      <li>You may cancel your subscription at any time — cancellation takes effect at the end of the current billing period</li>
+      <li>We do not offer refunds for partial billing periods</li>
+    </ul>
+    <p>During any free trial period, no payment is required. We will notify you before any trial converts to a paid subscription.</p>
+  </section>
+
+  <section id="availability">
+    <h2 data-num="08">Service availability</h2>
+    <p>We aim to keep Trade PA available at all times but cannot guarantee uninterrupted service. The service may be temporarily unavailable due to maintenance, updates, or circumstances beyond our control.</p>
+    <p>We will endeavour to provide advance notice of planned maintenance where possible. We are not liable for any loss or inconvenience caused by service interruptions.</p>
+  </section>
+
+  <section id="liability">
+    <h2 data-num="09">Limitation of liability</h2>
+    <p>Trade PA is provided "as is" without warranties of any kind, either express or implied. To the maximum extent permitted by law:</p>
+    <ul class="list">
+      <li>We are not liable for any indirect, incidental, or consequential damages arising from your use of the service</li>
+      <li>We are not liable for loss of business, revenue, or data resulting from service outages or errors</li>
+      <li>Our total liability to you for any claim shall not exceed the amount you paid for the service in the three months preceding the claim</li>
+    </ul>
+    <p>Nothing in these terms excludes or limits our liability for death or personal injury caused by negligence, fraud, or any other liability that cannot be excluded by law.</p>
+  </section>
+
+  <section id="termination">
+    <h2 data-num="10">Termination</h2>
+    <p>You may delete your account at any time from within the app settings. Upon deletion, your data will be permanently removed from our systems within 30 days.</p>
+    <p>We reserve the right to suspend or terminate your account immediately if you breach these terms, without obligation to provide a refund for any unused subscription period.</p>
+    <p>Upon termination, your right to access the service ends immediately. We recommend you export any data you need before deleting your account.</p>
+  </section>
+
+  <section id="changes">
+    <h2 data-num="11">Changes to these terms</h2>
+    <p>We may update these Terms of Service from time to time. We will notify you of material changes by email or by displaying a notice in the app.</p>
+    <p>Continued use of Trade PA after changes to these terms constitutes acceptance of the updated terms. If you do not agree to the updated terms, you should stop using the service and delete your account.</p>
+  </section>
+
+  <section id="law">
+    <h2 data-num="12">Governing law</h2>
+    <p>These terms are governed by the laws of England and Wales. Any disputes arising from these terms or your use of Trade PA shall be subject to the exclusive jurisdiction of the courts of England and Wales.</p>
+  </section>
+
+  <section id="contact">
+    <h2 data-num="13">Contact</h2>
+    <p>If you have any questions about these terms, please contact us:</p>
+    <div class="contact-card">
+      <div class="contact-row">
+        <div class="contact-label">Product</div>
+        <div class="contact-value">Trade PA</div>
+      </div>
+      <div class="contact-row">
+        <div class="contact-label">Email</div>
+        <div class="contact-value">thetradepa@gmail.com</div>
+      </div>
+      <div class="contact-row">
+        <div class="contact-label">Country</div>
+        <div style="font-size: 12px; color: var(--text);">United Kingdom</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p>© 2026 Trade PA · <a href="/privacy-policy.html">Privacy Policy</a> · <a href="https://trade-pa-id3s.vercel.app">Return to app</a></p>
+</footer>
+
+</body>
+</html>
