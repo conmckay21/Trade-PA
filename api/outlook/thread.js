@@ -1,6 +1,6 @@
-import { getValidOutlookToken } from "./_token.js";
+const { getValidOutlookToken } = require("./_token.js");
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { userId, messageId } = req.query;
   if (!userId || !messageId) {
     return res.status(400).json({ error: "userId and messageId required" });
@@ -35,15 +35,12 @@ export default async function handler(req, res) {
       `https://graph.microsoft.com/v1.0/me/messages/${messageId}`,
       {
         method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ isRead: true }),
       }
     );
 
-    const message = {
+    res.json({ messages: [{
       id: msg.id,
       from: msg.from?.emailAddress
         ? `${msg.from.emailAddress.name} <${msg.from.emailAddress.address}>`
@@ -55,11 +52,9 @@ export default async function handler(req, res) {
       isHtml: msg.body?.contentType === "html",
       attachments,
       unread: false,
-    };
-
-    res.json({ messages: [message] });
+    }]});
   } catch (err) {
     console.error("Outlook thread error:", err.message);
     res.status(500).json({ error: err.message });
   }
-}
+};
