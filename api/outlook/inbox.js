@@ -1,6 +1,6 @@
-import { getValidOutlookToken } from "./_token.js";
+const { getValidOutlookToken } = require("./_token.js");
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { userId, skipToken } = req.query;
   if (!userId) return res.status(400).json({ error: "userId required" });
 
@@ -18,7 +18,6 @@ export default async function handler(req, res) {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await msgRes.json();
-
     if (data.error) throw new Error(data.error.message);
 
     const threads = (data.value || []).map((msg) => ({
@@ -36,8 +35,8 @@ export default async function handler(req, res) {
       messageCount: 1,
     }));
 
-    const nextLink = data["@odata.nextLink"] || null;
     let nextSkipToken = null;
+    const nextLink = data["@odata.nextLink"] || null;
     if (nextLink) {
       const match = nextLink.match(/\$skiptoken=([^&]+)/);
       if (match) nextSkipToken = decodeURIComponent(match[1]);
@@ -48,4 +47,4 @@ export default async function handler(req, res) {
     console.error("Outlook inbox error:", err.message);
     res.status(500).json({ error: err.message });
   }
-}
+};
