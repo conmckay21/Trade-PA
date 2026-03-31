@@ -162,7 +162,7 @@ Respond ONLY with JSON:
 
         const saveRes = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions?on_conflict=user_id,email_id`, {
           method: "POST",
-          headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
+          headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json", "Prefer": "resolution=ignore-duplicates" },
           body: JSON.stringify({ user_id: userId, email_id: email.id, email_from: email.from, email_subject: email.subject, email_snippet: (email.snippet || "").slice(0, 300), action_type: analysis.action_type, action_data: analysis.action_data || {}, action_description: analysis.action_description || "", status: "pending" }),
         });
         if (saveRes.ok) actionsCreated++;
