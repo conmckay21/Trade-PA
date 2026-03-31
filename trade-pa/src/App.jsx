@@ -4897,6 +4897,16 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
   const [processing, setProcessing] = useState({});
   const [tab, setTab] = useState("pending");
   const [disconnecting, setDisconnecting] = useState(false);
+  const [urlError, setUrlError] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("email_error");
+    if (err) { window.history.replaceState({}, "", window.location.pathname); return decodeURIComponent(err); }
+    return null;
+  });
+  const [urlConnected, setUrlConnected] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("email_connected") || null;
+  });
 
   // Email reader state
   const [threads, setThreads] = useState([]);
@@ -5031,6 +5041,23 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
   };
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: IC.muted, fontFamily: "'DM Mono',monospace" }}>Loading...</div>;
+
+  // Show error from OAuth callback
+  if (urlError) {
+    return (
+      <div style={{ fontFamily: "'DM Mono',monospace", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ background: "#7f1d1d", border: "1px solid #ef4444", borderRadius: 10, padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", marginBottom: 8 }}>⚠ Email connection failed</div>
+          <div style={{ fontSize: 12, color: "#fca5a5", marginBottom: 16, lineHeight: 1.6, wordBreak: "break-all" }}>{urlError}</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={IS.btn("amber")} onClick={() => { window.location.href = `/api/auth/gmail/connect?userId=${user.id}`; }}>Try Gmail instead</button>
+            <button style={IS.btn("default")} onClick={() => { window.location.href = `/api/auth/outlook/connect?userId=${user.id}`; }}>Retry Outlook</button>
+            <button style={IS.btn("ghost")} onClick={() => setUrlError(null)}>Dismiss</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!connection) {
     return (
@@ -5228,9 +5255,9 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [pdfHtml, setPdfHtml] = useState(null);
   const [view, setView] = useState(() => {
-    // If redirected back from OAuth, go to Settings
     const params = new URLSearchParams(window.location.search);
     if (params.has('xero') || params.has('qb')) return "Settings";
+    if (params.has('email_connected') || params.has('email_error')) return "Inbox";
     return "Dashboard";
   });
   const [brand, setBrand] = useState(DEFAULT_BRAND);
