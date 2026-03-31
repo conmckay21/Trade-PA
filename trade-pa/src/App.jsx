@@ -1413,9 +1413,133 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
   const today = new Date(); today.setHours(0,0,0,0);
   const todayJobs = jobs.filter(j => j.dateObj && isSameDay(new Date(j.dateObj), today));
-  const weekRevenue = jobs.reduce((sum, j) => sum + (j.value || 0), 0);
-  const outstanding = invoices.filter(i => i.status !== "paid").reduce((sum, i) => sum + (i.amount || 0), 0);
-  const overdueInvoices = invoices.filter(i => i.status === "overdue" || i.status === "due");
+
+  const allInvoices = invoices.filter(i => !i.isQuote);
+  const allQuotes = invoices.filter(i => i.isQuote);
+  const totalInvoiceValue = allInvoices.reduce((s, i) => s + (i.amount || 0), 0);
+  const totalQuoteValue = allQuotes.reduce((s, q) => s + (q.amount || 0), 0);
+  const overdueInvoices = allInvoices.filter(i => i.status === "overdue" || i.status === "due");
+  const overdueValue = overdueInvoices.reduce((s, i) => s + (i.amount || 0), 0);
+  const newEnquiries = (enquiries || []).filter(e => !e.status || e.status === "new");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={S.grid3}>
+        {[
+          { label: "Total Quote Value", value: `£${totalQuoteValue.toLocaleString()}`, sub: `${allQuotes.length} quote${allQuotes.length !== 1 ? "s" : ""}`, color: C.blue, onClick: () => setView("Quotes") },
+          { label: "Total Invoice Value", value: `£${totalInvoiceValue.toLocaleString()}`, sub: `${allInvoices.filter(i => i.status !== "paid").length} outstanding`, color: C.amber, onClick: () => setView("Invoices") },
+          { label: "Overdue Invoices", value: `£${overdueValue.toLocaleString()}`, sub: `${overdueInvoices.length} invoice${overdueInvoices.length !== 1 ? "s" : ""} overdue`, color: overdueValue > 0 ? C.red : C.muted, onClick: () => setView("Invoices") },
+          { label: "New Enquiries", value: newEnquiries.length, sub: `${(enquiries || []).filter(e => e.urgent).length} urgent`, color: C.green, onClick: () => setView("Enquiries") },
+        ].map((stat, i) => (
+          <div key={i} style={{ ...S.statCard(stat.color), cursor: "pointer" }} onClick={stat.onClick}>
+            <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>{stat.label}</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{stat.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div style={S.grid2}>
+        <div style={S.card}>
+          <div style={S.sectionTitle}>Today's Jobs</div>
+          {todayJobs.length === 0
+            ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No jobs today — add one in Schedule or via the AI Assistant.</div>
+            : todayJobs.map(job => (
+              <div key={job.id} style={S.row}>
+                <div style={{ width: 4, height: 36, borderRadius: 2, background: statusColor[job.status] || C.muted, flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{job.customer}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{job.type} · {new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
+                </div>
+                {job.value > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{job.value}</div>}
+              </div>
+            ))
+          }
+          <div style={{ marginTop: 12 }}><button style={S.btn("ghost")} onClick={() => setView("Schedule")}>View Schedule →</button></div>
+        </div>
+        <div style={S.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={S.sectionTitle}>New Enquiries</div>
+            <button style={S.btn("ghost")} onClick={() => setView("Enquiries")}>Manage →</button>
+          </div>
+          {(enquiries || []).length === 0
+            ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No enquiries yet — log one via the AI Assistant.</div>
+            : (enquiries || []).slice(0, 3).map((e, i) => (
+              <div key={i} style={{ ...S.row, alignItems: "flex-start" }}>
+                <div style={{ width: 4, height: 36, borderRadius: 2, background: e.urgent ? C.red : C.blue, flexShrink: 0, marginTop: 4 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{e.name}</span>
+                    <span style={S.badge(C.muted)}>{e.source}</span>
+                    {e.urgent && <span style={S.badge(C.red)}>Urgent</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.msg}</div>
+                </div>
+                <div style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>{e.time}</div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+      <div style={S.card}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={S.sectionTitle}>Invoice Pipeline</div>
+          <button style={S.btn("ghost")} onClick={() => setView("Invoices")}>Manage →</button>
+        </div>
+        {allInvoices.length === 0
+          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No invoices yet — create one in Invoices or via the AI Assistant.</div>
+          : allInvoices.slice(0, 4).map(inv => (
+            <div key={inv.id} style={S.row}>
+              <div style={{ fontSize: 12, color: C.muted, width: 70, flexShrink: 0 }}>{inv.id}</div>
+              <div style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</span></div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 12, flexShrink: 0 }}>£{inv.amount}</div>
+              <div style={{ flexShrink: 0, textAlign: "right", marginRight: 10 }}>
+                <div style={S.badge(statusColor[inv.status] || C.muted)}>{statusLabel[inv.status] || inv.status}</div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{inv.due}</div>
+              </div>
+              <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }} onClick={() => downloadInvoicePDF(brand, inv)}>⬇ PDF</button>
+            </div>
+          ))
+        }
+      </div>
+
+      {allQuotes.length > 0 && (
+        <div style={S.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={S.sectionTitle}>Quotes ({allQuotes.length})</div>
+            <button style={S.btn("ghost")} onClick={() => setView("Quotes")}>Manage →</button>
+          </div>
+          {allQuotes.slice(0, 4).map(q => (
+            <div key={q.id} style={S.row}>
+              <div style={{ fontSize: 12, color: C.blue, width: 70, flexShrink: 0 }}>{q.id}</div>
+              <div style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</span></div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 12, flexShrink: 0 }}>£{q.amount}</div>
+              <div style={{ flexShrink: 0, textAlign: "right", marginRight: 10 }}>
+                <div style={S.badge(C.blue)}>Quote</div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{q.due}</div>
+              </div>
+              <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }} onClick={() => downloadInvoicePDF(brand, q)}>⬇ PDF</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {jobs.length === 0 && invoices.length === 0 && (enquiries || []).length === 0 && (
+        <div style={{ ...S.card, textAlign: "center", padding: 40, borderColor: C.amber + "44", background: C.amber + "08" }}>
+          <div style={{ fontSize: 36, marginBottom: 16 }}>⚡</div>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Welcome to Trade PA</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 24, lineHeight: 1.7 }}>
+            Get started by heading to <strong style={{ color: C.text }}>Settings</strong> to add your business details,<br />
+            then try the <strong style={{ color: C.text }}>AI Assistant</strong> to book your first job.
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+            <button style={S.btn("primary")} onClick={() => setView("Settings")}>Set up my business →</button>
+            <button style={S.btn("ghost")} onClick={() => setView("AI Assistant")}>Try AI Assistant</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -2185,7 +2309,16 @@ Return only JSON, no other text.` },
               <div key={i} style={S.row}>
                 <div style={{ width: 4, height: 44, borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
+                    {(m.receiptId || m.receiptSource) && (
+                      <div
+                        title={m.receiptFilename || "Receipt attached"}
+                        style={{ fontSize: 10, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 4, padding: "1px 5px", cursor: "pointer", flexShrink: 0 }}
+                        onClick={e => { e.stopPropagation(); const img = localStorage.getItem(`trade-pa-receipt-${m.receiptId}`); if (img) { const w = window.open(); w.document.write(`<img src="${img}" style="max-width:100%">`); } else if (m.receiptFilename) { alert(`Receipt: ${m.receiptFilename} (from email — view in your inbox)`); } }}
+                      >🧾 Receipt</div>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11, color: C.muted }}>
                     {[m.job && `📋 ${m.job}`, m.supplier && `🏪 ${m.supplier}`, m.unitPrice > 0 && `£${((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)}`].filter(Boolean).join(" · ")}
                   </div>
@@ -5390,14 +5523,19 @@ ${availabilityLine}
             });
             const parseData = await parseRes.json();
             if (parseData.items?.length > 0) {
+              const receiptId = `email_${action.id}_${Date.now()}`;
+              const supplierName = d.supplier || action.email_from?.match(/^(.+?)\s*</)?.[1]?.replace(/"/g, "") || "Supplier";
               const newMaterials = parseData.items.map((item, i) => ({
                 id: Date.now() + i,
                 item: item.item || item.description || "Unknown item",
                 qty: item.qty || 1,
                 unitPrice: item.unitPrice || item.unit_price || 0,
-                supplier: d.supplier || action.email_from?.match(/^(.+?)\s*</)?.[1]?.replace(/"/g, "") || "Supplier",
+                supplier: supplierName,
                 job: "",
                 status: "to_order",
+                receiptId,
+                receiptSource: "email",
+                receiptFilename: d.attachment_filename || "",
               }));
               setMaterials(prev => [...newMaterials, ...(prev || [])]);
               break;
@@ -5406,14 +5544,89 @@ ${availabilityLine}
             console.error("PDF parse failed:", err.message);
           }
         }
-        // Fallback if no attachment or parse failed
+        // Fallback — add single placeholder entry
         setMaterials(prev => [...(prev || []), {
           id: Date.now(),
           item: `Items from ${d.supplier || d.attachment_filename || "supplier invoice"}`,
           qty: 1, unitPrice: 0,
           supplier: d.supplier || "",
           job: "", status: "to_order",
+          receiptSource: "email",
+          receiptFilename: d.attachment_filename || "",
         }]);
+        break;
+      }
+
+      case "add_cis_statement": {
+        // Try to parse CIS statement from PDF attachment
+        if (d.message_id && d.attachment_id) {
+          try {
+            const isOutlook = connection?.provider === "outlook";
+            const { data: connData } = await window._supabase.from("email_connections").select("access_token").eq("user_id", user.id).single();
+            const token = connData?.access_token;
+
+            const attRes = await fetch(
+              isOutlook
+                ? `https://graph.microsoft.com/v1.0/me/messages/${d.message_id}/attachments/${d.attachment_id}`
+                : `https://gmail.googleapis.com/gmail/v1/users/me/messages/${d.message_id}/attachments/${d.attachment_id}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const attData = await attRes.json();
+            const rawBase64 = isOutlook ? attData.contentBytes : attData.data;
+
+            if (rawBase64) {
+              const base64Clean = rawBase64.replace(/-/g, "+").replace(/_/g, "/");
+              const pdfDataUrl = `data:application/pdf;base64,${base64Clean}`;
+
+              // Use Claude to extract CIS data from the PDF
+              const parseRes = await fetch("https://api.anthropic.com/v1/messages", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+                body: JSON.stringify({
+                  model: "claude-sonnet-4-6",
+                  max_tokens: 400,
+                  messages: [{
+                    role: "user",
+                    content: [
+                      { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Clean } },
+                      { type: "text", text: "Extract CIS monthly statement details. Return ONLY JSON: {\"contractor_name\":\"company name\",\"tax_month\":\"YYYY-MM\",\"gross_amount\":number,\"deduction_amount\":number,\"net_amount\":number}" }
+                    ],
+                  }],
+                }),
+              });
+              const parseData = await parseRes.json();
+              const raw = parseData.content?.[0]?.text?.trim() || "{}";
+              const match = raw.match(/\{[\s\S]*\}/);
+              const cis = match ? JSON.parse(match[0]) : {};
+
+              await window._supabase.from("cis_statements").insert({
+                user_id: user.id,
+                contractor_name: cis.contractor_name || d.contractor_name || "Unknown Contractor",
+                tax_month: ((cis.tax_month || d.tax_month || new Date().toISOString().slice(0,7))) + "-01",
+                gross_amount: cis.gross_amount || parseFloat(d.gross_amount) || 0,
+                deduction_amount: cis.deduction_amount || parseFloat(d.deduction_amount) || 0,
+                net_amount: cis.net_amount || ((cis.gross_amount || 0) - (cis.deduction_amount || 0)) || 0,
+                notes: `From email: ${action.email_subject}`,
+                attachment_data: pdfDataUrl,
+              });
+              break;
+            }
+          } catch (err) {
+            console.error("CIS PDF parse failed:", err.message);
+          }
+        }
+        // Fallback — save what Claude extracted from the email body
+        if (d.contractor_name || d.gross_amount) {
+          await window._supabase.from("cis_statements").insert({
+            user_id: user.id,
+            contractor_name: d.contractor_name || "Unknown Contractor",
+            tax_month: (d.tax_month || new Date().toISOString().slice(0,7)) + "-01",
+            gross_amount: parseFloat(d.gross_amount) || 0,
+            deduction_amount: parseFloat(d.deduction_amount) || 0,
+            net_amount: (parseFloat(d.gross_amount) || 0) - (parseFloat(d.deduction_amount) || 0),
+            notes: `From email: ${action.email_subject}`,
+          });
+        }
         break;
       }
       case "mark_invoice_paid": {
@@ -5474,8 +5687,8 @@ ${availabilityLine}
     }
   }
 
-  function actionIcon(type) { return { create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", add_materials: "🔧", save_customer: "👤", accept_quote: "🤝" }[type] || "⚡"; }
-  function actionColor(type) { return { create_job: IC.green, create_enquiry: IC.blue, mark_invoice_paid: IC.green, add_materials: IC.amber, save_customer: "#8b5cf6", accept_quote: IC.green }[type] || IC.amber; }
+  function actionIcon(type) { return { create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", add_materials: "🔧", save_customer: "👤", accept_quote: "🤝", add_cis_statement: "🏗" }[type] || "⚡"; }
+  function actionColor(type) { return { create_job: IC.green, create_enquiry: IC.blue, mark_invoice_paid: IC.green, add_materials: IC.amber, save_customer: "#8b5cf6", accept_quote: IC.green, add_cis_statement: IC.blue }[type] || IC.amber; }
   function formatTime(ts) { if (!ts) return ""; const d = new Date(ts), diff = Date.now() - d; if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`; return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
   function fromName(from) { if (!from) return "Unknown"; const m = from.match(/^(.+?)\s*</); return m ? m[1].replace(/"/g, "") : from.split("@")[0]; }
 
@@ -6756,7 +6969,19 @@ function CISStatementsTab({ user }) {
         {statements.map(s => (
           <div key={s.id} style={S.row}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{s.contractor_name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{s.contractor_name}</div>
+                {s.attachment_data && (
+                  <div
+                    title="CIS statement PDF attached"
+                    style={{ fontSize: 10, background: C.blue + "22", color: C.blue, border: `1px solid ${C.blue}44`, borderRadius: 4, padding: "1px 5px", cursor: "pointer", flexShrink: 0 }}
+                    onClick={() => {
+                      const win = window.open();
+                      win.document.write(`<iframe src="${s.attachment_data}" width="100%" height="100%" style="border:none;position:fixed;top:0;left:0;"></iframe>`);
+                    }}
+                  >📄 View PDF</div>
+                )}
+              </div>
               <div style={{ fontSize: 11, color: C.muted }}>{new Date(s.tax_month).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</div>
               {s.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{s.notes}</div>}
             </div>
