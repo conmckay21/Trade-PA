@@ -123,16 +123,18 @@ Has PDF attachment: ${email.hasPdfAttachment}
 ${email.pdfAttachments?.length > 0 ? `PDF files: ${email.pdfAttachments.map(a => a.filename).join(", ")}` : ""}
 
 ACTION RULES:
-1. BOOKING REQUEST — customer asking to book/schedule work → "create_job"
+1. BOOKING REQUEST — customer asking to book/schedule work (no prior quote mentioned) → "create_job"
 2. PAYMENT CONFIRMATION — customer says they have paid → "mark_invoice_paid"
-3. QUOTE ACCEPTANCE — customer says yes/wants to proceed → "create_job" (note the acceptance)
+3. QUOTE ACCEPTANCE — customer saying yes to a quote, wants to proceed, going ahead with work → "accept_quote" (NOT create_job — this needs the quote converted to invoice AND a reply sent)
 4. SUPPLIER PDF INVOICE — supplier sending material invoice/receipt with PDF → "add_materials"
 5. NEW ENQUIRY — potential customer asking about work/prices → "create_enquiry"
 6. SAVE CONTACT — someone providing contact details → "save_customer"
 7. IGNORE — newsletters, marketing, automated system emails only → "ignore"
 
+For accept_quote, extract: customer name, job/address mentioned, the sender's email address so we can reply.
+
 Respond ONLY with JSON:
-{"action_type":"create_job"|"create_enquiry"|"mark_invoice_paid"|"add_materials"|"save_customer"|"ignore","action_description":"One sentence describing what will happen","action_data":{"customer":"name","type":"job type","date_text":"date if mentioned","address":"address if mentioned","notes":"key details","source":"Email","message":"summary for enquiry","urgent":false,"supplier":"supplier name for materials","name":"name for contact","email":"email for contact"}}`;
+{"action_type":"create_job"|"accept_quote"|"create_enquiry"|"mark_invoice_paid"|"add_materials"|"save_customer"|"ignore","action_description":"One sentence describing what will happen","action_data":{"customer":"name","type":"job type","date_text":"date if mentioned","address":"address if mentioned","notes":"key details","source":"Email","message":"summary for enquiry","urgent":false,"supplier":"supplier name for materials","name":"name for contact","email":"email for contact","reply_to":"sender email address for accept_quote"}}`;
 
       const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
