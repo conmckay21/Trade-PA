@@ -486,6 +486,7 @@ function downloadInvoicePDF(brand, inv) {
     ${brand.vatNumber ? `<div><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
     <div><span>Ref:</span>${ref}</div>
     ${inv.jobRef ? `<div><span>Job Ref:</span>${inv.jobRef}</div>` : ""}
+    ${inv.poNumber ? `<div><span>PO Number:</span>${inv.poNumber}</div>` : ""}
   </div>
 
   <div class="addresses">
@@ -3306,7 +3307,7 @@ function MicButton({ form, setForm, accentColor }) {
               max_tokens: 400,
               messages: [{
                 role: "user",
-                content: `You are helping fill in an invoice/quote form. Current form: ${JSON.stringify({ customer: form.customer, email: form.email, address: form.address, amount: form.amount, desc: form.desc, jobRef: form.jobRef, due: form.due })}.
+                content: `You are helping fill in an invoice/quote form. Current form: ${JSON.stringify({ customer: form.customer, email: form.email, address: form.address, amount: form.amount, desc: form.desc, jobRef: form.jobRef, poNumber: form.poNumber || "", due: form.due })}.
 Voice instruction: "${text}"
 Return ONLY a JSON object with ONLY the fields to update (use exact same keys). Example: {"customer":"John Smith","amount":"450"}.
 Do not include fields that aren't being changed.`,
@@ -3531,6 +3532,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
     cisEnabled: initialData.cisEnabled || false,
     cisRate: initialData.cisRate || 20,
     jobRef: initialData?.jobRef || "",
+    poNumber: initialData?.poNumber || "",
     lineItems: initialData?.lineItems || [],
     materialItems: initialData?.materialItems || [{ desc: "", amount: "" }],
   } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatType: "income", vatZeroRated: false, cisEnabled: false, cisRate: 20, jobRef: "", lineItems: [], materialItems: [{ desc: "", amount: "" }] });
@@ -3582,7 +3584,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
         vatZeroRated: form.vatZeroRated, vatType: form.vatType || "",
         cisEnabled: form.cisEnabled, cisRate: form.cisRate,
         cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
-        jobRef: form.jobRef || "",
+        jobRef: form.jobRef || "", poNumber: form.poNumber || "",
         materialItems: form.materialItems || [],
       };
       if (isEditing) {
@@ -3637,7 +3639,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
                       vatEnabled: form.vatEnabled, vatRate: form.vatRate, vatType: form.vatType, vatZeroRated: form.vatZeroRated,
                       cisEnabled: form.cisEnabled, cisRate: form.cisRate,
                       cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
-                      jobRef: form.jobRef,
+                      jobRef: form.jobRef, poNumber: form.poNumber || "",
                     });
                   }} style={S.pill(brand.accentColor, false)} disabled={!valid}>Preview PDF</button>
                 <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
@@ -3889,7 +3891,7 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
         due: `Valid for ${form.validDays} days`, status: initialData?.status || "sent",
         description: finalDesc, lineItems: form.lineItems || [], isQuote: true,
         vatEnabled: form.vatEnabled, vatRate: form.vatRate, vatType: form.vatType,
-        jobRef: form.jobRef || "",
+        jobRef: form.jobRef || "", poNumber: form.poNumber || "",
         cisEnabled: form.cisEnabled, cisRate: form.cisRate,
         cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
         materialItems: form.materialItems || [],
@@ -3936,7 +3938,7 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
                       vatEnabled: form.vatEnabled, vatRate: form.vatRate, vatType: form.vatType, vatZeroRated: form.vatZeroRated,
                       cisEnabled: form.cisEnabled, cisRate: form.cisRate,
                       cisLabour: labourAmt, cisMaterials: materialsAmt, cisDeduction, cisNetPayable,
-                      jobRef: form.jobRef,
+                      jobRef: form.jobRef, poNumber: form.poNumber || "",
                     });
                   }} style={S.pill(C.blue, false)} disabled={!valid}>Preview PDF</button>
                 </div>
@@ -4025,6 +4027,10 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
 
                 <div><label style={S.label}>Job Reference <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
                   <input style={S.input} placeholder="e.g. Kitchen refurb Phase 2, Job #1042" value={form.jobRef || ""} onChange={set("jobRef")} />
+                </div>
+
+                <div><label style={S.label}>PO Number <span style={{ color: C.muted, fontWeight: 400 }}>(optional — for B2B/contractor work)</span></label>
+                  <input style={S.input} placeholder="e.g. PO-12345" value={form.poNumber || ""} onChange={set("poNumber")} />
                 </div>
 
                 {/* VAT toggle */}
@@ -6080,6 +6086,107 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
   );
 }
 
+// ─── Compliance Doc Helpers ───────────────────────────────────────────────────
+function buildComplianceDocHTML(doc, job, brand) {
+  const issued = doc.issued_date ? new Date(doc.issued_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
+  const expiry = doc.expiry_date ? new Date(doc.expiry_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    body{font-family:'Helvetica Neue',Arial,sans-serif;background:#fff;color:#1a1a1a;margin:0;padding:40px}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:24px;border-bottom:3px solid #f59e0b}
+    .brand-name{font-size:22px;font-weight:700;margin-bottom:4px}
+    .brand-detail{font-size:12px;color:#666;line-height:1.6}
+    .doc-title{font-size:28px;font-weight:700;color:#f59e0b;text-align:right}
+    .doc-type{font-size:13px;color:#666;text-align:right;margin-top:4px}
+    .section{margin-bottom:24px;padding:20px;background:#f9f9f9;border-radius:8px}
+    .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:12px}
+    .row{display:flex;justify-content:space-between;margin-bottom:8px;font-size:14px}
+    .label{color:#666}
+    .value{font-weight:600}
+    .footer{margin-top:40px;padding-top:20px;border-top:1px solid #eee;font-size:11px;color:#999;text-align:center}
+    .cert-number{font-size:32px;font-weight:700;text-align:center;color:#1a1a1a;margin:24px 0;letter-spacing:0.1em}
+  </style></head><body>
+    <div class="header">
+      <div>
+        <div class="brand-name">${brand.tradingName || ""}</div>
+        <div class="brand-detail">${brand.address || ""}${brand.phone ? `<br>${brand.phone}` : ""}${brand.email ? `<br>${brand.email}` : ""}${brand.gasSafeNumber ? `<br>Gas Safe: ${brand.gasSafeNumber}` : ""}${brand.vatNumber ? `<br>VAT: ${brand.vatNumber}` : ""}</div>
+      </div>
+      <div>
+        <div class="doc-title">CERTIFICATE</div>
+        <div class="doc-type">${doc.doc_type}</div>
+      </div>
+    </div>
+
+    ${doc.doc_number ? `<div class="cert-number">${doc.doc_number}</div>` : ""}
+
+    <div class="section">
+      <div class="section-title">Certificate Details</div>
+      <div class="row"><span class="label">Document Type</span><span class="value">${doc.doc_type}</span></div>
+      ${doc.doc_number ? `<div class="row"><span class="label">Certificate Number</span><span class="value">${doc.doc_number}</span></div>` : ""}
+      ${issued ? `<div class="row"><span class="label">Date Issued</span><span class="value">${issued}</span></div>` : ""}
+      ${expiry ? `<div class="row"><span class="label">Valid Until / Expiry</span><span class="value" style="color:${new Date(doc.expiry_date) < new Date() ? "#ef4444" : "#10b981"}">${expiry}</span></div>` : ""}
+      ${doc.notes ? `<div class="row"><span class="label">Notes</span><span class="value">${doc.notes}</span></div>` : ""}
+    </div>
+
+    <div class="section">
+      <div class="section-title">Property / Job Details</div>
+      <div class="row"><span class="label">Customer</span><span class="value">${job?.customer || ""}</span></div>
+      ${job?.address ? `<div class="row"><span class="label">Address</span><span class="value">${job.address}</span></div>` : ""}
+      <div class="row"><span class="label">Job</span><span class="value">${job?.title || job?.type || ""}</span></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Issued By</div>
+      <div class="row"><span class="label">Company</span><span class="value">${brand.tradingName || ""}</span></div>
+      ${brand.gasSafeNumber ? `<div class="row"><span class="label">Gas Safe Reg.</span><span class="value">${brand.gasSafeNumber}</span></div>` : ""}
+      ${brand.utrNumber ? `<div class="row"><span class="label">UTR</span><span class="value">${brand.utrNumber}</span></div>` : ""}
+    </div>
+
+    <div class="footer">${brand.tradingName} · ${brand.phone || ""} · ${brand.email || ""}<br>This certificate was issued on ${issued || "—"}</div>
+  </body></html>`;
+}
+
+function printComplianceDoc(doc, job, brand) {
+  const html = buildComplianceDocHTML(doc, job, brand);
+  const win = window.open("", "_blank");
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => win.print();
+}
+
+async function emailComplianceDoc(doc, job, customers, user, connection, brand) {
+  if (!connection) { alert("No email account connected. Go to the Inbox tab to connect Gmail or Outlook."); return; }
+  const customer = (customers || []).find(c => c.name?.toLowerCase() === job?.customer?.toLowerCase());
+  let toEmail = customer?.email || "";
+  if (!toEmail) {
+    toEmail = prompt(`Enter email address for ${job?.customer}:`);
+    if (!toEmail) return;
+  }
+
+  const issued = doc.issued_date ? new Date(doc.issued_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
+  const html = buildComplianceDocHTML(doc, job, brand);
+
+  const body = `<p>Dear ${job?.customer || "Customer"},</p>
+<p>Please find below your ${doc.doc_type}${doc.doc_number ? ` (Certificate No: ${doc.doc_number})` : ""}${issued ? `, issued ${issued}` : ""}.</p>
+<p>If you have any questions regarding this certificate, please don't hesitate to get in touch.</p>
+<p>Many thanks,<br>${brand.tradingName || ""}${brand.phone ? `<br>${brand.phone}` : ""}${brand.email ? `<br>${brand.email}` : ""}</p>
+<hr style="margin:24px 0;border:none;border-top:1px solid #eee">
+${html.replace(/<!DOCTYPE.*?<body>/s, "").replace(/<\/body>.*$/s, "")}`;
+
+  const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id, to: toEmail, subject: `${doc.doc_type}${doc.doc_number ? ` — ${doc.doc_number}` : ""} — ${brand.tradingName}`, body }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    alert(`✓ Certificate sent to ${toEmail}`);
+  } catch (err) {
+    alert(`Failed to send: ${err.message}`);
+  }
+}
+
 // ─── Jobs Tab ─────────────────────────────────────────────────────────────────
 const JOB_STATUSES = [
   { value: "enquiry", label: "Enquiry", color: C.muted },
@@ -6096,7 +6203,7 @@ const COMPLIANCE_TYPES = [
   "Air Tightness Test", "SAP Calculation", "Other",
 ];
 
-function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
+function JobsTab({ user, brand, customers, invoices, setInvoices, setView, connection }) {
   const [jobs, setJobCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -6115,6 +6222,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   const [addVO, setAddVO] = useState({ vo_number: "", description: "", amount: "" });
   const [addDoc, setAddDoc] = useState({ doc_type: "", doc_number: "", issued_date: "", expiry_date: "", notes: "" });
   const [addDaysheet, setAddDaysheet] = useState({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" });
+  const [emailConnection, setEmailConnection] = useState(null);
   const photoRef = useRef();
   const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -6553,6 +6661,10 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                       {d.doc_number && <div style={{ fontSize: 11, color: C.muted }}>Cert: {d.doc_number}</div>}
                       {d.issued_date && <div style={{ fontSize: 11, color: C.muted }}>Issued: {new Date(d.issued_date).toLocaleDateString("en-GB")}</div>}
                       {d.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{d.notes}</div>}
+                      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                        <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => emailComplianceDoc(d, selected, customers, user, connection, brand)}>✉ Email to customer</button>
+                        <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => printComplianceDoc(d, selected, brand)}>⬇ PDF</button>
+                      </div>
                     </div>
                   ))}
                 </div>
