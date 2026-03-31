@@ -132,9 +132,10 @@ ACTION RULES:
 7. IGNORE — newsletters, marketing, automated system emails only → "ignore"
 
 For accept_quote, extract: customer name, job/address mentioned, the sender's email address so we can reply.
+For create_job and create_enquiry, always set reply_to to the sender's email address so we can send a confirmation reply.
 
 Respond ONLY with JSON:
-{"action_type":"create_job"|"accept_quote"|"create_enquiry"|"mark_invoice_paid"|"add_materials"|"save_customer"|"ignore","action_description":"One sentence describing what will happen","action_data":{"customer":"name","type":"job type","date_text":"date if mentioned","address":"address if mentioned","notes":"key details","source":"Email","message":"summary for enquiry","urgent":false,"supplier":"supplier name for materials","name":"name for contact","email":"email for contact","reply_to":"sender email address for accept_quote"}}`;
+{"action_type":"create_job"|"accept_quote"|"create_enquiry"|"mark_invoice_paid"|"add_materials"|"save_customer"|"ignore","action_description":"One sentence describing what will happen","action_data":{"customer":"name extracted from email signature or body","type":"job type e.g. Boiler Service","date_text":"date/time mentioned","address":"address if mentioned","notes":"key details","source":"Email","message":"summary for enquiry","urgent":false,"supplier":"supplier name for materials","name":"name for contact","email":"email for contact","reply_to":"sender email address","sender_name":"first name of sender"}}`;
 
       const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -149,7 +150,17 @@ Respond ONLY with JSON:
       debugLog.push(`"${email.subject}" → ${analysis.action_type}: ${analysis.action_description || "no description"}`);
 
       if (analysis.action_type !== "ignore") {
-        const saveRes = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions`, {
+        // For add_materials, store the attachment info so we can parse the PDF on approval
+        if (analysis.action_type === "add_materials" && email.pdfAttachments?.length > 0) {
+          analysis.action_data = {
+            ...analysis.action_data,
+            message_id: email.id,
+            attachment_id: email.pdfAttachments[0].id,
+            attachment_filename: email.pdfAttachments[0].filename,
+          };
+        }
+
+        const saveRes = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions?on_conflict=user_id,email_id`, {
           method: "POST",
           headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
           body: JSON.stringify({ user_id: userId, email_id: email.id, email_from: email.from, email_subject: email.subject, email_snippet: (email.snippet || "").slice(0, 300), action_type: analysis.action_type, action_data: analysis.action_data || {}, action_description: analysis.action_description || "", status: "pending" }),
