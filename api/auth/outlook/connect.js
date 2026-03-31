@@ -1,4 +1,4 @@
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
   const clientId = process.env.OUTLOOK_CLIENT_ID;
   const redirectUri = process.env.OUTLOOK_REDIRECT_URI;
   const { userId } = req.query;
@@ -7,12 +7,7 @@ export default function handler(req, res) {
     return res.status(500).json({ error: "Outlook OAuth not configured" });
   }
 
-  const scopes = [
-    "offline_access",
-    "Mail.ReadWrite",
-    "Mail.Send",
-    "User.Read",
-  ].join(" ");
+  const scopes = ["offline_access", "Mail.ReadWrite", "Mail.Send", "User.Read"].join(" ");
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -23,7 +18,5 @@ export default function handler(req, res) {
     state: userId || "",
   });
 
-  res.redirect(
-    `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`
-  );
-}
+  res.redirect(`https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`);
+};
