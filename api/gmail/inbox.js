@@ -1,6 +1,6 @@
-const { getValidToken } = require("./_token.js");
+import { getValidToken } from "./_token.js";
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const { userId, pageToken, label = "INBOX" } = req.query;
   if (!userId) return res.status(400).json({ error: "userId required" });
 
@@ -47,4 +47,4 @@ module.exports = async function handler(req, res) {
     console.error("Gmail inbox error:", err.message);
     res.status(500).json({ error: err.message });
   }
-};
+}
