@@ -5091,7 +5091,7 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
                   <div style={{ fontSize: 12, fontWeight: 600, color: IC.text }}>{action.action_description}</div>
                   <div style={{ fontSize: 11, color: IC.muted }}>{action.email_from} · {formatTime(action.processed_at)}</div>
                 </div>
-                <div style={{ ...IC, fontSize: 10, color: IC.green, fontWeight: 700 }}>✓ Done</div>
+                <div style={{ fontSize: 10, color: IC.green, fontWeight: 700 }}>✓ Done</div>
               </div>
             </div>
           ))}
@@ -5570,7 +5570,7 @@ export default function App() {
         {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} />}
-        {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={setLastAction} />}
+        {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
         {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} />}
       </main>
     </div>
