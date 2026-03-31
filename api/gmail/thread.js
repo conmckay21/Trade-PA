@@ -1,4 +1,4 @@
-import { getValidToken } from "./_token.js";
+const { getValidToken } = require("./_token.js");
 
 function decodeBody(data) {
   if (!data) return "";
@@ -10,20 +10,13 @@ function extractParts(payload, parts = [], attachments = []) {
     parts.push({ type: payload.mimeType, body: decodeBody(payload.body?.data) });
   }
   if (payload.filename && payload.body?.attachmentId) {
-    attachments.push({
-      id: payload.body.attachmentId,
-      filename: payload.filename,
-      mimeType: payload.mimeType,
-      size: payload.body.size,
-    });
+    attachments.push({ id: payload.body.attachmentId, filename: payload.filename, mimeType: payload.mimeType, size: payload.body.size });
   }
-  if (payload.parts) {
-    payload.parts.forEach((p) => extractParts(p, parts, attachments));
-  }
+  if (payload.parts) payload.parts.forEach((p) => extractParts(p, parts, attachments));
   return { parts, attachments };
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { userId, threadId } = req.query;
   if (!userId || !threadId) return res.status(400).json({ error: "userId and threadId required" });
 
@@ -70,4 +63,4 @@ export default async function handler(req, res) {
     console.error("Gmail thread error:", err.message);
     res.status(500).json({ error: err.message });
   }
-}
+};
