@@ -111,11 +111,36 @@ export default async function handler(req, res) {
       }
     }
 
+    // Load AI feedback (recent dismissal reasons) and learned context
+    const [feedbackRes, contextRes] = await Promise.all([
+      fetch(
+        `${process.env.VITE_SUPABASE_URL}/rest/v1/ai_feedback?user_id=eq.${userId}&order=created_at.desc&limit=20`,
+        { headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+      ),
+      fetch(
+        `${process.env.VITE_SUPABASE_URL}/rest/v1/ai_context?user_id=eq.${userId}`,
+        { headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+      ),
+    ]);
+    const feedbackData = await feedbackRes.json();
+    const contextData = await contextRes.json();
+    const recentFeedback = Array.isArray(feedbackData) ? feedbackData : [];
+    const aiCtx = Array.isArray(contextData) && contextData.length > 0 ? contextData[0] : null;
+
+    // Build context strings to inject into prompt
+    const feedbackSection = recentFeedback.length > 0
+      ? `\nPAST MISTAKES TO AVOID:\n${recentFeedback.map(f => `- Email from "${f.email_from}" with subject "${f.email_subject}" was suggested as "${f.action_suggested}" but was dismissed because: ${f.reason}`).join("\n")}\n`
+      : "";
+
+    const contextSection = aiCtx
+      ? `\nKNOWN BUSINESS CONTEXT (use this to improve accuracy):\n${aiCtx.suppliers?.length > 0 ? `- Known material suppliers: ${aiCtx.suppliers.map(s => `${s.name} (${s.from || "email"})`).join(", ")}` : ""}\n${aiCtx.contractors?.length > 0 ? `- Known CIS contractors: ${aiCtx.contractors.map(c => `${c.name} (${c.from || "email"})`).join(", ")}` : ""}\n${aiCtx.customers?.length > 0 ? `- Known customers: ${aiCtx.customers.map(c => c.name).join(", ")}` : ""}\n${aiCtx.job_types?.length > 0 ? `- Common job types: ${aiCtx.job_types.join(", ")}` : ""}\n`
+      : "";
+
     // Analyse with Claude
     let actionsCreated = 0;
     for (const email of emails) {
       const prompt = `You are an AI assistant for a UK sole-trader tradesperson. Analyse this email and identify the business action to take. Be AGGRESSIVE — when in doubt, suggest an action rather than ignoring.
-
+${feedbackSection}${contextSection}
 Email from: ${email.from}
 Subject: ${email.subject}
 Body: ${email.body}
