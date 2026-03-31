@@ -1,20 +1,15 @@
-import { createClient } from "@supabase/supabase-js";
+const { createClient } = require("@supabase/supabase-js");
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { code, state: userId, error } = req.query;
 
-  if (error) {
-    return res.redirect(`${process.env.APP_URL}?email_error=${error}`);
-  }
-
-  if (!code || !userId) {
-    return res.status(400).json({ error: "Missing code or userId" });
-  }
+  if (error) return res.redirect(`${process.env.APP_URL}?email_error=${error}`);
+  if (!code || !userId) return res.status(400).json({ error: "Missing code or userId" });
 
   try {
     const tokenRes = await fetch(
@@ -41,22 +36,19 @@ export default async function handler(req, res) {
     });
     const profile = await profileRes.json();
 
-    await supabase.from("email_connections").upsert(
-      {
-        user_id: userId,
-        provider: "outlook",
-        email: profile.mail || profile.userPrincipalName,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,provider" }
-    );
+    await supabase.from("email_connections").upsert({
+      user_id: userId,
+      provider: "outlook",
+      email: profile.mail || profile.userPrincipalName,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,provider" });
 
     res.redirect(`${process.env.APP_URL}?email_connected=outlook`);
   } catch (err) {
     console.error("Outlook callback error:", err.message);
-    res.redirect(`${process.env.APP_URL}?email_error=${err.message}`);
+    res.redirect(`${process.env.APP_URL}?email_error=${encodeURIComponent(err.message)}`);
   }
-}
+};
