@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Trade PA — Admin tool for UK tradespeople</title>
+<meta name="description" content="Trade PA is a business administration tool for UK sole-trader tradespeople. Manage jobs, invoices, quotes, customers, materials and email — all in one place."/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --amber: #f59e0b;
+    --amber-glow: rgba(245,158,11,0.15);
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --surface2: #1e1e1e;
+    --border: #2a2a2a;
+    --text: #e5e5e5;
+    --muted: #6b7280;
+    --green: #10b981;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Mono', 'Courier New', monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(10,10,10,0.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.05em;
+    color: var(--amber);
+    text-decoration: none;
+  }
+
+  .logo-icon {
+    width: 30px; height: 30px;
+    background: var(--amber);
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    color: #000; font-size: 11px; font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .nav-links a {
+    font-size: 11px;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: color 0.15s;
+  }
+
+  .nav-links a:hover { color: var(--amber); }
+
+  .nav-cta {
+    background: var(--amber) !important;
+    color: #000 !important;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-weight: 700 !important;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 80px 24px 60px;
+    position: relative;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 400px;
+    background: radial-gradient(ellipse, rgba(245,158,11,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-inner {
+    max-width: 680px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--amber);
+    border: 1px solid rgba(245,158,11,0.3);
+    background: rgba(245,158,11,0.06);
+    padding: 5px 14px;
+    border-radius: 20px;
+    margin-bottom: 28px;
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--amber);
+    border-radius: 50%;
+  }
+
+  .hero h1 {
+    font-size: clamp(32px, 6vw, 56px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 20px;
+    color: var(--text);
+  }
+
+  .hero h1 span { color: var(--amber); }
+
+  .hero p {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.8;
+    margin-bottom: 36px;
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero-btns {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn-primary {
+    background: var(--amber);
+    color: #000;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 12px 28px;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.15s;
+  }
+
+  .btn-primary:hover { opacity: 0.85; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    padding: 12px 24px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s;
+  }
+
+  .btn-ghost:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* ── FEATURES ── */
+  .section {
+    padding: 80px 24px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 12px;
+  }
+
+  .section h2 {
+    font-size: clamp(22px, 4vw, 34px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 14px;
+    line-height: 1.2;
+  }
+
+  .section-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 48px;
+    max-width: 520px;
+    line-height: 1.8;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    transition: border-color 0.2s;
+  }
+
+  .feature-card:hover { border-color: rgba(245,158,11,0.3); }
+
+  .feature-icon {
+    width: 40px; height: 40px;
+    background: var(--amber-glow);
+    border: 1px solid rgba(245,158,11,0.2);
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    margin-bottom: 16px;
+  }
+
+  .feature-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .feature-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  /* ── HOW IT WORKS ── */
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  .steps::before {
+    content: '';
+    position: absolute;
+    left: 19px;
+    top: 40px;
+    bottom: 40px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .step {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    padding: 20px 0;
+    position: relative;
+  }
+
+  .step-num {
+    width: 40px; height: 40px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--amber);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .step-content h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .step-content p {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0 24px;
+  }
+
+  /* ── PURPOSE ── */
+  .purpose {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin: 0 24px;
+    max-width: 912px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .purpose p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.9;
+    margin-bottom: 12px;
+  }
+
+  .purpose p:last-child { margin-bottom: 0; }
+
+  /* ── CTA ── */
+  .cta-section {
+    padding: 80px 24px;
+    text-align: center;
+  }
+
+  .cta-section h2 {
+    font-size: clamp(22px, 4vw, 36px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+
+  .cta-section p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 32px;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 28px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .footer-left {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 20px;
+  }
+
+  .footer-links a {
+    font-size: 11px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.15s;
+    letter-spacing: 0.04em;
+  }
+
+  .footer-links a:hover { color: var(--amber); }
+
+  @media (max-width: 600px) {
+    nav { padding: 0 16px; }
+    .nav-links { gap: 12px; }
+    footer { flex-direction: column; align-items: flex-start; }
+    .purpose { margin: 0 0; border-radius: 10px; padding: 24px; }
+    .divider { margin: 0; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/about.html" class="logo">
+    <div class="logo-icon">TP</div>
+    TRADE PA
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how-it-works">How it works</a>
+    <a href="/privacy-policy.html">Privacy</a>
+    <a href="https://trade-pa-id3s.vercel.app" class="nav-cta">Sign in →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-badge">Built for UK tradespeople</div>
+    <h1>Run your trade business<br><span>without the paperwork</span></h1>
+    <p>Trade PA is an all-in-one admin tool for sole-trader plumbers, electricians, gas engineers and builders. Schedule jobs, create invoices, manage customers and chase payments — all from your phone.</p>
+    <div class="hero-btns">
+      <a href="https://trade-pa-id3s.vercel.app" class="btn-primary">Get started free →</a>
+      <a href="#features" class="btn-ghost">See features</a>
+    </div>
+  </div>
+</section>
+
+<!-- PURPOSE -->
+<div class="purpose" id="about">
+  <div class="section-label" style="margin-bottom: 16px;">What is Trade PA?</div>
+  <p>Trade PA is a web-based business administration application designed specifically for sole-trader tradespeople operating in the United Kingdom. It provides a single platform to manage the administrative side of a trades business, replacing spreadsheets, paper invoices, and separate apps.</p>
+  <p>The application includes tools for job scheduling, invoice and quote generation, customer contact management, materials and stock tracking, payment reminders, and an AI-powered voice assistant that lets tradespeople log jobs and create invoices hands-free while on site.</p>
+  <p>Trade PA optionally integrates with Gmail and Microsoft Outlook to allow tradespeople to send invoices directly from the app, chase outstanding payments, and automatically import supplier invoices into the materials tracker. It also integrates with Xero and QuickBooks for accounting synchronisation.</p>
+</div>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="section-label">Features</div>
+  <h2>Everything a tradesperson needs</h2>
+  <p class="section-sub">One app that covers the full admin workload — from the first call to the final payment.</p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">📅</div>
+      <div class="feature-title">Job scheduling</div>
+      <div class="feature-desc">Weekly calendar view with job details, customer addresses, status tracking and one-tap directions.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💰</div>
+      <div class="feature-title">Invoices & quotes</div>
+      <div class="feature-desc">Professional branded PDFs with VAT, CIS, line items, BACS details and Stripe payment links.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🎙</div>
+      <div class="feature-title">Voice assistant</div>
+      <div class="feature-desc">Speak naturally to log jobs, create invoices and set reminders — no typing required on site.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">✉</div>
+      <div class="feature-title">Inbox integration</div>
+      <div class="feature-desc">Connect Gmail or Outlook to send invoices directly, chase payments and import supplier invoices.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">👥</div>
+      <div class="feature-title">Customer records</div>
+      <div class="feature-desc">Full contact book with job history, notes and quick dial — everything about a customer in one place.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔧</div>
+      <div class="feature-title">Materials tracker</div>
+      <div class="feature-desc">Track what needs ordering, what's been ordered and what's on site. Scan supplier receipts to auto-import.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔔</div>
+      <div class="feature-title">Reminders</div>
+      <div class="feature-desc">Set reminders by voice or text. Browser push notifications mean you never miss a follow-up call.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">Accounting sync</div>
+      <div class="feature-desc">Connect Xero or QuickBooks. Invoices sync automatically — no double entry.</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="how-it-works">
+  <div class="section-label">How it works</div>
+  <h2>Up and running in minutes</h2>
+  <p class="section-sub">No setup costs, no training required. If you can use WhatsApp, you can use Trade PA.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-content">
+        <h3>Create your account</h3>
+        <p>Sign up with your email. Add your business name, logo, bank details and branding. Takes under 5 minutes.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-content">
+        <h3>Add your first job</h3>
+        <p>Type it in or just tap the mic and say "Book in John Smith, 14 Park Road, boiler service, Friday 9am, £120". The AI does the rest.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-content">
+        <h3>Send invoices on site</h3>
+        <p>Generate a professional branded PDF invoice in seconds. Send it directly from the app via email or download it.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">04</div>
+      <div class="step-content">
+        <h3>Get paid faster</h3>
+        <p>Chase overdue invoices with one tap. Customers can pay by bank transfer or card via Stripe.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="section-label" style="margin-bottom: 16px;">Get started</div>
+  <h2>Try Trade PA free today</h2>
+  <p>No credit card required. Set up your account in minutes.</p>
+  <a href="https://trade-pa-id3s.vercel.app" class="btn-primary">Create free account →</a>
+</section>
+
+<footer>
+  <div class="footer-left">© 2026 Trade PA · Built for UK tradespeople</div>
+  <div class="footer-links">
+    <a href="/privacy-policy.html">Privacy policy</a>
+    <a href="/terms.html">Terms of service</a>
+    <a href="mailto:thetradepa@gmail.com">Contact</a>
+    <a href="https://trade-pa-id3s.vercel.app">Sign in</a>
+  </div>
+</footer>
+
+</body>
+</html>
