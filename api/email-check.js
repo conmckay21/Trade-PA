@@ -65,16 +65,21 @@ export default async function handler(req, res) {
     }
 
     // Fetch emails
-    const since = conn.last_checked ? new Date(conn.last_checked) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+    // Always check last 48 hours - duplicates safely ignored by unique constraint on email_id
+    const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
     let emails = [];
+    const debugLog = [];
 
     if (conn.provider === "gmail") {
       const afterSeconds = Math.floor(since.getTime() / 1000);
+      // Removed category filters - they can block valid customer emails
       const listRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=15&q=after:${afterSeconds} -from:me -category:promotions -category:social`,
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=after:${afterSeconds} -from:me`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       const list = await listRes.json();
+      debugLog.push(`Gmail query returned ${list.messages?.length || 0} messages`);
+      if (list.error) debugLog.push(`Gmail error: ${JSON.stringify(list.error)}`);
       if (list.messages?.length) {
         const fetched = await Promise.all(list.messages.slice(0, 15).map(async (m) => {
           try {
@@ -139,13 +144,15 @@ Respond ONLY with JSON:
       let analysis = { action_type: "ignore" };
       try { const m = text.match(/\{[\s\S]*\}/); if (m) analysis = JSON.parse(m[0]); } catch {}
 
+      debugLog.push(`"${email.subject}" → ${analysis.action_type}: ${analysis.action_description || "no description"}`);
+
       if (analysis.action_type !== "ignore") {
-        await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions`, {
+        const saveRes = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions`, {
           method: "POST",
           headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json", "Prefer": "resolution=ignore-duplicates" },
           body: JSON.stringify({ user_id: userId, email_id: email.id, email_from: email.from, email_subject: email.subject, email_snippet: (email.snippet || "").slice(0, 300), action_type: analysis.action_type, action_data: analysis.action_data || {}, action_description: analysis.action_description || "", status: "pending" }),
         });
-        actionsCreated++;
+        if (saveRes.ok) actionsCreated++;
       }
     }
 
@@ -156,7 +163,7 @@ Respond ONLY with JSON:
       body: JSON.stringify({ last_checked: new Date().toISOString() }),
     });
 
-    return res.json({ success: true, emailsChecked: emails.length, actionsCreated });
+    return res.json({ success: true, emailsChecked: emails.length, actionsCreated, debug: debugLog });
   } catch (err) {
     console.error("Email check error:", err.message);
     return res.status(500).json({ error: err.message });
