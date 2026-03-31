@@ -252,5 +252,45 @@ export default async function handler(req, res) {
     } catch (err) { return res.status(500).json({ error: err.message }); }
   }
 
+  // ── Get Pending Actions ──────────────────────────────────────────────────
+  if (path === "/api/email/actions") {
+    const { userId, status = "pending" } = req.query;
+    if (!userId) return res.status(400).json({ error: "userId required" });
+    try {
+      const r = await fetch(
+        `${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions?user_id=eq.${userId}&status=eq.${status}&order=created_at.desc&limit=50`,
+        { headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+      );
+      const actions = await r.json();
+      return res.json({ actions: actions || [] });
+    } catch (err) { return res.status(500).json({ error: err.message }); }
+  }
+
+  // ── Approve Action ───────────────────────────────────────────────────────
+  if (path === "/api/email/actions/approve") {
+    const { actionId } = req.body;
+    try {
+      await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions?id=eq.${actionId}`, {
+        method: "PATCH",
+        headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "approved", processed_at: new Date().toISOString() }),
+      });
+      return res.json({ success: true });
+    } catch (err) { return res.status(500).json({ error: err.message }); }
+  }
+
+  // ── Reject Action ────────────────────────────────────────────────────────
+  if (path === "/api/email/actions/reject") {
+    const { actionId } = req.body;
+    try {
+      await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions?id=eq.${actionId}`, {
+        method: "PATCH",
+        headers: { "apikey": process.env.SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "rejected", processed_at: new Date().toISOString() }),
+      });
+      return res.json({ success: true });
+    } catch (err) { return res.status(500).json({ error: err.message }); }
+  }
+
   return res.status(404).json({ error: "Not found" });
 }
