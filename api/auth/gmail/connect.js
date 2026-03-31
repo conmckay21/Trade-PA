@@ -1,4 +1,4 @@
-module.exports = function handler(req, res) {
+export default function handler(req, res) {
   const clientId = process.env.GMAIL_CLIENT_ID;
   const redirectUri = process.env.GMAIL_REDIRECT_URI;
   const { userId } = req.query;
@@ -24,4 +24,4 @@ module.exports = function handler(req, res) {
   });
 
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
-};
+}
