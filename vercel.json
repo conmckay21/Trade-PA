@@ -2,6 +2,12 @@
   "buildCommand": "cd trade-pa && npm install && npm run build",
   "outputDirectory": "trade-pa/dist",
   "installCommand": "cd trade-pa && npm install",
+  "crons": [
+    {
+      "path": "/api/email-cron",
+      "schedule": "0 * * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/auth/gmail/connect", "destination": "/api/email" },
     { "source": "/api/auth/gmail/callback", "destination": "/api/email" },
@@ -14,6 +20,9 @@
     { "source": "/api/outlook/inbox", "destination": "/api/email" },
     { "source": "/api/outlook/thread", "destination": "/api/email" },
     { "source": "/api/outlook/send", "destination": "/api/email" },
-    { "source": "/api/outlook/parse-supplier", "destination": "/api/email" }
+    { "source": "/api/outlook/parse-supplier", "destination": "/api/email" },
+    { "source": "/api/email/actions", "destination": "/api/email" },
+    { "source": "/api/email/actions/approve", "destination": "/api/email" },
+    { "source": "/api/email/actions/reject", "destination": "/api/email" }
   ]
 }
