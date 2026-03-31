@@ -4908,6 +4908,11 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
     return params.get("email_connected") || null;
   });
 
+  // Voice dictation for compose
+  const { recording, transcribing, toggle } = useWhisper((text) => {
+    if (text) setComposeData(p => ({ ...p, body: p.body ? p.body + " " + text : text }));
+  });
+
   // Email reader state
   const [threads, setThreads] = useState([]);
   const [selectedThread, setSelectedThread] = useState(null);
@@ -5147,80 +5152,131 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
 
       {/* ── Inbox tab ── */}
       {tab === "inbox" && (
-        <div style={{ display: "flex", gap: 12, height: "calc(100vh - 240px)", overflow: "hidden" }}>
-          {/* Thread list */}
-          <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 10 }}>
+        <div>
+          {/* Thread list - full width on mobile */}
+          <div style={{ background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 10, overflow: "hidden" }}>
             <div style={{ padding: "10px 14px", borderBottom: `1px solid ${IC.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: IC.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>Inbox</div>
               <div style={{ display: "flex", gap: 6 }}>
                 <button style={IS.btn("default")} onClick={() => loadInbox()} title="Refresh">↻</button>
-                <button style={IS.btn("amber")} onClick={() => { setComposing(true); setSelectedThread(null); }}>+ New</button>
+                <button style={IS.btn("amber")} onClick={() => setComposing(true)}>+ New</button>
               </div>
             </div>
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              {inboxLoading && <div style={{ padding: 20, textAlign: "center", color: IC.muted, fontSize: 12 }}>Loading...</div>}
-              {!inboxLoading && threads.length === 0 && <div style={{ padding: 20, textAlign: "center", color: IC.muted, fontSize: 12 }}>No emails found</div>}
-              {threads.map(t => (
-                <div key={t.id + (t.messageId || "")} onClick={() => openThread(t)}
-                  style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${IC.border}`, background: selectedThread?.id === t.id ? IC.amberLight : "transparent" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 12, fontWeight: t.unread ? 700 : 400, color: IC.text, marginBottom: 2 }}>{fromName(t.from)}</div>
-                    <div style={{ fontSize: 9, color: IC.muted }}>{formatTime(t.date)}</div>
-                  </div>
-                  <div style={{ fontSize: 11, color: t.unread ? IC.amber : IC.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 2 }}>
-                    {t.unread && <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: IC.amber, marginRight: 4, verticalAlign: "middle" }} />}
-                    {t.subject}{t.hasAttachment && " 📎"}
-                  </div>
-                  <div style={{ fontSize: 10, color: IC.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.snippet}</div>
+            {inboxLoading && <div style={{ padding: 20, textAlign: "center", color: IC.muted, fontSize: 12 }}>Loading...</div>}
+            {!inboxLoading && threads.length === 0 && <div style={{ padding: 20, textAlign: "center", color: IC.muted, fontSize: 12 }}>No emails found</div>}
+            {threads.map(t => (
+              <div key={t.id + (t.messageId || "")} onClick={() => openThread(t)}
+                style={{ padding: "12px 14px", cursor: "pointer", borderBottom: `1px solid ${IC.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                  <div style={{ fontSize: 13, fontWeight: t.unread ? 700 : 500, color: IC.text }}>{fromName(t.from)}</div>
+                  <div style={{ fontSize: 10, color: IC.muted, flexShrink: 0, marginLeft: 8 }}>{formatTime(t.date)}</div>
                 </div>
-              ))}
-            </div>
+                <div style={{ fontSize: 12, color: t.unread ? IC.amber : IC.textDim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 2 }}>
+                  {t.unread && <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: IC.amber, marginRight: 5, verticalAlign: "middle" }} />}
+                  {t.subject}{t.hasAttachment && " 📎"}
+                </div>
+                <div style={{ fontSize: 11, color: IC.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.snippet}</div>
+              </div>
+            ))}
           </div>
 
-          {/* Message view */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 10 }}>
-            {composing && (
-              <div style={{ padding: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: IC.text, marginBottom: 10 }}>New email</div>
-                <input style={IS.input} placeholder="To" value={composeData.to} onChange={e => setComposeData(p => ({ ...p, to: e.target.value }))} />
-                <input style={IS.input} placeholder="Subject" value={composeData.subject} onChange={e => setComposeData(p => ({ ...p, subject: e.target.value }))} />
-                <textarea style={{ ...IS.input, minHeight: 100, resize: "vertical" }} placeholder="Message..." value={composeData.body} onChange={e => setComposeData(p => ({ ...p, body: e.target.value }))} />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button style={IS.btn("amber")} disabled={sending} onClick={sendEmail}>{sending ? "Sending..." : "Send"}</button>
-                  <button style={IS.btn("default")} onClick={() => setComposing(false)}>Cancel</button>
-                </div>
-              </div>
-            )}
-            {!selectedThread && !composing && (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: IC.muted, fontSize: 13 }}>Select an email to read</div>
-            )}
-            {selectedThread && !composing && (
-              <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-                <div style={{ padding: "12px 16px", borderBottom: `1px solid ${IC.border}` }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: IC.text, marginBottom: 8 }}>{selectedThread.subject}</div>
+          {/* ── Email read modal ── */}
+          {selectedThread && (
+            <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 0, paddingTop: "env(safe-area-inset-top, 0px)" }}
+              onClick={() => setSelectedThread(null)}>
+              <div onClick={e => e.stopPropagation()}
+                style={{ background: IC.bg2, width: "100%", maxWidth: 600, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                {/* Modal header */}
+                <div style={{ padding: "14px 16px", borderBottom: `1px solid ${IC.border}`, background: IC.bg2, flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: IC.text, flex: 1, marginRight: 12, lineHeight: 1.3 }}>{selectedThread.subject}</div>
+                    <button onClick={() => setSelectedThread(null)} style={{ background: "none", border: "none", color: IC.muted, cursor: "pointer", fontSize: 24, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+                  </div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button style={IS.btn("default")} onClick={() => { const last = messages[messages.length - 1]; setComposing(true); setComposeData({ to: last?.from?.match(/<(.+)>/)?.[1] || last?.from || "", subject: `Re: ${selectedThread.subject}`, body: "" }); }}>Reply</button>
-                    <button style={IS.btn("default")} onClick={() => { setComposing(true); setComposeData({ to: "", subject: `Fwd: ${selectedThread.subject}`, body: "" }); }}>Forward</button>
+                    <button style={IS.btn("amber")} onClick={() => {
+                      const last = messages[messages.length - 1];
+                      setSelectedThread(null);
+                      setComposing(true);
+                      setComposeData({ to: last?.from?.match(/<(.+)>/)?.[1] || last?.from || "", subject: `Re: ${selectedThread.subject}`, body: "" });
+                    }}>↩ Reply</button>
+                    <button style={IS.btn("default")} onClick={() => {
+                      setSelectedThread(null);
+                      setComposing(true);
+                      setComposeData({ to: "", subject: `Fwd: ${selectedThread.subject}`, body: "" });
+                    }}>→ Forward</button>
                   </div>
                 </div>
+                {/* Messages */}
                 <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-                  {threadLoading && <div style={{ color: IC.muted, fontSize: 12 }}>Loading...</div>}
+                  {threadLoading && <div style={{ color: IC.muted, fontSize: 12, textAlign: "center", padding: 20 }}>Loading...</div>}
                   {messages.map(msg => (
-                    <div key={msg.id} style={{ background: IC.bg3, borderRadius: 8, padding: 14, marginBottom: 10, border: `1px solid ${IC.border}` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: IC.text }}>{fromName(msg.from)}</div>
-                        <div style={{ fontSize: 10, color: IC.muted }}>{formatTime(msg.date)}</div>
+                    <div key={msg.id} style={{ background: IC.bg3, borderRadius: 10, padding: 16, marginBottom: 12, border: `1px solid ${IC.border}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: IC.text }}>{fromName(msg.from)}</div>
+                          <div style={{ fontSize: 11, color: IC.muted }}>to {msg.to}</div>
+                        </div>
+                        <div style={{ fontSize: 11, color: IC.muted, flexShrink: 0, marginLeft: 8 }}>{formatTime(msg.date)}</div>
                       </div>
-                      <div style={{ fontSize: 11, color: IC.muted, marginBottom: 10 }}>to {msg.to}</div>
-                      <div style={{ fontSize: 13, color: IC.text, lineHeight: 1.6 }}>
-                        {msg.isHtml ? <div dangerouslySetInnerHTML={{ __html: msg.body }} /> : <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", margin: 0 }}>{msg.body}</pre>}
+                      <div style={{ borderTop: `1px solid ${IC.border}`, paddingTop: 12, fontSize: 14, color: IC.text, lineHeight: 1.7 }}>
+                        {msg.isHtml
+                          ? <div style={{ color: IC.text }} dangerouslySetInnerHTML={{ __html: msg.body }} />
+                          : <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", margin: 0, fontSize: 14 }}>{msg.body}</pre>
+                        }
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* ── Compose modal ── */}
+          {composing && (
+            <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, paddingTop: "env(safe-area-inset-top, 0px)" }}>
+              <div style={{ background: IC.bg2, width: "100%", maxWidth: 600, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                {/* Compose header */}
+                <div style={{ padding: "14px 16px", borderBottom: `1px solid ${IC.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: IC.text }}>New Email</div>
+                  <button onClick={() => { setComposing(false); setComposeData({ to: "", subject: "", body: "" }); }} style={{ background: "none", border: "none", color: IC.muted, cursor: "pointer", fontSize: 24, lineHeight: 1 }}>×</button>
+                </div>
+                {/* Compose body */}
+                <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: IC.muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>To</label>
+                    <input style={IS.input} placeholder="customer@email.com" value={composeData.to} onChange={e => setComposeData(p => ({ ...p, to: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: IC.muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Subject</label>
+                    <input style={IS.input} placeholder="Invoice #INV-042 from Dave's Plumbing" value={composeData.subject} onChange={e => setComposeData(p => ({ ...p, subject: e.target.value }))} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <label style={{ fontSize: 11, color: IC.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Message</label>
+                      <button
+                        onClick={toggle}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, background: recording ? IC.red : IC.amber, color: recording ? "#fff" : "#000" }}>
+                        {transcribing ? "⏳ Transcribing..." : recording ? "⏹ Stop" : "🎙 Dictate"}
+                      </button>
+                    </div>
+                    <textarea
+                      style={{ ...IS.input, minHeight: 200, resize: "none", flex: 1 }}
+                      placeholder="Type your message here, or tap Dictate to speak it..."
+                      value={composeData.body}
+                      onChange={e => setComposeData(p => ({ ...p, body: e.target.value }))}
+                    />
+                    {recording && <div style={{ fontSize: 11, color: IC.red, marginTop: 6, textAlign: "center" }}>🔴 Recording... tap Stop when done</div>}
+                  </div>
+                </div>
+                {/* Compose footer */}
+                <div style={{ padding: "12px 16px", borderTop: `1px solid ${IC.border}`, flexShrink: 0 }}>
+                  <button style={{ ...IS.btn("amber"), width: "100%", justifyContent: "center", padding: "12px", fontSize: 13 }} disabled={sending || !composeData.to || !composeData.subject} onClick={sendEmail}>
+                    {sending ? "Sending..." : "Send Email →"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
