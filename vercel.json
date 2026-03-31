@@ -1,5 +1,19 @@
 {
   "buildCommand": "cd trade-pa && npm install && npm run build",
   "outputDirectory": "trade-pa/dist",
-  "installCommand": "cd trade-pa && npm install"
+  "installCommand": "cd trade-pa && npm install",
+  "rewrites": [
+    { "source": "/api/auth/gmail/connect", "destination": "/api/email" },
+    { "source": "/api/auth/gmail/callback", "destination": "/api/email" },
+    { "source": "/api/auth/outlook/connect", "destination": "/api/email" },
+    { "source": "/api/auth/outlook/callback", "destination": "/api/email" },
+    { "source": "/api/gmail/inbox", "destination": "/api/email" },
+    { "source": "/api/gmail/thread", "destination": "/api/email" },
+    { "source": "/api/gmail/send", "destination": "/api/email" },
+    { "source": "/api/gmail/parse-supplier", "destination": "/api/email" },
+    { "source": "/api/outlook/inbox", "destination": "/api/email" },
+    { "source": "/api/outlook/thread", "destination": "/api/email" },
+    { "source": "/api/outlook/send", "destination": "/api/email" },
+    { "source": "/api/outlook/parse-supplier", "destination": "/api/email" }
+  ]
 }
