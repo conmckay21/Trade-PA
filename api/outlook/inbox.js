@@ -1,6 +1,6 @@
-const { getValidOutlookToken } = require("./_token.js");
+import { getValidOutlookToken } from "./_token.js";
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const { userId, skipToken } = req.query;
   if (!userId) return res.status(400).json({ error: "userId required" });
 
@@ -47,4 +47,4 @@ module.exports = async function handler(req, res) {
     console.error("Outlook inbox error:", err.message);
     res.status(500).json({ error: err.message });
   }
-};
+}
