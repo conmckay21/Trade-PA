@@ -5103,7 +5103,7 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
   async function approve(action) {
     setProcessing(p => ({ ...p, [action.id]: true }));
     try {
-      executeAction(action);
+      await executeAction(action);
       await fetch("/api/email/actions/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
       setPendingActions(prev => prev.filter(a => a.id !== action.id));
       setRecentActions(prev => [{ ...action, status: "approved" }, ...prev]);
@@ -5120,19 +5120,54 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
     setProcessing(p => ({ ...p, [action.id]: false }));
   }
 
-  function executeAction(action) {
+  async function executeAction(action) {
     const d = action.action_data || {};
     switch (action.action_type) {
       case "create_job": setJobs(prev => [...(prev || []), { id: Date.now(), customer: d.customer || "Unknown", address: d.address || "", type: d.type || "Job", date: new Date().toLocaleDateString("en-GB"), dateObj: new Date().toISOString(), status: "pending", value: 0, notes: d.notes || `From email: ${action.email_subject}` }]); break;
-      case "create_enquiry": setEnquiries(prev => [{ name: d.name || "Unknown", source: "Email", msg: d.message || action.email_snippet, time: "Just now", urgent: d.urgent || false }, ...(prev || [])]); break;
-      case "save_customer": { const ex = (customers || []).find(c => c.name?.toLowerCase() === (d.name || "").toLowerCase()); if (!ex) setCustomers(prev => [...(prev || []), { id: Date.now(), name: d.name || "Unknown", email: d.email || "", phone: d.phone || "", address: "", notes: "" }]); break; }
+      case "create_enquiry": setEnquiries(prev => [{ name: d.name || d.customer || "Unknown", source: "Email", msg: d.message || action.email_snippet, time: "Just now", urgent: d.urgent || false }, ...(prev || [])]); break;
+      case "save_customer": { const ex = (customers || []).find(c => c.name?.toLowerCase() === (d.name || d.customer || "").toLowerCase()); if (!ex) setCustomers(prev => [...(prev || []), { id: Date.now(), name: d.name || d.customer || "Unknown", email: d.email || d.reply_to || "", phone: d.phone || "", address: "", notes: "" }]); break; }
       case "add_materials": setMaterials(prev => [...(prev || []), { id: Date.now(), item: `Items from ${d.supplier || "supplier"}`, qty: 1, unitPrice: 0, supplier: d.supplier || "", job: "", status: "to_order" }]); break;
       case "mark_invoice_paid": { const inv = (invoices || []).find(i => !i.isQuote && i.status !== "paid" && i.customer?.toLowerCase().includes((d.customer || "").toLowerCase())); if (inv) setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, status: "paid" } : i)); break; }
+      case "accept_quote": {
+        // Find matching quote by customer name or address
+        const customerName = d.customer || "";
+        const address = d.address || d.notes || "";
+        const matchingQuote = (invoices || []).find(i =>
+          i.isQuote &&
+          (i.customer?.toLowerCase().includes(customerName.toLowerCase()) ||
+           (address && (i.jobRef?.toLowerCase().includes(address.toLowerCase()) ||
+            i.address?.toLowerCase().includes(address.toLowerCase()))))
+        );
+
+        if (matchingQuote) {
+          // Convert quote to invoice
+          const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+          const newInvoice = { ...matchingQuote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand?.paymentTerms || 30} days` };
+          setInvoices(prev => [newInvoice, ...(prev || []).filter(i => i.id !== matchingQuote.id)]);
+        } else {
+          // No matching quote found — create a job instead
+          setJobs(prev => [...(prev || []), { id: Date.now(), customer: customerName || "Unknown", address: d.address || "", type: d.type || "Boiler Installation", date: new Date().toLocaleDateString("en-GB"), dateObj: new Date().toISOString(), status: "pending", value: 0, notes: `Quote accepted via email. ${d.notes || ""}` }]);
+        }
+
+        // Send reply email asking for booking date
+        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+        if (replyTo && connection) {
+          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+          const jobDesc = d.address || d.type || "the work";
+          const replyBody = `<p>Hi ${customerName || "there"},</p><p>Thank you for confirming you'd like to go ahead with ${jobDesc}. I'll get that booked in for you.</p><p>What date and time would suit you best? Please let me know a few options and I'll confirm which works.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}</p>`;
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+          }).catch(err => console.error("Reply failed:", err.message));
+        }
+        break;
+      }
     }
   }
 
-  function actionIcon(type) { return { create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", add_materials: "🔧", save_customer: "👤" }[type] || "⚡"; }
-  function actionColor(type) { return { create_job: IC.green, create_enquiry: IC.blue, mark_invoice_paid: IC.green, add_materials: IC.amber, save_customer: "#8b5cf6" }[type] || IC.amber; }
+  function actionIcon(type) { return { create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", add_materials: "🔧", save_customer: "👤", accept_quote: "🤝" }[type] || "⚡"; }
+  function actionColor(type) { return { create_job: IC.green, create_enquiry: IC.blue, mark_invoice_paid: IC.green, add_materials: IC.amber, save_customer: "#8b5cf6", accept_quote: IC.green }[type] || IC.amber; }
   function formatTime(ts) { if (!ts) return ""; const d = new Date(ts), diff = Date.now() - d; if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`; return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
   function fromName(from) { if (!from) return "Unknown"; const m = from.match(/^(.+?)\s*</); return m ? m[1].replace(/"/g, "") : from.split("@")[0]; }
 
