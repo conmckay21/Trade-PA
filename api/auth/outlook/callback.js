@@ -1,11 +1,19 @@
-const { createClient } = require("@supabase/supabase-js");
+async function upsertEmailConnection(userId, data) {
+  const url = `${process.env.VITE_SUPABASE_URL}/rest/v1/email_connections`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "apikey": process.env.SUPABASE_SERVICE_KEY,
+      "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "resolution=merge-duplicates",
+    },
+    body: JSON.stringify({ user_id: userId, ...data }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
-
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const { code, state: userId, error } = req.query;
 
   if (error) return res.redirect(`${process.env.APP_URL}?email_error=${error}`);
@@ -36,19 +44,18 @@ module.exports = async function handler(req, res) {
     });
     const profile = await profileRes.json();
 
-    await supabase.from("email_connections").upsert({
-      user_id: userId,
+    await upsertEmailConnection(userId, {
       provider: "outlook",
       email: profile.mail || profile.userPrincipalName,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
       updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id,provider" });
+    });
 
     res.redirect(`${process.env.APP_URL}?email_connected=outlook`);
   } catch (err) {
     console.error("Outlook callback error:", err.message);
     res.redirect(`${process.env.APP_URL}?email_error=${encodeURIComponent(err.message)}`);
   }
-};
+}
