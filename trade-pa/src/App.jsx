@@ -5017,8 +5017,11 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
     } catch (e) { console.error(e); }
   }
 
+  const [checkResult, setCheckResult] = useState(null);
+
   async function runEmailCheck() {
     setChecking(true);
+    setCheckResult(null);
     try {
       const res = await fetch("/api/email-check", {
         method: "POST",
@@ -5030,9 +5033,12 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
       await loadActions();
       const { data: connData } = await window._supabase.from("email_connections").select("provider, email, last_checked").eq("user_id", user.id);
       if (connData?.length) setConnection(connData[0]);
+      setCheckResult({ emails: data.emailsChecked || 0, actions: data.actionsCreated || 0, debug: data.debug || [] });
+      setTimeout(() => setCheckResult(null), 10000);
     } catch (e) {
       console.error("Check failed:", e.message);
-      alert("Check failed: " + e.message);
+      setCheckResult({ error: e.message });
+      setTimeout(() => setCheckResult(null), 6000);
     }
     setChecking(false);
   }
@@ -5207,6 +5213,26 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
         <button style={IS.tab(tab === "inbox")} onClick={() => setTab("inbox")}>Inbox</button>
         <button style={IS.tab(tab === "recent")} onClick={() => setTab("recent")}>History</button>
       </div>
+
+      {/* Check result banner */}
+      {checkResult && (
+        <div style={{ padding: "10px 14px", borderRadius: 8, fontSize: 12,
+          background: checkResult.error ? "#7f1d1d" : checkResult.actions > 0 ? "#064e3b" : "#1a1a1a",
+          border: `1px solid ${checkResult.error ? "#ef4444" : checkResult.actions > 0 ? "#10b981" : "#2a2a2a"}`,
+          color: checkResult.error ? "#fca5a5" : checkResult.actions > 0 ? "#6ee7b7" : "#6b7280" }}>
+          <div style={{ fontWeight: 600, marginBottom: checkResult.debug?.length ? 8 : 0 }}>
+            {checkResult.error
+              ? `⚠ Check failed: ${checkResult.error}`
+              : checkResult.actions > 0
+                ? `✓ Checked ${checkResult.emails} emails — found ${checkResult.actions} new action${checkResult.actions !== 1 ? "s" : ""}`
+                : `✓ Checked ${checkResult.emails} emails — no new actions`
+            }
+          </div>
+          {checkResult.debug?.map((line, i) => (
+            <div key={i} style={{ fontSize: 11, opacity: 0.8, marginTop: 3 }}>{line}</div>
+          ))}
+        </div>
+      )}
 
       {/* ── AI Actions tab ── */}
       {tab === "pending" && (
