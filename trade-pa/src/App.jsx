@@ -4501,10 +4501,83 @@ function CustomerForm({ form, set, onSave, onCancel }) {
 }
 
 // ─── Invoices View ────────────────────────────────────────────────────────────
-function InvoicesView({ brand, invoices, setInvoices, user }) {
+// ─── Send Invoice/Quote by Email ─────────────────────────────────────────────
+async function sendDocumentEmail(doc, brand, customers, userId, setSending) {
+  if (!userId) { alert("Please log in first."); return false; }
+
+  // Check email connection
+  const connRes = await fetch(
+    `${window._supabaseUrl || ""}/rest/v1/email_connections?user_id=eq.${userId}&select=provider,email`,
+    {
+      headers: {
+        "apikey": window._supabaseAnonKey || "",
+        "Authorization": `Bearer ${window._supabaseToken || ""}`,
+      },
+    }
+  ).catch(() => null);
+
+  // Use supabase client directly instead
+  const { data: conns } = await window._supabase
+    .from("email_connections")
+    .select("provider, email")
+    .eq("user_id", userId);
+
+  if (!conns?.length) {
+    alert("No email account connected. Go to the Inbox tab to connect Gmail or Outlook first.");
+    return false;
+  }
+
+  const provider = conns[0].provider;
+
+  // Look up customer email
+  const customerRecord = (customers || []).find(c =>
+    c.name?.toLowerCase() === doc.customer?.toLowerCase()
+  );
+  let toEmail = customerRecord?.email || doc.customerEmail || "";
+
+  if (!toEmail) {
+    toEmail = prompt(`Enter email address for ${doc.customer}:`);
+    if (!toEmail) return false;
+  }
+
+  const isQuote = doc.isQuote;
+  const docType = isQuote ? "Quote" : "Invoice";
+  const subject = `${docType} ${doc.id} from ${brand.tradingName} — £${doc.amount}`;
+  const body = `<p>Dear ${doc.customer},</p>
+<p>Please find your ${docType.toLowerCase()} ${doc.id} for £${doc.amount} attached below.</p>
+${!isQuote && brand.bankName ? `<p><strong>Payment details:</strong><br>
+Bank: ${brand.bankName}<br>
+Sort code: ${brand.sortCode}<br>
+Account number: ${brand.accountNumber}<br>
+Reference: ${doc.id}</p>` : ""}
+${isQuote ? `<p>This quote is valid for 30 days. Please get in touch to proceed or if you have any questions.</p>` : `<p>Payment is due within ${brand.paymentTerms || 30} days.</p>`}
+<p>Many thanks,<br>${brand.tradingName}${brand.phone ? `<br>${brand.phone}` : ""}${brand.email ? `<br>${brand.email}` : ""}</p>`;
+
+  if (setSending) setSending(doc.id);
+  try {
+    const endpoint = provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, to: toEmail, subject, body }),
+    });
+    const result = await res.json();
+    if (result.error) throw new Error(result.error);
+    alert(`✓ ${docType} sent to ${toEmail}`);
+    return true;
+  } catch (err) {
+    alert(`Failed to send: ${err.message}`);
+    return false;
+  } finally {
+    if (setSending) setSending(null);
+  }
+}
+
+function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
+  const [sendingId, setSendingId] = useState(null);
 
   const allInvoices = (invoices || []).filter(i => !i.isQuote);
   const paid = allInvoices.filter(i => i.status === "paid");
@@ -4571,6 +4644,7 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
               <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
+              <button onClick={e => { e.stopPropagation(); sendDocumentEmail(inv, brand, customers, user?.id, setSendingId); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.blue, flexShrink: 0 }} disabled={sendingId === inv.id}>{sendingId === inv.id ? "..." : "✉"}</button>
               <button onClick={e => { e.stopPropagation(); updateStatus(inv.id, "paid"); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green, flexShrink: 0 }}>✓ Paid</button>
               <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
             </div>
@@ -4681,6 +4755,7 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
 
             <div style={{ display: "flex", gap: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.blue }} onClick={() => sendDocumentEmail(selected, brand, customers, user?.id, setSendingId)} disabled={sendingId === selected?.id}>{sendingId === selected?.id ? "Sending..." : "✉ Send"}</button>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingInvoice(selected)}>✏ Edit</button>
               {selected.status === "overdue" && <button style={S.btn("danger")} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteInvoice(selected.id)}>Delete</button>
@@ -4696,10 +4771,11 @@ function InvoicesView({ brand, invoices, setInvoices, user }) {
 }
 
 // ─── Quotes View ──────────────────────────────────────────────────────────────
-function QuotesView({ brand, invoices, setInvoices, setView }) {
+function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingQuote, setEditingQuote] = useState(null);
+  const [sendingId, setSendingId] = useState(null);
 
   const allQuotes = (invoices || []).filter(i => i.isQuote);
   const pending = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
@@ -4771,6 +4847,7 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
               <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
                 {q.status === "accepted" ? "Accepted" : q.status === "declined" ? "Declined" : "Sent"}
               </div>
+              <button onClick={e => { e.stopPropagation(); sendDocumentEmail(q, brand, customers, user?.id, setSendingId); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.blue, flexShrink: 0 }} disabled={sendingId === q.id}>{sendingId === q.id ? "..." : "✉"}</button>
               <button onClick={e => { e.stopPropagation(); convertToInvoice(q); }} style={{ ...S.btn("primary"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>→ Invoice</button>
               <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
             </div>
@@ -4799,15 +4876,7 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Line Items</div>
-                {(selected.lineItems && selected.lineItems.length > 0)
-                  ? selected.lineItems.map((l, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: i > 0 ? 6 : 0, borderTop: i > 0 ? `1px solid ${C.border}` : "none", marginTop: i > 0 ? 6 : 0 }}>
-                      <span>{l.description}</span>
-                      <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{(l.amount || 0).toFixed(2)}</span>
-                    </div>
-                  ))
-                  : <div style={{ fontSize: 13, whiteSpace: "pre-line", lineHeight: 1.7 }}>{selected.description || selected.desc || "—"}</div>
-                }
+                <LineItemsDisplay inv={selected} />
               </div>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Valid For</div>
@@ -4834,6 +4903,7 @@ function QuotesView({ brand, invoices, setInvoices, setView }) {
             <div style={{ display: "flex", gap: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingQuote(selected)}>✏️ Edit</button>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.blue }} onClick={() => sendDocumentEmail(selected, brand, customers, user?.id, setSendingId)} disabled={sendingId === selected?.id}>{sendingId === selected?.id ? "Sending..." : "✉ Send"}</button>
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteQuote(selected.id)}>Delete</button>
             </div>
           </div>
@@ -5767,8 +5837,8 @@ export default function App() {
         {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} />}
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} />}
-        {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} />}
-        {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} />}
+        {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} />}
+        {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} />}
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
