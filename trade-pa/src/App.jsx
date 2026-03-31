@@ -304,6 +304,7 @@ const DEFAULT_BRAND = {
   address: "",
   gasSafeNumber: "",
   vatNumber: "",
+  utrNumber: "",
   bankName: "",
   sortCode: "",
   accountNumber: "",
@@ -495,6 +496,7 @@ function downloadInvoicePDF(brand, inv) {
       ${brand.phone ? `<div class="addr-detail">${brand.phone}</div>` : ""}
       ${brand.email ? `<div class="addr-detail addr-accent">${brand.email}</div>` : ""}
       ${brand.gasSafeNumber ? `<div class="addr-detail" style="font-size:11px;color:#999;margin-top:6px">Gas Safe: ${brand.gasSafeNumber}</div>` : ""}
+      ${brand.utrNumber ? `<div class="addr-detail" style="font-size:11px;color:#999;margin-top:2px">UTR: ${brand.utrNumber}</div>` : ""}
     </div>
     <div>
       <div class="addr-label">To</div>
@@ -822,7 +824,7 @@ function InvoicePreview({ brand, invoice }) {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 // ─── Team Invite ──────────────────────────────────────────────────────────────
 function TeamInvite({ companyId }) {
-  const ALL_SECTIONS = ["Dashboard", "Schedule", "Customers", "Invoices", "Quotes", "Materials", "AI Assistant", "Reminders", "Payments"];
+  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox"];
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [sending, setSending] = useState(false);
@@ -1135,6 +1137,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             { k: "website", l: "Website" },
             { k: "gasSafeNumber", l: "Gas Safe Number" },
             { k: "vatNumber", l: "VAT Number (if registered)" },
+            { k: "utrNumber", l: "UTR Number (Unique Taxpayer Reference)" },
           ].map(({ k, l }) => (
             <div key={k}>
               <label style={S.label}>{l}</label>
@@ -1323,7 +1326,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           const email = m.invited_email || m.users?.email || "Team member";
           const initials = email[0].toUpperCase();
           const perms = m.permissions || {};
-          const ALL_SECTIONS = ["Dashboard", "Schedule", "Customers", "Invoices", "Quotes", "Materials", "AI Assistant", "Reminders", "Payments"];
+          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox"];
 
           return (
             <div key={i} style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 14, marginBottom: 14 }}>
@@ -4787,12 +4790,27 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
     if (selected && selected.id === id) setSelected(s => ({ ...s, status }));
   };
 
-  const convertToInvoice = (quote) => {
+  const convertToInvoice = async (quote) => {
     const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
     const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
     setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== quote.id)]);
     setSelected(null);
-    setView("Invoices");
+    // Create a job card in Supabase
+    if (user?.id) {
+      supabase.from("job_cards").insert({
+        user_id: user.id,
+        title: `${quote.type || "Job"} — ${quote.customer}`,
+        customer: quote.customer,
+        address: quote.address || "",
+        type: quote.type || "",
+        status: "accepted",
+        value: quote.amount || 0,
+        quote_id: quote.id,
+        invoice_id: newId,
+        notes: `Created from quote ${quote.id}`,
+      }).then(({ error }) => { if (error) console.error("Job card creation failed:", error.message); });
+    }
+    setView("Jobs");
   };
 
   const deleteQuote = (id) => {
@@ -5597,7 +5615,813 @@ ${!hasDate ? "<li><strong>Preferred date and time</strong></li>" : ""}
   );
 }
 
-const VIEWS = ["Dashboard", "Schedule", "Customers", "Invoices", "Quotes", "Materials", "AI Assistant", "Reminders", "Payments", "Inbox", "Settings"];
+// ─── Jobs Tab ─────────────────────────────────────────────────────────────────
+const JOB_STATUSES = [
+  { value: "enquiry", label: "Enquiry", color: C.muted },
+  { value: "quoted", label: "Quoted", color: C.blue },
+  { value: "accepted", label: "Accepted", color: C.purple },
+  { value: "in_progress", label: "In Progress", color: C.amber },
+  { value: "completed", label: "Completed", color: C.green },
+  { value: "cancelled", label: "Cancelled", color: C.red },
+];
+
+const COMPLIANCE_TYPES = [
+  "Gas Safe Certificate", "Boiler Commissioning Sheet", "EICR", "Electrical Installation Certificate",
+  "Part P Building Reg", "Pressure Test Certificate", "Landlord Gas Safety Record",
+  "Air Tightness Test", "SAP Calculation", "Other",
+];
+
+function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
+  const [jobs, setJobCards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [tab, setTab] = useState("notes");
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", annual_service: false });
+  const [notes, setNotes] = useState([]);
+  const [photos, setPhotos] = useState([]);
+  const [timeLogs, setTimeLogs] = useState([]);
+  const [vos, setVos] = useState([]);
+  const [compDocs, setCompDocs] = useState([]);
+  const [daysheets, setDaysheets] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [addNote, setAddNote] = useState("");
+  const [addTime, setAddTime] = useState({ date: new Date().toISOString().slice(0,10), hours: "", rate: "", description: "" });
+  const [addVO, setAddVO] = useState({ vo_number: "", description: "", amount: "" });
+  const [addDoc, setAddDoc] = useState({ doc_type: "", doc_number: "", issued_date: "", expiry_date: "", notes: "" });
+  const [addDaysheet, setAddDaysheet] = useState({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" });
+  const photoRef = useRef();
+  const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  useEffect(() => { loadJobs(); }, [user]);
+  useEffect(() => {
+    if (selected) { loadJobDetails(selected.id); }
+  }, [selected?.id]);
+
+  // Check for annual service reminders on load
+  useEffect(() => {
+    const today = new Date();
+    jobs.forEach(j => {
+      if (j.annual_service && j.next_service_date && !j.service_reminder_sent) {
+        const due = new Date(j.next_service_date);
+        const daysUntil = Math.ceil((due - today) / 86400000);
+        if (daysUntil <= 14 && daysUntil >= 0) {
+          sendServiceReminder(j);
+        }
+      }
+    });
+  }, [jobs]);
+
+  async function sendServiceReminder(job) {
+    // Find customer email
+    const cust = (customers || []).find(c => c.name?.toLowerCase() === job.customer?.toLowerCase());
+    if (!cust?.email) return;
+    // Mark reminder sent first to prevent duplicates
+    await supabase.from("job_cards").update({ service_reminder_sent: true }).eq("id", job.id);
+    setJobCards(prev => prev.map(j => j.id === job.id ? { ...j, service_reminder_sent: true } : j));
+    // Check email connection
+    const { data: conns } = await supabase.from("email_connections").select("provider").eq("user_id", user.id);
+    if (!conns?.length) return;
+    const provider = conns[0].provider;
+    const endpoint = provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+    await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: user.id,
+        to: cust.email,
+        subject: `Your Annual Boiler Service is Due — ${brand.tradingName}`,
+        body: `<p>Dear ${job.customer},</p><p>Your annual boiler service is now due. Regular servicing keeps your boiler running safely and efficiently, and is often required to maintain your warranty.</p><p>Would you like to get booked in? Simply reply to this email or give us a call and we'll arrange a convenient time.</p><p>Many thanks,<br>${brand.tradingName}${brand.phone ? `<br>${brand.phone}` : ""}${brand.email ? `<br>${brand.email}` : ""}</p>`,
+      }),
+    }).catch(console.error);
+  }
+
+  async function loadJobs() {
+    if (!user) return;
+    setLoading(true);
+    const { data } = await supabase.from("job_cards").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    setJobCards(data || []);
+    setLoading(false);
+  }
+
+  async function loadJobDetails(jobId) {
+    const [n, p, t, v, d, ds] = await Promise.all([
+      supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+      supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+      supabase.from("time_logs").select("*").eq("job_id", jobId).order("log_date", { ascending: false }),
+      supabase.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+      supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+      supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
+    ]);
+    setNotes(n.data || []);
+    setPhotos(p.data || []);
+    setTimeLogs(t.data || []);
+    setVos(v.data || []);
+    setCompDocs(d.data || []);
+    setDaysheets(ds.data || []);
+  }
+
+  async function saveJob() {
+    if (!form.title || !form.customer) return;
+    setSaving(true);
+    const payload = { user_id: user.id, title: form.title, customer: form.customer, address: form.address, type: form.type, status: form.status, value: parseFloat(form.value) || 0, po_number: form.po_number, notes: form.notes, annual_service: form.annual_service, updated_at: new Date().toISOString() };
+    const { data, error } = await supabase.from("job_cards").insert(payload).select().single();
+    if (!error && data) { setJobCards(prev => [data, ...prev]); setShowAdd(false); setForm({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", annual_service: false }); }
+    setSaving(false);
+  }
+
+  async function updateJobStatus(jobId, status) {
+    const updates = { status, updated_at: new Date().toISOString() };
+    if (status === "completed") {
+      updates.completion_date = new Date().toISOString();
+      // Set next service date 50 weeks later
+      const nextService = new Date();
+      nextService.setDate(nextService.getDate() + 350);
+      updates.next_service_date = nextService.toISOString().slice(0, 10);
+      updates.service_reminder_sent = false;
+    }
+    await supabase.from("job_cards").update(updates).eq("id", jobId);
+    setJobCards(prev => prev.map(j => j.id === jobId ? { ...j, ...updates } : j));
+    if (selected?.id === jobId) setSelected(s => ({ ...s, ...updates }));
+  }
+
+  async function addNoteToJob() {
+    if (!addNote.trim() || !selected) return;
+    const { data } = await supabase.from("job_notes").insert({ job_id: selected.id, user_id: user.id, note: addNote.trim() }).select().single();
+    if (data) { setNotes(prev => [data, ...prev]); setAddNote(""); }
+  }
+
+  async function addPhoto(file) {
+    if (!file || !selected) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const data64 = e.target.result;
+      const { data } = await supabase.from("job_photos").insert({ job_id: selected.id, user_id: user.id, data: data64, caption: file.name }).select().single();
+      if (data) setPhotos(prev => [data, ...prev]);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function addTimeLog() {
+    if (!addTime.hours || !selected) return;
+    const { data } = await supabase.from("time_logs").insert({ job_id: selected.id, user_id: user.id, log_date: addTime.date, hours: parseFloat(addTime.hours), rate: parseFloat(addTime.rate) || null, description: addTime.description }).select().single();
+    if (data) { setTimeLogs(prev => [data, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), hours: "", rate: "", description: "" }); }
+  }
+
+  async function addVariationOrder() {
+    if (!addVO.description || !addVO.amount || !selected) return;
+    const { data } = await supabase.from("variation_orders").insert({ job_id: selected.id, user_id: user.id, vo_number: addVO.vo_number, description: addVO.description, amount: parseFloat(addVO.amount), status: "pending" }).select().single();
+    if (data) { setVos(prev => [data, ...prev]); setAddVO({ vo_number: "", description: "", amount: "" }); }
+  }
+
+  async function updateVOStatus(voId, status) {
+    await supabase.from("variation_orders").update({ status }).eq("id", voId);
+    setVos(prev => prev.map(v => v.id === voId ? { ...v, status } : v));
+  }
+
+  async function addComplianceDoc() {
+    if (!addDoc.doc_type || !selected) return;
+    const { data } = await supabase.from("compliance_docs").insert({ job_id: selected.id, user_id: user.id, ...addDoc }).select().single();
+    if (data) { setCompDocs(prev => [data, ...prev]); setAddDoc({ doc_type: "", doc_number: "", issued_date: "", expiry_date: "", notes: "" }); }
+  }
+
+  async function addDayworkSheet() {
+    if (!addDaysheet.hours || !addDaysheet.rate || !selected) return;
+    const { data } = await supabase.from("daywork_sheets").insert({ job_id: selected.id, user_id: user.id, ...addDaysheet, hours: parseFloat(addDaysheet.hours), rate: parseFloat(addDaysheet.rate) }).select().single();
+    if (data) { setDaysheets(prev => [data, ...prev]); setAddDaysheet({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" }); }
+  }
+
+  async function deleteJob(jobId) {
+    if (!confirm("Delete this job? This cannot be undone.")) return;
+    await supabase.from("job_cards").delete().eq("id", jobId);
+    setJobCards(prev => prev.filter(j => j.id !== jobId));
+    setSelected(null);
+  }
+
+  const statusInfo = (s) => JOB_STATUSES.find(x => x.value === s) || JOB_STATUSES[0];
+  const totalHours = timeLogs.reduce((s, t) => s + (t.hours || 0), 0);
+  const totalLabour = timeLogs.reduce((s, t) => s + ((t.hours || 0) * (t.rate || 0)), 0);
+  const totalVOs = vos.filter(v => v.status === "approved").reduce((s, v) => s + (v.amount || 0), 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>Jobs</div>
+        <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Job</button>
+      </div>
+
+      {/* Pipeline stats */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {JOB_STATUSES.map(st => {
+          const count = jobs.filter(j => j.status === st.value).length;
+          return (
+            <div key={st.value} style={{ padding: "6px 12px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, fontSize: 11, color: st.color }}>
+              {st.label} <strong>{count}</strong>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Job list */}
+      {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 20, textAlign: "center" }}>Loading...</div> :
+        jobs.length === 0 ? (
+          <div style={{ ...S.card, textAlign: "center", padding: 40 }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>🔨</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>No jobs yet</div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Jobs are created automatically when a quote is accepted, or add one manually.</div>
+            <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Job</button>
+          </div>
+        ) : jobs.map(j => (
+          <div key={j.id} onClick={() => { setSelected(j); setTab("notes"); }} style={{ ...S.card, cursor: "pointer", borderLeft: `3px solid ${statusInfo(j.status).color}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{j.title}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{j.customer}{j.address ? ` · ${j.address}` : ""}</div>
+                {j.po_number && <div style={{ fontSize: 11, color: C.blue, marginTop: 2 }}>PO: {j.po_number}</div>}
+                {j.annual_service && j.next_service_date && (
+                  <div style={{ fontSize: 10, color: C.green, marginTop: 2 }}>
+                    🔄 Next service: {new Date(j.next_service_date).toLocaleDateString("en-GB")}
+                    {j.service_reminder_sent && " · Reminder sent"}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0, marginLeft: 12 }}>
+                <div style={S.badge(statusInfo(j.status).color)}>{statusInfo(j.status).label}</div>
+                {j.value > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{Number(j.value).toLocaleString()}</div>}
+              </div>
+            </div>
+          </div>
+        ))
+      }
+
+      {/* Add Job Modal */}
+      {showAdd && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 500, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Job</div>
+              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[
+                { k: "title", l: "Job Title", p: "e.g. Boiler installation — 55 Merthyr Ave" },
+                { k: "customer", l: "Customer", p: "e.g. Glenn McKay" },
+                { k: "address", l: "Address", p: "e.g. 55 Merthyr Avenue, Portsmouth" },
+                { k: "type", l: "Job Type", p: "e.g. Boiler Installation, Boiler Service" },
+                { k: "value", l: "Value (£)", p: "e.g. 2500" },
+                { k: "po_number", l: "PO Number (B2B)", p: "e.g. PO-12345" },
+              ].map(({ k, l, p }) => (
+                <div key={k}>
+                  <label style={S.label}>{l}</label>
+                  <input style={S.input} placeholder={p} value={form[k]} onChange={setF(k)} />
+                </div>
+              ))}
+              <div>
+                <label style={S.label}>Status</label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {JOB_STATUSES.slice(0,4).map(st => (
+                    <button key={st.value} onClick={() => setForm(f => ({ ...f, status: st.value }))} style={S.pill(st.color, form.status === st.value)}>{st.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, cursor: "pointer" }} onClick={() => setForm(f => ({ ...f, annual_service: !f.annual_service }))}>
+                <div style={{ width: 36, height: 20, borderRadius: 10, background: form.annual_service ? C.amber : C.border, position: "relative", flexShrink: 0, transition: "all 0.2s" }}>
+                  <div style={{ position: "absolute", top: 2, left: form.annual_service ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "all 0.2s" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>Annual service job</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>Automatically emails customer after 50 weeks to book their next service</div>
+                </div>
+              </div>
+              <div>
+                <label style={S.label}>Notes</label>
+                <textarea style={{ ...S.input, minHeight: 72, resize: "vertical" }} value={form.notes} onChange={setF("notes")} />
+              </div>
+              <button style={S.btn("primary", saving || !form.title || !form.customer)} disabled={saving || !form.title || !form.customer} onClick={saveJob}>{saving ? "Saving..." : "Save Job →"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Job Detail Modal */}
+      {selected && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 0, paddingTop: "env(safe-area-inset-top, 0px)" }}>
+          <div style={{ background: C.surface, width: "100%", maxWidth: 600, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{selected.title}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>{selected.customer}{selected.address ? ` · ${selected.address}` : ""}</div>
+                  {selected.po_number && <div style={{ fontSize: 11, color: C.blue, marginTop: 2 }}>PO: {selected.po_number}</div>}
+                </div>
+                <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 24, lineHeight: 1, flexShrink: 0, marginLeft: 8 }}>×</button>
+              </div>
+              {/* Status pipeline */}
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+                {JOB_STATUSES.map(st => (
+                  <button key={st.value} onClick={() => updateJobStatus(selected.id, st.value)}
+                    style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${selected.status === st.value ? st.color : C.border}`, background: selected.status === st.value ? st.color + "22" : "transparent", color: selected.status === st.value ? st.color : C.muted, fontSize: 10, fontFamily: "'DM Mono',monospace", fontWeight: 600, cursor: "pointer" }}>
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+              {/* Stats row */}
+              <div style={{ display: "flex", gap: 12, fontSize: 11, color: C.muted }}>
+                {selected.value > 0 && <span style={{ color: C.amber, fontWeight: 700 }}>£{Number(selected.value).toLocaleString()}</span>}
+                {totalHours > 0 && <span>⏱ {totalHours}h logged</span>}
+                {totalLabour > 0 && <span>Labour: £{totalLabour.toFixed(0)}</span>}
+                {totalVOs > 0 && <span style={{ color: C.blue }}>VOs: £{totalVOs.toFixed(0)}</span>}
+                {selected.annual_service && <span style={{ color: C.green }}>🔄 Annual</span>}
+              </div>
+            </div>
+
+            {/* Sub-tabs */}
+            <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: "auto" }}>
+              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["daywork","Daywork"]].map(([v,l]) => (
+                <button key={v} onClick={() => setTab(v)}
+                  style={{ padding: "8px 14px", border: "none", borderBottom: tab === v ? `2px solid ${C.amber}` : "2px solid transparent", background: "transparent", color: tab === v ? C.amber : C.muted, fontSize: 11, fontWeight: tab === v ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'DM Mono',monospace" }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+
+              {/* NOTES */}
+              {tab === "notes" && (
+                <div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                    <textarea style={{ ...S.input, flex: 1, minHeight: 60, resize: "none" }} placeholder="Add a note..." value={addNote} onChange={e => setAddNote(e.target.value)} />
+                    <button style={{ ...S.btn("primary"), alignSelf: "flex-end" }} onClick={addNoteToJob} disabled={!addNote.trim()}>Add</button>
+                  </div>
+                  {notes.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No notes yet.</div>}
+                  {notes.map(n => (
+                    <div key={n.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 14px", marginBottom: 8 }}>
+                      <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{n.note}</div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 6 }}>{new Date(n.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* PHOTOS */}
+              {tab === "photos" && (
+                <div>
+                  <div style={{ marginBottom: 16 }}>
+                    <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center" }} onClick={() => photoRef.current?.click()}>📷 Add Photo</button>
+                    <input ref={photoRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => { addPhoto(e.target.files?.[0]); e.target.value = ""; }} />
+                  </div>
+                  {photos.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 20 }}>No photos yet. Tap to add before/after shots.</div>}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+                    {photos.map(p => (
+                      <div key={p.id} style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${C.border}` }}>
+                        <img src={p.data} alt={p.caption} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
+                        {p.caption && <div style={{ fontSize: 10, color: C.muted, padding: "4px 8px", background: C.surfaceHigh }}>{p.caption}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TIME LOGS */}
+              {tab === "time" && (
+                <div>
+                  <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                    <div style={S.sectionTitle}>Log Time</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                      <div><label style={S.label}>Date</label><input type="date" style={S.input} value={addTime.date} onChange={e => setAddTime(p => ({ ...p, date: e.target.value }))} /></div>
+                      <div><label style={S.label}>Hours</label><input type="number" step="0.5" style={S.input} placeholder="e.g. 8" value={addTime.hours} onChange={e => setAddTime(p => ({ ...p, hours: e.target.value }))} /></div>
+                      <div><label style={S.label}>Rate (£/hr)</label><input type="number" style={S.input} placeholder="e.g. 45" value={addTime.rate} onChange={e => setAddTime(p => ({ ...p, rate: e.target.value }))} /></div>
+                      <div><label style={S.label}>Description</label><input style={S.input} placeholder="e.g. Installation" value={addTime.description} onChange={e => setAddTime(p => ({ ...p, description: e.target.value }))} /></div>
+                    </div>
+                    <button style={S.btn("primary", !addTime.hours)} disabled={!addTime.hours} onClick={addTimeLog}>Add Time</button>
+                  </div>
+                  {totalHours > 0 && (
+                    <div style={{ background: C.amber + "18", border: `1px solid ${C.amber}44`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 12, color: C.text }}>Total: <strong>{totalHours}h</strong></span>
+                      {totalLabour > 0 && <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>£{totalLabour.toFixed(2)}</span>}
+                    </div>
+                  )}
+                  {timeLogs.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No time logged yet.</div>}
+                  {timeLogs.map(t => (
+                    <div key={t.id} style={{ ...S.row }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{t.hours}h {t.description ? `— ${t.description}` : ""}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>{new Date(t.log_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}{t.rate ? ` · £${t.rate}/hr` : ""}</div>
+                      </div>
+                      {t.rate && <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{(t.hours * t.rate).toFixed(2)}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* VARIATION ORDERS */}
+              {tab === "vo" && (
+                <div>
+                  <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                    <div style={S.sectionTitle}>New Variation Order</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        <div><label style={S.label}>VO Number</label><input style={S.input} placeholder="e.g. VO-001" value={addVO.vo_number} onChange={e => setAddVO(p => ({ ...p, vo_number: e.target.value }))} /></div>
+                        <div><label style={S.label}>Amount (£)</label><input type="number" style={S.input} placeholder="e.g. 350" value={addVO.amount} onChange={e => setAddVO(p => ({ ...p, amount: e.target.value }))} /></div>
+                      </div>
+                      <div><label style={S.label}>Description</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} placeholder="Describe the variation..." value={addVO.description} onChange={e => setAddVO(p => ({ ...p, description: e.target.value }))} /></div>
+                      <button style={S.btn("primary", !addVO.description || !addVO.amount)} disabled={!addVO.description || !addVO.amount} onClick={addVariationOrder}>Add Variation →</button>
+                    </div>
+                  </div>
+                  {vos.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No variation orders yet.</div>}
+                  {vos.map(v => (
+                    <div key={v.id} style={{ ...S.card, borderLeft: `3px solid ${v.status === "approved" ? C.green : v.status === "rejected" ? C.red : C.amber}`, marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <div style={{ fontSize: 12, color: C.muted }}>{v.vo_number || "VO"}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{Number(v.amount).toFixed(2)}</div>
+                      </div>
+                      <div style={{ fontSize: 13, marginBottom: 10 }}>{v.description}</div>
+                      {v.status === "pending" && (
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button style={{ ...S.btn("green"), fontSize: 11, padding: "4px 10px" }} onClick={() => updateVOStatus(v.id, "approved")}>✓ Approve</button>
+                          <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.red }} onClick={() => updateVOStatus(v.id, "rejected")}>✗ Reject</button>
+                        </div>
+                      )}
+                      {v.status !== "pending" && <div style={S.badge(v.status === "approved" ? C.green : C.red)}>{v.status}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* COMPLIANCE DOCUMENTS */}
+              {tab === "docs" && (
+                <div>
+                  <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                    <div style={S.sectionTitle}>Add Document</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div>
+                        <label style={S.label}>Document Type</label>
+                        <select style={S.input} value={addDoc.doc_type} onChange={e => setAddDoc(p => ({ ...p, doc_type: e.target.value }))}>
+                          <option value="">Select type...</option>
+                          {COMPLIANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        <div><label style={S.label}>Certificate No.</label><input style={S.input} placeholder="e.g. GS-12345" value={addDoc.doc_number} onChange={e => setAddDoc(p => ({ ...p, doc_number: e.target.value }))} /></div>
+                        <div><label style={S.label}>Issue Date</label><input type="date" style={S.input} value={addDoc.issued_date} onChange={e => setAddDoc(p => ({ ...p, issued_date: e.target.value }))} /></div>
+                        <div><label style={S.label}>Expiry Date</label><input type="date" style={S.input} value={addDoc.expiry_date} onChange={e => setAddDoc(p => ({ ...p, expiry_date: e.target.value }))} /></div>
+                      </div>
+                      <div><label style={S.label}>Notes</label><input style={S.input} placeholder="Any notes..." value={addDoc.notes} onChange={e => setAddDoc(p => ({ ...p, notes: e.target.value }))} /></div>
+                      <button style={S.btn("primary", !addDoc.doc_type)} disabled={!addDoc.doc_type} onClick={addComplianceDoc}>Add Document →</button>
+                    </div>
+                  </div>
+                  {compDocs.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No compliance documents logged yet.</div>}
+                  {compDocs.map(d => (
+                    <div key={d.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{d.doc_type}</div>
+                        {d.expiry_date && <div style={{ fontSize: 11, color: new Date(d.expiry_date) < new Date() ? C.red : C.green }}>
+                          Exp: {new Date(d.expiry_date).toLocaleDateString("en-GB")}
+                        </div>}
+                      </div>
+                      {d.doc_number && <div style={{ fontSize: 11, color: C.muted }}>Cert: {d.doc_number}</div>}
+                      {d.issued_date && <div style={{ fontSize: 11, color: C.muted }}>Issued: {new Date(d.issued_date).toLocaleDateString("en-GB")}</div>}
+                      {d.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{d.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* DAYWORK SHEETS */}
+              {tab === "daywork" && (
+                <div>
+                  <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                    <div style={S.sectionTitle}>Add Daywork Sheet</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        <div><label style={S.label}>Date</label><input type="date" style={S.input} value={addDaysheet.sheet_date} onChange={e => setAddDaysheet(p => ({ ...p, sheet_date: e.target.value }))} /></div>
+                        <div><label style={S.label}>Worker Name</label><input style={S.input} placeholder="e.g. Dave Hughes" value={addDaysheet.worker_name} onChange={e => setAddDaysheet(p => ({ ...p, worker_name: e.target.value }))} /></div>
+                        <div><label style={S.label}>Hours</label><input type="number" step="0.5" style={S.input} placeholder="e.g. 8" value={addDaysheet.hours} onChange={e => setAddDaysheet(p => ({ ...p, hours: e.target.value }))} /></div>
+                        <div><label style={S.label}>Rate (£/hr)</label><input type="number" style={S.input} placeholder="e.g. 45" value={addDaysheet.rate} onChange={e => setAddDaysheet(p => ({ ...p, rate: e.target.value }))} /></div>
+                        <div style={{ gridColumn: "1 / -1" }}><label style={S.label}>Contractor</label><input style={S.input} placeholder="Main contractor name" value={addDaysheet.contractor_name} onChange={e => setAddDaysheet(p => ({ ...p, contractor_name: e.target.value }))} /></div>
+                        <div style={{ gridColumn: "1 / -1" }}><label style={S.label}>Work Description</label><input style={S.input} placeholder="Describe the work done" value={addDaysheet.description} onChange={e => setAddDaysheet(p => ({ ...p, description: e.target.value }))} /></div>
+                      </div>
+                      <button style={S.btn("primary", !addDaysheet.hours || !addDaysheet.rate)} disabled={!addDaysheet.hours || !addDaysheet.rate} onClick={addDayworkSheet}>Add Sheet →</button>
+                    </div>
+                  </div>
+                  {daysheets.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No daywork sheets yet.</div>}
+                  {daysheets.map(d => (
+                    <div key={d.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{new Date(d.sheet_date).toLocaleDateString("en-GB")} · {d.worker_name || "Worker"}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{(d.hours * d.rate).toFixed(2)}</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{d.hours}h @ £{d.rate}/hr{d.contractor_name ? ` · ${d.contractor_name}` : ""}</div>
+                      {d.description && <div style={{ fontSize: 12, marginTop: 4 }}>{d.description}</div>}
+                      {!d.signed && <div style={{ fontSize: 10, color: C.amber, marginTop: 6 }}>⚠ Awaiting signature</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}`, flexShrink: 0, display: "flex", gap: 8 }}>
+              {selected.invoice_id && <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => { setSelected(null); setView("Invoices"); }}>View Invoice</button>}
+              {selected.quote_id && <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => { setSelected(null); setView("Quotes"); }}>View Quote</button>}
+              <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.red, marginLeft: "auto" }} onClick={() => deleteJob(selected.id)}>Delete Job</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Expenses Tab ─────────────────────────────────────────────────────────────
+const MILEAGE_RATE = 0.45; // HMRC approved mileage rate
+
+function ExpensesTab({ user }) {
+  const [expenses, setExpenses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ exp_type: "mileage", description: "", amount: "", miles: "", exp_date: new Date().toISOString().slice(0,10) });
+  const [filterMonth, setFilterMonth] = useState("all");
+  const receiptRef = useRef();
+  const [receiptData, setReceiptData] = useState(null);
+
+  useEffect(() => { loadExpenses(); }, [user]);
+
+  async function loadExpenses() {
+    if (!user) return;
+    setLoading(true);
+    const { data } = await supabase.from("expenses").select("*").eq("user_id", user.id).order("exp_date", { ascending: false });
+    setExpenses(data || []);
+    setLoading(false);
+  }
+
+  async function saveExpense() {
+    let amount = parseFloat(form.amount) || 0;
+    if (form.exp_type === "mileage" && form.miles) {
+      amount = parseFloat(form.miles) * MILEAGE_RATE;
+    }
+    const { data } = await supabase.from("expenses").insert({
+      user_id: user.id,
+      exp_type: form.exp_type,
+      description: form.description,
+      amount,
+      miles: form.exp_type === "mileage" ? parseFloat(form.miles) : null,
+      exp_date: form.exp_date,
+      receipt_data: receiptData || null,
+    }).select().single();
+    if (data) {
+      setExpenses(prev => [data, ...prev]);
+      setShowAdd(false);
+      setForm({ exp_type: "mileage", description: "", amount: "", miles: "", exp_date: new Date().toISOString().slice(0,10) });
+      setReceiptData(null);
+    }
+  }
+
+  const addReceipt = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => setReceiptData(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const months = [...new Set(expenses.map(e => e.exp_date?.slice(0,7)))].sort().reverse();
+  const filtered = filterMonth === "all" ? expenses : expenses.filter(e => e.exp_date?.startsWith(filterMonth));
+  const totalFiltered = filtered.reduce((s, e) => s + (e.amount || 0), 0);
+  const totalMileage = filtered.filter(e => e.exp_type === "mileage").reduce((s, e) => s + (e.miles || 0), 0);
+
+  const EXP_TYPES = [
+    { value: "mileage", label: "🚗 Mileage", desc: `HMRC rate ${MILEAGE_RATE * 100}p/mile` },
+    { value: "fuel", label: "⛽ Fuel" },
+    { value: "parking", label: "🅿 Parking" },
+    { value: "tools", label: "🔧 Tools" },
+    { value: "materials", label: "📦 Materials" },
+    { value: "accommodation", label: "🏨 Accommodation" },
+    { value: "subsistence", label: "🥗 Subsistence" },
+    { value: "other", label: "📋 Other" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>Expenses & Mileage</div>
+        <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Expense</button>
+      </div>
+
+      {/* Summary */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+        {[
+          { l: "Total Expenses", v: `£${filtered.reduce((s,e) => s + (e.amount||0), 0).toFixed(2)}`, c: C.amber },
+          { l: "Mileage", v: `${totalMileage.toFixed(0)} miles`, c: C.blue },
+          { l: "Mileage Value", v: `£${(totalMileage * MILEAGE_RATE).toFixed(2)}`, c: C.green },
+          { l: "This period", v: filtered.length + " entries", c: C.muted },
+        ].map((st, i) => (
+          <div key={i} style={S.card}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{st.l}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: st.c }}>{st.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Month filter */}
+      {months.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button onClick={() => setFilterMonth("all")} style={S.pill(C.amber, filterMonth === "all")}>All time</button>
+          {months.slice(0, 6).map(m => (
+            <button key={m} onClick={() => setFilterMonth(m)} style={S.pill(C.amber, filterMonth === m)}>
+              {new Date(m + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Expense list */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>Expense Log ({filtered.length})</div>
+        {loading && <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>}
+        {!loading && filtered.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No expenses logged yet.</div>}
+        {filtered.map(e => (
+          <div key={e.id} style={S.row}>
+            <div style={{ fontSize: 18, flexShrink: 0 }}>{EXP_TYPES.find(t => t.value === e.exp_type)?.label?.split(" ")[0] || "📋"}</div>
+            <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{EXP_TYPES.find(t => t.value === e.exp_type)?.label?.split(" ").slice(1).join(" ") || e.exp_type}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>
+                {new Date(e.exp_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                {e.description ? ` · ${e.description}` : ""}
+                {e.miles ? ` · ${e.miles} miles` : ""}
+              </div>
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, flexShrink: 0 }}>£{Number(e.amount).toFixed(2)}</div>
+            {e.receipt_data && <div style={{ fontSize: 16, marginLeft: 6 }} title="Receipt attached">🧾</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* Add Expense Modal */}
+      {showAdd && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Expense</div>
+              <button onClick={() => { setShowAdd(false); setReceiptData(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={S.label}>Type</label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {EXP_TYPES.map(t => (
+                    <button key={t.value} onClick={() => setForm(f => ({ ...f, exp_type: t.value }))} style={S.pill(C.amber, form.exp_type === t.value)}>{t.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={S.label}>Date</label>
+                <input type="date" style={S.input} value={form.exp_date} onChange={e => setForm(f => ({ ...f, exp_date: e.target.value }))} />
+              </div>
+              {form.exp_type === "mileage" ? (
+                <div>
+                  <label style={S.label}>Miles</label>
+                  <input type="number" style={S.input} placeholder="e.g. 24" value={form.miles} onChange={e => setForm(f => ({ ...f, miles: e.target.value }))} />
+                  {form.miles && <div style={{ fontSize: 11, color: C.amber, marginTop: 4 }}>= £{(parseFloat(form.miles) * MILEAGE_RATE).toFixed(2)} at {MILEAGE_RATE * 100}p/mile</div>}
+                </div>
+              ) : (
+                <div>
+                  <label style={S.label}>Amount (£)</label>
+                  <input type="number" step="0.01" style={S.input} placeholder="e.g. 45.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+                </div>
+              )}
+              <div>
+                <label style={S.label}>Description</label>
+                <input style={S.input} placeholder="e.g. Trip to Screwfix, parking at site" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div>
+                <label style={S.label}>Receipt (optional)</label>
+                <button style={{ ...S.btn("ghost"), width: "100%", justifyContent: "center" }} onClick={() => receiptRef.current?.click()}>
+                  {receiptData ? "✓ Receipt added" : "📷 Add receipt photo"}
+                </button>
+                <input ref={receiptRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => { addReceipt(e.target.files?.[0]); e.target.value = ""; }} />
+              </div>
+              <button style={S.btn("primary", (!form.miles && !form.amount) || form.exp_type === "mileage" && !form.miles)} onClick={saveExpense}>Save Expense →</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CIS Statements Tab ───────────────────────────────────────────────────────
+function CISStatementsTab({ user }) {
+  const [statements, setStatements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ contractor_name: "", tax_month: new Date().toISOString().slice(0,7), gross_amount: "", deduction_amount: "", notes: "" });
+
+  useEffect(() => { loadStatements(); }, [user]);
+
+  async function loadStatements() {
+    if (!user) return;
+    setLoading(true);
+    const { data } = await supabase.from("cis_statements").select("*").eq("user_id", user.id).order("tax_month", { ascending: false });
+    setStatements(data || []);
+    setLoading(false);
+  }
+
+  async function saveStatement() {
+    const gross = parseFloat(form.gross_amount) || 0;
+    const deduction = parseFloat(form.deduction_amount) || 0;
+    const { data } = await supabase.from("cis_statements").insert({
+      user_id: user.id,
+      contractor_name: form.contractor_name,
+      tax_month: form.tax_month + "-01",
+      gross_amount: gross,
+      deduction_amount: deduction,
+      net_amount: gross - deduction,
+      notes: form.notes,
+    }).select().single();
+    if (data) {
+      setStatements(prev => [data, ...prev]);
+      setShowAdd(false);
+      setForm({ contractor_name: "", tax_month: new Date().toISOString().slice(0,7), gross_amount: "", deduction_amount: "", notes: "" });
+    }
+  }
+
+  const totalGross = statements.reduce((s, st) => s + (st.gross_amount || 0), 0);
+  const totalDeducted = statements.reduce((s, st) => s + (st.deduction_amount || 0), 0);
+  const totalNet = statements.reduce((s, st) => s + (st.net_amount || 0), 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>CIS Monthly Statements</div>
+        <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Statement</button>
+      </div>
+      <div style={{ fontSize: 12, color: C.muted, background: C.surfaceHigh, borderRadius: 8, padding: "10px 14px" }}>
+        Log the CIS monthly statements you receive from main contractors. These show your gross pay, CIS tax deducted, and net paid — needed for your self-assessment tax return.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+        {[
+          { l: "Total Gross", v: `£${totalGross.toLocaleString()}`, c: C.text },
+          { l: "CIS Deducted", v: `£${totalDeducted.toLocaleString()}`, c: C.red },
+          { l: "Net Received", v: `£${totalNet.toLocaleString()}`, c: C.green },
+        ].map((st, i) => (
+          <div key={i} style={S.card}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{st.l}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: st.c }}>{st.v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={S.card}>
+        <div style={S.sectionTitle}>Statements ({statements.length})</div>
+        {loading && <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>}
+        {!loading && statements.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No statements logged yet.</div>}
+        {statements.map(s => (
+          <div key={s.id} style={S.row}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{s.contractor_name}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{new Date(s.tax_month).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</div>
+              {s.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{s.notes}</div>}
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>£{Number(s.gross_amount).toFixed(2)} gross</div>
+              <div style={{ fontSize: 11, color: C.red }}>-£{Number(s.deduction_amount).toFixed(2)} CIS</div>
+              <div style={{ fontSize: 11, color: C.green }}>£{Number(s.net_amount).toFixed(2)} net</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showAdd && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Add CIS Statement</div>
+              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div><label style={S.label}>Contractor Name</label><input style={S.input} placeholder="e.g. ABC Construction Ltd" value={form.contractor_name} onChange={e => setForm(f => ({ ...f, contractor_name: e.target.value }))} /></div>
+              <div><label style={S.label}>Tax Month</label><input type="month" style={S.input} value={form.tax_month} onChange={e => setForm(f => ({ ...f, tax_month: e.target.value }))} /></div>
+              <div><label style={S.label}>Gross Amount (£)</label><input type="number" step="0.01" style={S.input} placeholder="e.g. 3500.00" value={form.gross_amount} onChange={e => setForm(f => ({ ...f, gross_amount: e.target.value }))} /></div>
+              <div><label style={S.label}>CIS Deduction (£)</label><input type="number" step="0.01" style={S.input} placeholder="e.g. 700.00" value={form.deduction_amount} onChange={e => setForm(f => ({ ...f, deduction_amount: e.target.value }))} /></div>
+              {form.gross_amount && form.deduction_amount && (
+                <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+                  Net payable: <strong style={{ color: C.green }}>£{(parseFloat(form.gross_amount) - parseFloat(form.deduction_amount)).toFixed(2)}</strong>
+                </div>
+              )}
+              <div><label style={S.label}>Notes</label><input style={S.input} placeholder="e.g. Statement ref 2024/3" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+              <button style={S.btn("primary", !form.contractor_name || !form.gross_amount || !form.deduction_amount)} disabled={!form.contractor_name || !form.gross_amount || !form.deduction_amount} onClick={saveStatement}>Save Statement →</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const VIEWS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Settings"];
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -6059,10 +6883,13 @@ export default function App() {
         })()}
         {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} />}
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
+        {view === "Jobs" && <JobsTab user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} />}
         {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} />}
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
+        {view === "Expenses" && <ExpensesTab user={user} />}
+        {view === "CIS" && <CISStatementsTab user={user} />}
         {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} />}
