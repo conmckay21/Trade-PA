@@ -6383,6 +6383,10 @@ const CERT_CATEGORIES = [
       { id: "eic", label: "EIC — Electrical Installation Certificate", short: "EIC" },
       { id: "meic", label: "MEIC — Minor Electrical Works Certificate", short: "MEIC" },
       { id: "pat", label: "PAT Testing Record", short: "PAT" },
+      { id: "fire_alarm_design", label: "Fire Alarm — Design, Installation & Commissioning", short: "FA Install" },
+      { id: "fire_alarm_periodic", label: "Fire Alarm — Periodic Inspection Certificate", short: "FA Periodic" },
+      { id: "em_lighting_install", label: "Emergency Lighting — Installation Certificate", short: "EL Install" },
+      { id: "em_lighting_periodic", label: "Emergency Lighting — Periodic Inspection", short: "EL Periodic" },
     ],
   },
   {
@@ -6582,6 +6586,28 @@ function buildCertHTML(cert, brand, job, sig) {
     </div>`;
   }
 
+  if (cert.id === "fire_alarm_design" || cert.id === "fire_alarm_periodic") {
+    const isPeriodic = cert.id === "fire_alarm_periodic";
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">${isPeriodic ? "Periodic Inspection Details" : "Installation Details"}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["System Grade",cert.systemGrade||""],["Category",cert.category||""],["Number of Detectors",cert.numDetectors||""],["Number of Sounders",cert.numSounders||""],["Panel Make/Model",cert.makeModel||""],["Overall Result",cert.eicrResult||"Satisfactory ✓"]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong style="color:${l==="Overall Result"&&v.includes("Unsat")?"#ef4444":"inherit"}">${v}</strong></div>`).join("")}
+      </div>
+      ${cert.serviceNotes?`<div style="margin-top:10px;font-size:12px;color:#444">${cert.serviceNotes}</div>`:""}
+    </div>`;
+  }
+
+  if (cert.id === "em_lighting_install" || cert.id === "em_lighting_periodic") {
+    const isPeriodic = cert.id === "em_lighting_periodic";
+    body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">${isPeriodic ? "Periodic Inspection Details" : "Installation Details"}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        ${[["Number of Luminaires",cert.numLuminaires||""],["System Category",cert.emCategory||""],["Duration Test (hrs)",cert.durationTest||"3"],["Battery Type",cert.batteryType||""],["Overall Result",cert.eicrResult||"Satisfactory ✓"]].map(([l,v])=>`<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
+      </div>
+      ${cert.serviceNotes?`<div style="margin-top:10px;font-size:12px;color:#444">${cert.serviceNotes}</div>`:""}
+    </div>`;
+  }
+
   if (cert.id === "custom") {
     body = `<div style="background:#f9f9f9;padding:14px;border-radius:8px;margin-bottom:16px">
       <div style="font-size:12px;white-space:pre-wrap">${cert.customBody||""}</div>
@@ -6637,7 +6663,7 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
 
   async function loadCerts() {
     if (!user || !job?.id) return;
-    const { data } = await supabase.from("gas_safe_certs").select("*").eq("job_id", job.id).order("created_at", { ascending: false });
+    const { data } = await supabase.from("trade_certificates").select("*").eq("job_id", job.id).order("created_at", { ascending: false });
     setCerts(data || []);
   }
 
@@ -6647,7 +6673,7 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
     const certType = TRADE_CERT_LIST.find(c => c.id === showForm);
     const certData = { ...form, id: showForm, label: certType?.label || "", short: certType?.short || "", signature: sigData };
     const html = buildCertHTML(certData, brand, job, sigData);
-    const { data } = await supabase.from("gas_safe_certs").insert({ job_id: job.id, user_id: user.id, cert_type: showForm, cert_label: certType?.label || "", cert_data: certData, html_content: html, signature: sigData || null, created_at: new Date().toISOString() }).select().single();
+    const { data } = await supabase.from("trade_certificates").insert({ job_id: job.id, user_id: user.id, cert_type: showForm, cert_label: certType?.label || "", cert_data: certData, html_content: html, signature: sigData || null, created_at: new Date().toISOString() }).select().single();
     if (data) setCerts(prev => [data, ...prev]);
     setShowForm(null);
     setSaving(false);
@@ -6757,6 +6783,27 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
             <div><label style={S.label}>Building Control</label><input style={S.input} value={form.buildingControl} onChange={setF("buildingControl")} /></div>
           </div>
         )}
+        {(id === "fire_alarm_design" || id === "fire_alarm_periodic") && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div><label style={S.label}>System Grade</label><select style={S.input} value={form.systemGrade} onChange={setF("systemGrade")}>{["Grade A","Grade B","Grade C","Grade D","Grade E","Grade F"].map(g=><option key={g}>{g}</option>)}</select></div>
+            <div><label style={S.label}>Category</label><input style={S.input} placeholder="e.g. L1, M, P1" value={form.category} onChange={setF("category")} /></div>
+            <div><label style={S.label}>No. of Detectors</label><input type="number" style={S.input} value={form.numDetectors} onChange={setF("numDetectors")} /></div>
+            <div><label style={S.label}>No. of Sounders</label><input type="number" style={S.input} value={form.numSounders} onChange={setF("numSounders")} /></div>
+            <div><label style={S.label}>Panel Make/Model</label><input style={S.input} value={form.makeModel} onChange={setF("makeModel")} /></div>
+            <div><label style={S.label}>Result</label><select style={S.input} value={form.eicrResult} onChange={setF("eicrResult")}><option>Satisfactory ✓</option><option>Unsatisfactory</option></select></div>
+            <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Notes</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} value={form.serviceNotes} onChange={setF("serviceNotes")} /></div>
+          </div>
+        )}
+        {(id === "em_lighting_install" || id === "em_lighting_periodic") && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div><label style={S.label}>No. of Luminaires</label><input type="number" style={S.input} value={form.numLuminaires} onChange={setF("numLuminaires")} /></div>
+            <div><label style={S.label}>Category</label><input style={S.input} placeholder="e.g. Maintained, Non-maintained" value={form.emCategory} onChange={setF("emCategory")} /></div>
+            <div><label style={S.label}>Duration Test (hrs)</label><input style={S.input} value={form.durationTest} onChange={setF("durationTest")} /></div>
+            <div><label style={S.label}>Battery Type</label><input style={S.input} placeholder="e.g. NiCd, LiFePO4" value={form.batteryType} onChange={setF("batteryType")} /></div>
+            <div><label style={S.label}>Result</label><select style={S.input} value={form.eicrResult} onChange={setF("eicrResult")}><option>Satisfactory ✓</option><option>Unsatisfactory</option></select></div>
+            <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Notes</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} value={form.serviceNotes} onChange={setF("serviceNotes")} /></div>
+          </div>
+        )}
         {id === "custom" && (
           <>
             <div><label style={S.label}>Certificate Title</label><input style={S.input} placeholder="e.g. Scope of Works Certificate" value={form.certTitle} onChange={setF("certTitle")} /></div>
@@ -6850,7 +6897,7 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
             if (pendingSig) {
               const certData = { ...pendingSig.cert_data, signature: sigData };
               const html = buildCertHTML(certData, brand, job, sigData);
-              await supabase.from("gas_safe_certs").update({ signature: sigData, html_content: html }).eq("id", pendingSig.id);
+              await supabase.from("trade_certificates").update({ signature: sigData, html_content: html }).eq("id", pendingSig.id);
               setCerts(prev => prev.map(c => c.id === pendingSig.id ? { ...c, signature: sigData, html_content: html } : c));
               setPendingSig(null);
             } else {
@@ -6864,108 +6911,455 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
   );
 }
 
-function buildGasSafeCertHTML(cert, brand, job, sig) {
-  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-  const base = `
-    <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#1a1a1a;font-size:13px">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #f59e0b;padding-bottom:16px;margin-bottom:20px">
-      <div>
-        <div style="font-size:22px;font-weight:700">${brand.tradingName || ""}</div>
-        <div style="color:#666;font-size:12px;margin-top:4px">${brand.address || ""}${brand.phone ? ` · ${brand.phone}` : ""}${brand.email ? ` · ${brand.email}` : ""}</div>
-        ${brand.gasSafeNumber ? `<div style="font-size:12px;color:#666;margin-top:2px">Gas Safe Reg No: <strong>${brand.gasSafeNumber}</strong></div>` : ""}
+// ─── Jobs Tab ─────────────────────────────────────────────────────────────────
+function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
+  const supabase = window._supabase;
+  const [jobs, setJobCards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [tab, setTab] = useState("notes");
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", annual_service: false });
+  const [notes, setNotes] = useState([]);
+  const [photos, setPhotos] = useState([]);
+  const [timeLogs, setTimeLogs] = useState([]);
+  const [vos, setVos] = useState([]);
+  const [compDocs, setCompDocs] = useState([]);
+  const [daysheets, setDaysheets] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [addNote, setAddNote] = useState("");
+  const [addTime, setAddTime] = useState({ date: new Date().toISOString().slice(0,10), hours: "", rate: "", description: "" });
+  const [addVO, setAddVO] = useState({ vo_number: "", description: "", amount: "" });
+  const [addDoc, setAddDoc] = useState({ doc_type: "", doc_number: "", issued_date: "", expiry_date: "", notes: "" });
+  const [addDaysheet, setAddDaysheet] = useState({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" });
+  const [emailConnection, setEmailConnection] = useState(null);
+  const [showSignature, setShowSignature] = useState(false);
+  const photoRef = useRef();
+  const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  useEffect(() => { loadJobs(); loadEmailConn(); }, [user]);
+  useEffect(() => { if (selected) loadJobDetails(selected.id); }, [selected?.id]);
+  useEffect(() => {
+    if (!jobs.length || loading) return;
+    const today = new Date();
+    jobs.forEach(j => {
+      if (j.annual_service && j.next_service_date && !j.service_reminder_sent) {
+        const due = new Date(j.next_service_date);
+        const daysUntil = Math.ceil((due - today) / 86400000);
+        if (daysUntil <= 14 && daysUntil >= 0) sendServiceReminder(j);
+      }
+    });
+  }, [jobs, loading]);
+
+  async function loadEmailConn() {
+    if (!user) return;
+    const { data } = await supabase.from("email_connections").select("provider, email").eq("user_id", user.id);
+    if (data?.length) setEmailConnection(data[0]);
+  }
+
+  async function loadJobs() {
+    if (!user) return;
+    setLoading(true);
+    const { data } = await supabase.from("job_cards").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    setJobCards(data || []);
+    setLoading(false);
+  }
+
+  async function loadJobDetails(jobId) {
+    const [n, p, t, v, d, ds] = await Promise.all([
+      supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+      supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+      supabase.from("time_logs").select("*").eq("job_id", jobId).order("date", { ascending: false }),
+      supabase.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+      supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+      supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
+    ]);
+    setNotes(n.data || []);
+    setPhotos(p.data || []);
+    setTimeLogs(t.data || []);
+    setVos(v.data || []);
+    setCompDocs(d.data || []);
+    setDaysheets(ds.data || []);
+  }
+
+  async function sendServiceReminder(job) {
+    const cust = (customers || []).find(c => c.name?.toLowerCase() === job.customer?.toLowerCase());
+    if (!cust?.email) return;
+    await supabase.from("job_cards").update({ service_reminder_sent: true }).eq("id", job.id);
+    setJobCards(prev => prev.map(j => j.id === job.id ? { ...j, service_reminder_sent: true } : j));
+    const { data: conns } = await supabase.from("email_connections").select("provider").eq("user_id", user.id);
+    if (!conns?.length) return;
+    const provider = conns[0].provider;
+    const endpoint = provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+    const dueDate = new Date(job.next_service_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id, to: cust.email, subject: `Annual Service Reminder — ${job.title || job.type}`, body: `<p>Dear ${job.customer},</p><p>Your annual service for <strong>${job.title || job.type}</strong> at ${job.address || "your property"} is due on <strong>${dueDate}</strong>.</p><p>Please get in touch to arrange a convenient time.</p><p>Many thanks,<br>${brand.tradingName}${brand.phone ? `<br>${brand.phone}` : ""}</p>` }) });
+  }
+
+  async function saveJob() {
+    if (!form.customer && !form.title) return;
+    setSaving(true);
+    const payload = { user_id: user.id, title: form.title, customer: form.customer, address: form.address, type: form.type, status: form.status, value: parseFloat(form.value) || 0, po_number: form.po_number, notes: form.notes, annual_service: form.annual_service, updated_at: new Date().toISOString() };
+    const { data, error } = await supabase.from("job_cards").insert(payload).select().single();
+    if (!error && data) { setJobCards(prev => [data, ...prev]); setShowAdd(false); setForm({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", annual_service: false }); }
+    setSaving(false);
+  }
+
+  async function deleteJob(id) {
+    if (!window.confirm("Delete this job card?")) return;
+    await supabase.from("job_cards").delete().eq("id", id);
+    setJobCards(prev => prev.filter(j => j.id !== id));
+    setSelected(null);
+  }
+
+  async function addNoteToJob() {
+    if (!addNote.trim() || !selected) return;
+    const { data } = await supabase.from("job_notes").insert({ job_id: selected.id, user_id: user.id, note: addNote, created_at: new Date().toISOString() }).select().single();
+    if (data) { setNotes(prev => [data, ...prev]); setAddNote(""); }
+  }
+
+  async function addTimeLog() {
+    if (!addTime.hours || !addTime.rate || !selected) return;
+    const { data } = await supabase.from("time_logs").insert({ job_id: selected.id, user_id: user.id, ...addTime, hours: parseFloat(addTime.hours), rate: parseFloat(addTime.rate) }).select().single();
+    if (data) { setTimeLogs(prev => [data, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), hours: "", rate: "", description: "" }); }
+  }
+
+  async function addVariationOrder() {
+    if (!addVO.description || !selected) return;
+    const { data } = await supabase.from("variation_orders").insert({ job_id: selected.id, user_id: user.id, ...addVO, amount: parseFloat(addVO.amount) || 0, status: "pending" }).select().single();
+    if (data) { setVos(prev => [data, ...prev]); setAddVO({ vo_number: "", description: "", amount: "" }); }
+  }
+
+  async function addComplianceDoc() {
+    if (!addDoc.doc_type || !selected) return;
+    const { data } = await supabase.from("compliance_docs").insert({ job_id: selected.id, user_id: user.id, ...addDoc }).select().single();
+    if (data) { setCompDocs(prev => [data, ...prev]); setAddDoc({ doc_type: "", doc_number: "", issued_date: "", expiry_date: "", notes: "" }); }
+  }
+
+  async function addDayworkSheet() {
+    if (!addDaysheet.hours || !addDaysheet.rate || !selected) return;
+    const { data } = await supabase.from("daywork_sheets").insert({ job_id: selected.id, user_id: user.id, ...addDaysheet, hours: parseFloat(addDaysheet.hours), rate: parseFloat(addDaysheet.rate) }).select().single();
+    if (data) { setDaysheets(prev => [data, ...prev]); setAddDaysheet({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" }); }
+  }
+
+  const COMPLIANCE_TYPES = ["Gas Safety Certificate","Boiler Commissioning Sheet","EICR","Electrical Installation Certificate","Minor Works Certificate","PAT Testing","Pressure Test Certificate","Part P Certificate","Oil Safety Certificate","Other"];
+
+  const statusOptions = ["enquiry","quoted","accepted","in_progress","completed","on_hold"];
+  const totalTime = timeLogs.reduce((s, t) => s + (t.hours || 0), 0);
+  const totalLabour = timeLogs.reduce((s, t) => s + ((t.hours || 0) * (t.rate || 0)), 0);
+  const totalVO = vos.filter(v => v.status === "approved").reduce((s, v) => s + (v.amount || 0), 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 13, color: C.muted }}>{jobs.length} job{jobs.length !== 1 ? "s" : ""}</div>
+        <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Job</button>
       </div>
-      <div style="text-align:right">
-        <div style="font-size:18px;font-weight:700;color:#f59e0b">${cert.short}</div>
-        <div style="font-size:11px;color:#666">${cert.label}</div>
-        <div style="font-size:11px;color:#666;margin-top:4px">Date: ${today}</div>
-      </div>
+
+      {/* Add Job form */}
+      {showAdd && (
+        <div style={S.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={S.sectionTitle}>New Job Card</div>
+            <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="title (job title), customer (customer name), address (property address), type (job type e.g. boiler service), status (enquiry/quoted/accepted/in_progress/completed), value (job value in pounds), po_number (PO number if applicable), notes (any notes)" />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div><label style={S.label}>Job Title</label><input style={S.input} placeholder="e.g. Boiler Service" value={form.title} onChange={setF("title")} /></div>
+              <div><label style={S.label}>Customer</label><input style={S.input} placeholder="Customer name" value={form.customer} onChange={setF("customer")} /></div>
+              <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Address</label><input style={S.input} placeholder="Property address" value={form.address} onChange={setF("address")} /></div>
+              <div><label style={S.label}>Job Type</label><input style={S.input} placeholder="e.g. Plumbing, Electrical" value={form.type} onChange={setF("type")} /></div>
+              <div><label style={S.label}>Status</label><select style={S.input} value={form.status} onChange={setF("status")}>{statusOptions.map(s => <option key={s} value={s}>{s.replace("_"," ")}</option>)}</select></div>
+              <div><label style={S.label}>Value (£)</label><input type="number" style={S.input} placeholder="0" value={form.value} onChange={setF("value")} /></div>
+              <div><label style={S.label}>PO Number</label><input style={S.input} placeholder="Optional" value={form.po_number} onChange={setF("po_number")} /></div>
+            </div>
+            <div><label style={S.label}>Notes</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} value={form.notes} onChange={setF("notes")} /></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, cursor: "pointer" }} onClick={() => setForm(f => ({ ...f, annual_service: !f.annual_service }))}>
+              <div style={{ width: 36, height: 20, borderRadius: 10, background: form.annual_service ? C.amber : C.border, position: "relative", flexShrink: 0, transition: "all 0.2s" }}>
+                <div style={{ position: "absolute", top: 2, left: form.annual_service ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "all 0.2s" }} />
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>Annual Service Job <span style={{ color: C.muted, fontWeight: 400 }}>(auto-reminder at 50 weeks)</span></div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("primary"), flex: 1 }} disabled={saving || (!form.customer && !form.title)} onClick={saveJob}>{saving ? "Saving..." : "Save Job →"}</button>
+              <button style={S.btn("ghost")} onClick={() => setShowAdd(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Job list */}
+      {loading && <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>Loading jobs...</div>}
+      {!loading && jobs.length === 0 && !showAdd && (
+        <div style={{ ...S.card, textAlign: "center", padding: 32 }}>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>🔧</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>No job cards yet. Convert a quote or create one manually.</div>
+          <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add First Job</button>
+        </div>
+      )}
+      {jobs.map(j => (
+        <div key={j.id} onClick={() => { setSelected(j); setTab("notes"); }} style={{ ...S.card, cursor: "pointer", borderLeft: `3px solid ${statusColor[j.status] || C.muted}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{j.title || j.type || "Job"}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{j.customer}{j.address ? ` · ${j.address}` : ""}</div>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              {j.value > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>£{j.value}</div>}
+              <div style={S.badge(statusColor[j.status] || C.muted)}>{(j.status || "").replace("_"," ")}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {j.po_number && <span style={S.badge(C.blue)}>PO: {j.po_number}</span>}
+            {j.annual_service && <span style={{ color: C.green, fontSize: 11 }}>🔄 Annual</span>}
+            {j.customer_signature && <span style={{ color: C.green, fontSize: 11 }}>✓ Signed</span>}
+            {j.invoice_id && <span style={S.badge(C.amber)}>Invoiced</span>}
+          </div>
+        </div>
+      ))}
+
+      {/* Job detail modal */}
+      {selected && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 12, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16, display: "flex", flexDirection: "column", padding: 0, overflow: "hidden" }}>
+            {/* Modal header */}
+            <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>{selected.title || selected.type || "Job"}</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{selected.customer}{selected.address ? ` · ${selected.address}` : ""}</div>
+                </div>
+                <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>×</button>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                <span style={S.badge(statusColor[selected.status] || C.muted)}>{(selected.status || "").replace("_"," ")}</span>
+                {selected.value > 0 && <span style={S.badge(C.amber)}>£{selected.value}</span>}
+                {selected.po_number && <span style={S.badge(C.blue)}>PO: {selected.po_number}</span>}
+                {selected.annual_service && <span style={{ color: C.green, fontSize: 11 }}>🔄 Annual</span>}
+                {selected.customer_signature && <span style={{ color: C.green, fontSize: 11 }}>✓ Signed off</span>}
+              </div>
+            </div>
+
+            {/* Sub-tabs */}
+            <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: "auto" }}>
+              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"]].map(([v,l]) => (
+                <button key={v} onClick={() => setTab(v)}
+                  style={{ padding: "8px 12px", border: "none", borderBottom: tab === v ? `2px solid ${C.amber}` : "2px solid transparent", background: "transparent", color: tab === v ? C.amber : C.muted, fontSize: 11, fontWeight: tab === v ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'DM Mono',monospace" }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            <div style={{ padding: 16, overflowY: "auto", maxHeight: "55vh" }}>
+
+              {/* NOTES */}
+              {tab === "notes" && (
+                <div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                    <input style={{ ...S.input, flex: 1 }} placeholder="Add a note..." value={addNote} onChange={e => setAddNote(e.target.value)} onKeyDown={e => e.key === "Enter" && addNoteToJob()} />
+                    <button style={S.btn("primary")} onClick={addNoteToJob}>Add</button>
+                  </div>
+                  {notes.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No notes yet.</div>}
+                  {notes.map(n => (
+                    <div key={n.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 14px", marginBottom: 8 }}>
+                      <div style={{ fontSize: 13 }}>{n.note}</div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{new Date(n.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* PHOTOS */}
+              {tab === "photos" && (
+                <div>
+                  <input type="file" accept="image/*" ref={photoRef} style={{ display: "none" }} onChange={async e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async ev => {
+                      const { data } = await supabase.from("job_photos").insert({ job_id: selected.id, user_id: user.id, photo_data: ev.target.result, filename: file.name, created_at: new Date().toISOString() }).select().single();
+                      if (data) setPhotos(prev => [data, ...prev]);
+                    };
+                    reader.readAsDataURL(file);
+                  }} />
+                  <button style={{ ...S.btn("ghost"), marginBottom: 14 }} onClick={() => photoRef.current?.click()}>📷 Add Photo</button>
+                  {photos.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No photos yet.</div>}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {photos.map(p => (
+                      <div key={p.id} style={{ borderRadius: 8, overflow: "hidden", background: C.surfaceHigh }}>
+                        <img src={p.photo_data} alt={p.filename} style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
+                        <div style={{ padding: "4px 8px", fontSize: 10, color: C.muted }}>{new Date(p.created_at).toLocaleDateString("en-GB")}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TIME */}
+              {tab === "time" && (
+                <div>
+                  <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <div><label style={S.label}>Date</label><input type="date" style={S.input} value={addTime.date} onChange={e => setAddTime(p => ({ ...p, date: e.target.value }))} /></div>
+                      <div><label style={S.label}>Hours</label><input type="number" step="0.5" style={S.input} placeholder="e.g. 4" value={addTime.hours} onChange={e => setAddTime(p => ({ ...p, hours: e.target.value }))} /></div>
+                      <div><label style={S.label}>Rate (£/hr)</label><input type="number" style={S.input} placeholder="e.g. 55" value={addTime.rate} onChange={e => setAddTime(p => ({ ...p, rate: e.target.value }))} /></div>
+                      <div><label style={S.label}>Description</label><input style={S.input} placeholder="Work done" value={addTime.description} onChange={e => setAddTime(p => ({ ...p, description: e.target.value }))} /></div>
+                    </div>
+                    <button style={{ ...S.btn("primary"), marginTop: 8 }} disabled={!addTime.hours || !addTime.rate} onClick={addTimeLog}>Log Time →</button>
+                  </div>
+                  {totalTime > 0 && <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Total: {totalTime}hrs · £{totalLabour.toFixed(2)} labour</div>}
+                  {timeLogs.map(t => (
+                    <div key={t.id} style={{ ...S.row }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{t.hours}hrs @ £{t.rate}/hr</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>{t.description} · {t.date}</div>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{(t.hours * t.rate).toFixed(2)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* VARIATION ORDERS */}
+              {tab === "vo" && (
+                <div>
+                  <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <div><label style={S.label}>VO Number</label><input style={S.input} placeholder="e.g. VO-001" value={addVO.vo_number} onChange={e => setAddVO(p => ({ ...p, vo_number: e.target.value }))} /></div>
+                      <div><label style={S.label}>Amount (£)</label><input type="number" style={S.input} value={addVO.amount} onChange={e => setAddVO(p => ({ ...p, amount: e.target.value }))} /></div>
+                      <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Description</label><input style={S.input} placeholder="Describe the variation" value={addVO.description} onChange={e => setAddVO(p => ({ ...p, description: e.target.value }))} /></div>
+                    </div>
+                    <button style={{ ...S.btn("primary"), marginTop: 8 }} disabled={!addVO.description} onClick={addVariationOrder}>Add VO →</button>
+                  </div>
+                  {totalVO > 0 && <div style={{ fontSize: 12, color: C.green, marginBottom: 10 }}>Approved VOs: £{totalVO.toFixed(2)}</div>}
+                  {vos.map(v => (
+                    <div key={v.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{v.vo_number || "VO"}</div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>£{v.amount || 0}</span>
+                          <span style={S.badge(v.status === "approved" ? C.green : v.status === "rejected" ? C.red : C.amber)}>{v.status}</span>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{v.description}</div>
+                      {v.status === "pending" && (
+                        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                          <button style={{ ...S.btn("green"), fontSize: 11, padding: "4px 10px" }} onClick={async () => { await supabase.from("variation_orders").update({ status: "approved" }).eq("id", v.id); setVos(prev => prev.map(x => x.id === v.id ? { ...x, status: "approved" } : x)); }}>Approve</button>
+                          <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.red }} onClick={async () => { await supabase.from("variation_orders").update({ status: "rejected" }).eq("id", v.id); setVos(prev => prev.map(x => x.id === v.id ? { ...x, status: "rejected" } : x)); }}>Reject</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* COMPLIANCE DOCUMENTS */}
+              {tab === "docs" && (
+                <div>
+                  <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div><label style={S.label}>Document Type</label>
+                        <select style={S.input} value={addDoc.doc_type} onChange={e => setAddDoc(p => ({ ...p, doc_type: e.target.value }))}>
+                          <option value="">Select type...</option>
+                          {COMPLIANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        <div><label style={S.label}>Cert Number</label><input style={S.input} value={addDoc.doc_number} onChange={e => setAddDoc(p => ({ ...p, doc_number: e.target.value }))} /></div>
+                        <div><label style={S.label}>Issued Date</label><input type="date" style={S.input} value={addDoc.issued_date} onChange={e => setAddDoc(p => ({ ...p, issued_date: e.target.value }))} /></div>
+                        <div><label style={S.label}>Expiry Date</label><input type="date" style={S.input} value={addDoc.expiry_date} onChange={e => setAddDoc(p => ({ ...p, expiry_date: e.target.value }))} /></div>
+                        <div><label style={S.label}>Notes</label><input style={S.input} value={addDoc.notes} onChange={e => setAddDoc(p => ({ ...p, notes: e.target.value }))} /></div>
+                      </div>
+                      <button style={S.btn("primary", !addDoc.doc_type)} disabled={!addDoc.doc_type} onClick={addComplianceDoc}>Add Document →</button>
+                    </div>
+                  </div>
+                  {compDocs.map(d => (
+                    <div key={d.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{d.doc_type}</div>
+                        {d.expiry_date && <div style={{ fontSize: 11, color: new Date(d.expiry_date) < new Date() ? C.red : C.green }}>Exp: {new Date(d.expiry_date).toLocaleDateString("en-GB")}</div>}
+                      </div>
+                      {d.doc_number && <div style={{ fontSize: 11, color: C.muted }}>Cert: {d.doc_number}</div>}
+                      {d.issued_date && <div style={{ fontSize: 11, color: C.muted }}>Issued: {new Date(d.issued_date).toLocaleDateString("en-GB")}</div>}
+                      {d.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{d.notes}</div>}
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => emailComplianceDoc(d, selected, customers, user, emailConnection, brand)}>✉ Email</button>
+                        <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => printComplianceDoc(d, selected, brand)}>⬇ PDF</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* CERTIFICATES */}
+              {tab === "certs" && (
+                <CertificatesTab job={selected} brand={brand} customers={customers} user={user} connection={emailConnection} />
+              )}
+
+              {/* DAYWORK SHEETS */}
+              {tab === "daywork" && (
+                <div>
+                  <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <div><label style={S.label}>Date</label><input type="date" style={S.input} value={addDaysheet.sheet_date} onChange={e => setAddDaysheet(p => ({ ...p, sheet_date: e.target.value }))} /></div>
+                      <div><label style={S.label}>Worker Name</label><input style={S.input} placeholder="e.g. Dave Hughes" value={addDaysheet.worker_name} onChange={e => setAddDaysheet(p => ({ ...p, worker_name: e.target.value }))} /></div>
+                      <div><label style={S.label}>Hours</label><input type="number" step="0.5" style={S.input} placeholder="e.g. 8" value={addDaysheet.hours} onChange={e => setAddDaysheet(p => ({ ...p, hours: e.target.value }))} /></div>
+                      <div><label style={S.label}>Rate (£/hr)</label><input type="number" style={S.input} placeholder="e.g. 45" value={addDaysheet.rate} onChange={e => setAddDaysheet(p => ({ ...p, rate: e.target.value }))} /></div>
+                      <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Contractor</label><input style={S.input} placeholder="Main contractor name" value={addDaysheet.contractor_name} onChange={e => setAddDaysheet(p => ({ ...p, contractor_name: e.target.value }))} /></div>
+                      <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Work Description</label><input style={S.input} placeholder="Describe the work done" value={addDaysheet.description} onChange={e => setAddDaysheet(p => ({ ...p, description: e.target.value }))} /></div>
+                    </div>
+                    <button style={{ ...S.btn("primary"), marginTop: 8 }} disabled={!addDaysheet.hours || !addDaysheet.rate} onClick={addDayworkSheet}>Add Sheet →</button>
+                  </div>
+                  {daysheets.map(d => (
+                    <div key={d.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{new Date(d.sheet_date).toLocaleDateString("en-GB")} · {d.worker_name || "Worker"}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{(d.hours * d.rate).toFixed(2)}</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{d.hours}hrs @ £{d.rate}/hr{d.contractor_name ? ` · ${d.contractor_name}` : ""}</div>
+                      {d.description && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{d.description}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}`, flexShrink: 0, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {selected.invoice_id && <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => { setSelected(null); setView("Invoices"); }}>View Invoice</button>}
+              {selected.quote_id && <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => { setSelected(null); setView("Quotes"); }}>View Quote</button>}
+              {selected.address && <a href={`https://maps.google.com/?q=${encodeURIComponent(selected.address)}`} target="_blank" rel="noreferrer" style={{ ...S.btn("ghost"), fontSize: 11, textDecoration: "none" }}>📍 Navigate</a>}
+              <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => setShowSignature(true)}>✍ Get Signature</button>
+              <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.red, marginLeft: "auto" }} onClick={() => deleteJob(selected.id)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Signature modal */}
+      {showSignature && selected && (
+        <SignaturePad
+          title={`Customer sign-off — ${selected.customer}`}
+          onSave={async sigData => {
+            await supabase.from("job_cards").update({ customer_signature: sigData, status: "completed", completion_date: new Date().toISOString() }).eq("id", selected.id);
+            setJobCards(prev => prev.map(j => j.id === selected.id ? { ...j, customer_signature: sigData, status: "completed" } : j));
+            setSelected(s => ({ ...s, customer_signature: sigData, status: "completed" }));
+            setShowSignature(false);
+            if (selected.annual_service) {
+              const nextService = new Date();
+              nextService.setDate(nextService.getDate() + 350);
+              await supabase.from("job_cards").update({ next_service_date: nextService.toISOString().slice(0,10), service_reminder_sent: false }).eq("id", selected.id);
+            }
+          }}
+          onCancel={() => setShowSignature(false)}
+        />
+      )}
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-      <div style="background:#f9f9f9;padding:14px;border-radius:8px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Property / Customer</div>
-        <div style="font-weight:600">${cert.customer || job?.customer || ""}</div>
-        <div style="color:#666;margin-top:4px">${cert.address || job?.address || ""}</div>
-      </div>
-      <div style="background:#f9f9f9;padding:14px;border-radius:8px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Engineer Details</div>
-        <div style="font-weight:600">${cert.engineer || brand.tradingName || ""}</div>
-        ${brand.gasSafeNumber ? `<div style="color:#666;margin-top:4px">Gas Safe: ${brand.gasSafeNumber}</div>` : ""}
-        ${brand.utrNumber ? `<div style="color:#666">UTR: ${brand.utrNumber}</div>` : ""}
-      </div>
-    </div>`;
-
-  const cp12Fields = `
-    <div style="margin-bottom:20px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:10px">Appliance Details</div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="background:#f5f5f5">
-          ${["Location","Appliance","Make/Model","Flue Type","Inspected","Safe to Use"].map(h => `<th style="padding:8px;text-align:left;border:1px solid #e5e5e5">${h}</th>`).join("")}
-        </tr></thead>
-        <tbody>
-          ${(cert.appliances || [{ location: cert.applianceLocation || "", type: cert.applianceType || "", makeModel: cert.makeModel || "", flueType: cert.flueType || "Open flued", inspected: "✓", safe: cert.safeToUse !== false ? "Yes" : "No" }]).map(a => `<tr>
-            ${[a.location,a.type,a.makeModel,a.flueType,a.inspected,a.safe].map(v => `<td style="padding:8px;border:1px solid #e5e5e5">${v||""}</td>`).join("")}
-          </tr>`).join("")}
-        </tbody>
-      </table>
-    </div>
-    ${cert.defects ? `<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:12px;margin-bottom:16px"><strong>⚠ Defects / Remedial Action Required:</strong><br>${cert.defects}</div>` : ""}
-    <div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Safety Checks</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-        ${["Gas tightness","Flue flow","Burner pressure","Heat input","Safety devices","CO detector"].map(c => `<div style="background:#f9f9f9;padding:8px 12px;border-radius:4px;display:flex;justify-content:space-between"><span>${c}</span><span style="color:#10b981;font-weight:700">✓</span></div>`).join("")}
-      </div>
-    </div>`;
-
-  const smrFields = `
-    <div style="margin-bottom:16px;background:#f9f9f9;padding:14px;border-radius:8px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Service Details</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-        ${[["Appliance", cert.applianceType || ""],["Make/Model", cert.makeModel || ""],["Serial No.", cert.serialNo || ""],["Next Service Due", cert.nextServiceDate || ""]].map(([l,v]) => `<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
-      </div>
-      ${cert.serviceNotes ? `<div style="margin-top:10px;font-size:12px;color:#666">${cert.serviceNotes}</div>` : ""}
-    </div>`;
-
-  const warningFields = `
-    <div style="background:#fff3cd;border:2px solid #f59e0b;border-radius:8px;padding:16px;margin-bottom:16px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:8px">⚠ Gas Warning/Advice Notice</div>
-      <div style="font-size:12px"><strong>Condition Found:</strong> ${cert.warningCondition || ""}</div>
-      ${cert.warningAction ? `<div style="font-size:12px;margin-top:6px"><strong>Action Taken:</strong> ${cert.warningAction}</div>` : ""}
-      ${cert.warningAdvice ? `<div style="font-size:12px;margin-top:6px"><strong>Advice Given:</strong> ${cert.warningAdvice}</div>` : ""}
-    </div>`;
-
-  const commissionFields = `
-    <div style="margin-bottom:16px;background:#f9f9f9;padding:14px;border-radius:8px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Installation Details</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-        ${[["Appliance", cert.applianceType || ""],["Make/Model", cert.makeModel || ""],["Serial No.", cert.serialNo || ""],["Gas Type", "Natural Gas"],["Installation Date", today],["Commissioned By", brand.tradingName || ""]].map(([l,v]) => `<div><span style="color:#666">${l}:</span> <strong>${v}</strong></div>`).join("")}
-      </div>
-    </div>`;
-
-  const fields = cert.id === "cp12" ? cp12Fields : cert.id === "smr" ? smrFields : cert.id === "warning" ? warningFields : commissionFields;
-
-  const sigSection = sig ? `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5">
-      <div>
-        <div style="font-size:11px;color:#999;margin-bottom:8px">ENGINEER SIGNATURE</div>
-        <img src="${sig}" style="height:50px;border-bottom:1px solid #333;padding-bottom:4px" alt="Engineer signature"/>
-        <div style="font-size:11px;color:#666;margin-top:4px">${brand.tradingName || ""} — ${today}</div>
-      </div>
-      <div>
-        <div style="font-size:11px;color:#999;margin-bottom:8px">CUSTOMER SIGNATURE</div>
-        <div style="height:50px;border-bottom:1px solid #333;margin-bottom:4px"></div>
-        <div style="font-size:11px;color:#666">Name: ______________________</div>
-      </div>
-    </div>` : `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5">
-      <div><div style="font-size:11px;color:#999;margin-bottom:4px">ENGINEER SIGNATURE</div><div style="height:50px;border-bottom:1px solid #333"></div></div>
-      <div><div style="font-size:11px;color:#999;margin-bottom:4px">CUSTOMER SIGNATURE</div><div style="height:50px;border-bottom:1px solid #333"></div></div>
-    </div>`;
-
-  return base + fields + sigSection + `<div style="margin-top:16px;font-size:10px;color:#999;text-align:center">${brand.tradingName} — Gas Safe Reg No: ${brand.gasSafeNumber || "—"} — Issued ${today}</div></div>`;
+  );
 }
 
-// ─── Gas Safe Certificate Tab ─────────────────────────────────────────────────
-// ─── Expenses Tab ─────────────────────────────────────────────────────────────
+
 const MILEAGE_RATE = 0.45; // HMRC approved mileage rate
 
 function ExpensesTab({ user }) {
