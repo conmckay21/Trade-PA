@@ -1,4 +1,4 @@
-const { getValidToken } = require("./_token.js");
+import { getValidToken } from "./_token.js";
 
 function makeRaw({ to, from, subject, body, attachmentBase64, attachmentName }) {
   const boundary = `boundary_${Date.now()}`;
@@ -39,7 +39,7 @@ function makeRaw({ to, from, subject, body, attachmentBase64, attachmentName }) 
   return Buffer.from(raw).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
   const { userId, to, subject, body, attachmentBase64, attachmentName, threadId } = req.body;
@@ -77,4 +77,4 @@ module.exports = async function handler(req, res) {
     console.error("Gmail send error:", err.message);
     res.status(500).json({ error: err.message });
   }
-};
+}
