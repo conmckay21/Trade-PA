@@ -5020,16 +5020,14 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
   async function runEmailCheck() {
     setChecking(true);
     try {
-      const res = await fetch("/api/email/check", {
+      const res = await fetch("/api/email-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      // Reload actions after check
       await loadActions();
-      // Refresh connection to update last_checked time
       const { data: connData } = await window._supabase.from("email_connections").select("provider, email, last_checked").eq("user_id", user.id);
       if (connData?.length) setConnection(connData[0]);
     } catch (e) {
