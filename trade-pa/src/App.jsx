@@ -33,8 +33,211 @@ async function syncInvoiceToAccounting(userId, invoice) {
 }
 
 // ─── Auth Screen ──────────────────────────────────────────────────────────────
-function AuthScreen({ onAuth }) {
-  const [mode, setMode] = useState("login"); // login | signup | reset
+// ─── Landing Page ─────────────────────────────────────────────────────────────
+function LandingPage({ onAuth }) {
+  const [screen, setScreen] = useState("landing"); // landing | login | signup
+  const LP = {
+    wrap: { minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0", fontFamily: "'DM Sans','Helvetica Neue',sans-serif", overflowX: "hidden" },
+    nav: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 28px", borderBottom: "1px solid #1a1a1a", position: "sticky", top: 0, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(8px)", zIndex: 100 },
+    logo: { display: "flex", alignItems: "center", gap: 10, fontFamily: "'DM Mono',monospace", fontSize: 14, color: "#f59e0b", letterSpacing: "0.06em" },
+    logoIcon: { width: 30, height: 30, background: "#f59e0b", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: "#000" },
+    hero: { textAlign: "center", padding: "80px 24px 60px", position: "relative" },
+    h1: { fontSize: "clamp(36px, 7vw, 72px)", fontWeight: 800, lineHeight: 1.05, letterSpacing: "-0.03em", marginBottom: 24, fontFamily: "'DM Mono',monospace" },
+    sub: { fontSize: "clamp(15px, 2.5vw, 19px)", color: "#888", maxWidth: 540, margin: "0 auto 40px", lineHeight: 1.7 },
+    btnPrimary: { display: "inline-flex", alignItems: "center", gap: 8, background: "#f59e0b", color: "#000", padding: "14px 32px", borderRadius: 10, fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace", letterSpacing: "0.02em", transition: "all 0.15s" },
+    btnGhost: { display: "inline-flex", alignItems: "center", background: "transparent", color: "#888", padding: "14px 24px", borderRadius: 10, fontSize: 14, fontWeight: 500, border: "1px solid #2a2a2a", cursor: "pointer", fontFamily: "'DM Mono',monospace", transition: "all 0.15s", textDecoration: "none" },
+    section: { padding: "72px 24px", maxWidth: 1040, margin: "0 auto" },
+    sectionLabel: { fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14 },
+    h2: { fontSize: "clamp(28px, 5vw, 48px)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 16, fontFamily: "'DM Mono',monospace" },
+    card: { background: "#141414", border: "1px solid #222", borderRadius: 14, padding: "28px 24px" },
+    featureGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 2, background: "#1a1a1a", borderRadius: 14, overflow: "hidden" },
+    feature: { background: "#0a0a0a", padding: "32px 28px" },
+    featureIcon: { width: 40, height: 40, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, marginBottom: 16 },
+    pricingCard: { background: "#141414", border: "1px solid #222", borderRadius: 20, padding: "44px 36px", maxWidth: 440, margin: "0 auto", position: "relative", overflow: "hidden" },
+  };
+
+  if (screen === "login" || screen === "signup") {
+    return <AuthScreen onAuth={onAuth} initialMode={screen === "signup" ? "signup" : "login"} onBack={() => setScreen("landing")} />;
+  }
+
+  return (
+    <div style={LP.wrap}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0;}
+        .lp-btn-primary:hover{background:#fbbf24!important;transform:translateY(-2px);box-shadow:0 12px 32px rgba(245,158,11,0.3);}
+        .lp-btn-ghost:hover{border-color:#f59e0b!important;color:#f59e0b!important;}
+        .lp-feature:hover{background:#111!important;}
+        .lp-trade-pill:hover{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,0.08);}
+        .lp-plan-btn.active{border-color:#f59e0b!important;background:rgba(245,158,11,0.06)!important;}
+      `}</style>
+
+      {/* NAV */}
+      <nav style={LP.nav}>
+        <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => setScreen("login")} style={{ ...LP.btnGhost, padding: "8px 18px", fontSize: 13 }} className="lp-btn-ghost">Log in</button>
+          <button onClick={() => setScreen("signup")} style={{ ...LP.btnPrimary, padding: "8px 20px", fontSize: 13 }} className="lp-btn-primary">Get started →</button>
+        </div>
+      </nav>
+
+      {/* HERO */}
+      <div style={LP.hero}>
+        <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(245,158,11,0.04) 1px, transparent 1px),linear-gradient(90deg,rgba(245,158,11,0.04) 1px,transparent 1px)", backgroundSize: "56px 56px", WebkitMaskImage: "radial-gradient(ellipse at center, black 0%, transparent 70%)", maskImage: "radial-gradient(ellipse at center, black 0%, transparent 70%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", width: 500, height: 500, background: "radial-gradient(circle, rgba(245,158,11,0.1) 0%, transparent 70%)", top: "50%", left: "50%", transform: "translate(-50%,-60%)", pointerEvents: "none" }} />
+        <div style={{ position: "relative" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 100, padding: "6px 16px", fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 28 }}>
+            <div style={{ width: 6, height: 6, background: "#f59e0b", borderRadius: "50%", animation: "pulse 2s infinite" }} />
+            Built for UK Tradespeople
+          </div>
+          <h1 style={LP.h1}>Your inbox runs<br/><span style={{ color: "#f59e0b" }}>itself</span> now</h1>
+          <p style={LP.sub}>Trade PA reads your emails, books jobs, chases overdue invoices, fills in certificates by voice, and learns your business — all while you're on the tools.</p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 16 }}>
+            <button onClick={() => setScreen("signup")} style={LP.btnPrimary} className="lp-btn-primary">Get started — £49/month →</button>
+            <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
+          </div>
+          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail & Outlook · Cancel anytime · UK-built</p>
+        </div>
+      </div>
+
+      {/* AI ACTIONS DEMO */}
+      <div style={{ maxWidth: 680, margin: "0 auto 72px", padding: "0 24px" }}>
+        <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: 20, boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 14, borderBottom: "1px solid #1e1e1e", marginBottom: 14 }}>
+            <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444" }} />
+            <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#f59e0b" }} />
+            <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#10b981" }} />
+            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#444", marginLeft: 8 }}>Trade PA — AI Actions</span>
+          </div>
+          {[
+            { icon: "📩", title: "New enquiry — Lisa Thompson", body: "Boiler replacement at 42 Maple Ave. Wants a quote this week.", color: "#3b82f6" },
+            { icon: "✅", title: "Invoice paid — Steve Johnson", body: "Payment of £850 received. Mark INV-214 as paid.", color: "#10b981" },
+            { icon: "🏗", title: "CIS statement — ABC Construction", body: "Gross £4,200 · Deduction £840 · Net £3,360 — PDF attached.", color: "#f59e0b" },
+          ].map((item, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.12)", borderRadius: 10, marginBottom: i < 2 ? 8 : 0 }}>
+              <div style={{ fontSize: 20, flexShrink: 0 }}>{item.icon}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: item.color, marginBottom: 2 }}>{item.title}</div>
+                <div style={{ fontSize: 12, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.body}</div>
+              </div>
+              <div style={{ background: "#10b981", color: "#000", padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>✓ Approve</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* HOW IT WORKS */}
+      <div style={{ ...LP.section, borderTop: "1px solid #1a1a1a" }}>
+        <div style={LP.sectionLabel}>How it works</div>
+        <h2 style={LP.h2}>Three taps.<br/>Everything handled.</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 2, background: "#1a1a1a", borderRadius: 14, overflow: "hidden", marginTop: 40 }}>
+          {[
+            { num: "01", icon: "📧", title: "Connect your inbox", body: "Link Gmail or Outlook in 30 seconds. Trade PA reads every email as it arrives." },
+            { num: "02", icon: "🤖", title: "AI suggests actions", body: "New booking? Creates the job. CIS statement? Logs it. Payment in? Marks invoice paid." },
+            { num: "03", icon: "⚡", title: "One tap to confirm", body: "Review what the AI suggests and approve. Reply emails send automatically." },
+            { num: "04", icon: "🧠", title: "Gets smarter over time", body: "Dismiss something wrong, tell it why. It learns your suppliers, contractors, regulars." },
+          ].map((s, i) => (
+            <div key={i} style={{ background: "#0a0a0a", padding: "32px 24px" }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 52, fontWeight: 700, color: "rgba(245,158,11,0.07)", lineHeight: 1, marginBottom: 16 }}>{s.num}</div>
+              <div style={{ fontSize: 24, marginBottom: 12 }}>{s.icon}</div>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{s.title}</div>
+              <div style={{ fontSize: 13, color: "#666", lineHeight: 1.7 }}>{s.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* FEATURES */}
+      <div style={{ padding: "72px 24px", background: "#0d0d0d", borderTop: "1px solid #1a1a1a", borderBottom: "1px solid #1a1a1a" }}>
+        <div style={{ maxWidth: 1040, margin: "0 auto" }}>
+          <div style={LP.sectionLabel}>Everything included</div>
+          <h2 style={LP.h2}>The full toolkit.<br/>One price.</h2>
+          <div style={{ ...LP.featureGrid, marginTop: 40 }}>
+            {[
+              { icon: "🎙", title: "Voice dictation everywhere", body: "Tap the mic on any form — jobs, quotes, invoices, certificates, time logs. Speak and the AI fills it in.", badge: "Unique to Trade PA" },
+              { icon: "📋", title: "All-trades certificates", body: "CP12, EICR, EIC, PAT, Pressure Test, Unvented HW, CD/11, CD/12, Fire Alarm, Emergency Lighting, Part P." },
+              { icon: "🏗", title: "Deep CIS support", body: "Domestic Reverse Charge invoicing, UTR on all documents, CIS monthly statement logging with PDF storage." },
+              { icon: "💷", title: "Quotes & invoices", body: "Professional branded documents sent from your Gmail or Outlook. Xero and QuickBooks sync built in." },
+              { icon: "📅", title: "Jobs & scheduling", body: "Full job cards with notes, photos, time logs, variation orders, daywork sheets and customer sign-off." },
+              { icon: "💸", title: "Overdue payment chasing", body: "Trade PA automatically sends professional chase emails weekly until overdue invoices are paid." },
+            ].map((f, i) => (
+              <div key={i} style={{ ...LP.feature }} className="lp-feature">
+                <div style={LP.featureIcon}>{f.icon}</div>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{f.title}</div>
+                <div style={{ fontSize: 13, color: "#666", lineHeight: 1.7 }}>{f.body}</div>
+                {f.badge && <div style={{ display: "inline-block", marginTop: 10, background: "rgba(16,185,129,0.1)", color: "#10b981", border: "1px solid rgba(16,185,129,0.2)", borderRadius: 100, fontFamily: "'DM Mono',monospace", fontSize: 9, padding: "3px 10px", letterSpacing: "0.06em", textTransform: "uppercase" }}>{f.badge}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* TRADES */}
+      <div style={LP.section}>
+        <div style={LP.sectionLabel}>Every trade welcome</div>
+        <h2 style={LP.h2}>Built for how<br/>you actually work.</h2>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 32 }}>
+          {["⚡ Electricians","🔧 Plumbers","🔥 Gas Engineers","🛢 Oil Heating","❄ HVAC","🏗 Builders","🪟 Window & Door","🎨 Decorators","🔩 Multi-trade","🏠 Property Maintenance","🌿 Landscapers","🪛 General Contractors"].map(t => (
+            <div key={t} style={{ background: "#141414", border: "1px solid #222", borderRadius: 100, padding: "8px 16px", fontSize: 13, color: "#666", fontFamily: "'DM Mono',monospace", cursor: "default", transition: "all 0.15s" }} className="lp-trade-pill">{t}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* PRICING */}
+      <div style={{ padding: "72px 24px", background: "#0d0d0d", borderTop: "1px solid #1a1a1a", borderBottom: "1px solid #1a1a1a" }}>
+        <div style={{ maxWidth: 1040, margin: "0 auto", textAlign: "center" }}>
+          <div style={LP.sectionLabel}>Pricing</div>
+          <h2 style={LP.h2}>Simple. One price.<br/>Everything included.</h2>
+          <p style={{ fontSize: 17, color: "#666", margin: "0 auto 48px", maxWidth: 480, lineHeight: 1.7 }}>No per-user fees. No feature tiers. No add-ons. Just everything you need.</p>
+          <div style={LP.pricingCard}>
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#f59e0b" }} />
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 68, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em", color: "#f59e0b", marginBottom: 6 }}>
+              <sup style={{ fontSize: 28, verticalAlign: "super" }}>£</sup>49<span style={{ fontSize: 18, color: "#666", fontWeight: 400 }}>/month</span>
+            </div>
+            <p style={{ color: "#666", fontSize: 14, marginBottom: 32 }}>Or £500/year — save nearly two months</p>
+            <ul style={{ listStyle: "none", textAlign: "left", display: "flex", flexDirection: "column", gap: 10, marginBottom: 36 }}>
+              {["AI email agent — processes your inbox","Voice dictation on every form & certificate","All trade certificates — Gas, Electrical, Plumbing, Oil, Fire","Full job management with photos, time logs, VOs","Quotes, invoices, Xero & QuickBooks sync","CIS, DRC, UTR — full subcontractor support","Overdue payment auto-chasing","Annual service reminders","Digital signatures","Unlimited jobs, invoices, certificates"].map(f => (
+                <li key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#ccc" }}>
+                  <span style={{ color: "#10b981", fontWeight: 700 }}>✓</span>{f}
+                </li>
+              ))}
+            </ul>
+            <button onClick={() => setScreen("signup")} style={{ ...LP.btnPrimary, width: "100%", justifyContent: "center", fontSize: 15, padding: 16 }} className="lp-btn-primary">Get started →</button>
+            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 14, textAlign: "center" }}>Cancel anytime · No hidden fees</p>
+          </div>
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div style={{ padding: "72px 24px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", width: 400, height: 400, background: "radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)", top: "50%", left: "50%", transform: "translate(-50%,-50%)", pointerEvents: "none" }} />
+        <div style={{ position: "relative" }}>
+          <h2 style={{ ...LP.h2, marginBottom: 20 }}>Stop doing admin<br/>after hours.</h2>
+          <p style={{ fontSize: 17, color: "#666", marginBottom: 40, maxWidth: 440, margin: "0 auto 40px", lineHeight: 1.7 }}>Trade PA handles the paperwork while you handle the jobs.</p>
+          <button onClick={() => setScreen("signup")} style={{ ...LP.btnPrimary, fontSize: 16, padding: "16px 40px" }} className="lp-btn-primary">Get started →</button>
+          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 16 }}>Works with Gmail · Works with Outlook · UK-built for UK trades</p>
+        </div>
+      </div>
+
+      {/* FOOTER */}
+      <div style={{ padding: "28px 28px", borderTop: "1px solid #1a1a1a", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
+        <div style={{ display: "flex", gap: 24 }}>
+          {[["Privacy Policy","privacy-policy.html"],["Terms of Service","terms.html"],["Contact","mailto:hello@tradespa.co.uk"]].map(([l,h]) => (
+            <a key={l} href={h} style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#555", textDecoration: "none" }}>{l}</a>
+          ))}
+        </div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#444" }}>© 2026 Trade PA</div>
+      </div>
+
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
+    </div>
+  );
+}
+
+
+function AuthScreen({ onAuth, initialMode = "login", onBack }) {
+  const [mode, setMode] = useState(initialMode); // login | signup | reset
   const [form, setForm] = useState({ email: "", password: "", name: "", confirm: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -103,6 +306,9 @@ function AuthScreen({ onAuth }) {
     <div style={authStyles.wrap}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&display=swap'); *{box-sizing:border-box;margin:0;padding:0;} input:focus{border-color:#f59e0b !important;outline:none;}`}</style>
       <div style={authStyles.box}>
+        {onBack && (
+          <button onClick={onBack} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", marginBottom: 20, display: "flex", alignItems: "center", gap: 6, padding: 0 }}>← Back to home</button>
+        )}
         <div style={authStyles.logo}>
           <div style={authStyles.logoIcon}>TP</div>
           <div style={authStyles.logoText}>TRADE PA</div>
@@ -7805,6 +8011,7 @@ const VIEWS = ["Dashboard", "Schedule", "Enquiries", "Jobs", "Customers", "Invoi
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [subscriptionStatus, setSubscriptionStatus] = useState(null); // null=loading, 'active', 'past_due', 'cancelled', 'none'
   const [pdfHtml, setPdfHtml] = useState(null);
   const [view, setView] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -7836,6 +8043,23 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // Check subscription status whenever user changes
+  useEffect(() => {
+    if (!user) { setSubscriptionStatus(null); return; }
+    async function checkSubscription() {
+      const { data } = await supabase.from("subscriptions").select("status, current_period_end").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1);
+      if (!data?.length) { setSubscriptionStatus("none"); return; }
+      const sub = data[0];
+      // Check if period has ended even if status says active
+      if (sub.current_period_end && new Date(sub.current_period_end) < new Date() && sub.status === "active") {
+        setSubscriptionStatus("past_due");
+      } else {
+        setSubscriptionStatus(sub.status);
+      }
+    }
+    checkSubscription();
+  }, [user]);
 
   // Load brand settings from localStorage (brand is small, localStorage is fine)
   const brandSaveCount = useRef(0);
@@ -8182,7 +8406,43 @@ export default function App() {
     </div>
   );
 
-  if (!user) return <AuthScreen onAuth={setUser} />;
+  if (!user) return <LandingPage onLogin={() => {}} onAuth={setUser} />;
+
+  // Accounts that bypass the subscription check (owner/test accounts)
+  const EXEMPT_EMAILS = [
+    "thetradepa@gmail.com",
+    "connor_mckay777@hotmail.com",
+    "landbheating@outlook.com",
+  ];
+  const isExempt = EXEMPT_EMAILS.includes(user?.email?.toLowerCase());
+
+  // Subscription paywall — blocks access if payment has lapsed
+  if (!isExempt && (subscriptionStatus === "past_due" || subscriptionStatus === "cancelled" || subscriptionStatus === "none")) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Mono',monospace" }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Syne:wght@700;800&display=swap');`}</style>
+        <div style={{ maxWidth: 420, width: "100%", textAlign: "center" }}>
+          <div style={{ width: 56, height: 56, background: "#f59e0b", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "#000", margin: "0 auto 24px", letterSpacing: "-0.02em" }}>TP</div>
+          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 28, fontWeight: 800, color: "#f0f0f0", marginBottom: 12 }}>
+            {subscriptionStatus === "past_due" ? "Payment Required" : subscriptionStatus === "none" ? "No Active Subscription" : "Subscription Ended"}
+          </div>
+          <div style={{ fontSize: 14, color: "#888", lineHeight: 1.7, marginBottom: 32 }}>
+            {subscriptionStatus === "past_due"
+              ? "Your last payment didn't go through. Please update your payment details to restore access."
+              : subscriptionStatus === "none"
+              ? "You don't have an active subscription. Subscribe to get full access to Trade PA."
+              : "Your subscription has ended. Resubscribe to continue using Trade PA."}
+          </div>
+          <a href="https://www.tradespa.co.uk/signup.html" style={{ display: "block", background: "#f59e0b", color: "#000", padding: "16px 32px", borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: "none", marginBottom: 12 }}>
+            {subscriptionStatus === "past_due" ? "Update Payment Details →" : "Subscribe Now →"}
+          </a>
+          <button onClick={async () => { await supabase.auth.signOut(); setUser(null); }} style={{ background: "transparent", border: "none", color: "#555", fontSize: 13, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (dbLoading) return (
     <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13, gap: 12 }}>
