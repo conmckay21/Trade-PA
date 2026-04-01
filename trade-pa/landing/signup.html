@@ -588,7 +588,7 @@
 
 <script>
   // ── Stripe setup ──
-  const stripe = Stripe('REPLACE_WITH_VITE_STRIPE_PUBLISHABLE_KEY');
+  const stripe = Stripe('pk_live_51THMNyDV8Bu1hOo8iM7RtZtzQe1wgBHkU9Hx6EUHTkeGSnMdb4TurtebwEvXRYJpg8yT8OF5VL3kAmCBgAlQUvL600iEn2iPnY');
   const elements = stripe.elements({
     appearance: {
       theme: 'night',
@@ -621,8 +621,8 @@
   // ── Plan selection ──
   let selectedPlan = 'monthly';
   const PRICE_IDS = {
-    monthly: 'REPLACE_WITH_STRIPE_MONTHLY_PRICE_ID',
-    annual: 'REPLACE_WITH_STRIPE_ANNUAL_PRICE_ID',
+    monthly: 'price_1THMbUDV8Bu1hOo8Snbfozpl',
+    annual: 'price_1THMc0DV8Bu1hOo8BJlaRmjl',
   };
 
   function selectPlan(plan) {
