@@ -199,6 +199,22 @@ Respond ONLY with JSON:
       }
     }
 
+    // Send push notification if new actions were created
+    if (actionsCreated > 0) {
+      fetch(`${process.env.APP_URL}/api/push/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          title: `Trade PA — ${actionsCreated} new action${actionsCreated > 1 ? "s" : ""}`,
+          body: actionsCreated === 1 ? `${debugLog[debugLog.length - 1]?.split(" → ")[1] || "Review in your Inbox"}` : `${actionsCreated} emails processed and ready to approve`,
+          url: "/",
+          type: "ai_action",
+          tag: "ai-action",
+        }),
+      }).catch(() => {});
+    }
+
     // Update last_checked
     await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_connections?user_id=eq.${userId}&provider=eq.${conn.provider}`, {
       method: "PATCH",
