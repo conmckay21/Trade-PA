@@ -710,7 +710,7 @@ function downloadInvoicePDF(brand, inv) {
     .back-bar{display:none !important;}
     body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   }
-  .back-bar{background:#1a1a1a;padding:10px 36px;display:flex;gap:16px;align-items:center;position:sticky;top:0;z-index:10;}
+  .back-bar{background:#1a1a1a;padding:max(10px, env(safe-area-inset-top, 10px)) 36px 10px;display:flex;gap:16px;align-items:center;position:sticky;top:0;z-index:10;}
   .back-bar a{color:#f59e0b;font-size:13px;text-decoration:none;font-weight:600;cursor:pointer;}
 </style>
 </head>
@@ -2588,7 +2588,7 @@ Return only JSON, no other text.` },
                             overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
                             const closeBtn = document.createElement("button");
                             closeBtn.textContent = "← Back to app";
-                            closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10";
+                            closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
                             closeBtn.onclick = () => document.body.removeChild(overlay);
                             const imgEl = document.createElement("img");
                             imgEl.src = img;
@@ -6934,11 +6934,14 @@ function buildCertHTML(cert, brand, job, sig) {
 
   const header = `<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#1a1a1a;font-size:13px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${accentColor};padding-bottom:16px;margin-bottom:20px">
-      <div>
-        <div style="font-size:22px;font-weight:700">${brand.tradingName || ""}</div>
-        <div style="color:#666;font-size:12px;margin-top:4px">${brand.address || ""}${brand.phone ? ` · ${brand.phone}` : ""}${brand.email ? ` · ${brand.email}` : ""}</div>
-        ${regLine ? `<div style="font-size:12px;color:#666;margin-top:2px">${regLine}</div>` : ""}
-        ${brand.utrNumber ? `<div style="font-size:12px;color:#666">UTR: ${brand.utrNumber}</div>` : ""}
+      <div style="display:flex;align-items:flex-start;gap:14px">
+        ${brand.logo ? `<img src="${brand.logo}" style="width:52px;height:52px;object-fit:contain;border-radius:8px;flex-shrink:0">` : ""}
+        <div>
+          <div style="font-size:22px;font-weight:700">${brand.tradingName || ""}</div>
+          <div style="color:#666;font-size:12px;margin-top:4px">${brand.address || ""}${brand.phone ? ` · ${brand.phone}` : ""}${brand.email ? ` · ${brand.email}` : ""}</div>
+          ${regLine ? `<div style="font-size:12px;color:#666;margin-top:2px">${regLine}</div>` : ""}
+          ${brand.utrNumber ? `<div style="font-size:12px;color:#666">UTR: ${brand.utrNumber}</div>` : ""}
+        </div>
       </div>
       <div style="text-align:right">
         <div style="font-size:18px;font-weight:700;color:${accentColor}">${cert.short}</div>
@@ -7938,7 +7941,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                     overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9999;display:flex;flex-direction:column;overflow-y:auto";
 
                     overlay.innerHTML = `
-                      <div style="padding:12px 16px;background:#1a1a1a;border-bottom:1px solid #333;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10">
+                      <div style="padding:max(12px, env(safe-area-inset-top, 12px)) 16px 12px;background:#1a1a1a;border-bottom:1px solid #333;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10">
                         <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))" style="background:${accent};color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace">← Back</button>
                         <span style="color:#888;font-size:13px;font-family:'DM Mono',monospace">Job Completion Certificate</span>
                         <button onclick="window.print()" style="background:transparent;color:#888;border:1px solid #333;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:'DM Mono',monospace;margin-left:auto">🖨 Print / Save PDF</button>
@@ -7946,13 +7949,16 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                       <div style="flex:1;background:#f5f5f5;padding:24px;display:flex;justify-content:center">
                         <div style="font-family:Arial,sans-serif;max-width:680px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.15)">
                           <div style="background:${accent};padding:28px 32px;display:flex;justify-content:space-between;align-items:flex-start">
-                            <div>
-                              <div style="font-size:22px;font-weight:700;color:#000">${tradingName}</div>
-                              <div style="color:rgba(0,0,0,0.6);font-size:12px;margin-top:4px">${[phone, email, address].filter(Boolean).join(" · ")}</div>
+                            <div style="display:flex;align-items:center;gap:14px">
+                              ${brand?.logo ? `<img src="${brand.logo}" style="height:48px;width:48px;object-fit:contain;border-radius:8px;background:#fff;padding:4px">` : `<div style="width:44px;height:44px;background:rgba(0,0,0,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#000">TP</div>`}
+                              <div>
+                                <div style="font-size:20px;font-weight:700;color:#000">${tradingName}</div>
+                                <div style="color:rgba(0,0,0,0.6);font-size:11px;margin-top:2px">${[phone, email, address].filter(Boolean).join(" · ")}</div>
+                              </div>
                             </div>
                             <div style="text-align:right">
-                              <div style="font-size:16px;font-weight:700;color:#000">COMPLETION CERTIFICATE</div>
-                              <div style="font-size:12px;color:rgba(0,0,0,0.6);margin-top:2px">${completionDate}</div>
+                              <div style="font-size:15px;font-weight:700;color:#000">COMPLETION CERTIFICATE</div>
+                              <div style="font-size:11px;color:rgba(0,0,0,0.6);margin-top:2px">${completionDate}</div>
                             </div>
                           </div>
                           <div style="padding:28px 32px">
