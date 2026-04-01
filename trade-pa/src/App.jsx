@@ -1030,7 +1030,92 @@ function InvoicePreview({ brand, invoice }) {
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 // ─── Team Invite ──────────────────────────────────────────────────────────────
-function TeamInvite({ companyId }) {
+// ─── Call Tracking Settings ────────────────────────────────────────────────────
+function CallTrackingSettings({ user }) {
+  const [status, setStatus] = useState(null); // null=loading, object=data
+  const [forwardTo, setForwardTo] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from("call_tracking").select("*").eq("user_id", user.id).single()
+      .then(({ data }) => setStatus(data || false));
+  }, [user?.id]);
+
+  const activate = async () => {
+    if (!forwardTo.trim()) { setError("Please enter your mobile number"); return; }
+    setSaving(true); setError("");
+    try {
+      const res = await fetch("/api/calls/provision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, forwardTo: forwardTo.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setStatus(data);
+    } catch (err) {
+      setError(err.message);
+    }
+    setSaving(false);
+  };
+
+  if (status === null) return <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>;
+
+  if (status && status.twilioNumber) return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <div style={S.badge(C.green)}>✓ Active</div>
+        <div style={{ fontSize: 12, color: C.muted }}>Call tracking is enabled</div>
+      </div>
+      <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 12 }}>
+        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Forwarding number</div>
+        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: C.amber }}>{status.twilioNumber}</div>
+      </div>
+      <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 12 }}>
+        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Setup — dial these codes on your mobile</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+            <span style={{ color: C.muted }}>Enable call tracking:</span>
+            <span style={{ fontFamily: "'DM Mono',monospace", color: C.green }}>{status.forwardingCode}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+            <span style={{ color: C.muted }}>Disable call tracking:</span>
+            <span style={{ fontFamily: "'DM Mono',monospace", color: C.red }}>{status.disableCode}</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
+        Your existing number stays the same. Clients call you as normal — calls from known customers are recorded and transcribed automatically. Unknown callers pass straight through unrecorded.
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+        Enter your mobile number below. We'll set up a routing number that forwards calls through Trade PA. Your existing number stays the same — clients call you as normal.
+      </div>
+      <label style={S.label}>Your mobile number</label>
+      <input
+        style={{ ...S.input, marginBottom: 12 }}
+        placeholder="e.g. 07700 900123"
+        value={forwardTo}
+        onChange={e => setForwardTo(e.target.value)}
+      />
+      {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{error}</div>}
+      <button style={S.btn("primary")} disabled={saving} onClick={activate}>
+        {saving ? "Setting up..." : "Activate Call Tracking →"}
+      </button>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>
+        Add-on pricing: 100 mins £20/mo · 300 mins £40/mo · 600 mins £65/mo · Unlimited £104/mo
+      </div>
+    </div>
+  );
+}
+
+function TeamInvite({ companyId, planTier, currentMemberCount }) {
   const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox"];
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
@@ -1048,6 +1133,15 @@ function TeamInvite({ companyId }) {
 
   const sendInvite = async () => {
     if (!email || !companyId) return;
+
+    // Check user limit based on plan
+    const PLAN_LIMITS = { solo: 1, team: 5, pro: 10 };
+    const maxUsers = PLAN_LIMITS[planTier] || 1;
+    if (currentMemberCount >= maxUsers) {
+      setError(`Your ${planTier} plan allows up to ${maxUsers} user${maxUsers === 1 ? "" : "s"}. Upgrade your plan to add more team members.`);
+      return;
+    }
+
     setSending(true); setError("");
     try {
       const { data: existing } = await supabase
@@ -1210,7 +1304,7 @@ function CertificationsCard({ brand, setBrand }) {
   );
 }
 
-function Settings({ brand, setBrand, companyId, companyName, userRole, members, user }) {
+function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier }) {
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
   const [xeroConnected, setXeroConnected] = useState(false);
@@ -1330,6 +1424,34 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Business Info */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>Your Plan</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: C.surfaceHigh, borderRadius: 10, marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, textTransform: "capitalize" }}>Trade PA {planTier}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+              {planTier === "solo" ? "1 user" : planTier === "team" ? "Up to 5 users" : "Up to 10 users"}
+            </div>
+          </div>
+          <div style={S.badge(planTier === "pro" ? C.blue : planTier === "team" ? C.green : C.amber)}>
+            {planTier === "pro" ? "PRO" : planTier === "team" ? "TEAM" : "SOLO"}
+          </div>
+        </div>
+        {planTier === "solo" && (
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+            Need to add team members? Upgrade to <strong style={{ color: C.amber }}>Team (£89/mo)</strong> for up to 5 users or <strong style={{ color: C.amber }}>Pro (£129/mo)</strong> for up to 10 users.
+            <br/><a href="mailto:hello@tradespa.co.uk" style={{ color: C.amber }}>Contact us to upgrade →</a>
+          </div>
+        )}
+        {planTier === "team" && (
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+            Need more than 5 users? Upgrade to <strong style={{ color: C.amber }}>Pro (£129/mo)</strong> for up to 10 users.
+            <br/><a href="mailto:hello@tradespa.co.uk" style={{ color: C.amber }}>Contact us to upgrade →</a>
+          </div>
+        )}
       </div>
 
       {/* Business Info */}
@@ -1513,11 +1635,20 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         </div>
       </div>
 
+      {/* Call Tracking */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>📞 Call Tracking</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+          AI-powered call recording and transcription. Known customers who call are automatically recorded, transcribed and linked to their job or customer record. Unknown callers pass straight through unrecorded.
+        </div>
+        <CallTrackingSettings user={user} />
+      </div>
+
       {/* Team Management */}
       <div style={S.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={S.sectionTitle}>Team Access</div>
-          {userRole === "owner" && <TeamInvite companyId={companyId} />}
+          {userRole === "owner" && <TeamInvite companyId={companyId} planTier={planTier} currentMemberCount={members.length} userLimit={userLimit} />}
         </div>
 
         <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, marginBottom: 14 }}>
@@ -4624,13 +4755,28 @@ Rules:
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 // ─── Customers ────────────────────────────────────────────────────────────────
-function Customers({ customers, setCustomers, jobs, invoices, setView }) {
+function Customers({ customers, setCustomers, jobs, invoices, setView, user }) {
   const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState(null);
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", notes: "" });
+  const [callLogs, setCallLogs] = useState([]);
+  const [customerTab, setCustomerTab] = useState("overview"); // overview | calls
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  // Load call logs when customer selected
+  useEffect(() => {
+    if (!selected || !user?.id) return;
+    setCustomerTab("overview");
+    supabase.from("call_logs")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("customer_name", selected.name)
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .then(({ data }) => setCallLogs(data || []));
+  }, [selected, user?.id]);
 
   const save = () => {
     if (!form.name) return;
@@ -4723,6 +4869,45 @@ function Customers({ customers, setCustomers, jobs, invoices, setView }) {
               <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
             </div>
 
+            {/* Tab switcher */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+              {["overview", "calls"].map(t => (
+                <button key={t} onClick={() => setCustomerTab(t)} style={{ ...S.btn(customerTab === t ? "primary" : "ghost"), fontSize: 11, padding: "4px 12px", textTransform: "capitalize" }}>{t === "calls" ? `📞 Calls${callLogs.length > 0 ? ` (${callLogs.length})` : ""}` : "Overview"}</button>
+              ))}
+            </div>
+
+            {customerTab === "calls" && (
+              <div>
+                {callLogs.length === 0 ? (
+                  <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "20px 0" }}>
+                    No recorded calls yet.<br/>
+                    <span style={{ fontSize: 11 }}>Calls are recorded when this customer rings through your Trade PA number.</span>
+                  </div>
+                ) : callLogs.map(log => (
+                  <div key={log.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: 14, marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 16 }}>📞</span>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{new Date(log.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>{Math.floor((log.duration_seconds || 0) / 60)}m {(log.duration_seconds || 0) % 60}s</div>
+                        </div>
+                      </div>
+                      <span style={S.badge(
+                        log.category === "existing_job" ? C.green :
+                        log.category === "new_enquiry" ? C.blue :
+                        log.category === "invoice_payment" ? C.amber : C.muted
+                      )}>{log.category?.replace("_", " ")}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6, marginBottom: 6 }}>{log.summary}</div>
+                    {log.key_details && <div style={{ fontSize: 11, color: C.amber, fontStyle: "italic" }}>📌 {log.key_details}</div>}
+                    {log.action_needed && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Action: {log.action_needed}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {customerTab === "overview" && (<>
             {/* Contact details */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
@@ -4776,12 +4961,15 @@ function Customers({ customers, setCustomers, jobs, invoices, setView }) {
             )}
 
             {/* Actions */}
+            {customerTab === "overview" && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button style={S.btn("primary")} onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}>Edit</button>
               {selected.phone && <a href={`tel:${selected.phone.replace(/\s/g, "")}`} style={{ ...S.btn("ghost"), textDecoration: "none" }}>📞 Call</a>}
               {selected.email && <a href={`mailto:${selected.email}`} style={{ ...S.btn("ghost"), textDecoration: "none" }}>✉ Email</a>}
               <button style={{ ...S.btn("ghost"), color: C.red, marginLeft: "auto" }} onClick={() => del(selected.id)}>Delete</button>
             </div>
+            )}
+            </>)}
           </div>
         </div>
       )}
@@ -8011,7 +8199,9 @@ const VIEWS = ["Dashboard", "Schedule", "Enquiries", "Jobs", "Customers", "Invoi
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [subscriptionStatus, setSubscriptionStatus] = useState(null); // null=loading, 'active', 'past_due', 'cancelled', 'none'
+  const [subscriptionStatus, setSubscriptionStatus] = useState(null);
+  const [planTier, setPlanTier] = useState("solo");
+  const [userLimit, setUserLimit] = useState(1);
   const [pdfHtml, setPdfHtml] = useState(null);
   const [view, setView] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -8048,10 +8238,24 @@ export default function App() {
   useEffect(() => {
     if (!user) { setSubscriptionStatus(null); return; }
     async function checkSubscription() {
-      const { data } = await supabase.from("subscriptions").select("status, current_period_end").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1);
+      const { data } = await supabase.from("subscriptions").select("status, current_period_end, stripe_price_id").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1);
       if (!data?.length) { setSubscriptionStatus("none"); return; }
       const sub = data[0];
-      // Check if period has ended even if status says active
+
+      // Determine plan tier from price ID
+      const PRICE_TO_PLAN = {
+        "price_1THMbUDV8Bu1hOo8Snbfozpl": "solo",
+        "price_1THMc0DV8Bu1hOo8BJlaRmjl": "solo",
+        "price_1THUQFDV8Bu1hOo8VygjgUMK": "team",
+        "price_1THUQbDV8Bu1hOo8uEp3IgBI": "team",
+        "price_1THUQsDV8Bu1hOo8b2MXyh1r": "pro",
+        "price_1THUR9DV8Bu1hOo8bhrLfaYf": "pro",
+      };
+      const PLAN_USER_LIMITS = { solo: 1, team: 5, pro: 10 };
+      const detectedPlan = PRICE_TO_PLAN[sub.stripe_price_id] || sub.plan || "solo";
+      setPlanTier(detectedPlan);
+      setUserLimit(PLAN_USER_LIMITS[detectedPlan] || 1);
+
       if (sub.current_period_end && new Date(sub.current_period_end) < new Date() && sub.status === "active") {
         setSubscriptionStatus("past_due");
       } else {
@@ -8525,7 +8729,7 @@ export default function App() {
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} />}
         {view === "Jobs" && <JobsTab user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
-        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} />}
+        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} user={user} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} />}
         {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} />}
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
@@ -8535,7 +8739,7 @@ export default function App() {
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
-        {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} />}
+        {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} />}
       </main>
     </div>
   );
