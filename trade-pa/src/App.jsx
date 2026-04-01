@@ -7174,6 +7174,11 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                 <div>
                   <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                     <input style={{ ...S.input, flex: 1 }} placeholder="Add a note..." value={addNote} onChange={e => setAddNote(e.target.value)} onKeyDown={e => e.key === "Enter" && addNoteToJob()} />
+                    <VoiceFillButton
+                      form={{ note: addNote }}
+                      setForm={f => setAddNote(f.note || "")}
+                      fieldDescriptions="note (the note text to add about this job)"
+                    />
                     <button style={S.btn("primary")} onClick={addNoteToJob}>Add</button>
                   </div>
                   {notes.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No notes yet.</div>}
@@ -7216,6 +7221,10 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               {tab === "time" && (
                 <div>
                   <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700 }}>Log Time</div>
+                      <VoiceFillButton form={addTime} setForm={setAddTime} fieldDescriptions="date (date in YYYY-MM-DD format), hours (number of hours e.g. 4 or 2.5), rate (hourly rate in pounds e.g. 55), description (what work was done)" />
+                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       <div><label style={S.label}>Date</label><input type="date" style={S.input} value={addTime.date} onChange={e => setAddTime(p => ({ ...p, date: e.target.value }))} /></div>
                       <div><label style={S.label}>Hours</label><input type="number" step="0.5" style={S.input} placeholder="e.g. 4" value={addTime.hours} onChange={e => setAddTime(p => ({ ...p, hours: e.target.value }))} /></div>
@@ -7241,6 +7250,10 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               {tab === "vo" && (
                 <div>
                   <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700 }}>Add Variation</div>
+                      <VoiceFillButton form={addVO} setForm={setAddVO} fieldDescriptions="vo_number (VO reference number e.g. VO-001), description (what the variation is e.g. additional radiator in hallway), amount (cost in pounds)" />
+                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       <div><label style={S.label}>VO Number</label><input style={S.input} placeholder="e.g. VO-001" value={addVO.vo_number} onChange={e => setAddVO(p => ({ ...p, vo_number: e.target.value }))} /></div>
                       <div><label style={S.label}>Amount (£)</label><input type="number" style={S.input} value={addVO.amount} onChange={e => setAddVO(p => ({ ...p, amount: e.target.value }))} /></div>
@@ -7261,7 +7274,30 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                       <div style={{ fontSize: 12, color: C.muted }}>{v.description}</div>
                       {v.status === "pending" && (
                         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                          <button style={{ ...S.btn("green"), fontSize: 11, padding: "4px 10px" }} onClick={async () => { await supabase.from("variation_orders").update({ status: "approved" }).eq("id", v.id); setVos(prev => prev.map(x => x.id === v.id ? { ...x, status: "approved" } : x)); }}>Approve</button>
+                          <button style={{ ...S.btn("green"), fontSize: 11, padding: "4px 10px" }} onClick={async () => {
+                            // Mark VO approved
+                            await supabase.from("variation_orders").update({ status: "approved" }).eq("id", v.id);
+                            setVos(prev => prev.map(x => x.id === v.id ? { ...x, status: "approved" } : x));
+                            // Create draft invoice for this variation
+                            const invId = `INV-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+                            const newInv = {
+                              id: invId,
+                              customer: selected.customer,
+                              address: selected.address || "",
+                              amount: v.amount || 0,
+                              desc: `Variation Order${v.vo_number ? ` ${v.vo_number}` : ""}: ${v.description}`,
+                              description: `Variation Order${v.vo_number ? ` ${v.vo_number}` : ""}: ${v.description}`,
+                              lineItems: [{ description: `VO${v.vo_number ? ` ${v.vo_number}` : ""}: ${v.description}`, amount: v.amount || 0 }],
+                              due: `Due in ${brand?.paymentTerms || 14} days`,
+                              status: "draft",
+                              isQuote: false,
+                              jobRef: selected.title || selected.type || "",
+                              poNumber: selected.po_number || "",
+                              created: new Date().toLocaleDateString("en-GB"),
+                            };
+                            setInvoices(prev => [newInv, ...(prev || [])]);
+                            alert(`✓ VO approved — draft invoice ${invId} created for £${v.amount}. Review and send from the Invoices tab.`);
+                          }}>Approve</button>
                           <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.red }} onClick={async () => { await supabase.from("variation_orders").update({ status: "rejected" }).eq("id", v.id); setVos(prev => prev.map(x => x.id === v.id ? { ...x, status: "rejected" } : x)); }}>Reject</button>
                         </div>
                       )}
@@ -7274,6 +7310,10 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               {tab === "docs" && (
                 <div>
                   <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700 }}>Add Document</div>
+                      <VoiceFillButton form={addDoc} setForm={setAddDoc} fieldDescriptions="doc_type (certificate type e.g. Gas Safety Certificate, EICR, PAT Testing), doc_number (certificate number), issued_date (date issued YYYY-MM-DD), expiry_date (expiry date YYYY-MM-DD), notes (any notes)" />
+                    </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <div><label style={S.label}>Document Type</label>
                         <select style={S.input} value={addDoc.doc_type} onChange={e => setAddDoc(p => ({ ...p, doc_type: e.target.value }))}>
@@ -7317,6 +7357,10 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               {tab === "daywork" && (
                 <div>
                   <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700 }}>Add Daywork Sheet</div>
+                      <VoiceFillButton form={addDaysheet} setForm={setAddDaysheet} fieldDescriptions="sheet_date (date in YYYY-MM-DD), worker_name (worker's full name), hours (number of hours e.g. 8), rate (hourly rate in pounds e.g. 45), contractor_name (main contractor name), description (work carried out)" />
+                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       <div><label style={S.label}>Date</label><input type="date" style={S.input} value={addDaysheet.sheet_date} onChange={e => setAddDaysheet(p => ({ ...p, sheet_date: e.target.value }))} /></div>
                       <div><label style={S.label}>Worker Name</label><input style={S.input} placeholder="e.g. Dave Hughes" value={addDaysheet.worker_name} onChange={e => setAddDaysheet(p => ({ ...p, worker_name: e.target.value }))} /></div>
