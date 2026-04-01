@@ -2572,41 +2572,10 @@ Return only JSON, no other text.` },
           : filtered.map((m, rawI) => {
             const i = (materials || []).indexOf(m);
             return (
-              <div key={i} style={S.row}>
+              <div key={i} style={{ ...S.row, flexWrap: "wrap", gap: "4px 0" }}>
                 <div style={{ width: 4, height: 44, borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
-                    {(m.receiptId || m.receiptSource) && (
-                      <div
-                        title={m.receiptFilename || "View invoice"}
-                        style={{ fontSize: 10, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 4, padding: "1px 5px", cursor: "pointer", flexShrink: 0 }}
-                        onClick={e => {
-                          e.stopPropagation();
-                          // Try Supabase-stored image first, then localStorage fallback
-                          const img = m.receiptImage || localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
-                          if (img) {
-                            const overlay = document.createElement("div");
-                            overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
-                            const closeBtn = document.createElement("button");
-                            closeBtn.textContent = "← Back to app";
-                            closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
-                            closeBtn.onclick = () => document.body.removeChild(overlay);
-                            const imgEl = document.createElement("img");
-                            imgEl.src = img;
-                            imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
-                            overlay.appendChild(closeBtn);
-                            overlay.appendChild(imgEl);
-                            document.body.appendChild(overlay);
-                          } else if (m.receiptSource === "email" && m.receiptFilename) {
-                            alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was received via email. Open your Inbox to view the original email and attachment.`);
-                          } else {
-                            alert("Invoice image not available.");
-                          }
-                        }}
-                      >🧾 View Invoice</div>
-                    )}
-                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
                   <div style={{ fontSize: 11, color: C.muted }}>
                     {[m.job && `📋 ${m.job}`, m.supplier && `🏪 ${m.supplier}`, m.unitPrice > 0 && `£${((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)}`].filter(Boolean).join(" · ")}
                   </div>
@@ -2618,6 +2587,36 @@ Return only JSON, no other text.` },
                 </button>
                 <button onClick={() => setEditingMaterial({ index: i, item: m.item, qty: String(m.qty || 1), unitPrice: String(m.unitPrice || ""), supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" })} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0 }}>✏</button>
                 <button onClick={() => deleteMaterial(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginLeft: 4 }}>×</button>
+                {(m.receiptId || m.receiptSource || m.receiptImage) && (
+                  <div style={{ width: "100%", paddingLeft: 8, paddingTop: 4, paddingBottom: 4 }}>
+                    <div
+                      title={m.receiptFilename || "View invoice"}
+                      style={{ fontSize: 11, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        const img = m.receiptImage || localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
+                        if (img) {
+                          const overlay = document.createElement("div");
+                          overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
+                          const closeBtn = document.createElement("button");
+                          closeBtn.textContent = "← Back to app";
+                          closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
+                          closeBtn.onclick = () => document.body.removeChild(overlay);
+                          const imgEl = document.createElement("img");
+                          imgEl.src = img;
+                          imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
+                          overlay.appendChild(closeBtn);
+                          overlay.appendChild(imgEl);
+                          document.body.appendChild(overlay);
+                        } else if (m.receiptSource === "email" && m.receiptFilename) {
+                          alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was received via email. Open your Inbox to view the original.`);
+                        } else {
+                          alert("Invoice image not available.");
+                        }
+                      }}
+                    >🧾 View Invoice</div>
+                  </div>
+                )}
               </div>
             );
           })
@@ -5388,11 +5387,15 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
     const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
     setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== quote.id)]);
     setSelected(null);
+    // Build scope of work from quote line items or description
+    const scopeOfWork = (quote.lineItems && quote.lineItems.length > 0)
+      ? quote.lineItems.map(l => l.description || l.desc || "").filter(Boolean).join("\n")
+      : (quote.description || quote.desc || "");
     // Create a job card in Supabase
     if (user?.id) {
       supabase.from("job_cards").insert({
         user_id: user.id,
-        title: `${quote.type || "Job"} — ${quote.customer}`,
+        title: `${quote.id} — ${quote.customer}`,
         customer: quote.customer,
         address: quote.address || "",
         type: quote.type || "",
@@ -5400,7 +5403,8 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
         value: quote.amount || 0,
         quote_id: quote.id,
         invoice_id: newId,
-        notes: `Created from quote ${quote.id}`,
+        scope_of_work: scopeOfWork,
+        notes: `Converted from quote ${quote.id} on ${new Date().toLocaleDateString("en-GB")}`,
       }).then(({ error }) => { if (error) console.error("Job card creation failed:", error.message); });
     }
     setView("Jobs");
@@ -7422,7 +7426,8 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   const [selected, setSelected] = useState(null);
   const [tab, setTab] = useState("notes");
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", annual_service: false });
+  const [form, setForm] = useState({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", scope_of_work: "", annual_service: false });
+  const [drawings, setDrawings] = useState([]);
   const [notes, setNotes] = useState([]);
   const [photos, setPhotos] = useState([]);
   const [timeLogs, setTimeLogs] = useState([]);
@@ -7439,7 +7444,12 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   const [showSignature, setShowSignature] = useState(false);
   const [editingJob, setEditingJob] = useState(false);
   const [editForm, setEditForm] = useState({});
-  const [jobCallLogs, setJobCallLogs] = useState([]);
+  const [showStagePayments, setShowStagePayments] = useState(false);
+  const [stagePaymentStages, setStagePaymentStages] = useState([
+    { label: "Deposit", type: "pct", value: "30" },
+    { label: "First Fix", type: "pct", value: "40" },
+    { label: "Completion", type: "pct", value: "30" },
+  ]);
   const photoRef = useRef();
   const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -7485,13 +7495,14 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   }
 
   async function loadJobDetails(jobId) {
-    const [n, p, t, v, d, ds] = await Promise.all([
+    const [n, p, t, v, d, ds, dr] = await Promise.all([
       supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
       supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
       supabase.from("time_logs").select("*").eq("job_id", jobId).order("date", { ascending: false }),
       supabase.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
       supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
       supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
+      supabase.from("job_drawings").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
     ]);
     setNotes(n.data || []);
     setPhotos(p.data || []);
@@ -7499,6 +7510,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
     setVos(v.data || []);
     setCompDocs(d.data || []);
     setDaysheets(ds.data || []);
+    setDrawings(dr.data || []);
   }
 
   async function sendServiceReminder(job) {
@@ -7517,9 +7529,9 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   async function saveJob() {
     if (!form.customer && !form.title) return;
     setSaving(true);
-    const payload = { user_id: user.id, title: form.title, customer: form.customer, address: form.address, type: form.type, status: form.status, value: parseFloat(form.value) || 0, po_number: form.po_number, notes: form.notes, annual_service: form.annual_service, updated_at: new Date().toISOString() };
+    const payload = { user_id: user.id, title: form.title, customer: form.customer, address: form.address, type: form.type, status: form.status, value: parseFloat(form.value) || 0, po_number: form.po_number, notes: form.notes, scope_of_work: form.scope_of_work || "", annual_service: form.annual_service, updated_at: new Date().toISOString() };
     const { data, error } = await supabase.from("job_cards").insert(payload).select().single();
-    if (!error && data) { setJobCards(prev => [data, ...prev]); setShowAdd(false); setForm({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", annual_service: false }); }
+    if (!error && data) { setJobCards(prev => [data, ...prev]); setShowAdd(false); setForm({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", scope_of_work: "", annual_service: false }); }
     setSaving(false);
   }
 
@@ -7593,6 +7605,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               <div><label style={S.label}>PO Number</label><input style={S.input} placeholder="Optional" value={form.po_number} onChange={setF("po_number")} /></div>
             </div>
             <div><label style={S.label}>Notes</label><textarea style={{ ...S.input, minHeight: 60, resize: "none" }} value={form.notes} onChange={setF("notes")} /></div>
+            <div><label style={S.label}>Scope of Work</label><textarea style={{ ...S.input, minHeight: 80, resize: "none" }} placeholder="Detail the work to be carried out..." value={form.scope_of_work} onChange={setF("scope_of_work")} /></div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, cursor: "pointer" }} onClick={() => setForm(f => ({ ...f, annual_service: !f.annual_service }))}>
               <div style={{ width: 36, height: 20, borderRadius: 10, background: form.annual_service ? C.amber : C.border, position: "relative", flexShrink: 0, transition: "all 0.2s" }}>
                 <div style={{ position: "absolute", top: 2, left: form.annual_service ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "all 0.2s" }} />
@@ -7664,7 +7677,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
 
             {/* Sub-tabs */}
             <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: "auto" }}>
-              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"],["calls",`📞${jobCallLogs.length > 0 ? ` (${jobCallLogs.length})` : ""}`]].map(([v,l]) => (
+              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"],["plans","📐 Plans"],["calls",`📞${jobCallLogs.length > 0 ? ` (${jobCallLogs.length})` : ""}`]].map(([v,l]) => (
                 <button key={v} onClick={() => setTab(v)}
                   style={{ padding: "8px 12px", border: "none", borderBottom: tab === v ? `2px solid ${C.amber}` : "2px solid transparent", background: "transparent", color: tab === v ? C.amber : C.muted, fontSize: 11, fontWeight: tab === v ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'DM Mono',monospace" }}>
                   {l}
@@ -7678,6 +7691,12 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               {/* NOTES */}
               {tab === "notes" && (
                 <div>
+                  {selected.scope_of_work && (
+                    <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 14px", marginBottom: 14, borderLeft: `3px solid ${C.amber}` }}>
+                      <div style={{ fontSize: 10, color: C.amber, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Scope of Work</div>
+                      <div style={{ fontSize: 12, color: C.text, lineHeight: 1.7, whiteSpace: "pre-line" }}>{selected.scope_of_work}</div>
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                     <input style={{ ...S.input, flex: 1 }} placeholder="Add a note..." value={addNote} onChange={e => setAddNote(e.target.value)} onKeyDown={e => e.key === "Enter" && addNoteToJob()} />
                     <VoiceFillButton
@@ -7891,6 +7910,97 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               )}
 
               {/* CALLS */}
+              {/* PLANS / DRAWINGS */}
+              {tab === "plans" && (
+                <div>
+                  <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Upload Drawing or Plan</div>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      style={{ display: "none" }}
+                      id="drawingUpload"
+                      onChange={async e => {
+                        const file = e.target.files[0];
+                        if (!file || !selected) return;
+                        const reader = new FileReader();
+                        reader.onload = async ev => {
+                          const { data } = await supabase.from("job_drawings").insert({
+                            job_id: selected.id,
+                            user_id: user.id,
+                            filename: file.name,
+                            file_type: file.type,
+                            file_data: ev.target.result,
+                            created_at: new Date().toISOString(),
+                          }).select().single();
+                          if (data) setDrawings(prev => [data, ...prev]);
+                        };
+                        reader.readAsDataURL(file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <button style={S.btn("primary")} onClick={() => document.getElementById("drawingUpload").click()}>📐 Upload Drawing / Plan</button>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Supports images and PDFs. Stored with the job for on-site reference.</div>
+                  </div>
+                  {drawings.length === 0
+                    ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No drawings or plans uploaded yet.</div>
+                    : drawings.map(d => (
+                      <div key={d.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: 14, marginBottom: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>📐 {d.filename}</div>
+                            <div style={{ fontSize: 11, color: C.muted }}>{new Date(d.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }} onClick={() => {
+                              const overlay = document.createElement("div");
+                              overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9999;display:flex;flex-direction:column;overflow-y:auto";
+                              const bar = document.createElement("div");
+                              bar.style.cssText = `padding:max(12px, env(safe-area-inset-top, 12px)) 16px 12px;background:#1a1a1a;border-bottom:1px solid #333;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px`;
+                              const backBtn = document.createElement("button");
+                              backBtn.textContent = "← Back";
+                              backBtn.style.cssText = "background:#f59e0b;color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace";
+                              backBtn.onclick = () => document.body.removeChild(overlay);
+                              const title = document.createElement("span");
+                              title.textContent = d.filename;
+                              title.style.cssText = "color:#888;font-size:13px;font-family:'DM Mono',monospace";
+                              bar.appendChild(backBtn);
+                              bar.appendChild(title);
+                              overlay.appendChild(bar);
+                              const content = document.createElement("div");
+                              content.style.cssText = "flex:1;display:flex;justify-content:center;align-items:flex-start;padding:16px;background:#f5f5f5";
+                              if (d.file_type === "application/pdf") {
+                                const embed = document.createElement("embed");
+                                embed.src = d.file_data;
+                                embed.type = "application/pdf";
+                                embed.style.cssText = "width:100%;height:80vh;border:none;border-radius:8px";
+                                content.appendChild(embed);
+                              } else {
+                                const img = document.createElement("img");
+                                img.src = d.file_data;
+                                img.style.cssText = "max-width:100%;border-radius:8px";
+                                content.appendChild(img);
+                              }
+                              overlay.appendChild(content);
+                              document.body.appendChild(overlay);
+                            }}>View</button>
+                            <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", color: C.red }} onClick={async () => {
+                              await supabase.from("job_drawings").delete().eq("id", d.id);
+                              setDrawings(prev => prev.filter(x => x.id !== d.id));
+                            }}>×</button>
+                          </div>
+                        </div>
+                        {d.file_type !== "application/pdf" && d.file_data && (
+                          <img src={d.file_data} alt={d.filename} style={{ width: "100%", maxHeight: 160, objectFit: "contain", borderRadius: 6, background: "#fff", cursor: "pointer" }}
+                            onClick={() => document.getElementById(`view-drawing-${d.id}`) && document.getElementById(`view-drawing-${d.id}`).click()}
+                          />
+                        )}
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+
               {tab === "calls" && (
                 <div>
                   {jobCallLogs.length === 0 ? (
@@ -8005,6 +8115,16 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                   }}>📄 Completion Certificate</button>
                 : <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => setShowSignature(true)}>✍ Get Signature</button>
               }
+              {selected.value > 0 && (
+                <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.blue }} onClick={() => {
+                  setStagePaymentStages([
+                    { label: "Deposit", type: "pct", value: "30" },
+                    { label: "First Fix", type: "pct", value: "40" },
+                    { label: "Completion", type: "pct", value: "30" },
+                  ]);
+                  setShowStagePayments(true);
+                }}>💰 Stage Payments</button>
+              )}
               <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.red, marginLeft: "auto" }} onClick={() => deleteJob(selected.id)}>Delete</button>
             </div>
           </div>
@@ -8054,6 +8174,123 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                 <button style={S.btn("ghost")} onClick={() => setEditingJob(false)}>Cancel</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stage Payments Modal */}
+      {showStagePayments && selected && (
+        <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 500, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setShowStagePayments(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>💰 Stage Payments</div>
+              <button onClick={() => setShowStagePayments(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>
+              Job value: <strong style={{ color: C.amber }}>£{selected.value}</strong> · Each stage creates a draft invoice
+            </div>
+
+            {/* Stages list */}
+            {stagePaymentStages.map((stage, i) => {
+              const stageAmt = stage.type === "pct"
+                ? parseFloat(((selected.value * parseFloat(stage.value || 0)) / 100).toFixed(2))
+                : parseFloat(stage.value || 0);
+              return (
+                <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: 12, marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.amber }}>Stage {i + 1}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>£{stageAmt.toFixed(2)}</div>
+                    {stagePaymentStages.length > 1 && (
+                      <button onClick={() => setStagePaymentStages(prev => prev.filter((_, j) => j !== i))}
+                        style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>
+                    )}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, alignItems: "center" }}>
+                    <input
+                      style={{ ...S.input, fontSize: 13 }}
+                      placeholder="Stage name e.g. Deposit"
+                      value={stage.label}
+                      onChange={e => setStagePaymentStages(prev => prev.map((s, j) => j === i ? { ...s, label: e.target.value } : s))}
+                    />
+                    <select
+                      style={{ ...S.input, width: 70, padding: "10px 6px", fontSize: 12 }}
+                      value={stage.type}
+                      onChange={e => setStagePaymentStages(prev => prev.map((s, j) => j === i ? { ...s, type: e.target.value, value: e.target.value === "pct" ? "30" : "" } : s))}
+                    >
+                      <option value="pct">%</option>
+                      <option value="gbp">£</option>
+                    </select>
+                    <input
+                      style={{ ...S.input, width: 80, fontSize: 13 }}
+                      type="number"
+                      min="0"
+                      placeholder={stage.type === "pct" ? "%" : "£"}
+                      value={stage.value}
+                      onChange={e => setStagePaymentStages(prev => prev.map((s, j) => j === i ? { ...s, value: e.target.value } : s))}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Total check */}
+            {(() => {
+              const total = stagePaymentStages.reduce((sum, s) => {
+                const amt = s.type === "pct"
+                  ? parseFloat(((selected.value * parseFloat(s.value || 0)) / 100))
+                  : parseFloat(s.value || 0);
+                return sum + (isNaN(amt) ? 0 : amt);
+              }, 0);
+              const diff = Math.abs(total - selected.value);
+              return (
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: diff < 0.01 ? C.green + "18" : C.red + "18", borderRadius: 8, marginBottom: 14, border: `1px solid ${diff < 0.01 ? C.green + "44" : C.red + "44"}` }}>
+                  <span style={{ fontSize: 12, color: diff < 0.01 ? C.green : C.red }}>
+                    {diff < 0.01 ? "✓ Stages total correctly" : `⚠ Stages total £${total.toFixed(2)} — job value is £${selected.value}`}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: diff < 0.01 ? C.green : C.red }}>£{total.toFixed(2)}</span>
+                </div>
+              );
+            })()}
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => setStagePaymentStages(prev => [...prev, { label: "", type: "pct", value: "" }])}>
+                + Add Stage
+              </button>
+            </div>
+
+            <button
+              style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: 14 }}
+              onClick={() => {
+                stagePaymentStages.forEach((s, i) => {
+                  const stageAmt = parseFloat((s.type === "pct"
+                    ? (selected.value * parseFloat(s.value || 0)) / 100
+                    : parseFloat(s.value || 0)).toFixed(2));
+                  if (!stageAmt || stageAmt <= 0) return;
+                  const invId = `INV-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+                  const label = s.label || `Stage ${i + 1}`;
+                  const newInv = {
+                    id: invId,
+                    customer: selected.customer,
+                    address: selected.address || "",
+                    amount: stageAmt,
+                    desc: `${label} — ${selected.title || selected.type || ""}`,
+                    description: `${label} — ${selected.title || selected.type || ""}`,
+                    lineItems: [{ description: `${label} — ${selected.title || selected.type || ""}`, amount: stageAmt }],
+                    due: `Due in ${brand?.paymentTerms || 14} days`,
+                    status: "draft",
+                    isQuote: false,
+                    jobRef: selected.title || selected.type || "",
+                    poNumber: selected.po_number || "",
+                    created: new Date().toLocaleDateString("en-GB"),
+                  };
+                  setInvoices(prev => [newInv, ...(prev || [])]);
+                });
+                setShowStagePayments(false);
+                alert(`✓ ${stagePaymentStages.length} stage payment invoices created as drafts. Review and send from the Invoices tab.`);
+              }}
+            >
+              Create {stagePaymentStages.length} Draft Invoice{stagePaymentStages.length !== 1 ? "s" : ""} →
+            </button>
           </div>
         </div>
       )}
