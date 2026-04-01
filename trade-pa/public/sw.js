@@ -1,69 +1,48 @@
-const CACHE = "trade-pa-v3";
+// trade-pa/public/sw.js
+// Service worker for Trade PA push notifications
 
-const PRECACHE = [
-  "/icon-192.png",
-  "/icon-512.png",
-];
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 
-self.addEventListener("install", (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(PRECACHE))
-  );
-  // Take control immediately — don't wait for old SW to finish
-  self.skipWaiting();
+// Handle incoming push notifications
+self.addEventListener('push', e => {
+  if (!e.data) return;
+
+  let data = {};
+  try { data = e.data.json(); } catch { data = { title: 'Trade PA', body: e.data.text() }; }
+
+  const title = data.title || 'Trade PA';
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-72.png',
+    tag: data.tag || 'trade-pa',
+    data: { url: data.url || '/', type: data.type || '' },
+    actions: data.actions || [],
+    requireInteraction: data.requireInteraction || false,
+    silent: false,
+  };
+
+  e.waitUntil(self.registration.showNotification(title, options));
 });
 
-self.addEventListener("activate", (e) => {
+// Handle notification click — open or focus the app
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = e.notification.data?.url || '/';
+
   e.waitUntil(
-    // Delete ALL old caches
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener("fetch", (e) => {
-  const url = new URL(e.request.url);
-
-  // Always network for API calls — never cache these
-  if (
-    url.hostname.includes("supabase") ||
-    url.hostname.includes("anthropic") ||
-    url.hostname.includes("openai") ||
-    url.hostname.includes("googleapis") ||
-    url.hostname.includes("fonts")
-  ) {
-    return;
-  }
-
-  // NEVER cache HTML — always get fresh from network
-  if (e.request.destination === "document" || url.pathname === "/" || url.pathname.endsWith(".html")) {
-    e.respondWith(
-      fetch(e.request).catch(() => caches.match(e.request))
-    );
-    return;
-  }
-
-  // Cache-first for icons only
-  if (url.pathname.endsWith(".png") || url.pathname.endsWith(".svg") || url.pathname.endsWith(".ico")) {
-    e.respondWith(
-      caches.match(e.request).then((cached) => {
-        return cached || fetch(e.request).then((res) => {
-          caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
-          return res;
-        });
-      })
-    );
-    return;
-  }
-
-  // Network-first for JS, CSS — get fresh, fall back to cache
-  e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
-        return res;
-      })
-      .catch(() => caches.match(e.request))
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      // If app already open, focus it and navigate
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin)) {
+          client.focus();
+          client.postMessage({ type: 'NOTIFICATION_CLICK', url, notifType: e.notification.data?.type });
+          return;
+        }
+      }
+      // Otherwise open new window
+      return self.clients.openWindow(url);
+    })
   );
 });
