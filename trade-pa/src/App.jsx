@@ -3199,6 +3199,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           if (!match) return `Couldn't find an unpaid invoice matching that. Check the Invoices tab.`;
           setInvoices(prev => (prev || []).map(i => i.id === match.id ? { ...i, status: "paid", due: "Paid" } : i));
           syncInvoiceToAccounting(user?.id, { ...match, status: "paid" });
+          sendPush({ title: "💰 Invoice Paid", body: `${match.customer} paid £${match.amount}`, url: "/", type: "invoice_paid", tag: "invoice-paid" });
           setLastAction({ type: "invoice", label: `Paid: ${match.id} — ${match.customer}`, view: "Invoices" });
           return `Invoice ${match.id} for ${match.customer} (£${match.amount}) marked as paid.`;
         }
@@ -3404,7 +3405,7 @@ Rules:
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
-function Payments({ brand, invoices, setInvoices, customers, user }) {
+function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [docType, setDocType] = useState("invoices");
@@ -3428,7 +3429,16 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
     const inv = (invoices || []).find(i => i.id === id);
     setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status, due: status === "paid" ? "Paid" : i.due } : i));
     if (selected && selected.id === id) setSelected(s => ({ ...s, status, due: status === "paid" ? "Paid" : s.due }));
-    if (status === "paid" && inv) syncInvoiceToAccounting(user?.id, { ...inv, status: "paid" });
+    if (status === "paid" && inv) {
+      syncInvoiceToAccounting(user?.id, { ...inv, status: "paid" });
+      if (sendPush) sendPush({
+        title: "💰 Invoice Paid",
+        body: `${inv.customer} paid £${inv.amount}`,
+        url: "/",
+        type: "invoice_paid",
+        tag: "invoice-paid",
+      });
+    }
   };
 
   const convertToInvoice = (quote) => {
@@ -5900,6 +5910,15 @@ ${availabilityLine}
           address: d.address || "",
         };
         setEnquiries(prev => [newEnquiry, ...(prev || [])]);
+        // Push notification for new enquiry
+        sendPush({
+          title: "📩 New Enquiry",
+          body: `${enquiryName}${d.message ? " — " + d.message.slice(0, 80) : ""}`,
+          url: "/",
+          type: "enquiry",
+          tag: "new-enquiry",
+          requireInteraction: true,
+        });
 
         // Also save directly to Supabase so it persists through reloads
         if (user?.id) {
@@ -8644,6 +8663,14 @@ function CISStatementsTab({ user }) {
 
 const VIEWS = ["Dashboard", "Schedule", "Enquiries", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Settings"];
 
+// Helper: convert VAPID public key for push subscription
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -8667,6 +8694,16 @@ export default function App() {
   const [bellFlash, setBellFlash] = useState(false);
   const now = Date.now();
 
+  // Send push notification to this user via server
+  const sendPush = (opts) => {
+    if (!user?.id) return;
+    fetch("/api/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id, ...opts }),
+    }).catch(() => {});
+  };
+
   // PDF overlay event listener (iOS PWA fallback)
   useEffect(() => {
     // Fix safe area insets for iPhone notch/dynamic island
@@ -8685,6 +8722,53 @@ export default function App() {
     window.addEventListener('beforeinstallprompt', promptHandler);
     return () => window.removeEventListener('beforeinstallprompt', promptHandler);
   }, []);
+
+  // Register service worker and push notifications
+  useEffect(() => {
+    if (!user?.id) return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+
+    const registerPush = async () => {
+      try {
+        const reg = await navigator.serviceWorker.register("/sw.js");
+        await navigator.serviceWorker.ready;
+
+        // Check existing permission
+        if (Notification.permission === "denied") return;
+
+        // Subscribe to push
+        const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+        if (!vapidPublicKey) return;
+
+        const existing = await reg.pushManager.getSubscription();
+        const sub = existing || await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        });
+
+        // Save subscription to server
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, subscription: sub.toJSON() }),
+        });
+
+        // Listen for notification clicks from service worker
+        navigator.serviceWorker.addEventListener("message", e => {
+          if (e.data?.type === "NOTIFICATION_CLICK") {
+            if (e.data.notifType === "ai_action") setView("Inbox");
+            else if (e.data.notifType === "enquiry") setView("Enquiries");
+            else if (e.data.notifType === "invoice_paid") setView("Payments");
+            else if (e.data.notifType === "call") setView("Customers");
+          }
+        });
+      } catch (err) {
+        console.log("Push registration:", err.message);
+      }
+    };
+
+    registerPush();
+  }, [user?.id]);
 
   useEffect(() => {
     const handler = (e) => setPdfHtml(e.detail);
@@ -9248,7 +9332,7 @@ export default function App() {
         {view === "CIS" && <CISStatementsTab user={user} />}
         {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
-        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} />}
+        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} /></ErrorBoundary>}
       </main>
