@@ -7450,6 +7450,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
     { label: "First Fix", type: "pct", value: "40" },
     { label: "Completion", type: "pct", value: "30" },
   ]);
+  const [jobCallLogs, setJobCallLogs] = useState([]);
   const photoRef = useRef();
   const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -7462,9 +7463,10 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
         supabase.from("call_logs")
           .select("*")
           .eq("user_id", user.id)
-          .or(`job_id.eq.${selected.id},customer_name.ilike.${selected.customer}`)
+          .eq("customer_name", selected.customer || "")
           .order("created_at", { ascending: false })
-          .then(({ data }) => setJobCallLogs(data || []));
+          .then(({ data }) => setJobCallLogs(data || []))
+          .catch(() => setJobCallLogs([]));
       }
     }
   }, [selected?.id]);
@@ -7495,22 +7497,42 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   }
 
   async function loadJobDetails(jobId) {
-    const [n, p, t, v, d, ds, dr] = await Promise.all([
-      supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-      supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-      supabase.from("time_logs").select("*").eq("job_id", jobId).order("date", { ascending: false }),
-      supabase.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-      supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-      supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
-      supabase.from("job_drawings").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-    ]);
-    setNotes(n.data || []);
-    setPhotos(p.data || []);
-    setTimeLogs(t.data || []);
-    setVos(v.data || []);
-    setCompDocs(d.data || []);
-    setDaysheets(ds.data || []);
-    setDrawings(dr.data || []);
+    try {
+      const [n, p, t, v, d, ds, dr] = await Promise.all([
+        supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        supabase.from("time_logs").select("*").eq("job_id", jobId).order("date", { ascending: false }),
+        supabase.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
+        supabase.from("job_drawings").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+      ]);
+      setNotes(n.data || []);
+      setPhotos(p.data || []);
+      setTimeLogs(t.data || []);
+      setVos(v.data || []);
+      setCompDocs(d.data || []);
+      setDaysheets(ds.data || []);
+      setDrawings(dr.data || []);
+    } catch (err) {
+      console.error("loadJobDetails error:", err.message);
+      // Still load critical data even if drawings table missing
+      const [n, p, t, v, d, ds] = await Promise.all([
+        supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        supabase.from("time_logs").select("*").eq("job_id", jobId).order("date", { ascending: false }),
+        supabase.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
+      ]);
+      setNotes(n.data || []);
+      setPhotos(p.data || []);
+      setTimeLogs(t.data || []);
+      setVos(v.data || []);
+      setCompDocs(d.data || []);
+      setDaysheets(ds.data || []);
+      setDrawings([]);
+    }
   }
 
   async function sendServiceReminder(job) {
