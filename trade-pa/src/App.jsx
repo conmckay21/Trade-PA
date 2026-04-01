@@ -5421,40 +5421,71 @@ ${availabilityLine}
         break;
       }
       case "create_enquiry": {
-        setEnquiries(prev => [{
-          name: d.name || d.customer || d.sender_name || "Unknown",
+        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+        const senderName = d.sender_name || d.customer || d.name || "there";
+        const enquiryName = d.name || d.customer || d.sender_name || senderName || "Unknown";
+
+        // Create enquiry with full contact details
+        const newEnquiry = {
+          name: enquiryName,
           source: "Email",
           msg: d.message || action.email_snippet,
           time: "Just now",
           urgent: d.urgent || false,
-        }, ...(prev || [])]);
+          status: "new",
+          email: replyTo,
+          phone: d.phone || "",
+          address: d.address || "",
+        };
+        setEnquiries(prev => [newEnquiry, ...(prev || [])]);
 
-        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
-        const senderName = d.sender_name || d.customer || "there";
+        // Also save directly to Supabase so it persists through reloads
+        if (user?.id) {
+          const cid = window._companyId;
+          if (cid) {
+            await window._supabase.from("enquiries").insert({
+              company_id: cid,
+              user_id: user.id,
+              name: enquiryName,
+              source: "Email",
+              msg: d.message || action.email_snippet || "",
+              time: "Just now",
+              urgent: d.urgent || false,
+              status: "new",
+              email: replyTo,
+              phone: d.phone || "",
+              address: d.address || "",
+            }).catch(e => console.error("Enquiry insert:", e.message));
+          }
+        }
+
+        // Create or update customer record
         const existingCustomer = (customers || []).find(c =>
-          c.name?.toLowerCase().includes((d.customer || "").toLowerCase()) ||
-          c.email?.toLowerCase() === replyTo.toLowerCase()
+          c.email?.toLowerCase() === replyTo.toLowerCase() ||
+          c.name?.toLowerCase() === enquiryName.toLowerCase()
         );
 
-        if (replyTo && connection && !existingCustomer) {
+        if (replyTo && !existingCustomer) {
           setCustomers(prev => [...(prev || []), {
             id: Date.now(),
-            name: d.name || d.customer || d.sender_name || "Unknown",
+            name: enquiryName,
             email: replyTo,
-            phone: "",
-            address: "",
+            phone: d.phone || "",
+            address: d.address || "",
             notes: "Added from email enquiry",
           }]);
+        }
 
+        // Send reply asking for details (only if we have a reply address and email connection)
+        if (replyTo && connection) {
           const replyBody = `<p>Hi ${senderName},</p>
-<p>Thank you for your enquiry. I've logged your request and will be in touch shortly with more information.</p>
-<p>Ahead of the scheduled appointment, could you please provide:</p>
+<p>Thank you for getting in touch. I've added your ${d.type || d.message?.slice(0, 50) || "enquiry"} to the diary.</p>
+<p>Could you please suggest a few dates and times that work for you so we can get something confirmed?</p>
+${!existingCustomer ? `<p>It would also be helpful to have:</p>
 <ul>
-<li><strong>Full name</strong></li>
-<li><strong>Phone number</strong></li>
-<li><strong>Address where the work is needed</strong></li>
-<li><strong>A few preferred dates and times that work for you</strong> so we can arrange a suitable appointment</li>
-</ul>
+<li><strong>Your phone number</strong></li>
+<li><strong>The address where the work is needed</strong></li>
+</ul>` : ""}
 <p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
 
           const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
@@ -7869,6 +7900,7 @@ export default function App() {
 
     if (membership) {
       setCompanyId(membership.company_id);
+        window._companyId = membership.company_id;
       setCompanyName(membership.companies?.name || "");
       setUserRole(membership.role);
       return membership.company_id;
