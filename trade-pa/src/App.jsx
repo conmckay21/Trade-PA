@@ -1061,15 +1061,23 @@ function InvoicePreview({ brand, invoice }) {
 // ─── Team Invite ──────────────────────────────────────────────────────────────
 // ─── Call Tracking Settings ────────────────────────────────────────────────────
 function CallTrackingSettings({ user }) {
-  const [status, setStatus] = useState(null); // null=loading, object=data
+  const [callTracking, setCallTracking] = useState(null);
   const [forwardTo, setForwardTo] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
-    supabase.from("call_tracking").select("*").eq("user_id", user.id).single()
-      .then(({ data }) => setStatus(data || false));
+    supabase.from("call_tracking")
+      .select("*")
+      .eq("user_id", user.id)
+      .limit(1)
+      .then(({ data }) => {
+        setCallTracking(data?.[0] || null);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
   }, [user?.id]);
 
   const activate = async () => {
@@ -1083,63 +1091,49 @@ function CallTrackingSettings({ user }) {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setStatus(data);
+      setCallTracking({ twilio_number: data.twilioNumber, forwarding_code: data.forwardingCode, disable_code: data.disableCode });
     } catch (err) {
       setError(err.message);
     }
     setSaving(false);
   };
 
-  if (status === null) return <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>;
+  if (!loaded) return <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>;
 
-  if (status && status.twilioNumber) return (
+  if (callTracking?.twilio_number) return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <div style={S.badge(C.green)}>✓ Active</div>
         <div style={{ fontSize: 12, color: C.muted }}>Call tracking is enabled</div>
       </div>
-      <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 12 }}>
-        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Forwarding number</div>
-        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: C.amber }}>{status.twilioNumber}</div>
+      <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Routing number</div>
+        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: C.amber }}>{callTracking.twilio_number}</div>
       </div>
-      <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 12 }}>
-        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Setup — dial these codes on your mobile</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-            <span style={{ color: C.muted }}>Enable call tracking:</span>
-            <span style={{ fontFamily: "'DM Mono',monospace", color: C.green }}>{status.forwardingCode}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-            <span style={{ color: C.muted }}>Disable call tracking:</span>
-            <span style={{ fontFamily: "'DM Mono',monospace", color: C.red }}>{status.disableCode}</span>
-          </div>
+      <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14 }}>
+        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Dial these codes on your mobile</div>
+        <div style={{ fontSize: 12, display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ color: C.muted }}>Enable:</span>
+          <span style={{ fontFamily: "'DM Mono',monospace", color: C.green }}>{callTracking.forwarding_code}</span>
         </div>
-      </div>
-      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
-        Your existing number stays the same. Clients call you as normal — calls from known customers are recorded and transcribed automatically. Unknown callers pass straight through unrecorded.
+        <div style={{ fontSize: 12, display: "flex", justifyContent: "space-between" }}>
+          <span style={{ color: C.muted }}>Disable:</span>
+          <span style={{ fontFamily: "'DM Mono',monospace", color: C.amber }}>##21#</span>
+        </div>
       </div>
     </div>
   );
 
   return (
     <div>
-      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
-        Enter your mobile number below. We'll set up a routing number that forwards calls through Trade PA. Your existing number stays the same — clients call you as normal.
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.6 }}>
+        Enter your mobile number. Calls from known customers will be recorded and transcribed automatically. Your existing number stays the same — clients call you as normal.
       </div>
       <label style={S.label}>Your mobile number</label>
-      <input
-        style={{ ...S.input, marginBottom: 12 }}
-        placeholder="e.g. 07700 900123"
-        value={forwardTo}
-        onChange={e => setForwardTo(e.target.value)}
-      />
-      {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{error}</div>}
-      <button style={S.btn("primary")} disabled={saving} onClick={activate}>
-        {saving ? "Setting up..." : "Activate Call Tracking →"}
-      </button>
-      <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>
-        Add-on pricing: 100 mins £20/mo · 300 mins £40/mo · 600 mins £65/mo · Unlimited £104/mo
-      </div>
+      <input style={{ ...S.input, marginBottom: 10 }} placeholder="e.g. 07700 900123" value={forwardTo} onChange={e => setForwardTo(e.target.value)} />
+      {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{error}</div>}
+      <button style={S.btn("primary")} disabled={saving} onClick={activate}>{saving ? "Setting up..." : "Activate Call Tracking →"}</button>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>100 mins £20/mo · 300 mins £40/mo · 600 mins £65/mo · Unlimited £104/mo</div>
     </div>
   );
 }
@@ -1333,7 +1327,7 @@ function CertificationsCard({ brand, setBrand }) {
   );
 }
 
-function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier }) {
+function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit }) {
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
   const [xeroConnected, setXeroConnected] = useState(false);
@@ -2338,7 +2332,7 @@ Return only JSON, no other text.` },
       unitPrice: item.unitPrice || 0,
       supplier: scanResult.supplier || "",
       job: scanResult.jobRef || "",
-      status: "to_order",
+      status: "ordered", // Invoice scanned = already purchased
       receiptId,
       receiptDate: scanResult.date || "",
     }));
@@ -2566,10 +2560,22 @@ Return only JSON, no other text.` },
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
                     {(m.receiptId || m.receiptSource) && (
                       <div
-                        title={m.receiptFilename || "Receipt attached"}
+                        title={m.receiptFilename || "View invoice"}
                         style={{ fontSize: 10, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 4, padding: "1px 5px", cursor: "pointer", flexShrink: 0 }}
-                        onClick={e => { e.stopPropagation(); const img = localStorage.getItem(`trade-pa-receipt-${m.receiptId}`); if (img) { const w = window.open(); w.document.write(`<img src="${img}" style="max-width:100%">`); } else if (m.receiptFilename) { alert(`Receipt: ${m.receiptFilename} (from email — view in your inbox)`); } }}
-                      >🧾 Receipt</div>
+                        onClick={e => {
+                          e.stopPropagation();
+                          const img = localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
+                          if (img) {
+                            const w = window.open("", "_blank");
+                            w.document.write(`<!DOCTYPE html><html><head><title>${m.receiptFilename || "Invoice"}</title><style>body{margin:0;background:#111;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:20px}img{max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5)}</style></head><body><img src="${img}"></body></html>`);
+                            w.document.close();
+                          } else if (m.receiptSource === "email" && m.receiptFilename) {
+                            alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was scanned from email. To view the original, open your email inbox.`);
+                          } else {
+                            alert("Invoice preview not available.");
+                          }
+                        }}
+                      >🧾 View Invoice</div>
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: C.muted }}>
@@ -5943,7 +5949,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
                 unitPrice: item.unitPrice || item.unit_price || 0,
                 supplier: supplierName,
                 job: "",
-                status: "to_order",
+                status: "ordered", // Invoice received = already ordered/purchased
                 receiptId,
                 receiptSource: "email",
                 receiptFilename: d.attachment_filename || "",
@@ -7401,11 +7407,25 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   const [showSignature, setShowSignature] = useState(false);
   const [editingJob, setEditingJob] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [jobCallLogs, setJobCallLogs] = useState([]);
   const photoRef = useRef();
   const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   useEffect(() => { loadJobs(); loadEmailConn(); }, [user]);
-  useEffect(() => { if (selected) loadJobDetails(selected.id); }, [selected?.id]);
+  useEffect(() => {
+    if (selected) {
+      loadJobDetails(selected.id);
+      // Load call logs for this job
+      if (user?.id) {
+        supabase.from("call_logs")
+          .select("*")
+          .eq("user_id", user.id)
+          .or(`job_id.eq.${selected.id},customer_name.ilike.${selected.customer}`)
+          .order("created_at", { ascending: false })
+          .then(({ data }) => setJobCallLogs(data || []));
+      }
+    }
+  }, [selected?.id]);
   useEffect(() => {
     if (!jobs.length || loading) return;
     const today = new Date();
@@ -7612,7 +7632,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
 
             {/* Sub-tabs */}
             <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: "auto" }}>
-              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"]].map(([v,l]) => (
+              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"],["calls",`📞${jobCallLogs.length > 0 ? ` (${jobCallLogs.length})` : ""}`]].map(([v,l]) => (
                 <button key={v} onClick={() => setTab(v)}
                   style={{ padding: "8px 12px", border: "none", borderBottom: tab === v ? `2px solid ${C.amber}` : "2px solid transparent", background: "transparent", color: tab === v ? C.amber : C.muted, fontSize: 11, fontWeight: tab === v ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'DM Mono',monospace" }}>
                   {l}
@@ -7837,6 +7857,38 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                   ))}
                 </div>
               )}
+
+              {/* CALLS */}
+              {tab === "calls" && (
+                <div>
+                  {jobCallLogs.length === 0 ? (
+                    <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "24px 0" }}>
+                      No recorded calls for this job yet.<br/>
+                      <span style={{ fontSize: 11 }}>Calls from known customers are automatically recorded when Call Tracking is active.</span>
+                    </div>
+                  ) : jobCallLogs.map(log => (
+                    <div key={log.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: 14, marginBottom: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 18 }}>📞</span>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 700 }}>{new Date(log.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
+                            <div style={{ fontSize: 11, color: C.muted }}>{Math.floor((log.duration_seconds || 0) / 60)}m {(log.duration_seconds || 0) % 60}s · {log.caller_number}</div>
+                          </div>
+                        </div>
+                        <span style={S.badge(log.category === "existing_job" ? C.green : log.category === "new_enquiry" ? C.blue : C.amber)}>{(log.category || "general").replace("_", " ")}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6, marginBottom: 6 }}>{log.summary}</div>
+                      {log.key_details && <div style={{ fontSize: 11, color: C.amber }}>📌 {log.key_details}</div>}
+                      {log.recording_url && (
+                        <audio controls style={{ width: "100%", marginTop: 8, height: 32 }} src={log.recording_url}>
+                          Your browser does not support audio playback.
+                        </audio>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -7844,7 +7896,27 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               {selected.invoice_id && <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => { setSelected(null); setView("Invoices"); }}>View Invoice</button>}
               {selected.quote_id && <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => { setSelected(null); setView("Quotes"); }}>View Quote</button>}
               {selected.address && <a href={`https://maps.google.com/?q=${encodeURIComponent(selected.address)}`} target="_blank" rel="noreferrer" style={{ ...S.btn("ghost"), fontSize: 11, textDecoration: "none" }}>📍 Navigate</a>}
-              <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => setShowSignature(true)}>✍ Get Signature</button>
+              {selected.customer_signature
+                ? <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => {
+                    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Job Completion Certificate</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#1a1a1a;max-width:700px;margin:0 auto}h1{font-size:22px;margin-bottom:4px}h2{font-size:16px;color:#666;font-weight:400;margin-bottom:24px}.section{margin-bottom:20px;padding:16px;background:#f9f9f9;border-radius:8px}.label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#999;margin-bottom:4px}.value{font-size:14px;color:#1a1a1a}.sig{margin-top:24px;padding-top:16px;border-top:1px solid #eee;display:grid;grid-template-columns:1fr 1fr;gap:24px}.sig-box{border-bottom:2px solid #333;height:60px;margin-bottom:6px;display:flex;align-items:flex-end}.footer{margin-top:32px;font-size:11px;color:#999;text-align:center}</style></head><body>
+                    <h1>Job Completion Certificate</h1>
+                    <h2>Confirmation that work has been completed satisfactorily</h2>
+                    <div class="section"><div class="label">Customer</div><div class="value">${selected.customer}</div></div>
+                    <div class="section"><div class="label">Job</div><div class="value">${selected.title || selected.type}</div>${selected.address ? `<div class="label" style="margin-top:8px">Address</div><div class="value">${selected.address}</div>` : ""}${selected.value ? `<div class="label" style="margin-top:8px">Value</div><div class="value">£${selected.value}</div>` : ""}</div>
+                    <div class="section"><div class="label">Completion Date</div><div class="value">${selected.completion_date ? new Date(selected.completion_date).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" }) : new Date().toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" })}</div></div>
+                    <p style="margin:20px 0">I confirm that the above work has been completed to my satisfaction and I am happy with the quality of workmanship.</p>
+                    <div class="sig">
+                      <div><div class="label">Customer Signature</div><div class="sig-box"><img src="${selected.customer_signature}" style="max-height:55px;max-width:100%"></div><div style="font-size:11px;color:#666">${selected.customer}</div></div>
+                      <div><div class="label">Date</div><div class="sig-box" style="align-items:center;font-size:14px">${selected.completion_date ? new Date(selected.completion_date).toLocaleDateString("en-GB") : new Date().toLocaleDateString("en-GB")}</div></div>
+                    </div>
+                    <div class="footer">This certificate was generated by Trade PA · tradespa.co.uk</div>
+                    </body></html>`;
+                    const w = window.open("", "_blank");
+                    w.document.write(html);
+                    w.document.close();
+                  }}>📄 View Completion Certificate</button>
+                : <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => setShowSignature(true)}>✍ Get Signature</button>
+              }
               <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.red, marginLeft: "auto" }} onClick={() => deleteJob(selected.id)}>Delete</button>
             </div>
           </div>
@@ -8231,6 +8303,10 @@ export default function App() {
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [planTier, setPlanTier] = useState("solo");
   const [userLimit, setUserLimit] = useState(1);
+  const [pwaPrompt, setPwaPrompt] = useState(null); // Android install prompt
+  const [showPwaBanner, setShowPwaBanner] = useState(false);
+  const [isIos, setIsIos] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
   const [pdfHtml, setPdfHtml] = useState(null);
   const [view, setView] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -8251,6 +8327,16 @@ export default function App() {
     if (viewport && !viewport.content.includes('viewport-fit')) {
       viewport.content = viewport.content + ', viewport-fit=cover';
     }
+    // Detect iOS and standalone mode
+    const ios = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    setIsIos(ios);
+    setIsStandalone(standalone);
+    if (!standalone) setTimeout(() => setShowPwaBanner(true), 4000);
+    // Android — capture install prompt event
+    const promptHandler = (e) => { e.preventDefault(); setPwaPrompt(e); };
+    window.addEventListener('beforeinstallprompt', promptHandler);
+    return () => window.removeEventListener('beforeinstallprompt', promptHandler);
   }, []);
 
   useEffect(() => {
@@ -8708,6 +8794,24 @@ export default function App() {
   return (
     <div style={S.app}>
       {pdfHtml && <PDFOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
+
+      {/* PWA Install Banner */}
+      {showPwaBanner && !isStandalone && (
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 500, padding: "12px 16px", paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))", background: "#1a1a1a", borderTop: "1px solid #2a2a2a", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 36, height: 36, background: "#f59e0b", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, color: "#000", flexShrink: 0 }}>TP</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#f0f0f0" }}>Install Trade PA</div>
+            {isIos
+              ? <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Tap <strong style={{ color: "#f59e0b" }}>Share</strong> then <strong style={{ color: "#f59e0b" }}>Add to Home Screen</strong></div>
+              : <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Add to your home screen for the best experience</div>
+            }
+          </div>
+          {pwaPrompt && !isIos && (
+            <button onClick={async () => { pwaPrompt.prompt(); const { outcome } = await pwaPrompt.userChoice; if (outcome === "accepted") setShowPwaBanner(false); }} style={{ background: "#f59e0b", color: "#000", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>Install →</button>
+          )}
+          <button onClick={() => setShowPwaBanner(false)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 20, flexShrink: 0, padding: "0 4px" }}>×</button>
+        </div>
+      )}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500;700&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
@@ -8787,7 +8891,7 @@ export default function App() {
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
-        {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} />}
+        {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} />}
       </main>
     </div>
   );
