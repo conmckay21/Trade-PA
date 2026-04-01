@@ -38,7 +38,7 @@ function LandingPage({ onAuth }) {
   const [screen, setScreen] = useState("landing"); // landing | login | signup
   const LP = {
     wrap: { minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0", fontFamily: "'DM Sans','Helvetica Neue',sans-serif", overflowX: "hidden" },
-    nav: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 28px", borderBottom: "1px solid #1a1a1a", position: "sticky", top: 0, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(8px)", zIndex: 100 },
+    nav: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 28px", paddingTop: "max(20px, env(safe-area-inset-top, 20px))", borderBottom: "1px solid #1a1a1a", position: "sticky", top: 0, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(8px)", zIndex: 100 },
     logo: { display: "flex", alignItems: "center", gap: 10, fontFamily: "'DM Mono',monospace", fontSize: 14, color: "#f59e0b", letterSpacing: "0.06em" },
     logoIcon: { width: 30, height: 30, background: "#f59e0b", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: "#000" },
     hero: { textAlign: "center", padding: "80px 24px 60px", position: "relative" },
