@@ -1,5 +1,23 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Component } from "react";
 import { supabase } from "./supabase.js";
+
+// Error boundary to catch Settings crashes and show the actual error
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 24, background: "#1a1a1a", borderRadius: 12, border: "1px solid #ef4444" }}>
+          <div style={{ color: "#ef4444", fontWeight: 700, marginBottom: 8, fontFamily: "'DM Mono',monospace", fontSize: 13 }}>Settings crashed — error details:</div>
+          <div style={{ color: "#fca5a5", fontSize: 12, fontFamily: "'DM Mono',monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{this.state.error?.message || String(this.state.error)}</div>
+          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 12, background: "#f59e0b", color: "#000", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>Try again</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 window._supabase = supabase;
 
 // ─── Sync invoice to accounting software ─────────────────────────────────────
@@ -2566,13 +2584,22 @@ Return only JSON, no other text.` },
                           e.stopPropagation();
                           const img = localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
                           if (img) {
-                            const w = window.open("", "_blank");
-                            w.document.write(`<!DOCTYPE html><html><head><title>${m.receiptFilename || "Invoice"}</title><style>body{margin:0;background:#111;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:20px}img{max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5)}</style></head><body><img src="${img}"></body></html>`);
-                            w.document.close();
+                            const overlay = document.createElement("div");
+                            overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
+                            const closeBtn = document.createElement("button");
+                            closeBtn.textContent = "← Back to app";
+                            closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10";
+                            closeBtn.onclick = () => document.body.removeChild(overlay);
+                            const imgEl = document.createElement("img");
+                            imgEl.src = img;
+                            imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
+                            overlay.appendChild(closeBtn);
+                            overlay.appendChild(imgEl);
+                            document.body.appendChild(overlay);
                           } else if (m.receiptSource === "email" && m.receiptFilename) {
-                            alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was scanned from email. To view the original, open your email inbox.`);
+                            alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was received via email. Open your Inbox to view the original email and attachment.`);
                           } else {
-                            alert("Invoice preview not available.");
+                            alert("Invoice image not available — it may have been cleared from device storage.");
                           }
                         }}
                       >🧾 View Invoice</div>
@@ -7898,23 +7925,76 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               {selected.address && <a href={`https://maps.google.com/?q=${encodeURIComponent(selected.address)}`} target="_blank" rel="noreferrer" style={{ ...S.btn("ghost"), fontSize: 11, textDecoration: "none" }}>📍 Navigate</a>}
               {selected.customer_signature
                 ? <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => {
-                    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Job Completion Certificate</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#1a1a1a;max-width:700px;margin:0 auto}h1{font-size:22px;margin-bottom:4px}h2{font-size:16px;color:#666;font-weight:400;margin-bottom:24px}.section{margin-bottom:20px;padding:16px;background:#f9f9f9;border-radius:8px}.label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#999;margin-bottom:4px}.value{font-size:14px;color:#1a1a1a}.sig{margin-top:24px;padding-top:16px;border-top:1px solid #eee;display:grid;grid-template-columns:1fr 1fr;gap:24px}.sig-box{border-bottom:2px solid #333;height:60px;margin-bottom:6px;display:flex;align-items:flex-end}.footer{margin-top:32px;font-size:11px;color:#999;text-align:center}</style></head><body>
-                    <h1>Job Completion Certificate</h1>
-                    <h2>Confirmation that work has been completed satisfactorily</h2>
-                    <div class="section"><div class="label">Customer</div><div class="value">${selected.customer}</div></div>
-                    <div class="section"><div class="label">Job</div><div class="value">${selected.title || selected.type}</div>${selected.address ? `<div class="label" style="margin-top:8px">Address</div><div class="value">${selected.address}</div>` : ""}${selected.value ? `<div class="label" style="margin-top:8px">Value</div><div class="value">£${selected.value}</div>` : ""}</div>
-                    <div class="section"><div class="label">Completion Date</div><div class="value">${selected.completion_date ? new Date(selected.completion_date).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" }) : new Date().toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" })}</div></div>
-                    <p style="margin:20px 0">I confirm that the above work has been completed to my satisfaction and I am happy with the quality of workmanship.</p>
-                    <div class="sig">
-                      <div><div class="label">Customer Signature</div><div class="sig-box"><img src="${selected.customer_signature}" style="max-height:55px;max-width:100%"></div><div style="font-size:11px;color:#666">${selected.customer}</div></div>
-                      <div><div class="label">Date</div><div class="sig-box" style="align-items:center;font-size:14px">${selected.completion_date ? new Date(selected.completion_date).toLocaleDateString("en-GB") : new Date().toLocaleDateString("en-GB")}</div></div>
-                    </div>
-                    <div class="footer">This certificate was generated by Trade PA · tradespa.co.uk</div>
-                    </body></html>`;
-                    const w = window.open("", "_blank");
-                    w.document.write(html);
-                    w.document.close();
-                  }}>📄 View Completion Certificate</button>
+                    const accent = brand?.accentColor || "#f59e0b";
+                    const tradingName = brand?.tradingName || "Trade PA";
+                    const phone = brand?.phone || "";
+                    const email = brand?.email || "";
+                    const address = brand?.address || "";
+                    const completionDate = selected.completion_date
+                      ? new Date(selected.completion_date).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" })
+                      : new Date().toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" });
+
+                    const overlay = document.createElement("div");
+                    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9999;display:flex;flex-direction:column;overflow-y:auto";
+
+                    overlay.innerHTML = `
+                      <div style="padding:12px 16px;background:#1a1a1a;border-bottom:1px solid #333;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10">
+                        <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))" style="background:${accent};color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace">← Back</button>
+                        <span style="color:#888;font-size:13px;font-family:'DM Mono',monospace">Job Completion Certificate</span>
+                        <button onclick="window.print()" style="background:transparent;color:#888;border:1px solid #333;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:'DM Mono',monospace;margin-left:auto">🖨 Print / Save PDF</button>
+                      </div>
+                      <div style="flex:1;background:#f5f5f5;padding:24px;display:flex;justify-content:center">
+                        <div style="font-family:Arial,sans-serif;max-width:680px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.15)">
+                          <div style="background:${accent};padding:28px 32px;display:flex;justify-content:space-between;align-items:flex-start">
+                            <div>
+                              <div style="font-size:22px;font-weight:700;color:#000">${tradingName}</div>
+                              <div style="color:rgba(0,0,0,0.6);font-size:12px;margin-top:4px">${[phone, email, address].filter(Boolean).join(" · ")}</div>
+                            </div>
+                            <div style="text-align:right">
+                              <div style="font-size:16px;font-weight:700;color:#000">COMPLETION CERTIFICATE</div>
+                              <div style="font-size:12px;color:rgba(0,0,0,0.6);margin-top:2px">${completionDate}</div>
+                            </div>
+                          </div>
+                          <div style="padding:28px 32px">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+                              <div style="background:#f9f9f9;padding:14px;border-radius:8px">
+                                <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:6px">Customer</div>
+                                <div style="font-weight:600;font-size:14px">${selected.customer || ""}</div>
+                                ${selected.address ? `<div style="color:#666;font-size:12px;margin-top:4px">${selected.address}</div>` : ""}
+                              </div>
+                              <div style="background:#f9f9f9;padding:14px;border-radius:8px">
+                                <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:6px">Job</div>
+                                <div style="font-weight:600;font-size:14px">${selected.title || selected.type || ""}</div>
+                                ${selected.value ? `<div style="color:#666;font-size:12px;margin-top:4px">Value: £${selected.value}</div>` : ""}
+                                ${selected.po_number ? `<div style="color:#666;font-size:12px">PO: ${selected.po_number}</div>` : ""}
+                              </div>
+                            </div>
+                            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:24px">
+                              <p style="margin:0;font-size:14px;color:#166534;line-height:1.6">I confirm that the above works have been completed to my full satisfaction. I am happy with the quality of workmanship and all works have been carried out as agreed.</p>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;padding-top:20px;border-top:1px solid #eee">
+                              <div>
+                                <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Customer Signature</div>
+                                <div style="height:64px;border-bottom:2px solid #333;margin-bottom:6px;display:flex;align-items:flex-end;padding-bottom:4px">
+                                  <img src="${selected.customer_signature}" style="max-height:60px;max-width:100%">
+                                </div>
+                                <div style="font-size:11px;color:#666">${selected.customer} · ${completionDate}</div>
+                              </div>
+                              <div>
+                                <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px">Engineer / Contractor</div>
+                                <div style="height:64px;border-bottom:2px solid #333;margin-bottom:6px;display:flex;align-items:center;padding-bottom:4px">
+                                  <span style="font-size:13px;color:#1a1a1a">${tradingName}</span>
+                                </div>
+                                <div style="font-size:11px;color:#666">${completionDate}</div>
+                              </div>
+                            </div>
+                            <div style="margin-top:24px;padding-top:16px;border-top:1px solid #eee;font-size:10px;color:#999;text-align:center">${tradingName}${phone ? ` · ${phone}` : ""}${email ? ` · ${email}` : ""} · Generated by Trade PA</div>
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                    document.body.appendChild(overlay);
+                  }}>📄 Completion Certificate</button>
                 : <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => setShowSignature(true)}>✍ Get Signature</button>
               }
               <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.red, marginLeft: "auto" }} onClick={() => deleteJob(selected.id)}>Delete</button>
@@ -8891,7 +8971,7 @@ export default function App() {
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
-        {view === "Settings" && <Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} />}
+        {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} /></ErrorBoundary>}
       </main>
     </div>
   );
