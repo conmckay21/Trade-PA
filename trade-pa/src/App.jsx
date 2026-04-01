@@ -2340,7 +2340,7 @@ Return only JSON, no other text.` },
   const addScannedMaterials = async () => {
     if (!scanResult) return;
     const receiptId = `rcpt_${Date.now()}`;
-    // Store image in localStorage keyed by receipt ID
+    // Store image in localStorage as backup
     if (scanImageData) {
       try { localStorage.setItem(`trade-pa-receipt-${receiptId}`, scanImageData); } catch {}
     }
@@ -2352,6 +2352,7 @@ Return only JSON, no other text.` },
       job: scanResult.jobRef || "",
       status: "ordered", // Invoice scanned = already purchased
       receiptId,
+      receiptImage: scanImageData || "", // Store base64 in Supabase for persistence
       receiptDate: scanResult.date || "",
     }));
     setMaterials(prev => [...(prev || []), ...newMaterials]);
@@ -2582,7 +2583,8 @@ Return only JSON, no other text.` },
                         style={{ fontSize: 10, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 4, padding: "1px 5px", cursor: "pointer", flexShrink: 0 }}
                         onClick={e => {
                           e.stopPropagation();
-                          const img = localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
+                          // Try Supabase-stored image first, then localStorage fallback
+                          const img = m.receiptImage || localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
                           if (img) {
                             const overlay = document.createElement("div");
                             overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
@@ -2599,7 +2601,7 @@ Return only JSON, no other text.` },
                           } else if (m.receiptSource === "email" && m.receiptFilename) {
                             alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was received via email. Open your Inbox to view the original email and attachment.`);
                           } else {
-                            alert("Invoice image not available — it may have been cleared from device storage.");
+                            alert("Invoice image not available.");
                           }
                         }}
                       >🧾 View Invoice</div>
@@ -3612,8 +3614,8 @@ function Payments({ brand, invoices, setInvoices, customers, user }) {
                 {(selected.lineItems && selected.lineItems.length > 0)
                   ? selected.lineItems.map((l, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: i > 0 ? 6 : 0, borderTop: i > 0 ? `1px solid ${C.border}` : "none", marginTop: i > 0 ? 6 : 0 }}>
-                      <span>{l.description}</span>
-                      <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{(l.amount || 0).toFixed(2)}</span>
+                      <span>{l.description || l.desc || ""}</span>
+                      {(l.amount || l.amount === 0) && <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{(parseFloat(l.amount) || 0).toFixed(2)}</span>}
                     </div>
                   ))
                   : <div style={{ fontSize: 13, whiteSpace: "pre-line", lineHeight: 1.7 }}>{selected.description || selected.desc || "—"}</div>
@@ -8642,7 +8644,19 @@ export default function App() {
           cisNetPayable: parseFloat(r.cis_net_payable) || 0,
         })));
         if (enq.data) setEnquiriesRaw(enq.data);
-        if (mat.data) setMaterialsRaw(mat.data);
+        if (mat.data) setMaterialsRaw(mat.data.map(m => ({
+          id: m.id,
+          item: m.item || "",
+          qty: m.qty || 1,
+          unitPrice: m.unit_price || 0,
+          supplier: m.supplier || "",
+          job: m.job || "",
+          status: m.status || "to_order",
+          receiptId: m.receipt_id || "",
+          receiptSource: m.receipt_source || "",
+          receiptFilename: m.receipt_filename || "",
+          receiptImage: m.receipt_image || "", // base64 image stored in Supabase
+        })));
         if (cust.data) setCustomersRaw(cust.data);
       } catch (e) { console.error("DB load error:", e); }
       setDbLoading(false);
@@ -8760,7 +8774,7 @@ export default function App() {
           await supabase.from("materials").delete().eq("company_id", companyId);
           if (next.length > 0) {
             await supabase.from("materials").insert(
-              next.map(m => ({ company_id: companyId, user_id: user.id, item: m.item, qty: m.qty || 1, unit_price: m.unitPrice || 0, supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order", receipt_id: m.receiptId || "", receipt_source: m.receiptSource || "", receipt_filename: m.receiptFilename || "" }))
+              next.map(m => ({ company_id: companyId, user_id: user.id, item: m.item, qty: m.qty || 1, unit_price: m.unitPrice || 0, supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order", receipt_id: m.receiptId || "", receipt_source: m.receiptSource || "", receipt_filename: m.receiptFilename || "", receipt_image: m.receiptImage || "" }))
             );
           }
         } catch (e) { console.error("Materials sync:", e); }
