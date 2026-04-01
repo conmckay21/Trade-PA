@@ -3097,7 +3097,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           return `Job created: ${input.type} for ${input.customer} on ${dateObj.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} at ${input.time}.`;
         }
         case "create_invoice": {
-          const id = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+          const id = nextInvoiceId(invoices);
           const lineItems = input.line_items || [{ description: input.description || "Services", amount: input.amount || 0 }];
           const totalAmount = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
           const inv = {
@@ -3116,7 +3116,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           return `Invoice ${id} created for ${input.customer} — £${totalAmount} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
         }
         case "create_quote": {
-          const id = `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
+          const id = nextQuoteId(invoices);
           const lineItems = input.line_items || [{ description: input.description || "Services", amount: input.amount || 0 }];
           const totalAmount = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
           const quote = {
@@ -3218,7 +3218,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
             )
           );
           if (!match) return `Couldn't find a quote matching that. Check the Quotes tab.`;
-          const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+          const newId = nextInvoiceId(invoices);
           const inv = { ...match, id: newId, isQuote: false, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
           setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== match.id)]);
           setLastAction({ type: "invoice", label: `Converted: ${newId} — ${match.customer}`, view: "Invoices" });
@@ -3442,7 +3442,7 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
   };
 
   const convertToInvoice = (quote) => {
-    const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+    const newId = nextInvoiceId(invoices);
     const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
     setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== quote.id)]);
     setSelected(null);
@@ -3677,8 +3677,8 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
         </div>
       )}
 
-      {showInvoiceModal && <InvoiceModal brand={brand} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...(prev || [])]); setShowInvoiceModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
-      {showQuoteModal && <QuoteModal brand={brand} onClose={() => setShowQuoteModal(false)} onSent={(q) => { setInvoices(prev => [q, ...(prev || [])]); setShowQuoteModal(false); setDocType("quotes"); }} />}
+      {showInvoiceModal && <InvoiceModal brand={brand} invoices={safeInvoices} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...(prev || [])]); setShowInvoiceModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
+      {showQuoteModal && <QuoteModal brand={brand} invoices={safeInvoices} onClose={() => setShowQuoteModal(false)} onSent={(q) => { setInvoices(prev => [q, ...(prev || [])]); setShowQuoteModal(false); setDocType("quotes"); }} />}
     </div>
   );
 }
@@ -3927,7 +3927,7 @@ function LineItemsBuilder({ form, setForm, accentColor, isQuote }) {
 }
 
 // ─── Invoice Modal ────────────────────────────────────────────────────────────
-function InvoiceModal({ brand, onClose, onSent, initialData }) {
+function InvoiceModal({ brand, onClose, onSent, initialData, invoices }) {
   const [form, setForm] = useState(() => initialData ? {
     customer: initialData.customer || "",
     email: initialData.email || "",
@@ -3986,7 +3986,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
         : form.desc;
       const finalAmount = form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount);
       const payload = {
-        id: initialData?.id || `INV-0${43 + Math.floor(Math.random() * 10)}`,
+        id: initialData?.id || nextInvoiceId(invoices),
         customer: form.customer, email: form.email, address: form.address,
         amount: finalAmount,
         grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
@@ -4248,7 +4248,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData }) {
 }
 
 // ─── Quote Modal ──────────────────────────────────────────────────────────────
-function QuoteModal({ brand, onClose, onSent, initialData }) {
+function QuoteModal({ brand, onClose, onSent, initialData, invoices }) {
   const [form, setForm] = useState(() => initialData ? {
     customer: initialData.customer || "",
     email: initialData.email || "",
@@ -4292,7 +4292,7 @@ function QuoteModal({ brand, onClose, onSent, initialData }) {
 
   const send = () => {
     try {
-      const id = initialData?.id || `QTE-${String(Math.floor(Math.random() * 900) + 100)}`;
+      const id = initialData?.id || nextQuoteId(invoices);
       const finalDesc = form.lineItems && form.lineItems.length > 0
         ? form.lineItems.map(l => l.amount && l.amount !== "" ? `${l.desc || l.description}|${l.amount}` : (l.desc || l.description || "")).filter(Boolean).join("\n")
         : form.desc;
@@ -5369,8 +5369,8 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
         </div>
       )}
 
-      {showModal && <InvoiceModal brand={brand} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
-      {editingInvoice && <InvoiceModal brand={brand} initialData={editingInvoice} onClose={() => setEditingInvoice(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingInvoice.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingInvoice(null); }} />}
+      {showModal && <InvoiceModal brand={brand} invoices={invoices} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
+      {editingInvoice && <InvoiceModal brand={brand} invoices={invoices} initialData={editingInvoice} onClose={() => setEditingInvoice(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingInvoice.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingInvoice(null); }} />}
     </div>
   );
 }
@@ -5393,7 +5393,7 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
   };
 
   const convertToInvoice = async (quote) => {
-    const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+    const newId = nextInvoiceId(invoices);
     const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
     setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== quote.id)]);
     setSelected(null);
@@ -5535,8 +5535,8 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
         </div>
       )}
 
-      {showModal && <QuoteModal brand={brand} onClose={() => setShowModal(false)} onSent={q => { setInvoices(prev => [q, ...(prev || [])]); setShowModal(false); }} />}
-      {editingQuote && <QuoteModal brand={brand} initialData={editingQuote} onClose={() => setEditingQuote(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingQuote.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingQuote(null); }} />}
+      {showModal && <QuoteModal brand={brand} invoices={invoices} onClose={() => setShowModal(false)} onSent={q => { setInvoices(prev => [q, ...(prev || [])]); setShowModal(false); }} />}
+      {editingQuote && <QuoteModal brand={brand} invoices={invoices} initialData={editingQuote} onClose={() => setEditingQuote(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingQuote.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingQuote(null); }} />}
     </div>
   );
 }
@@ -6131,7 +6131,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
 
         if (matchingQuote) {
           // Convert quote to invoice
-          const newId = `INV-${String(Math.floor(Math.random() * 900) + 100)}`;
+          const newId = nextInvoiceId(invoices);
           const newInvoice = { ...matchingQuote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand?.paymentTerms || 30} days` };
           setInvoices(prev => [newInvoice, ...(prev || []).filter(i => i.id !== matchingQuote.id)]);
         } else {
@@ -7845,7 +7845,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                             await supabase.from("variation_orders").update({ status: "approved" }).eq("id", v.id);
                             setVos(prev => prev.map(x => x.id === v.id ? { ...x, status: "approved" } : x));
                             // Create draft invoice for this variation
-                            const invId = `INV-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+                            const invId = nextInvoiceId(invoices);
                             const newInv = {
                               id: invId,
                               customer: selected.customer,
@@ -8307,7 +8307,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                     ? (selected.value * parseFloat(s.value || 0)) / 100
                     : parseFloat(s.value || 0)).toFixed(2));
                   if (!stageAmt || stageAmt <= 0) return;
-                  const invId = `INV-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+                  const invId = nextInvoiceId(invoices);
                   const label = s.label || `Stage ${i + 1}`;
                   const newInv = {
                     id: invId,
@@ -8669,6 +8669,25 @@ function urlBase64ToUint8Array(base64String) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+// Sequential invoice/quote ID generators
+function nextInvoiceId(invoices) {
+  const existing = (invoices || [])
+    .filter(i => !i.isQuote)
+    .map(i => parseInt((i.id || "").replace(/\D/g, ""), 10))
+    .filter(n => !isNaN(n));
+  const max = existing.length > 0 ? Math.max(...existing) : 0;
+  return `INV-${String(max + 1).padStart(3, "0")}`;
+}
+
+function nextQuoteId(invoices) {
+  const existing = (invoices || [])
+    .filter(i => i.isQuote)
+    .map(i => parseInt((i.id || "").replace(/\D/g, ""), 10))
+    .filter(n => !isNaN(n));
+  const max = existing.length > 0 ? Math.max(...existing) : 0;
+  return `QTE-${String(max + 1).padStart(3, "0")}`;
 }
 
 export default function App() {
