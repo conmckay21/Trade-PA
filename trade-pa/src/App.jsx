@@ -93,7 +93,7 @@ function LandingPage({ onAuth }) {
           <h1 style={LP.h1}>Your inbox runs<br/><span style={{ color: "#f59e0b" }}>itself</span> now</h1>
           <p style={LP.sub}>Trade PA reads your emails, books jobs, chases overdue invoices, fills in certificates by voice, and learns your business — all while you're on the tools.</p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 16 }}>
-            <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Get started — £49/month →</button>
+            <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Get started — from £49/month →</button>
             <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
           </div>
           <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail & Outlook · Cancel anytime · UK-built</p>
@@ -185,25 +185,54 @@ function LandingPage({ onAuth }) {
 
       {/* PRICING */}
       <div style={{ padding: "72px 24px", background: "#0d0d0d", borderTop: "1px solid #1a1a1a", borderBottom: "1px solid #1a1a1a" }}>
-        <div style={{ maxWidth: 1040, margin: "0 auto", textAlign: "center" }}>
-          <div style={LP.sectionLabel}>Pricing</div>
-          <h2 style={LP.h2}>Simple. One price.<br/>Everything included.</h2>
-          <p style={{ fontSize: 17, color: "#666", margin: "0 auto 48px", maxWidth: 480, lineHeight: 1.7 }}>No per-user fees. No feature tiers. No add-ons. Just everything you need.</p>
-          <div style={LP.pricingCard}>
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#f59e0b" }} />
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 68, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em", color: "#f59e0b", marginBottom: 6 }}>
-              <sup style={{ fontSize: 28, verticalAlign: "super" }}>£</sup>49<span style={{ fontSize: 18, color: "#666", fontWeight: 400 }}>/month</span>
-            </div>
-            <p style={{ color: "#666", fontSize: 14, marginBottom: 32 }}>Or £500/year — save nearly two months</p>
-            <ul style={{ listStyle: "none", textAlign: "left", display: "flex", flexDirection: "column", gap: 10, marginBottom: 36 }}>
-              {["AI email agent — processes your inbox","Voice dictation on every form & certificate","All trade certificates — Gas, Electrical, Plumbing, Oil, Fire","Full job management with photos, time logs, VOs","Quotes, invoices, Xero & QuickBooks sync","CIS, DRC, UTR — full subcontractor support","Overdue payment auto-chasing","Annual service reminders","Digital signatures","Unlimited jobs, invoices, certificates"].map(f => (
-                <li key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#ccc" }}>
-                  <span style={{ color: "#10b981", fontWeight: 700 }}>✓</span>{f}
-                </li>
+        <div style={{ maxWidth: 1040, margin: "0 auto" }}>
+          <div style={{ ...LP.sectionLabel, textAlign: "center" }}>Pricing</div>
+          <h2 style={{ ...LP.h2, textAlign: "center" }}>Plans for every tradesperson.</h2>
+          <p style={{ fontSize: 17, color: "#666", margin: "0 auto 48px", maxWidth: 520, lineHeight: 1.7, textAlign: "center" }}>Start as a sole trader, scale as you grow. All plans include every feature.</p>
+
+          {/* Three plan cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 32 }}>
+            {[
+              { name: "Solo", price: "£49", period: "/month", annual: "£500/year", users: "1 user", features: ["AI email agent","Voice dictation everywhere","All trade certificates","Jobs, quotes & invoices","CIS, DRC, Xero & QuickBooks","Overdue payment chasing","Annual service reminders","Digital signatures","Unlimited everything"], popular: false },
+              { name: "Team", price: "£89", period: "/month", annual: "£890/year", users: "Up to 5 users", features: ["Everything in Solo","Job assignment to team","Team scheduling","Permission controls","Staff timesheets"], popular: true },
+              { name: "Pro", price: "£129", period: "/month", annual: "£1,290/year", users: "Up to 10 users", features: ["Everything in Team","Up to 10 users","Priority support"], popular: false },
+            ].map(plan => (
+              <div key={plan.name} style={{ ...LP.pricingCard, maxWidth: "100%", border: plan.popular ? "2px solid #f59e0b" : "1px solid #222", position: "relative" }}>
+                {plan.popular && <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: "#f59e0b", color: "#000", fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 700, padding: "3px 14px", borderRadius: 100, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>MOST POPULAR</div>}
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#f59e0b" }} />
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>{plan.name}</div>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 52, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em", color: "#f59e0b", marginBottom: 4 }}>
+                  {plan.price}<span style={{ fontSize: 16, color: "#666", fontWeight: 400 }}>{plan.period}</span>
+                </div>
+                <p style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>{plan.annual}</p>
+                <p style={{ color: "#f59e0b", fontSize: 12, fontFamily: "'DM Mono',monospace", marginBottom: 20 }}>{plan.users}</p>
+                <ul style={{ listStyle: "none", textAlign: "left", display: "flex", flexDirection: "column", gap: 8, marginBottom: 28 }}>
+                  {plan.features.map(f => (
+                    <li key={f} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#ccc" }}>
+                      <span style={{ color: "#10b981", fontWeight: 700, flexShrink: 0 }}>✓</span>{f}
+                    </li>
+                  ))}
+                </ul>
+                <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, width: "100%", justifyContent: "center", fontSize: 14, padding: 14 }} className="lp-btn-primary">Get started →</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Call Tracking add-on */}
+          <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: "32px 28px", textAlign: "center" }}>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📞 Add-on · Any Plan</div>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>AI Call Tracking</div>
+            <p style={{ color: "#666", fontSize: 14, maxWidth: 520, margin: "0 auto 24px", lineHeight: 1.7 }}>Known customers who call are recorded, transcribed and linked to their job automatically. Unknown callers pass straight through. Your existing number stays the same.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, maxWidth: 640, margin: "0 auto 16px" }}>
+              {[["100 mins","£20"],["300 mins","£40"],["600 mins","£65"],["Unlimited","£104"]].map(([mins, price]) => (
+                <div key={mins} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 12px" }}>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#666", marginBottom: 6 }}>{mins}/month</div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{price}</div>
+                  <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>per month</div>
+                </div>
               ))}
-            </ul>
-            <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, width: "100%", justifyContent: "center", fontSize: 15, padding: 16 }} className="lp-btn-primary">Get started →</button>
-            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 14, textAlign: "center" }}>Cancel anytime · No hidden fees</p>
+            </div>
+            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555" }}>Works with your existing number · No number changes · UK GDPR compliant</p>
           </div>
         </div>
       </div>
