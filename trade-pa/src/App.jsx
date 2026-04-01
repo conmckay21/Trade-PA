@@ -77,7 +77,7 @@ function LandingPage({ onAuth }) {
         <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => setScreen("login")} style={{ ...LP.btnGhost, padding: "8px 18px", fontSize: 13 }} className="lp-btn-ghost">Log in</button>
-          <button onClick={() => setScreen("signup")} style={{ ...LP.btnPrimary, padding: "8px 20px", fontSize: 13 }} className="lp-btn-primary">Get started →</button>
+          <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, padding: "8px 20px", fontSize: 13 }} className="lp-btn-primary">Get started →</button>
         </div>
       </nav>
 
@@ -93,7 +93,7 @@ function LandingPage({ onAuth }) {
           <h1 style={LP.h1}>Your inbox runs<br/><span style={{ color: "#f59e0b" }}>itself</span> now</h1>
           <p style={LP.sub}>Trade PA reads your emails, books jobs, chases overdue invoices, fills in certificates by voice, and learns your business — all while you're on the tools.</p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 16 }}>
-            <button onClick={() => setScreen("signup")} style={LP.btnPrimary} className="lp-btn-primary">Get started — £49/month →</button>
+            <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Get started — £49/month →</button>
             <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
           </div>
           <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail & Outlook · Cancel anytime · UK-built</p>
@@ -202,7 +202,7 @@ function LandingPage({ onAuth }) {
                 </li>
               ))}
             </ul>
-            <button onClick={() => setScreen("signup")} style={{ ...LP.btnPrimary, width: "100%", justifyContent: "center", fontSize: 15, padding: 16 }} className="lp-btn-primary">Get started →</button>
+            <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, width: "100%", justifyContent: "center", fontSize: 15, padding: 16 }} className="lp-btn-primary">Get started →</button>
             <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 14, textAlign: "center" }}>Cancel anytime · No hidden fees</p>
           </div>
         </div>
@@ -214,7 +214,7 @@ function LandingPage({ onAuth }) {
         <div style={{ position: "relative" }}>
           <h2 style={{ ...LP.h2, marginBottom: 20 }}>Stop doing admin<br/>after hours.</h2>
           <p style={{ fontSize: 17, color: "#666", marginBottom: 40, maxWidth: 440, margin: "0 auto 40px", lineHeight: 1.7 }}>Trade PA handles the paperwork while you handle the jobs.</p>
-          <button onClick={() => setScreen("signup")} style={{ ...LP.btnPrimary, fontSize: 16, padding: "16px 40px" }} className="lp-btn-primary">Get started →</button>
+          <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, fontSize: 16, padding: "16px 40px" }} className="lp-btn-primary">Get started →</button>
           <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 16 }}>Works with Gmail · Works with Outlook · UK-built for UK trades</p>
         </div>
       </div>
