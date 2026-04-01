@@ -264,7 +264,7 @@ const C = {
 
 const S = {
   app: { fontFamily: "'DM Mono','Courier New',monospace", background: C.bg, minHeight: "-webkit-fill-available", color: C.text, width: "100%", overflowX: "hidden" },
-  header: { background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 12px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, position: "sticky", top: 0, zIndex: 100, width: "100%", boxSizing: "border-box" },
+  header: { background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 12px", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 56, position: "sticky", top: 0, zIndex: 100, width: "100%", boxSizing: "border-box" },
   logo: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 14, letterSpacing: "0.05em", color: C.amber },
   logoIcon: { width: 28, height: 28, background: C.amber, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontSize: 10, fontWeight: 900, letterSpacing: "-0.02em", flexShrink: 0 },
   nav: { display: "flex", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", flexShrink: 0 },
@@ -1425,7 +1425,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={S.grid4}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         {[
           { label: "Total Quote Value", value: `£${totalQuoteValue.toLocaleString()}`, sub: `${allQuotes.length} quote${allQuotes.length !== 1 ? "s" : ""}`, color: C.blue, onClick: () => setView("Quotes") },
           { label: "Total Invoice Value", value: `£${totalInvoiceValue.toLocaleString()}`, sub: `${allInvoices.filter(i => i.status !== "paid").length} outstanding`, color: C.amber, onClick: () => setView("Invoices") },
@@ -8135,7 +8135,7 @@ export default function App() {
       `}</style>
       <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100, width: "100%" }}>
         {/* Top row — logo and right icons */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", height: 48 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", paddingTop: "max(12px, env(safe-area-inset-top, 12px))", height: "calc(48px + env(safe-area-inset-top, 0px))", boxSizing: "border-box" }}>
           <div style={S.logo}>
             <div style={S.logoIcon}>TP</div>
             TRADE PA
