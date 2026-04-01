@@ -8246,6 +8246,14 @@ export default function App() {
 
   // PDF overlay event listener (iOS PWA fallback)
   useEffect(() => {
+    // Fix safe area insets for iPhone notch/dynamic island
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport && !viewport.content.includes('viewport-fit')) {
+      viewport.content = viewport.content + ', viewport-fit=cover';
+    }
+  }, []);
+
+  useEffect(() => {
     const handler = (e) => setPdfHtml(e.detail);
     window.addEventListener("trade-pa-show-pdf", handler);
     return () => window.removeEventListener("trade-pa-show-pdf", handler);
@@ -8266,6 +8274,16 @@ export default function App() {
   // Check subscription status whenever user changes
   useEffect(() => {
     if (!user) { setSubscriptionStatus(null); return; }
+
+    // Exempt accounts skip subscription check entirely
+    const EXEMPT = ["thetradepa@gmail.com", "connor_mckay777@hotmail.com", "landbheating@outlook.com"];
+    if (EXEMPT.includes(user.email?.toLowerCase())) {
+      setSubscriptionStatus("active");
+      setPlanTier("pro");
+      setUserLimit(10);
+      return;
+    }
+
     async function checkSubscription() {
       const { data } = await supabase.from("subscriptions").select("status, current_period_end, stripe_price_id").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1);
       if (!data?.length) { setSubscriptionStatus("none"); return; }
