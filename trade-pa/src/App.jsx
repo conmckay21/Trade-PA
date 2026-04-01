@@ -8276,7 +8276,7 @@ export default function App() {
     if (!user) { setSubscriptionStatus(null); return; }
 
     // Exempt accounts skip subscription check entirely
-    const EXEMPT = ["thetradepa@gmail.com", "connor_mckay777@hotmail.com", "landbheating@outlook.com"];
+    const EXEMPT = ["thetradepa@gmail.com", "connor_mckay777@hotmail.com", "connor_mckay777@hotmail.co.uk", "landbheating@outlook.com"];
     if (EXEMPT.includes(user.email?.toLowerCase())) {
       setSubscriptionStatus("active");
       setPlanTier("pro");
@@ -8663,6 +8663,7 @@ export default function App() {
   const EXEMPT_EMAILS = [
     "thetradepa@gmail.com",
     "connor_mckay777@hotmail.com",
+    "connor_mckay777@hotmail.co.uk",
     "landbheating@outlook.com",
   ];
   const isExempt = EXEMPT_EMAILS.includes(user?.email?.toLowerCase());
