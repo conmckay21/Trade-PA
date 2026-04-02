@@ -7470,10 +7470,106 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
     { label: "Completion", type: "pct", value: "30" },
   ]);
   const [jobCallLogs, setJobCallLogs] = useState([]);
+  // Geofencing state
+  const [geoState, setGeoState] = useState("idle"); // idle | requesting | travelling | arrived | finished
+  const [geoJobId, setGeoJobId] = useState(null);   // which job is active
+  const [arrivalTime, setArrivalTime] = useState(null);
+  const [geoDistance, setGeoDistance] = useState(null); // metres from job
+  const [jobCoords, setJobCoords] = useState(null);     // { lat, lng } of job address
+  const geoWatchRef = useRef(null);
   const photoRef = useRef();
   const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
+  // ── Geofencing helpers ────────────────────────────────────────────────────────
+  function haversineDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) ** 2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  async function geocodeAddress(address) {
+    const key = import.meta.env.VITE_GOOGLE_MAPS_KEY;
+    if (!key) return null;
+    try {
+      const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address + ", UK")}&key=${key}`);
+      const data = await res.json();
+      if (data.status === "OK" && data.results?.[0]) {
+        const loc = data.results[0].geometry.location;
+        return { lat: loc.lat, lng: loc.lng };
+      }
+    } catch {}
+    return null;
+  }
+
+  async function startGeoTracking(job) {
+    if (!job.address) { alert("Add an address to this job before tracking."); return; }
+    if (!navigator.geolocation) { alert("Location not supported on this device."); return; }
+    setGeoState("requesting");
+    setGeoJobId(job.id);
+    setArrivalTime(null);
+    setGeoDistance(null);
+    const coords = await geocodeAddress(job.address);
+    setJobCoords(coords);
+    setGeoState("travelling");
+    if (geoWatchRef.current) navigator.geolocation.clearWatch(geoWatchRef.current);
+    geoWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (!coords) return;
+        const dist = haversineDistance(pos.coords.latitude, pos.coords.longitude, coords.lat, coords.lng);
+        setGeoDistance(Math.round(dist));
+        setGeoState(prev => {
+          if (prev === "travelling" && dist < 80) {
+            setArrivalTime(new Date());
+            return "arrived";
+          }
+          return prev;
+        });
+      },
+      (err) => console.log("Geo:", err.message),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+  }
+
+  function stopGeoTracking() {
+    if (geoWatchRef.current) { navigator.geolocation.clearWatch(geoWatchRef.current); geoWatchRef.current = null; }
+    setGeoState("idle"); setGeoJobId(null); setArrivalTime(null); setGeoDistance(null); setJobCoords(null);
+  }
+
+  function markArrived(job) {
+    setArrivalTime(new Date());
+    setGeoState("arrived");
+    // Update job to in_progress
+    supabase.from("job_cards").update({ status: "in_progress" }).eq("id", job.id).then(() => {
+      setJobCards(prev => prev.map(j => j.id === job.id ? { ...j, status: "in_progress" } : j));
+      if (selected?.id === job.id) setSelected(s => ({ ...s, status: "in_progress" }));
+    });
+  }
+
+  async function finishJob(job) {
+    const departure = new Date();
+    const arrival = arrivalTime || departure;
+    const hours = parseFloat(Math.max((departure - arrival) / 3600000, 0.25).toFixed(2));
+    const arrStr = arrival.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    const depStr = departure.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    if (job?.id && user?.id) {
+      const { data } = await supabase.from("time_logs").insert({
+        job_id: job.id, user_id: user.id,
+        date: arrival.toISOString().slice(0, 10),
+        hours,
+        rate: parseFloat(brand?.defaultHourlyRate || 0) || 0,
+        description: `On site ${arrStr}–${depStr} · auto-tracked`,
+      }).select().single();
+      if (data) setTimeLogs(prev => [data, ...prev]);
+    }
+    stopGeoTracking();
+    setGeoState("finished");
+    setGeoJobId(job.id);
+  }
+
   useEffect(() => { loadJobs(); loadEmailConn(); }, [user]);
+  useEffect(() => () => { if (geoWatchRef.current) navigator.geolocation.clearWatch(geoWatchRef.current); }, []);
   useEffect(() => {
     if (selected) {
       loadJobDetails(selected.id);
@@ -7687,6 +7783,8 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
             {j.annual_service && <span style={{ color: C.green, fontSize: 11 }}>🔄 Annual</span>}
             {j.customer_signature && <span style={{ color: C.green, fontSize: 11 }}>✓ Signed</span>}
             {j.invoice_id && <span style={S.badge(C.amber)}>Invoiced</span>}
+            {geoJobId === j.id && geoState === "travelling" && <span style={{ color: C.amber, fontSize: 11 }}>🚗 {geoDistance !== null ? (geoDistance < 1000 ? geoDistance + "m" : (geoDistance/1000).toFixed(1) + "km") : "Travelling"}</span>}
+            {geoJobId === j.id && geoState === "arrived" && <span style={{ color: C.green, fontSize: 11 }}>📍 On site</span>}
           </div>
         </div>
       ))}
@@ -7715,6 +7813,41 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                 {selected.customer_signature && <span style={{ color: C.green, fontSize: 11 }}>✓ Signed off</span>}
               </div>
             </div>
+
+            {/* Geofence live status banner */}
+            {geoJobId === selected.id && geoState !== "idle" && (
+              <div style={{ padding: "10px 16px", background: geoState === "arrived" ? C.green + "18" : geoState === "finished" ? C.surfaceHigh : C.amber + "18", borderBottom: `1px solid ${geoState === "arrived" ? C.green + "44" : geoState === "finished" ? C.border : C.amber + "44"}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ fontSize: 18 }}>{geoState === "requesting" ? "⏳" : geoState === "travelling" ? "🚗" : geoState === "arrived" ? "📍" : "✅"}</div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: geoState === "arrived" ? C.green : geoState === "finished" ? C.text : C.amber }}>
+                      {geoState === "requesting" && "Getting your location..."}
+                      {geoState === "travelling" && (geoDistance !== null ? `${geoDistance < 1000 ? geoDistance + "m" : (geoDistance/1000).toFixed(1) + "km"} from job` : "Travelling to job")}
+                      {geoState === "arrived" && `Arrived · ${arrivalTime?.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`}
+                      {geoState === "finished" && "Session saved to Time tab"}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
+                      {geoState === "travelling" && jobCoords ? "Auto-arrival within 80m" : geoState === "travelling" ? "Tap 'I've Arrived' when on site" : ""}
+                      {geoState === "arrived" && "Tap Finish Job when leaving"}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {geoState === "travelling" && !jobCoords && (
+                    <button style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 10px" }} onClick={() => markArrived(selected)}>I've Arrived</button>
+                  )}
+                  {geoState === "arrived" && (
+                    <button style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 10px", background: C.red, color: "#fff" }} onClick={() => finishJob(selected)}>Finish Job</button>
+                  )}
+                  {(geoState === "travelling" || geoState === "arrived") && (
+                    <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 8px" }} onClick={stopGeoTracking}>✕</button>
+                  )}
+                  {geoState === "finished" && (
+                    <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px" }} onClick={() => { setGeoState("idle"); setGeoJobId(null); }}>Dismiss</button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Sub-tabs */}
             <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: "auto" }}>
@@ -8079,6 +8212,15 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               {selected.invoice_id && <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => { setSelected(null); setView("Invoices"); }}>View Invoice</button>}
               {selected.quote_id && <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => { setSelected(null); setView("Quotes"); }}>View Quote</button>}
               {selected.address && <a href={`https://maps.google.com/?q=${encodeURIComponent(selected.address)}`} target="_blank" rel="noreferrer" style={{ ...S.btn("ghost"), fontSize: 11, textDecoration: "none" }}>📍 Navigate</a>}
+              {selected.address && geoJobId !== selected.id && (
+                <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.blue }} onClick={() => startGeoTracking(selected)}>🚗 Start Job</button>
+              )}
+              {geoJobId === selected.id && geoState === "travelling" && jobCoords && (
+                <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => markArrived(selected)}>📍 I've Arrived</button>
+              )}
+              {geoJobId === selected.id && geoState === "arrived" && (
+                <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.red }} onClick={() => finishJob(selected)}>✅ Finish Job</button>
+              )}
               {selected.customer_signature
                 ? <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.green }} onClick={() => {
                     const accent = brand?.accentColor || "#f59e0b";
