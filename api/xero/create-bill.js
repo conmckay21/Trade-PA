@@ -89,7 +89,6 @@ export default async function handler(req, res) {
         Contact: { ContactID: contactId },
         Date: today,
         DueDate: dueDate,
-        LineAmountTypes: 'EXCLUSIVE',
         LineItems: [{
           Description: description,
           Quantity: qty,
@@ -97,6 +96,7 @@ export default async function handler(req, res) {
           AccountCode: '300',
           TaxType: material.vatEnabled ? 'INPUT2' : 'NONE',
         }],
+        LineAmountTypes: 'Exclusive',
         CurrencyCode: 'GBP',
         Status: 'AUTHORISED',
       }],
