@@ -9668,8 +9668,164 @@ function ReportsTab({ invoices, jobs, materials, customers, brand, user }) {
     </div>
   );
 
-  const printReport = () => {
-    window.print();
+  const downloadPDF = () => {
+    const reportName = reports.find(r => r.id === activeReport)?.label || "Report";
+    const periodLabel = isCustom
+      ? `${customFrom} to ${customTo}`
+      : periods[periodIdx].label;
+    const businessName = brand?.tradingName || "Trade PA";
+
+    // Collect the current report content from the DOM
+    const reportEl = document.getElementById("report-content");
+    if (!reportEl) return;
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${reportName} — ${businessName}</title>
+<style>
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #111; margin: 0; padding: 32px; font-size: 13px; }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+  .meta { color: #666; font-size: 12px; margin-bottom: 24px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; }
+  .stat-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .stat-value { font-size: 20px; font-weight: 700; font-family: monospace; }
+  .stat-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  thead tr { background: #f9fafb; }
+  th { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+  th:not(:first-child) { text-align: right; }
+  td { padding: 9px 12px; border-bottom: 1px solid #f3f4f6; font-size: 12px; }
+  td:not(:first-child) { text-align: right; font-family: monospace; }
+  tr.total td { font-weight: 700; background: #fef9f0; }
+  .section-title { font-size: 14px; font-weight: 700; margin: 20px 0 10px; }
+  .note { background: #fef3c7; border: 1px solid #f59e0b44; border-radius: 6px; padding: 8px 12px; font-size: 11px; color: #92400e; margin-top: 12px; }
+  @media print { body { padding: 16px; } }
+</style>
+</head>
+<body>
+<h1>${businessName}</h1>
+<div class="meta">${reportName} · ${periodLabel} · Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</div>
+${generateReportHTML()}
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      win.onload = () => {
+        win.focus();
+        win.print();
+      };
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+
+  const generateReportHTML = () => {
+    const fmtH = n => `£${(n || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const statBox = (label, value, sub) => `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value">${value}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ""}</div>`;
+    const tableRow = (cells, isTotal) => `<tr${isTotal ? ' class="total"' : ""}>${cells.map((c, i) => `<td>${c}</td>`).join("")}</tr>`;
+    const tableHead = cells => `<thead><tr>${cells.map(c => `<th>${c}</th>`).join("")}</tr></thead>`;
+
+    if (activeReport === "pl") return `
+      <div class="stat-grid">
+        ${statBox("Total Revenue", fmtH(totalRevenue), `${paidInvoices.length} paid invoices`)}
+        ${statBox("Materials Cost", fmtH(totalMaterialCost), `${periodMaterials.length} items`)}
+        ${statBox("Gross Profit", fmtH(grossProfit), `${fmtPct(grossMargin)} margin`)}
+        ${statBox("Outstanding", fmtH(totalOutstanding), `${outstandingInvoices.length} invoices`)}
+      </div>
+      <table>
+        ${tableHead(["Category", "Amount"])}
+        <tbody>
+          ${tableRow(["Revenue (paid invoices)", fmtH(totalRevenue)])}
+          ${tableRow(["Less: Materials & Supplies", `(${fmtH(totalMaterialCost)})`])}
+          ${tableRow(["Gross Profit", fmtH(grossProfit)], true)}
+          ${tableRow(["Gross Margin", fmtPct(grossMargin)])}
+          ${tableRow(["Outstanding (not yet paid)", fmtH(totalOutstanding)])}
+        </tbody>
+      </table>`;
+
+    if (activeReport === "vat") return `
+      <div class="stat-grid">
+        ${statBox("Output VAT", fmtH(outputVat), "Collected from customers")}
+        ${statBox("Input VAT", fmtH(inputVat), "Paid on materials")}
+        ${statBox("Net VAT Due", fmtH(netVat), netVat >= 0 ? "Payable to HMRC" : "Reclaimable")}
+      </div>
+      <table>
+        ${tableHead(["Description", "Net", "VAT"])}
+        <tbody>
+          ${tableRow(["Sales (Output VAT)", fmtH(totalRevenue - outputVat), fmtH(outputVat)])}
+          ${tableRow(["Purchases (Input VAT)", fmtH(totalMaterialCost), `(${fmtH(inputVat)})`])}
+          ${tableRow(["Net VAT payable to HMRC", "", fmtH(netVat)], true)}
+        </tbody>
+      </table>
+      <div class="section-title">VAT Invoices</div>
+      <table>
+        ${tableHead(["Invoice", "Customer", "Net", "VAT", "Gross"])}
+        <tbody>${vatInvoices.map(i => {
+          const gross = parseFloat(i.grossAmount || i.amount || 0);
+          const rate = parseFloat(i.vatRate || 20) / 100;
+          const vat = gross - gross / (1 + rate);
+          return tableRow([i.id, i.customer, fmtH(gross - vat), fmtH(vat), fmtH(gross)]);
+        }).join("")}</tbody>
+      </table>`;
+
+    if (activeReport === "outstanding") return `
+      <table>
+        ${tableHead(["Invoice", "Customer", "Amount", "Days Outstanding"])}
+        <tbody>${agedDebtors.map(i => tableRow([i.id, i.customer, fmtH(parseFloat(i.grossAmount || i.amount || 0)), `${i.daysOld} days`])).join("")}</tbody>
+      </table>`;
+
+    if (activeReport === "jobprofit") return `
+      <table>
+        ${tableHead(["Job", "Revenue", "Costs", "Profit", "Margin"])}
+        <tbody>
+          ${jobProfitData.map(j => tableRow([j.name, fmtH(j.revenue), fmtH(j.costs), fmtH(j.profit), fmtPct(j.margin)])).join("")}
+          ${tableRow(["Total", fmtH(jobProfitData.reduce((s,j)=>s+j.revenue,0)), fmtH(jobProfitData.reduce((s,j)=>s+j.costs,0)), fmtH(jobProfitData.reduce((s,j)=>s+j.profit,0)), ""], true)}
+        </tbody>
+      </table>`;
+
+    if (activeReport === "customers") return `
+      <table>
+        ${tableHead(["Customer", "Invoices", "Total Paid", "Outstanding", "Last Job"])}
+        <tbody>${customerData.map(c => tableRow([c.name, c.invoiceCount, fmtH(c.totalSpend), c.outstanding > 0 ? fmtH(c.outstanding) : "—", c.lastJobDate ? new Date(c.lastJobDate).toLocaleDateString("en-GB") : "—"])).join("")}</tbody>
+      </table>`;
+
+    if (activeReport === "materials") return `
+      <div class="section-title">By Supplier</div>
+      <table>
+        ${tableHead(["Supplier", "Items", "Total"])}
+        <tbody>${supplierList.map(s => tableRow([s.name, s.items, fmtH(s.total)])).join("")}</tbody>
+      </table>
+      <div class="section-title">All Items</div>
+      <table>
+        ${tableHead(["Item", "Supplier", "Qty", "Unit Price", "Total"])}
+        <tbody>${periodMaterials.map(m => tableRow([m.item, m.supplier || "—", m.qty, fmtH(m.unitPrice), fmtH((m.unitPrice||0)*(m.qty||1))])).join("")}</tbody>
+      </table>`;
+
+    if (activeReport === "cis") return `
+      <div class="stat-grid">
+        ${statBox("Gross Earnings", fmtH(cisGross), "")}
+        ${statBox("CIS Deductions", fmtH(cisDeductions), "")}
+        ${statBox("Net Received", fmtH(cisNet), "")}
+        ${statBox("CIS Invoices", cisInvoices.length, "")}
+      </div>
+      <table>
+        ${tableHead(["Invoice", "Contractor", "Gross", "Deduction", "Net Paid"])}
+        <tbody>${cisInvoices.map(i => tableRow([i.id, i.customer, fmtH(parseFloat(i.grossAmount||i.amount||0)), fmtH(parseFloat(i.cisDeduction||0)), fmtH(parseFloat(i.cisNetPayable||0))])).join("")}</tbody>
+      </table>
+      <div class="note">Use these figures on your self-assessment tax return. CIS deductions can be offset against your tax bill.</div>`;
+
+    if (activeReport === "jobs") return `
+      <table>
+        ${tableHead(["Job", "Customer", "Type", "Date", "Status"])}
+        <tbody>${periodJobs.map(j => tableRow([j.title||j.type||"Job", j.customer, j.type||"—", j.date ? new Date(j.dateObj||j.date).toLocaleDateString("en-GB") : "TBC", j.status])).join("")}</tbody>
+      </table>`;
+
+    return "";
   };
 
   return (
@@ -9677,7 +9833,7 @@ function ReportsTab({ invoices, jobs, materials, customers, brand, user }) {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 18, fontWeight: 700 }}>Reports</div>
-        <button onClick={printReport} style={{ ...S.btn("ghost"), fontSize: 12 }}>🖨 Print</button>
+        <button onClick={downloadPDF} style={{ ...S.btn("ghost"), fontSize: 12 }}>⬇ Save PDF</button>
       </div>
 
       {/* Period selector */}
