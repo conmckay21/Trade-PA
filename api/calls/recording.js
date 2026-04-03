@@ -51,9 +51,11 @@ async function processRecording(req) {
 
     // 3. Transcribe with Whisper
     console.log("recording.js: Sending to Whisper...");
-    const FormData = (await import("form-data")).default;
+    const { Blob } = await import("buffer");
+    const audioBlob = new Blob([audioBytes], { type: "audio/mpeg" });
+
     const formData = new FormData();
-    formData.append("file", audioBytes, { filename: "call.mp3", contentType: "audio/mpeg" });
+    formData.append("file", audioBlob, "call.mp3");
     formData.append("model", "whisper-1");
     formData.append("language", "en");
 
@@ -61,7 +63,6 @@ async function processRecording(req) {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.VITE_OPENAI_KEY}`,
-        ...formData.getHeaders(),
       },
       body: formData,
     });
