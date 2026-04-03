@@ -5284,7 +5284,7 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
     supabase.from("call_logs")
       .select("*")
       .eq("user_id", user.id)
-      .eq("customer_name", selected.name)
+      .ilike("customer_name", selected.name)
       .order("created_at", { ascending: false })
       .limit(20)
       .then(({ data }) => setCallLogs(data || []));
@@ -5399,21 +5399,27 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                   <div key={log.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: 14, marginBottom: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 16 }}>📞</span>
+                        <span style={{ fontSize: 16 }}>{log.direction === "outbound" ? "📲" : "📞"}</span>
                         <div>
                           <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{new Date(log.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
-                          <div style={{ fontSize: 11, color: C.muted }}>{Math.floor((log.duration_seconds || 0) / 60)}m {(log.duration_seconds || 0) % 60}s</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>{log.direction === "outbound" ? "Outbound · " : "Inbound · "}{Math.floor((log.duration_seconds || 0) / 60)}m {(log.duration_seconds || 0) % 60}s</div>
                         </div>
                       </div>
                       <span style={S.badge(
                         log.category === "existing_job" ? C.green :
                         log.category === "new_enquiry" ? C.blue :
                         log.category === "invoice_payment" ? C.amber : C.muted
-                      )}>{log.category?.replace("_", " ")}</span>
+                      )}>{log.category?.replace(/_/g, " ")}</span>
                     </div>
                     <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6, marginBottom: 6 }}>{log.summary}</div>
                     {log.key_details && <div style={{ fontSize: 11, color: C.amber, fontStyle: "italic" }}>📌 {log.key_details}</div>}
                     {log.action_needed && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Action: {log.action_needed}</div>}
+                    {log.recording_url && (
+                      <audio controls style={{ width: "100%", marginTop: 8, height: 32 }}
+                        src={`/api/calls/audio?url=${encodeURIComponent(log.recording_url)}`}>
+                        Your browser does not support audio playback.
+                      </audio>
+                    )}
                   </div>
                 ))}
               </div>
@@ -6539,18 +6545,34 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
         }
         break;
       }
+      case "update_job": {
+        // Mark job as complete — triggered when call confirms work is done
+        const jobId = d.job_id;
+        if (jobId) {
+          supabase.from("job_cards")
+            .update({ status: "completed", completion_date: new Date().toISOString() })
+            .eq("id", jobId)
+            .eq("user_id", user.id)
+            .then(() => {}).catch(() => {});
+        }
+        break;
+      }
       case "mark_invoice_paid": {
-        // Extract invoice number from email subject or action data (e.g. "Invoice 241")
+        // Extract invoice number from action_data, email subject, or email snippet
+        const invoiceNumFromData = d.invoice_number ? String(d.invoice_number) : null;
         const subjectMatch = action.email_subject?.match(/(?:invoice\s*#?\s*)(\d+)/i);
         const invoiceNumFromSubject = subjectMatch ? subjectMatch[1] : null;
-        const customerName = (d.customer || "").toLowerCase();
+        const snippetMatch = action.email_snippet?.match(/(?:invoice\s*#?\s*)(\d+)/i);
+        const invoiceNumFromSnippet = snippetMatch ? snippetMatch[1] : null;
+        const invoiceNum = invoiceNumFromData || invoiceNumFromSubject || invoiceNumFromSnippet;
+        const customerNameLower = (d.customer || "").toLowerCase();
 
         const inv = (invoices || []).find(i => {
           if (i.isQuote || i.status === "paid") return false;
-          // Match by invoice number from email subject
-          if (invoiceNumFromSubject && i.id?.includes(invoiceNumFromSubject)) return true;
+          // Match by invoice number (highest priority)
+          if (invoiceNum && i.id?.includes(invoiceNum)) return true;
           // Match by customer name
-          if (customerName && i.customer?.toLowerCase().includes(customerName)) return true;
+          if (customerNameLower && i.customer?.toLowerCase().includes(customerNameLower)) return true;
           return false;
         });
 
@@ -6597,8 +6619,8 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
     }
   }
 
-  function actionIcon(type) { return { create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", add_materials: "🔧", save_customer: "👤", accept_quote: "🤝", add_cis_statement: "🏗" }[type] || "⚡"; }
-  function actionColor(type) { return { create_job: IC.green, create_enquiry: IC.blue, mark_invoice_paid: IC.green, add_materials: IC.amber, save_customer: "#8b5cf6", accept_quote: IC.green, add_cis_statement: IC.blue }[type] || IC.amber; }
+  function actionIcon(type) { return { create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", update_job: "🔧", add_materials: "🔧", save_customer: "👤", accept_quote: "🤝", add_cis_statement: "🏗" }[type] || "⚡"; }
+  function actionColor(type) { return { create_job: IC.green, create_enquiry: IC.blue, mark_invoice_paid: IC.green, update_job: IC.amber, add_materials: IC.amber, save_customer: "#8b5cf6", accept_quote: IC.green, add_cis_statement: IC.blue }[type] || IC.amber; }
   function formatTime(ts) { if (!ts) return ""; const d = new Date(ts), diff = Date.now() - d; if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`; return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
   function fromName(from) { if (!from) return "Unknown"; const m = from.match(/^(.+?)\s*</); return m ? m[1].replace(/"/g, "") : from.split("@")[0]; }
 
@@ -8090,7 +8112,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
         supabase.from("call_logs")
           .select("*")
           .eq("user_id", user.id)
-          .eq("customer_name", selected.customer || "")
+          .ilike("customer_name", selected.customer || "")
           .order("created_at", { ascending: false })
           .then(({ data }) => setJobCallLogs(data || []))
           .catch(() => setJobCallLogs([]));
@@ -8709,7 +8731,8 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                       <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6, marginBottom: 6 }}>{log.summary}</div>
                       {log.key_details && <div style={{ fontSize: 11, color: C.amber }}>📌 {log.key_details}</div>}
                       {log.recording_url && (
-                        <audio controls style={{ width: "100%", marginTop: 8, height: 32 }} src={log.recording_url}>
+                        <audio controls style={{ width: "100%", marginTop: 8, height: 32 }}
+                          src={`/api/calls/audio?url=${encodeURIComponent(log.recording_url)}`}>
                           Your browser does not support audio playback.
                         </audio>
                       )}
