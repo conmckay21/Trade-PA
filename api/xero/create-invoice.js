@@ -4,17 +4,16 @@ export default async function handler(req, res) {
   const { userId, invoice } = req.body;
   if (!userId || !invoice) return res.status(400).json({ error: 'Missing userId or invoice' });
 
-  // Safe JSON parser — returns readable error if Xero sends HTML
   async function safeJson(r) {
     const text = await r.text();
     try { return JSON.parse(text); }
-    catch { throw new Error(`Xero returned unexpected response (status ${r.status}): ${text.slice(0, 300)}`); }
+    catch { throw new Error(`Xero error (${r.status}): ${text.slice(0, 300)}`); }
   }
 
   try {
     const connRes = await fetch(
       `${process.env.VITE_SUPABASE_URL}/rest/v1/accounting_connections?user_id=eq.${userId}&provider=eq.xero&select=*`,
-      { headers: { 'apikey': process.env.SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+      { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
     );
     const conns = await connRes.json();
     const conn = conns?.[0];
@@ -37,7 +36,7 @@ export default async function handler(req, res) {
       accessToken = tokens.access_token;
       await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/accounting_connections?user_id=eq.${userId}&provider=eq.xero`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}` },
+        headers: { 'Content-Type': 'application/json', apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` },
         body: JSON.stringify({
           access_token: tokens.access_token,
           refresh_token: tokens.refresh_token,
@@ -46,34 +45,91 @@ export default async function handler(req, res) {
       });
     }
 
-    // Map VAT type to Xero tax type
-    const vatType = invoice.vatType || "income";
+    // ── VAT / Tax setup ────────────────────────────────────────────────────────
+    // Trade PA invoices always store grossAmount (VAT-inclusive customer price)
+    // We send INCLUSIVE amounts to Xero and let it extract VAT automatically
+
+    const vatEnabled = !!invoice.vatEnabled;
+    const vatZeroRated = !!invoice.vatZeroRated;
+    const vatType = invoice.vatType || 'income';
+    const vatRate = Number(invoice.vatRate || 20);
+    const grossAmount = parseFloat(invoice.grossAmount || invoice.amount) || 0;
+    const isDRC = vatType.includes('drc');
+
+    // Xero tax type — UK standard codes
     let taxType = 'NONE';
-    if (invoice.vatZeroRated) taxType = 'ZERORATEDOUTPUT';
-    else if (invoice.vatEnabled) {
-      const rate = invoice.vatRate;
-      if (vatType.includes('drc')) {
-        taxType = rate === 20 ? 'ECOUTPUT' : 'ECOUTPUTSERVICES';
-      } else if (vatType === 'expenses') {
-        taxType = rate === 20 ? 'INPUT2' : 'RRINPUT';
+    if (vatZeroRated) {
+      taxType = 'ZERORATEDOUTPUT';
+    } else if (vatEnabled) {
+      if (isDRC) {
+        // Domestic Reverse Charge — customer accounts for VAT
+        taxType = 'RROUTPUT';
+      } else if (vatRate === 20) {
+        taxType = 'OUTPUT2';   // Standard rate 20%
+      } else if (vatRate === 5) {
+        taxType = 'RRINPUT';   // Reduced rate 5%
       } else {
-        taxType = rate === 20 ? 'OUTPUT2' : 'RRINPUT';
+        taxType = 'OUTPUT2';
       }
     }
 
+    // Line amount type:
+    // - If VAT enabled and inclusive → INCLUSIVE (Xero extracts VAT from gross)
+    // - If no VAT → EXCLUSIVE (amount = net, no VAT)
+    // - DRC → EXCLUSIVE (net amount, customer accounts for VAT)
+    const lineAmountTypes = (vatEnabled && !vatZeroRated && !isDRC) ? 'INCLUSIVE' : 'EXCLUSIVE';
+
+    // ── Build line items ───────────────────────────────────────────────────────
     let lineItems = [];
+
     if (invoice.cisEnabled) {
-      if (invoice.cisLabour > 0) lineItems.push({ Description: 'Labour', Quantity: 1, UnitAmount: invoice.cisLabour, AccountCode: '200', TaxType: taxType });
-      if (invoice.cisMaterials > 0) lineItems.push({ Description: 'Materials', Quantity: 1, UnitAmount: invoice.cisMaterials, AccountCode: '200', TaxType: taxType });
-    } else {
-      lineItems.push({ Description: invoice.description || 'Services rendered', Quantity: 1, UnitAmount: invoice.grossAmount || invoice.amount, AccountCode: '200', TaxType: taxType });
+      // CIS invoice — split labour and materials
+      if ((invoice.cisLabour || 0) > 0) {
+        lineItems.push({
+          Description: 'Labour',
+          Quantity: 1,
+          UnitAmount: parseFloat(invoice.cisLabour),
+          AccountCode: '200',
+          TaxType: taxType,
+        });
+      }
+      if ((invoice.cisMaterials || 0) > 0) {
+        lineItems.push({
+          Description: 'Materials',
+          Quantity: 1,
+          UnitAmount: parseFloat(invoice.cisMaterials),
+          AccountCode: '200',
+          TaxType: taxType,
+        });
+      }
+    } else if (invoice.lineItems && invoice.lineItems.length > 0) {
+      // Multi-line invoice — send each line
+      // Line amounts from Trade PA are already gross (VAT-inclusive)
+      lineItems = invoice.lineItems.map(l => ({
+        Description: l.description || l.desc || 'Services',
+        Quantity: parseFloat(l.qty || l.quantity || 1),
+        UnitAmount: parseFloat(l.amount || l.unitPrice || l.total || 0),
+        AccountCode: '200',
+        TaxType: taxType,
+      })).filter(l => l.UnitAmount > 0);
+    }
+
+    // Fallback — single line using gross amount
+    if (lineItems.length === 0) {
+      lineItems.push({
+        Description: invoice.description || 'Services rendered',
+        Quantity: 1,
+        UnitAmount: grossAmount,
+        AccountCode: '200',
+        TaxType: taxType,
+      });
     }
 
     const xeroInvoice = {
       Type: 'ACCREC',
       Contact: { Name: invoice.customer },
       LineItems: lineItems,
-      LineAmountTypes: invoice.vatEnabled && !invoice.vatZeroRated ? 'INCLUSIVE' : 'EXCLUSIVE',
+      LineAmountTypes: lineAmountTypes,
       Date: new Date().toISOString().split('T')[0],
       DueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       InvoiceNumber: invoice.id,
@@ -85,10 +141,10 @@ export default async function handler(req, res) {
     const xeroRes = await fetch('https://api.xero.com/api.xro/2.0/Invoices', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         'Xero-tenant-id': conn.tenant_id,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify({ Invoices: [xeroInvoice] }),
     });
@@ -98,11 +154,10 @@ export default async function handler(req, res) {
     if (xeroData.Invoices?.[0]?.InvoiceID) {
       return res.status(200).json({ success: true, xeroId: xeroData.Invoices[0].InvoiceID });
     } else {
-      // Extract Xero validation error message if available
-      const validationError = xeroData.Elements?.[0]?.ValidationErrors?.[0]?.Message
+      const validationMsg = xeroData.Elements?.[0]?.ValidationErrors?.[0]?.Message
         || xeroData.Invoices?.[0]?.ValidationErrors?.[0]?.Message
         || JSON.stringify(xeroData);
-      throw new Error(validationError);
+      throw new Error(validationMsg);
     }
   } catch (err) {
     console.error('Xero create invoice error:', err.message);
