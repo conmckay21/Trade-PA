@@ -9633,12 +9633,21 @@ export default function App() {
         const tokenRes = await fetch("/api/calls/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id }) });
         const { token } = await tokenRes.json();
         if (!token) return;
-        device = new Device(token, { logLevel: 1, codecPreferences: ["opus", "pcmu"], edge: "dublin" });
+        device = new Device(token, {
+          logLevel: 1,
+          codecPreferences: ["opus", "pcmu"],
+          edge: "dublin",
+        });
+
         device.on("incoming", call => {
+          console.log("📞 INCOMING CALL FIRED");
+          console.log("📞 Caller name param:", call.customParameters?.get("callerName"));
+          console.log("📞 Caller number param:", call.customParameters?.get("callerNumber"));
           const callerName = call.customParameters?.get("callerName") || "Unknown caller";
           const callerNumber = call.customParameters?.get("callerNumber") || "";
           setIncomingCall({ call, callerName, callerNumber });
-          call.on("cancel", () => setIncomingCall(null));
+          call.on("cancel", () => { console.log("📞 Call cancelled"); setIncomingCall(null); });
+          call.on("reject", () => { console.log("📞 Call rejected"); setIncomingCall(null); });
         });
         device.on("tokenWillExpire", async () => {
           try {
