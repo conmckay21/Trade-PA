@@ -2686,8 +2686,6 @@ const DEFAULT_SUPPLIERS = [
 ];
 
 function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, userId }) {
-  const C = COLORS;
-  const S = STYLES;
   const [expanded, setExpanded] = useState(false);
   const statusColor = { to_order: C.red, ordered: C.amber, collected: C.green };
   const statusLabel = { to_order: "To Order", ordered: "Ordered", collected: "Collected" };
@@ -9523,9 +9521,6 @@ function CISStatementsTab({ user }) {
 
 // ─── Reports Tab ─────────────────────────────────────────────────────────────
 function ReportsTab({ invoices, jobs, materials, customers, brand, user }) {
-  const C = COLORS;
-  const S = STYLES;
-
   const today = new Date();
   const fmtDate = d => d.toISOString().split("T")[0];
 
