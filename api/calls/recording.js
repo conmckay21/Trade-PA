@@ -13,12 +13,14 @@ export default async function handler(req, res) {
     CallSid,
   } = req.body || {};
 
-  const { userId, callerNumber, customerName } = req.query;
+  const { userId, callerNumber, customerName, direction } = req.query;
 
   if (!RecordingUrl || !userId) {
     console.error("Missing recording URL or userId");
     return;
   }
+
+  const isOutbound = direction === "outbound";
 
   try {
     // 1. Download the recording from Twilio (wait a moment for it to be ready)
@@ -100,14 +102,15 @@ export default async function handler(req, res) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 600,
         messages: [{
           role: "user",
           content: `You are an AI assistant for a UK sole-trader tradesperson. Analyse this phone call transcript and classify what it's about.
 
 Customer: ${customerName || "Unknown"}
-Caller number: ${callerNumber}
+${isOutbound ? "Called number" : "Caller number"}: ${callerNumber}
+Call direction: ${isOutbound ? "Outbound (tradesperson called customer)" : "Inbound (customer called tradesperson)"}
 Call duration: ${RecordingDuration} seconds
 
 Active jobs for this customer:
@@ -145,6 +148,7 @@ Classify this call and respond ONLY with JSON:
       customer_name: customerName || "Unknown",
       caller_number: callerNumber,
       call_sid: CallSid,
+      direction: isOutbound ? "outbound" : "inbound",
       duration_seconds: parseInt(RecordingDuration) || 0,
       recording_url: RecordingUrl,
       transcript,
@@ -168,6 +172,7 @@ Classify this call and respond ONLY with JSON:
 
     // 6. If there's a related job, add a note to it
     if (classification.job_id) {
+      const directionLabel = isOutbound ? "Call to" : "Call from";
       await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/job_notes`, {
         method: "POST",
         headers: {
@@ -178,7 +183,7 @@ Classify this call and respond ONLY with JSON:
         body: JSON.stringify({
           job_id: classification.job_id,
           user_id: userId,
-          note: `📞 Call from ${customerName} (${Math.floor(parseInt(RecordingDuration)/60)}min ${parseInt(RecordingDuration)%60}s)\n\n${classification.summary}${classification.key_details ? `\n\nKey details: ${classification.key_details}` : ""}`,
+          note: `📞 ${directionLabel} ${customerName} (${Math.floor(parseInt(RecordingDuration)/60)}min ${parseInt(RecordingDuration)%60}s)\n\n${classification.summary}${classification.key_details ? `\n\nKey details: ${classification.key_details}` : ""}`,
           created_at: new Date().toISOString(),
         }),
       });
@@ -186,6 +191,7 @@ Classify this call and respond ONLY with JSON:
 
     // 7. If action needed, create an AI action for approval
     if (classification.suggested_action_type && classification.suggested_action_type !== "none") {
+      const directionLabel = isOutbound ? "Outbound call to" : "Call from";
       await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions`, {
         method: "POST",
         headers: {
@@ -197,7 +203,7 @@ Classify this call and respond ONLY with JSON:
           user_id: userId,
           email_id: `call_${CallSid}`,
           email_from: `${customerName} <${callerNumber}>`,
-          email_subject: `📞 Call: ${classification.summary?.slice(0, 60)}`,
+          email_subject: `📞 ${directionLabel} ${customerName}: ${classification.summary?.slice(0, 50)}`,
           email_snippet: classification.summary?.slice(0, 300),
           action_type: classification.suggested_action_type,
           action_description: classification.action_needed || classification.summary,
@@ -208,6 +214,7 @@ Classify this call and respond ONLY with JSON:
             key_details: classification.key_details,
             job_id: classification.job_id,
             source: "phone_call",
+            direction: isOutbound ? "outbound" : "inbound",
             duration: RecordingDuration,
           },
           status: "pending",
@@ -215,7 +222,7 @@ Classify this call and respond ONLY with JSON:
       });
     }
 
-    console.log(`✓ Call processed for ${customerName}: ${classification.category} — ${classification.summary?.slice(0, 80)}`);
+    console.log(`✓ Call processed for ${customerName} (${isOutbound ? "outbound" : "inbound"}): ${classification.category} — ${classification.summary?.slice(0, 80)}`);
 
     // 8. Send push notification to the user
     const durationStr = `${Math.floor(parseInt(RecordingDuration || 0) / 60)}m ${parseInt(RecordingDuration || 0) % 60}s`;
@@ -224,7 +231,7 @@ Classify this call and respond ONLY with JSON:
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userId,
-        title: `📞 Call from ${customerName}`,
+        title: isOutbound ? `📞 Call to ${customerName}` : `📞 Call from ${customerName}`,
         body: `${durationStr} · ${classification.summary?.slice(0, 100) || "Call recorded and transcribed"}`,
         url: "/",
         type: "call",
