@@ -15,10 +15,9 @@ async function processRecording(req) {
   console.log(`recording.js: RecordingUrl: ${RecordingUrl}`);
 
   try {
-    // 1. Wait for recording to be ready
-    await new Promise(r => setTimeout(r, 3000));
+    // 1. Wait for recording to be ready then retry up to 5 times
+    await new Promise(r => setTimeout(r, 5000));
 
-    // 2. Download recording
     console.log(`recording.js: RecordingUrl type: ${typeof RecordingUrl}`);
 
     // Normalise recording URL — convert regional IE1 URL to standard API endpoint
@@ -28,18 +27,27 @@ async function processRecording(req) {
     );
     console.log(`recording.js: Normalised URL: ${normalisedRecordingUrl}`);
 
+    // Download with retries — recording may not be ready immediately
     console.log("recording.js: Downloading recording...");
-    const recordingRes = await fetch(`${normalisedRecordingUrl}.mp3`, {
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
-      },
-    });
+    let recordingRes;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      recordingRes = await fetch(`${normalisedRecordingUrl}.mp3`, {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
+        },
+      });
+      if (recordingRes.ok) {
+        console.log(`recording.js: Download succeeded on attempt ${attempt}`);
+        break;
+      }
+      console.log(`recording.js: Download attempt ${attempt} failed — status ${recordingRes.status}, retrying...`);
+      await new Promise(r => setTimeout(r, 5000 * attempt));
+    }
 
-    if (!recordingRes.ok) {
-      console.error(`recording.js: Failed to download recording — status ${recordingRes.status}`);
+    if (!recordingRes?.ok) {
+      console.error(`recording.js: Failed to download after 5 attempts`);
       return;
     }
-    console.log("recording.js: Recording downloaded successfully");
 
     const audioBuffer = await recordingRes.arrayBuffer();
     const audioBytes = Buffer.from(audioBuffer);
