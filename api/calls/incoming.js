@@ -4,6 +4,16 @@
 // Push notification fires immediately to wake app if backgrounded
 // Falls back to real mobile after 45s if app doesn't answer
 
+// XML-escape helper — prevents special chars breaking TwiML parsing
+function xmlEscape(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 export default async function handler(req, res) {
   const { userId } = req.query;
 
@@ -68,27 +78,27 @@ export default async function handler(req, res) {
       }),
     }).catch(() => {});
 
-    // 4. Build URLs
+    // 4. Build URLs — encode all params for URLs
     const recordingCallback = `${appUrl}/api/calls/recording?userId=${encodeURIComponent(userId)}&callerNumber=${encodeURIComponent(normalised)}&customerName=${encodeURIComponent(customerName)}`;
     const fallbackUrl = `${appUrl}/api/calls/fallback?forwardTo=${encodeURIComponent(forwardTo)}&callerNumber=${encodeURIComponent(normalised)}&customerName=${encodeURIComponent(customerName)}`;
 
-    console.log(`Incoming call from ${normalised} (${customerName}) → routing to client identity: ${identity}`);
+    // 5. XML-escape all values that go inside TwiML attributes
+    const safeIdentity = xmlEscape(identity);
+    const safeCustomerName = xmlEscape(customerName);
+    const safeCallerNumber = xmlEscape(normalised);
+    const safeRecordingCallback = xmlEscape(recordingCallback);
+    const safeFallbackUrl = xmlEscape(fallbackUrl);
 
-    // 5. Ring app client for 45s then fall back to mobile
+    console.log(`Incoming call from ${normalised} (${customerName}) → client: ${identity}`);
+
     res.setHeader("Content-Type", "text/xml");
     return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial
-    timeout="45"
-    record="record-from-answer"
-    recordingStatusCallback="${recordingCallback}"
-    recordingStatusCallbackMethod="POST"
-    action="${fallbackUrl}"
-  >
+  <Dial timeout="45" record="record-from-answer" recordingStatusCallback="${safeRecordingCallback}" recordingStatusCallbackMethod="POST" action="${safeFallbackUrl}">
     <Client>
-      <Identity>${identity}</Identity>
-      <Parameter name="callerName" value="${customerName}"/>
-      <Parameter name="callerNumber" value="${normalised}"/>
+      <Identity>${safeIdentity}</Identity>
+      <Parameter name="callerName" value="${safeCustomerName}"/>
+      <Parameter name="callerNumber" value="${safeCallerNumber}"/>
     </Client>
   </Dial>
 </Response>`);
@@ -100,9 +110,9 @@ export default async function handler(req, res) {
 <Response>
   <Dial timeout="45">
     <Client>
-      <Identity>${identity}</Identity>
+      <Identity>${xmlEscape(identity)}</Identity>
       <Parameter name="callerName" value="Incoming call"/>
-      <Parameter name="callerNumber" value="${normalised}"/>
+      <Parameter name="callerNumber" value="${xmlEscape(normalised)}"/>
     </Client>
   </Dial>
 </Response>`);
