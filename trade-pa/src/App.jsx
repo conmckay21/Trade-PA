@@ -1161,6 +1161,7 @@ function CallTrackingSettings({ user }) {
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [showPortInfo, setShowPortInfo] = useState(false);
+  const [micStatus, setMicStatus] = useState(null); // granted | denied | prompt | unknown
 
   useEffect(() => {
     if (!user?.id) return;
@@ -1175,8 +1176,30 @@ function CallTrackingSettings({ user }) {
       .catch(() => setLoaded(true));
   }, [user?.id]);
 
+  // Check mic permission status whenever call tracking is active
+  useEffect(() => {
+    if (!callTracking?.twilio_number) return;
+    navigator.permissions?.query({ name: "microphone" })
+      .then(result => {
+        setMicStatus(result.state);
+        result.onchange = () => setMicStatus(result.state);
+      })
+      .catch(() => setMicStatus("unknown"));
+  }, [callTracking?.twilio_number]);
+
   const activate = async () => {
     if (!forwardTo.trim()) { setError("Please enter your mobile number for missed call fallback"); return; }
+
+    // Request microphone permission before provisioning
+    // This ensures the user grants access upfront rather than failing silently on first call
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop()); // release immediately
+    } catch (err) {
+      setError("Microphone access is required to receive calls. Please tap Allow when your browser asks, or enable it in your browser settings.");
+      return;
+    }
+
     setSaving(true); setError("");
     try {
       const res = await fetch("/api/calls/provision", {
@@ -1197,6 +1220,16 @@ function CallTrackingSettings({ user }) {
 
   if (callTracking?.twilio_number) return (
     <div>
+      {/* Microphone blocked warning */}
+      {micStatus === "denied" && (
+        <div style={{ background: "#ef444418", border: "1px solid #ef444444", borderRadius: 8, padding: 12, marginBottom: 14, display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>🎙️</span>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", marginBottom: 4 }}>Microphone access blocked</div>
+            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>Calls can't come through without microphone access. On iPhone: Settings → Safari → Microphone → Allow. On desktop: click the lock icon in your browser address bar and allow microphone.</div>
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
         <div style={S.badge(C.green)}>✓ Active</div>
         <div style={{ fontSize: 12, color: C.muted }}>Business phone is live</div>
@@ -9427,6 +9460,7 @@ export default function App() {
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
   const [callMuted, setCallMuted] = useState(false);
+  const [micBlocked, setMicBlocked] = useState(false);
   const now = Date.now();
 
   // Send push notification to this user via server
@@ -9439,8 +9473,19 @@ export default function App() {
     }).catch(() => {});
   };
 
-  const answerCall = () => {
+  const answerCall = async () => {
     if (!incomingCall) return;
+    // Request mic permission explicitly before accepting
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+    } catch {
+      alert("Microphone access is required to answer calls. Please allow microphone access in your browser/device settings.");
+      incomingCall.call.reject();
+      setIncomingCall(null);
+      setMicBlocked(true);
+      return;
+    }
     const { call, callerName, callerNumber } = incomingCall;
     call.accept();
     setActiveCall({ call, callerName, callerNumber, direction: "inbound", startTime: Date.now() });
@@ -9558,6 +9603,33 @@ export default function App() {
       try {
         const { data: ct } = await supabase.from("call_tracking").select("twilio_number").eq("user_id", user.id).limit(1).maybeSingle();
         if (!ct?.twilio_number) return;
+
+        // Check microphone permission before registering
+        try {
+          const perm = await navigator.permissions.query({ name: "microphone" });
+          if (perm.state === "denied") {
+            setMicBlocked(true);
+            console.log("Twilio Device: microphone blocked — Device not registered");
+            return;
+          }
+          setMicBlocked(false);
+          perm.onchange = () => {
+            if (perm.state === "denied") setMicBlocked(true);
+            else setMicBlocked(false);
+          };
+        } catch {} // permissions API not supported — proceed anyway
+
+        // Request mic access now — this triggers the browser prompt once
+        // and the browser remembers the choice permanently for this site
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(t => t.stop()); // release immediately, just needed the permission
+          setMicBlocked(false);
+        } catch {
+          setMicBlocked(true);
+          console.log("Twilio Device: microphone access denied");
+          return;
+        }
         const tokenRes = await fetch("/api/calls/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id }) });
         const { token } = await tokenRes.json();
         if (!token) return;
@@ -10055,6 +10127,15 @@ export default function App() {
       {pdfHtml && <PDFOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
       {incomingCall && <IncomingCallScreen callerName={incomingCall.callerName} callerNumber={incomingCall.callerNumber} onAnswer={answerCall} onDecline={declineCall} />}
       {activeCall && <ActiveCallScreen callerName={activeCall.callerName} callerNumber={activeCall.callerNumber} direction={activeCall.direction} startTime={activeCall.startTime} muted={callMuted} onMute={toggleMute} onHangUp={hangUp} />}
+      {micBlocked && (
+        <div style={{ position: "fixed", top: "max(52px, env(safe-area-inset-top, 52px))", left: 0, right: 0, zIndex: 200, background: "#ef4444", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 16 }}>🎙️</span>
+          <div style={{ flex: 1, fontSize: 12, color: "#fff", lineHeight: 1.5 }}>
+            <strong>Microphone blocked</strong> — calls can't ring in the app. Go to your browser/device settings and allow microphone access for Trade PA.
+          </div>
+          <button onClick={() => setMicBlocked(false)} style={{ background: "none", border: "none", color: "#fff", fontSize: 18, cursor: "pointer", padding: "0 4px" }}>×</button>
+        </div>
+      )}
 
       {/* PWA Install Banner */}
       {showPwaBanner && !isStandalone && (
