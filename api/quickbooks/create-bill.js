@@ -56,9 +56,11 @@ export default async function handler(req, res) {
       : 'https://quickbooks.api.intuit.com';
 
     const supplierName = material.supplier || 'Unknown Supplier';
-    const amount = parseFloat(material.unitPrice || 0) * parseFloat(material.qty || 1);
+    const qty = parseFloat(material.qty || 1);
+    const unitPrice = parseFloat(material.unitPrice || 0);
+    const amount = parseFloat((qty * unitPrice).toFixed(2));
 
-    // Find or create vendor (supplier) in QB
+    // Find or create vendor
     const vendorQuery = await fetch(
       `${baseUrl}/v3/company/${conn.tenant_id}/query?query=SELECT * FROM Vendor WHERE DisplayName = '${supplierName.replace(/'/g, "\\'")}'&minorversion=65`,
       { headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' } }
@@ -71,11 +73,7 @@ export default async function handler(req, res) {
         `${baseUrl}/v3/company/${conn.tenant_id}/vendor?minorversion=65`,
         {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ DisplayName: supplierName }),
         }
       );
@@ -83,19 +81,19 @@ export default async function handler(req, res) {
       vendorId = newVendorData.Vendor?.Id;
     }
 
-    // Create bill
+    // QB Bill — uses ItemBasedExpenseLineDetail for simplicity (avoids account mapping issues)
     const bill = {
       VendorRef: { value: vendorId },
       CurrencyRef: { value: 'GBP' },
       Line: [{
-        DetailType: 'AccountBasedExpenseLineDetail',
+        DetailType: 'ItemBasedExpenseLineDetail',
         Amount: amount,
         Description: `${material.item}${material.job ? ` — Job: ${material.job}` : ''}`,
-        AccountBasedExpenseLineDetail: {
-          AccountRef: { value: '1', name: 'Cost of Goods Sold' },
+        ItemBasedExpenseLineDetail: {
+          ItemRef: { value: '1' }, // Default item — maps to your QB items list
+          Qty: qty,
+          UnitPrice: unitPrice,
           BillableStatus: material.job ? 'Billable' : 'NotBillable',
-          Qty: parseFloat(material.qty || 1),
-          UnitPrice: parseFloat(material.unitPrice || 0),
         },
       }],
     };
@@ -104,11 +102,7 @@ export default async function handler(req, res) {
       `${baseUrl}/v3/company/${conn.tenant_id}/bill?minorversion=65`,
       {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(bill),
       }
     );
@@ -117,10 +111,10 @@ export default async function handler(req, res) {
     if (billData.Bill?.Id) {
       return res.status(200).json({ success: true, billId: billData.Bill.Id });
     } else {
-      throw new Error(JSON.stringify(billData));
+      throw new Error(JSON.stringify(billData.Fault || billData));
     }
   } catch (err) {
-    console.error('QuickBooks create-bill error:', err);
+    console.error('QuickBooks create-bill error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 }
