@@ -6546,14 +6546,39 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
         break;
       }
       case "update_job": {
-        // Mark job as complete — triggered when call confirms work is done
         const jobId = d.job_id;
+        const customerNameForJob = (d.customer || "").toLowerCase();
+        const jobValue = d.job_value ? parseFloat(d.job_value) : null;
+
         if (jobId) {
-          supabase.from("job_cards")
+          // Direct job_id match
+          await supabase.from("job_cards")
             .update({ status: "completed", completion_date: new Date().toISOString() })
             .eq("id", jobId)
+            .eq("user_id", user.id);
+        } else {
+          // Match by customer name + value if available
+          const { data: matchingJobs } = await supabase.from("job_cards")
+            .select("id, title, type, status, value")
             .eq("user_id", user.id)
-            .then(() => {}).catch(() => {});
+            .ilike("customer", `%${customerNameForJob}%`)
+            .neq("status", "completed")
+            .order("created_at", { ascending: false });
+
+          if (matchingJobs?.length > 0) {
+            // If we have a value, try to match on it first (within 10% tolerance)
+            let bestMatch = matchingJobs[0];
+            if (jobValue && matchingJobs.length > 1) {
+              const valueMatch = matchingJobs.find(j =>
+                j.value && Math.abs(parseFloat(j.value) - jobValue) / jobValue < 0.1
+              );
+              if (valueMatch) bestMatch = valueMatch;
+            }
+            await supabase.from("job_cards")
+              .update({ status: "completed", completion_date: new Date().toISOString() })
+              .eq("id", bestMatch.id)
+              .eq("user_id", user.id);
+          }
         }
         break;
       }
@@ -9373,7 +9398,7 @@ const EXEMPT_EMAILS = [
   "connor_mckay777@hotmail.com",
   "connor_mckay777@hotmail.co.uk",
   "landbheating@outlook.com",
-  "shannoandrewsimpson@gmail.com",
+  "shannonandrewsimpson@gmail.com",
 ];
 function isExemptAccount(email) {
   return EXEMPT_EMAILS.includes((email || "").toLowerCase());
@@ -9764,7 +9789,7 @@ export default function App() {
     if (!user) { setSubscriptionStatus(null); return; }
 
     // Exempt accounts skip subscription check entirely
-    const EXEMPT = ["thetradepa@gmail.com", "connor_mckay777@hotmail.com", "connor_mckay777@hotmail.co.uk", "landbheating@outlook.com", "shannoandrewsimpson@gmail.com"];
+    const EXEMPT = ["thetradepa@gmail.com", "connor_mckay777@hotmail.com", "connor_mckay777@hotmail.co.uk", "landbheating@outlook.com", "shannonandrewsimpson@gmail.com"];
     if (EXEMPT.includes(user.email?.toLowerCase())) {
       setSubscriptionStatus("active");
       setPlanTier("pro");
