@@ -3023,58 +3023,77 @@ Return only JSON, no other text.` },
           ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials yet — tap + Add Materials above or ask the AI Assistant.</div>
           : filtered.map((m, rawI) => {
             const i = (materials || []).indexOf(m);
+            const [expanded, setExpanded] = React.useState(false);
             return (
-              <div key={i} style={{ ...S.row, flexWrap: "wrap", gap: "4px 0" }}>
-                <div style={{ width: 4, height: 44, borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{m.item}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>
-                    {[m.job && `📋 ${m.job}`, m.supplier && `🏪 ${m.supplier}`, m.unitPrice > 0 && `£${((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)}`].filter(Boolean).join(" · ")}
+              <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}` }}>
+                {/* Main row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px" }} onClick={() => setExpanded(e => !e)}>
+                  <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{m.item}</div>
+                    <div style={{ fontSize: 11, color: C.muted, display: "flex", flexWrap: "wrap", gap: "2px 8px" }}>
+                      {m.qty > 1 && <span>×{m.qty}</span>}
+                      {m.supplier && <span>🏪 {m.supplier}</span>}
+                      {m.job && <span>📋 {m.job}</span>}
+                      {m.unitPrice > 0 && <span style={{ color: C.amber }}>£{((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)}</span>}
+                    </div>
                   </div>
+                  <div style={{ ...S.badge(statusColor[m.status] || C.muted), flexShrink: 0 }}>{statusLabel[m.status] || m.status}</div>
+                  <div style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>{expanded ? "▲" : "▼"}</div>
                 </div>
-                <div style={{ fontSize: 12, color: C.textDim, marginRight: 8, flexShrink: 0 }}>×{m.qty}</div>
-                <div style={{ ...S.badge(statusColor[m.status] || C.muted), marginRight: 6, flexShrink: 0 }}>{statusLabel[m.status] || m.status}</div>
-                <button onClick={() => cycleStatus(i)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0 }}>
-                  {m.status === "to_order" ? "→ Ordered" : m.status === "ordered" ? "→ Collected" : "↺ Reset"}
-                </button>
-                <button onClick={() => setEditingMaterial({ index: i, item: m.item, qty: String(m.qty || 1), unitPrice: String(m.unitPrice || ""), supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" })} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0 }}>✏</button>
-                <button onClick={() => {
-                  fetch("/api/xero/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, material: m }) })
-                    .then(r => r.json()).then(d => alert(d.error ? `Xero: ${d.error}` : "✓ Bill created in Xero")).catch(() => alert("Xero not connected — check Settings"));
-                }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0, color: "#13B5EA", borderColor: "#13B5EA44" }}>Xero Bill</button>
-                <button onClick={() => {
-                  fetch("/api/quickbooks/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, material: m }) })
-                    .then(r => r.json()).then(d => alert(d.error ? `QuickBooks: ${d.error}` : "✓ Bill created in QuickBooks")).catch(() => alert("QuickBooks not connected — check Settings"));
-                }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0, color: "#2CA01C", borderColor: "#2CA01C44" }}>QB Bill</button>
-                <button onClick={() => deleteMaterial(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginLeft: 4 }}>×</button>
-                {(m.receiptId || m.receiptSource || m.receiptImage) && (
-                  <div style={{ width: "100%", paddingLeft: 8, paddingTop: 4, paddingBottom: 4 }}>
-                    <div
-                      title={m.receiptFilename || "View invoice"}
-                      style={{ fontSize: 11, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
-                      onClick={e => {
-                        e.stopPropagation();
-                        const img = m.receiptImage || localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
-                        if (img) {
-                          const overlay = document.createElement("div");
-                          overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
-                          const closeBtn = document.createElement("button");
-                          closeBtn.textContent = "← Back to app";
-                          closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
-                          closeBtn.onclick = () => document.body.removeChild(overlay);
-                          const imgEl = document.createElement("img");
-                          imgEl.src = img;
-                          imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
-                          overlay.appendChild(closeBtn);
-                          overlay.appendChild(imgEl);
-                          document.body.appendChild(overlay);
-                        } else if (m.receiptSource === "email" && m.receiptFilename) {
-                          alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was received via email. Open your Inbox to view the original.`);
-                        } else {
-                          alert("Invoice image not available.");
-                        }
-                      }}
-                    >🧾 View Invoice</div>
+
+                {/* Expanded actions */}
+                {expanded && (
+                  <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+                    {/* Status + edit row */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => cycleStatus(i)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>
+                        {m.status === "to_order" ? "✓ Mark Ordered" : m.status === "ordered" ? "✓ Mark Collected" : "↺ Reset Status"}
+                      </button>
+                      <button onClick={() => setEditingMaterial({ index: i, item: m.item, qty: String(m.qty || 1), unitPrice: String(m.unitPrice || ""), supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" })} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px" }}>✏ Edit</button>
+                      <button onClick={() => deleteMaterial(i)} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px", color: C.red, borderColor: C.red + "44" }}>Delete</button>
+                    </div>
+
+                    {/* Accounting row */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => {
+                        fetch("/api/xero/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, material: m }) })
+                          .then(r => r.json()).then(d => alert(d.error ? `Xero: ${d.error}` : "✓ Bill created in Xero")).catch(() => alert("Xero not connected — check Settings"));
+                      }} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: "#13B5EA", borderColor: "#13B5EA44" }}>↑ Xero Bill</button>
+                      <button onClick={() => {
+                        fetch("/api/quickbooks/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, material: m }) })
+                          .then(r => r.json()).then(d => alert(d.error ? `QuickBooks: ${d.error}` : "✓ Bill created in QuickBooks")).catch(() => alert("QuickBooks not connected — check Settings"));
+                      }} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: "#2CA01C", borderColor: "#2CA01C44" }}>↑ QB Bill</button>
+                    </div>
+
+                    {/* Receipt */}
+                    {(m.receiptId || m.receiptSource || m.receiptImage) && (
+                      <div
+                        style={{ fontSize: 12, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                        onClick={e => {
+                          e.stopPropagation();
+                          const img = m.receiptImage || localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
+                          if (img) {
+                            const overlay = document.createElement("div");
+                            overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
+                            const closeBtn = document.createElement("button");
+                            closeBtn.textContent = "← Back to app";
+                            closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
+                            closeBtn.onclick = () => document.body.removeChild(overlay);
+                            const imgEl = document.createElement("img");
+                            imgEl.src = img;
+                            imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
+                            overlay.appendChild(closeBtn);
+                            overlay.appendChild(imgEl);
+                            document.body.appendChild(overlay);
+                          } else if (m.receiptSource === "email" && m.receiptFilename) {
+                            alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was received via email. Open your Inbox to view the original.`);
+                          } else {
+                            alert("Invoice image not available.");
+                          }
+                        }}
+                      >🧾 {m.receiptFilename || "View Invoice"}</div>
+                    )}
                   </div>
                 )}
               </div>
