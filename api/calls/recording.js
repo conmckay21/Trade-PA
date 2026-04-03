@@ -29,7 +29,7 @@ async function processRecording(req) {
     for (let attempt = 1; attempt <= 5; attempt++) {
       recordingRes = await fetch(`${downloadUrl}.mp3`, {
         headers: {
-          Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
+          Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_API_KEY}:${process.env.TWILIO_API_SECRET}`).toString("base64")}`,
         },
       });
       if (recordingRes.ok) {
