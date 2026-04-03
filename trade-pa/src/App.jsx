@@ -9633,7 +9633,7 @@ export default function App() {
         const tokenRes = await fetch("/api/calls/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id }) });
         const { token } = await tokenRes.json();
         if (!token) return;
-        device = new Device(token, { logLevel: 1, codecPreferences: ["opus", "pcmu"] });
+        device = new Device(token, { logLevel: 1, codecPreferences: ["opus", "pcmu"], edge: "dublin" });
         device.on("incoming", call => {
           const callerName = call.customParameters?.get("callerName") || "Unknown caller";
           const callerNumber = call.customParameters?.get("callerNumber") || "";
