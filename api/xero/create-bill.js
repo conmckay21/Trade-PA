@@ -1,5 +1,4 @@
 // api/xero/create-bill.js
-// Creates a single purchase bill in Xero for one material item
 import { createClient } from '@supabase/supabase-js';
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
@@ -31,6 +30,45 @@ async function refreshXeroToken(userId, refreshToken) {
   return tokens.access_token;
 }
 
+async function safeJson(res) {
+  const text = await res.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error(`Xero returned non-JSON: ${text.slice(0, 200)}`); }
+}
+
+async function getOrCreateContact(accessToken, tenantId, supplierName) {
+  // Search by name using proper query param
+  const searchRes = await fetch(
+    `https://api.xero.com/api.xro/2.0/Contacts?searchTerm=${encodeURIComponent(supplierName)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Xero-tenant-id': tenantId,
+        Accept: 'application/json',
+      },
+    }
+  );
+  const searchData = await safeJson(searchRes);
+  const match = searchData.Contacts?.find(c =>
+    c.Name?.toLowerCase() === supplierName.toLowerCase()
+  );
+  if (match?.ContactID) return match.ContactID;
+
+  // Create new contact
+  const createRes = await fetch('https://api.xero.com/api.xro/2.0/Contacts', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Xero-tenant-id': tenantId,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ Contacts: [{ Name: supplierName }] }),
+  });
+  const createData = await safeJson(createRes);
+  return createData.Contacts?.[0]?.ContactID;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -55,38 +93,9 @@ export default async function handler(req, res) {
     const supplierName = material.supplier || 'Unknown Supplier';
     const qty = parseFloat(material.qty || 1);
     const unitPrice = parseFloat(material.unitPrice || 0);
-    const amount = qty * unitPrice;
 
-    // Find or create contact (supplier) in Xero
-    const contactRes = await fetch(
-      `https://api.xero.com/api.xro/2.0/Contacts?where=Name="${encodeURIComponent(supplierName)}"`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Xero-tenant-id': conn.tenant_id,
-          Accept: 'application/json',
-        },
-      }
-    );
-    const contactData = await contactRes.json();
-    let contactId = contactData.Contacts?.[0]?.ContactID;
+    const contactId = await getOrCreateContact(accessToken, conn.tenant_id, supplierName);
 
-    if (!contactId) {
-      const newContactRes = await fetch('https://api.xero.com/api.xro/2.0/Contacts', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Xero-tenant-id': conn.tenant_id,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ Contacts: [{ Name: supplierName }] }),
-      });
-      const newContactData = await newContactRes.json();
-      contactId = newContactData.Contacts?.[0]?.ContactID;
-    }
-
-    // Create ACCPAY (bill) invoice in Xero
     const bill = {
       Invoices: [{
         Type: 'ACCPAY',
@@ -95,11 +104,11 @@ export default async function handler(req, res) {
           Description: `${material.item}${material.job ? ` — Job: ${material.job}` : ''}`,
           Quantity: qty,
           UnitAmount: unitPrice,
-          AccountCode: '300', // Cost of Sales — change to match your Xero chart of accounts
+          AccountCode: '300',
           TaxType: 'NONE',
         }],
         CurrencyCode: 'GBP',
-        Status: 'DRAFT',
+        Status: 'AUTHORISED',
       }],
     };
 
@@ -114,14 +123,14 @@ export default async function handler(req, res) {
       body: JSON.stringify(bill),
     });
 
-    const billData = await billRes.json();
+    const billData = await safeJson(billRes);
     if (billData.Invoices?.[0]?.InvoiceID) {
       return res.status(200).json({ success: true, xeroId: billData.Invoices[0].InvoiceID });
     } else {
-      throw new Error(JSON.stringify(billData));
+      throw new Error(billData.Elements?.[0]?.ValidationErrors?.[0]?.Message || JSON.stringify(billData));
     }
   } catch (err) {
-    console.error('Xero create-bill error:', err);
+    console.error('Xero create-bill error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 }
