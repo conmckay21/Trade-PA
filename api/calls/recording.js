@@ -18,20 +18,16 @@ async function processRecording(req) {
     // 1. Wait for recording to be ready then retry up to 5 times
     await new Promise(r => setTimeout(r, 5000));
 
-    console.log(`recording.js: RecordingUrl type: ${typeof RecordingUrl}`);
+    // Keep the regional URL — recording is stored in IE1 region
+    // Standard api.twilio.com returns 404 for IE1 recordings
+    const downloadUrl = RecordingUrl;
+    console.log(`recording.js: Downloading from: ${downloadUrl}.mp3`);
 
-    // Normalise recording URL — convert regional IE1 URL to standard API endpoint
-    const normalisedRecordingUrl = RecordingUrl.replace(
-      /https:\/\/api\.[^/]+\.twilio\.com/,
-      "https://api.twilio.com"
-    );
-    console.log(`recording.js: Normalised URL: ${normalisedRecordingUrl}`);
-
-    // Download with retries — recording may not be ready immediately
+    // Download with retries
     console.log("recording.js: Downloading recording...");
     let recordingRes;
     for (let attempt = 1; attempt <= 5; attempt++) {
-      recordingRes = await fetch(`${normalisedRecordingUrl}.mp3`, {
+      recordingRes = await fetch(`${downloadUrl}.mp3`, {
         headers: {
           Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
         },
