@@ -77,8 +77,9 @@ export default async function handler(req, res) {
       }
     }
 
-    // Always EXCLUSIVE — net amounts only, Xero calculates VAT
-    const lineAmountTypes = 'EXCLUSIVE';
+
+    // Xero LineAmountTypes — correct casing required
+    const lineAmountTypes = (vatEnabled && !vatZeroRated && !isDRC) ? 'Inclusive' : 'Exclusive';
 
     // ── Build line items ───────────────────────────────────────────────────────
     let lineItems = [];
@@ -135,9 +136,9 @@ export default async function handler(req, res) {
       Type: 'ACCREC',
       Contact: { Name: invoice.customer },
       LineItems: lineItems,
-      LineAmountTypes: lineAmountTypes,
       Date: new Date().toISOString().split('T')[0],
       DueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      LineAmountTypes: lineAmountTypes,
       InvoiceNumber: invoice.id,
       Reference: invoice.jobRef || invoice.id,
       Status: 'AUTHORISED',
