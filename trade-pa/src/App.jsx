@@ -32,6 +32,12 @@ async function syncInvoiceToAccounting(userId, invoice) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, invoiceId: invoice.id }),
       }).catch(() => {});
+      // Mark as paid in QuickBooks
+      fetch("/api/quickbooks/mark-paid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, invoiceId: invoice.id }),
+      }).catch(() => {});
     } else {
       // Create invoice in both systems
       fetch("/api/xero/create-invoice", {
@@ -39,7 +45,6 @@ async function syncInvoiceToAccounting(userId, invoice) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, invoice }),
       }).catch(() => {});
-
       fetch("/api/quickbooks/create-invoice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2875,6 +2880,14 @@ Return only JSON, no other text.` },
           <div style={{ display: "flex", gap: 8 }}>
             <button style={S.btn("ghost")} onClick={() => setShowSuppliers(true)}>Suppliers</button>
             <button style={{ ...S.btn("ghost"), color: "#13B5EA", borderColor: "#13B5EA44" }} onClick={syncToXero} disabled={syncing}>{syncing ? "Syncing..." : "↑ Xero"}</button>
+            <button style={{ ...S.btn("ghost"), color: "#2CA01C", borderColor: "#2CA01C44" }} onClick={async () => {
+              try {
+                const toSync = materials.filter(m => m.status === "ordered" || m.status === "to_order");
+                if (toSync.length === 0) { alert("No materials to sync"); return; }
+                await fetch("/api/quickbooks/create-bills", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, materials: toSync }) });
+                alert(`✓ ${toSync.length} material${toSync.length !== 1 ? "s" : ""} synced to QuickBooks`);
+              } catch { alert("QuickBooks sync failed — check QuickBooks is connected in Settings"); }
+            }}>↑ QB</button>
             <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add</button>
           </div>
         </div>
@@ -3025,6 +3038,14 @@ Return only JSON, no other text.` },
                   {m.status === "to_order" ? "→ Ordered" : m.status === "ordered" ? "→ Collected" : "↺ Reset"}
                 </button>
                 <button onClick={() => setEditingMaterial({ index: i, item: m.item, qty: String(m.qty || 1), unitPrice: String(m.unitPrice || ""), supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" })} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0 }}>✏</button>
+                <button onClick={() => {
+                  fetch("/api/xero/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, material: m }) })
+                    .then(r => r.json()).then(d => alert(d.error ? `Xero: ${d.error}` : "✓ Bill created in Xero")).catch(() => alert("Xero not connected — check Settings"));
+                }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0, color: "#13B5EA", borderColor: "#13B5EA44" }}>Xero Bill</button>
+                <button onClick={() => {
+                  fetch("/api/quickbooks/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, material: m }) })
+                    .then(r => r.json()).then(d => alert(d.error ? `QuickBooks: ${d.error}` : "✓ Bill created in QuickBooks")).catch(() => alert("QuickBooks not connected — check Settings"));
+                }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", flexShrink: 0, color: "#2CA01C", borderColor: "#2CA01C44" }}>QB Bill</button>
                 <button onClick={() => deleteMaterial(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginLeft: 4 }}>×</button>
                 {(m.receiptId || m.receiptSource || m.receiptImage) && (
                   <div style={{ width: "100%", paddingLeft: 8, paddingTop: 4, paddingBottom: 4 }}>
@@ -4105,13 +4126,29 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
             )}
 
             {/* Secondary */}
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
               {!selected.isQuote && selected.status === "overdue" && (
                 <button style={{ ...S.btn("danger") }} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>
               )}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteDoc(selected.id)}>Delete</button>
             </div>
+
+            {/* Accounting sync — invoice only */}
+            {!selected.isQuote && (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#13B5EA", borderColor: "#13B5EA44", fontSize: 11 }}
+                  onClick={() => {
+                    fetch("/api/xero/create-invoice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, invoice: selected }) })
+                      .then(r => r.json()).then(d => alert(d.error ? `Xero: ${d.error}` : "✓ Invoice sent to Xero")).catch(() => alert("Xero not connected — check Settings"));
+                  }}>Xero Invoice</button>
+                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#2CA01C", borderColor: "#2CA01C44", fontSize: 11 }}
+                  onClick={() => {
+                    fetch("/api/quickbooks/create-invoice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, invoice: selected }) })
+                      .then(r => r.json()).then(d => alert(d.error ? `QuickBooks: ${d.error}` : "✓ Invoice sent to QuickBooks")).catch(() => alert("QuickBooks not connected — check Settings"));
+                  }}>QB Invoice</button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -5811,6 +5848,18 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingInvoice(selected)}>✏ Edit</button>
               {selected.status === "overdue" && <button style={S.btn("danger")} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteInvoice(selected.id)}>Delete</button>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#13B5EA", borderColor: "#13B5EA44", fontSize: 11 }}
+                onClick={() => {
+                  fetch("/api/xero/create-invoice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, invoice: selected }) })
+                    .then(r => r.json()).then(d => alert(d.error ? `Xero: ${d.error}` : "✓ Invoice sent to Xero")).catch(() => alert("Xero not connected — check Settings"));
+                }}>Xero Invoice</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#2CA01C", borderColor: "#2CA01C44", fontSize: 11 }}
+                onClick={() => {
+                  fetch("/api/quickbooks/create-invoice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, invoice: selected }) })
+                    .then(r => r.json()).then(d => alert(d.error ? `QuickBooks: ${d.error}` : "✓ Invoice sent to QuickBooks")).catch(() => alert("QuickBooks not connected — check Settings"));
+                }}>QB Invoice</button>
             </div>
           </div>
         </div>
