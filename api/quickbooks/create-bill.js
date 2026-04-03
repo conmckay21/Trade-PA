@@ -11,14 +11,8 @@ async function refreshQBToken(userId, refreshToken) {
   ).toString('base64');
   const res = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${credentials}`,
-    },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-    }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: `Basic ${credentials}` },
+    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),
   });
   const tokens = await res.json();
   await supabase.from('accounting_connections').update({
@@ -38,11 +32,8 @@ export default async function handler(req, res) {
 
   try {
     const { data: conn } = await supabase
-      .from('accounting_connections')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('provider', 'quickbooks')
-      .single();
+      .from('accounting_connections').select('*')
+      .eq('user_id', userId).eq('provider', 'quickbooks').single();
 
     if (!conn) return res.status(404).json({ error: 'QuickBooks not connected' });
 
@@ -60,6 +51,15 @@ export default async function handler(req, res) {
     const unitPrice = parseFloat(material.unitPrice || 0);
     const amount = parseFloat((qty * unitPrice).toFixed(2));
 
+    // Due date — 30 days
+    const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Build description with pre-VAT and VAT info
+    const vatInfo = material.vatEnabled
+      ? ` (Ex. VAT: £${amount.toFixed(2)} + ${material.vatRate || 20}% VAT)`
+      : ` (No VAT)`;
+    const description = `${material.item}${material.job ? ` — Job: ${material.job}` : ''}${vatInfo}`;
+
     // Find or create vendor
     const vendorQuery = await fetch(
       `${baseUrl}/v3/company/${conn.tenant_id}/query?query=SELECT * FROM Vendor WHERE DisplayName = '${supplierName.replace(/'/g, "\\'")}'&minorversion=65`,
@@ -69,43 +69,35 @@ export default async function handler(req, res) {
     let vendorId = vendorData.QueryResponse?.Vendor?.[0]?.Id;
 
     if (!vendorId) {
-      const newVendor = await fetch(
-        `${baseUrl}/v3/company/${conn.tenant_id}/vendor?minorversion=65`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ DisplayName: supplierName }),
-        }
-      );
+      const newVendor = await fetch(`${baseUrl}/v3/company/${conn.tenant_id}/vendor?minorversion=65`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ DisplayName: supplierName }),
+      });
       const newVendorData = await newVendor.json();
       vendorId = newVendorData.Vendor?.Id;
     }
 
-    // QB Bill — uses ItemBasedExpenseLineDetail for simplicity (avoids account mapping issues)
+    // Bill — no CurrencyRef to avoid exchange rate issues (uses company default currency)
     const bill = {
       VendorRef: { value: vendorId },
-      CurrencyRef: { value: 'GBP' },
+      DueDate: dueDate,
       Line: [{
-        DetailType: 'ItemBasedExpenseLineDetail',
+        DetailType: 'AccountBasedExpenseLineDetail',
         Amount: amount,
-        Description: `${material.item}${material.job ? ` — Job: ${material.job}` : ''}`,
-        ItemBasedExpenseLineDetail: {
-          ItemRef: { value: '1' }, // Default item — maps to your QB items list
-          Qty: qty,
-          UnitPrice: unitPrice,
+        Description: description,
+        AccountBasedExpenseLineDetail: {
+          AccountRef: { value: '1', name: 'Cost of Goods Sold' },
           BillableStatus: material.job ? 'Billable' : 'NotBillable',
         },
       }],
     };
 
-    const billRes = await fetch(
-      `${baseUrl}/v3/company/${conn.tenant_id}/bill?minorversion=65`,
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(bill),
-      }
-    );
+    const billRes = await fetch(`${baseUrl}/v3/company/${conn.tenant_id}/bill?minorversion=65`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(bill),
+    });
 
     const billData = await billRes.json();
     if (billData.Bill?.Id) {
