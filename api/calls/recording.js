@@ -1,7 +1,7 @@
 // api/calls/recording.js
-export default async function handler(req, res) {
-  res.status(200).json({ received: true });
+import { waitUntil } from "@vercel/functions";
 
+async function processRecording(req) {
   const { RecordingUrl, RecordingDuration, CallSid } = req.body || {};
   const { userId, callerNumber, customerName, direction } = req.query;
 
@@ -249,4 +249,9 @@ Respond ONLY with JSON:
     console.error(`recording.js: ERROR — ${err.message}`);
     console.error(err.stack);
   }
+}
+
+export default async function handler(req, res) {
+  res.status(200).json({ received: true });
+  waitUntil(processRecording(req));
 }
