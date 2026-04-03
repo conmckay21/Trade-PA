@@ -19,8 +19,14 @@ export default async function handler(req, res) {
     await new Promise(r => setTimeout(r, 3000));
 
     // 2. Download recording
+    // Normalise recording URL — convert regional IE1 URL to standard API endpoint
+    const normalisedRecordingUrl = RecordingUrl.replace(
+      /https:\/\/api\.[^/]+\.twilio\.com/,
+      "https://api.twilio.com"
+    );
+
     console.log("recording.js: Downloading recording...");
-    const recordingRes = await fetch(`${RecordingUrl}.mp3`, {
+    const recordingRes = await fetch(`${normalisedRecordingUrl}.mp3`, {
       headers: {
         Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
       },
