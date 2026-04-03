@@ -93,7 +93,6 @@ export default async function handler(req, res) {
           Description: description,
           Quantity: qty,
           UnitAmount: unitPrice,
-          AccountCode: '300',
           TaxType: material.vatEnabled ? 'INPUT2' : 'NONE',
         }],
         LineAmountTypes: 'Exclusive',
