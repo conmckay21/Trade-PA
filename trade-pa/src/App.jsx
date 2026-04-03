@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, Component } from "react";
+import React, { useState, useRef, useEffect, Component } from "react";
 import { supabase } from "./supabase.js";
 import { Device } from "@twilio/voice-sdk";
 
