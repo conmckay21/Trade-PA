@@ -46,8 +46,8 @@ export default async function handler(req, res) {
     }
 
     // ── VAT / Tax setup ────────────────────────────────────────────────────────
-    // Trade PA invoices always store grossAmount (VAT-inclusive customer price)
-    // We send INCLUSIVE amounts to Xero and let it extract VAT automatically
+    // Always use EXCLUSIVE — send net amount, Xero adds VAT on top
+    // Trade PA stores grossAmount (VAT-inclusive), so we extract net ourselves
 
     const vatEnabled = !!invoice.vatEnabled;
     const vatZeroRated = !!invoice.vatZeroRated;
@@ -56,28 +56,29 @@ export default async function handler(req, res) {
     const grossAmount = parseFloat(invoice.grossAmount || invoice.amount) || 0;
     const isDRC = vatType.includes('drc');
 
+    // Net amount — extract from gross if VAT-inclusive
+    const netAmount = (vatEnabled && !vatZeroRated && !isDRC)
+      ? parseFloat((grossAmount / (1 + vatRate / 100)).toFixed(2))
+      : grossAmount;
+
     // Xero tax type — UK standard codes
     let taxType = 'NONE';
     if (vatZeroRated) {
       taxType = 'ZERORATEDOUTPUT';
     } else if (vatEnabled) {
       if (isDRC) {
-        // Domestic Reverse Charge — customer accounts for VAT
-        taxType = 'RROUTPUT';
+        taxType = 'RROUTPUT';      // Domestic Reverse Charge
       } else if (vatRate === 20) {
-        taxType = 'OUTPUT2';   // Standard rate 20%
+        taxType = 'OUTPUT2';       // Standard rate 20%
       } else if (vatRate === 5) {
-        taxType = 'RRINPUT';   // Reduced rate 5%
+        taxType = 'RRINPUT';       // Reduced rate 5%
       } else {
         taxType = 'OUTPUT2';
       }
     }
 
-    // Line amount type:
-    // - If VAT enabled and inclusive → INCLUSIVE (Xero extracts VAT from gross)
-    // - If no VAT → EXCLUSIVE (amount = net, no VAT)
-    // - DRC → EXCLUSIVE (net amount, customer accounts for VAT)
-    const lineAmountTypes = (vatEnabled && !vatZeroRated && !isDRC) ? 'INCLUSIVE' : 'EXCLUSIVE';
+    // Always EXCLUSIVE — net amounts only, Xero calculates VAT
+    const lineAmountTypes = 'EXCLUSIVE';
 
     // ── Build line items ───────────────────────────────────────────────────────
     let lineItems = [];
@@ -103,23 +104,28 @@ export default async function handler(req, res) {
         });
       }
     } else if (invoice.lineItems && invoice.lineItems.length > 0) {
-      // Multi-line invoice — send each line
-      // Line amounts from Trade PA are already gross (VAT-inclusive)
-      lineItems = invoice.lineItems.map(l => ({
-        Description: l.description || l.desc || 'Services',
-        Quantity: parseFloat(l.qty || l.quantity || 1),
-        UnitAmount: parseFloat(l.amount || l.unitPrice || l.total || 0),
-        AccountCode: '200',
-        TaxType: taxType,
-      })).filter(l => l.UnitAmount > 0);
+      // Multi-line invoice — extract net from each line amount if VAT-inclusive
+      lineItems = invoice.lineItems.map(l => {
+        const lineGross = parseFloat(l.amount || l.unitPrice || l.total || 0);
+        const lineNet = (vatEnabled && !vatZeroRated && !isDRC)
+          ? parseFloat((lineGross / (1 + vatRate / 100)).toFixed(2))
+          : lineGross;
+        return {
+          Description: l.description || l.desc || 'Services',
+          Quantity: parseFloat(l.qty || l.quantity || 1),
+          UnitAmount: lineNet,
+          AccountCode: '200',
+          TaxType: taxType,
+        };
+      }).filter(l => l.UnitAmount > 0);
     }
 
-    // Fallback — single line using gross amount
+    // Fallback — single line using net amount
     if (lineItems.length === 0) {
       lineItems.push({
         Description: invoice.description || 'Services rendered',
         Quantity: 1,
-        UnitAmount: grossAmount,
+        UnitAmount: netAmount,
         AccountCode: '200',
         TaxType: taxType,
       });
