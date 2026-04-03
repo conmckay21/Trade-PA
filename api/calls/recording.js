@@ -86,7 +86,7 @@ async function processRecording(req) {
     // 4. Load context
     console.log("recording.js: Loading context from Supabase...");
     const [jobsRes, invoicesRes, customersRes] = await Promise.all([
-      fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/job_cards?user_id=eq.${userId}&status=neq.completed&select=id,title,customer,status,type&order=created_at.desc&limit=20`, {
+      fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/job_cards?user_id=eq.${userId}&status=neq.completed&select=id,title,customer,status,type,value&order=created_at.desc&limit=20`, {
         headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` },
       }),
       fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/invoices?user_id=eq.${userId}&status=neq.paid&select=id,customer,amount,status&order=created_at.desc&limit=10`, {
@@ -129,7 +129,7 @@ Direction: ${isOutbound ? "Outbound" : "Inbound"}
 Duration: ${RecordingDuration} seconds
 
 Active jobs:
-${customerJobs.length > 0 ? customerJobs.map(j => `- ${j.title || j.type} (${j.status}) [ID: ${j.id}]`).join("\n") : "None"}
+${customerJobs.length > 0 ? customerJobs.map(j => `- ${j.title || j.type} (${j.status}) [ID: ${j.id}]${j.value ? ` £${j.value}` : ""}`).join("\n") : "None"}
 
 Outstanding invoices:
 ${outstandingInvoices.filter(i => i.customer?.toLowerCase() === (customerName || "").toLowerCase()).map(i => `- ${i.id} £${i.amount} (${i.status})`).join("\n") || "None"}
@@ -141,7 +141,7 @@ Extract EVERY action from this call. A single call may have multiple actions.
 
 Action types available:
 - mark_invoice_paid: customer confirmed payment or paying an invoice
-- update_job: mark a job as complete or update its status  
+- update_job: mark a job as complete or update its status — ALWAYS include the job_id from the active jobs list if you can match it
 - create_job: new work to be booked in
 - create_enquiry: new enquiry from customer
 - chase_invoice: invoice still outstanding, needs chasing
@@ -164,7 +164,8 @@ Respond ONLY with JSON:
       "action_type": "update_job",
       "description": "Mark stage 1 job as complete",
       "invoice_number": null,
-      "job_id": "the-job-id-here-or-null"
+      "job_id": "the-job-id-here-or-null",
+      "job_value": 1000
     },
     {
       "action_type": "create_job",
