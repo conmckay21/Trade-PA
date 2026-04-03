@@ -19,11 +19,14 @@ export default async function handler(req, res) {
     await new Promise(r => setTimeout(r, 3000));
 
     // 2. Download recording
+    console.log(`recording.js: RecordingUrl type: ${typeof RecordingUrl}`);
+
     // Normalise recording URL — convert regional IE1 URL to standard API endpoint
     const normalisedRecordingUrl = RecordingUrl.replace(
       /https:\/\/api\.[^/]+\.twilio\.com/,
       "https://api.twilio.com"
     );
+    console.log(`recording.js: Normalised URL: ${normalisedRecordingUrl}`);
 
     console.log("recording.js: Downloading recording...");
     const recordingRes = await fetch(`${normalisedRecordingUrl}.mp3`, {
