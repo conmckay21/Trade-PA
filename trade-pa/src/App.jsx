@@ -1311,7 +1311,7 @@ function CallTrackingSettings({ user }) {
 }
 
 function TeamInvite({ companyId, planTier, currentMemberCount }) {
-  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox"];
+  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports"];
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [sending, setSending] = useState(false);
@@ -2149,7 +2149,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           const email = m.invited_email || m.users?.email || "Team member";
           const initials = email[0].toUpperCase();
           const perms = m.permissions || {};
-          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox"];
+          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports"];
 
           return (
             <div key={i} style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 14, marginBottom: 14 }}>
@@ -9504,7 +9504,432 @@ function CISStatementsTab({ user }) {
   );
 }
 
-const VIEWS = ["Dashboard", "Schedule", "Enquiries", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Settings"];
+// ─── Reports Tab ─────────────────────────────────────────────────────────────
+function ReportsTab({ invoices, jobs, materials, customers, brand, user }) {
+  const C = COLORS;
+  const S = STYLES;
+
+  const today = new Date();
+  const fmtDate = d => d.toISOString().split("T")[0];
+
+  // Period presets
+  const periods = [
+    { label: "This Month", from: fmtDate(new Date(today.getFullYear(), today.getMonth(), 1)), to: fmtDate(today) },
+    { label: "Last Month", from: fmtDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)), to: fmtDate(new Date(today.getFullYear(), today.getMonth(), 0)) },
+    { label: "This Quarter", from: fmtDate(new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1)), to: fmtDate(today) },
+    { label: "Last Quarter", from: fmtDate(new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3 - 3, 1)), to: fmtDate(new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 0)) },
+    { label: "Last 6 Months", from: fmtDate(new Date(today.getFullYear(), today.getMonth() - 6, 1)), to: fmtDate(today) },
+    { label: "This Year", from: fmtDate(new Date(today.getFullYear(), 0, 1)), to: fmtDate(today) },
+    { label: "Last Year", from: fmtDate(new Date(today.getFullYear() - 1, 0, 1)), to: fmtDate(new Date(today.getFullYear() - 1, 11, 31)) },
+    { label: "Custom", from: "", to: "" },
+  ];
+
+  const [periodIdx, setPeriodIdx] = React.useState(0);
+  const [customFrom, setCustomFrom] = React.useState(fmtDate(new Date(today.getFullYear(), today.getMonth(), 1)));
+  const [customTo, setCustomTo] = React.useState(fmtDate(today));
+  const [activeReport, setActiveReport] = React.useState("pl");
+
+  const isCustom = periodIdx === periods.length - 1;
+  const fromDate = isCustom ? customFrom : periods[periodIdx].from;
+  const toDate = isCustom ? customTo : periods[periodIdx].to;
+
+  const inRange = (dateStr) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    return d >= new Date(fromDate) && d <= new Date(toDate + "T23:59:59");
+  };
+
+  const fmt = n => `£${(n || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtPct = n => `${(n || 0).toFixed(1)}%`;
+
+  // ── Data calculations ─────────────────────────────────────────────────────
+  const allInvoices = (invoices || []).filter(i => !i.isQuote);
+  const paidInvoices = allInvoices.filter(i => i.status === "paid" && inRange(i.paidDate || i.created_at || i.date));
+  const sentInvoices = allInvoices.filter(i => inRange(i.created_at || i.date));
+  const overdueInvoices = allInvoices.filter(i => i.status === "overdue");
+  const outstandingInvoices = allInvoices.filter(i => ["sent", "overdue", "due"].includes(i.status));
+
+  const totalRevenue = paidInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
+  const totalOutstanding = outstandingInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
+
+  const vatInvoices = paidInvoices.filter(i => i.vatEnabled && !i.vatZeroRated);
+  const outputVat = vatInvoices.reduce((s, i) => {
+    const gross = parseFloat(i.grossAmount || i.amount || 0);
+    const rate = parseFloat(i.vatRate || 20) / 100;
+    return s + gross - gross / (1 + rate);
+  }, 0);
+
+  const periodMaterials = (materials || []).filter(m => inRange(m.receiptDate || m.created_at));
+  const totalMaterialCost = periodMaterials.reduce((s, m) => s + parseFloat(m.unitPrice || 0) * parseFloat(m.qty || 1), 0);
+  const inputVat = periodMaterials.filter(m => m.vatEnabled).reduce((s, m) => {
+    const net = parseFloat(m.unitPrice || 0) * parseFloat(m.qty || 1);
+    const rate = parseFloat(m.vatRate || 20) / 100;
+    return s + net * rate;
+  }, 0);
+  const netVat = outputVat - inputVat;
+
+  const grossProfit = totalRevenue - totalMaterialCost;
+  const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+
+  const periodJobs = (jobs || []).filter(j => inRange(j.dateObj || j.date));
+  const completedJobs = periodJobs.filter(j => j.status === "completed");
+
+  // CIS
+  const cisInvoices = paidInvoices.filter(i => i.cisEnabled);
+  const cisGross = cisInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
+  const cisDeductions = cisInvoices.reduce((s, i) => s + parseFloat(i.cisDeduction || 0), 0);
+  const cisNet = cisGross - cisDeductions;
+
+  // Job profitability
+  const jobProfitData = (jobs || [])
+    .filter(j => j.status === "completed" && inRange(j.dateObj || j.date))
+    .map(j => {
+      const jobInvoices = allInvoices.filter(i => i.customer?.toLowerCase() === j.customer?.toLowerCase() && i.status === "paid");
+      const revenue = jobInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
+      const jobMaterials = (materials || []).filter(m => m.job?.toLowerCase() === j.customer?.toLowerCase() || m.job === j.title);
+      const costs = jobMaterials.reduce((s, m) => s + parseFloat(m.unitPrice || 0) * parseFloat(m.qty || 1), 0);
+      const profit = revenue - costs;
+      return { name: j.customer || j.title || "Unknown", type: j.type || "Job", revenue, costs, profit, margin: revenue > 0 ? (profit / revenue) * 100 : 0 };
+    })
+    .filter(j => j.revenue > 0 || j.costs > 0)
+    .sort((a, b) => b.profit - a.profit);
+
+  // Customer activity
+  const customerData = (customers || []).map(c => {
+    const custInvoices = allInvoices.filter(i => i.customer?.toLowerCase() === c.name?.toLowerCase());
+    const paid = custInvoices.filter(i => i.status === "paid" && inRange(i.paidDate || i.created_at));
+    const outstanding = custInvoices.filter(i => ["sent", "overdue", "due"].includes(i.status));
+    const totalSpend = paid.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
+    const lastJob = (jobs || []).filter(j => j.customer?.toLowerCase() === c.name?.toLowerCase()).sort((a, b) => new Date(b.dateObj || b.date) - new Date(a.dateObj || a.date))[0];
+    return { name: c.name, totalSpend, invoiceCount: paid.length, outstanding: outstanding.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0), lastJobDate: lastJob?.dateObj || lastJob?.date };
+  }).filter(c => c.totalSpend > 0 || c.outstanding > 0).sort((a, b) => b.totalSpend - a.totalSpend);
+
+  // Materials by supplier
+  const supplierData = {};
+  periodMaterials.forEach(m => {
+    const s = m.supplier || "Unknown";
+    if (!supplierData[s]) supplierData[s] = { name: s, total: 0, items: 0 };
+    supplierData[s].total += parseFloat(m.unitPrice || 0) * parseFloat(m.qty || 1);
+    supplierData[s].items++;
+  });
+  const supplierList = Object.values(supplierData).sort((a, b) => b.total - a.total);
+
+  // Aged debtors
+  const agedDebtors = outstandingInvoices.map(i => {
+    const invoiceDate = new Date(i.created_at || i.date || Date.now());
+    const daysOld = Math.floor((Date.now() - invoiceDate) / 86400000);
+    return { ...i, daysOld };
+  }).sort((a, b) => b.daysOld - a.daysOld);
+
+  const reports = [
+    { id: "pl", label: "P&L Summary", icon: "📊" },
+    { id: "vat", label: "VAT Summary", icon: "🏦" },
+    { id: "outstanding", label: "Outstanding Invoices", icon: "⏳" },
+    { id: "jobprofit", label: "Job Profitability", icon: "💼" },
+    { id: "customers", label: "Customer Activity", icon: "👥" },
+    { id: "materials", label: "Materials Spend", icon: "🔧" },
+    { id: "cis", label: "CIS Summary", icon: "🏗" },
+    { id: "jobs", label: "Jobs Overview", icon: "📋" },
+  ];
+
+  const StatBox = ({ label, value, sub, color }) => (
+    <div style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+      <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: color || C.text, fontFamily: "'DM Mono',monospace" }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+
+  const TableRow = ({ cells, bold, highlight }) => (
+    <div style={{ display: "grid", gridTemplateColumns: cells.map(() => "1fr").join(" "), gap: 8, padding: "10px 12px", borderBottom: `1px solid ${C.border}`, background: highlight ? C.amber + "0a" : "transparent" }}>
+      {cells.map((cell, i) => (
+        <div key={i} style={{ fontSize: 12, color: bold ? C.text : i === 0 ? C.text : C.muted, fontWeight: bold ? 700 : 400, textAlign: i > 0 ? "right" : "left", fontFamily: i > 0 ? "'DM Mono',monospace" : "inherit" }}>{cell}</div>
+      ))}
+    </div>
+  );
+
+  const TableHeader = ({ cells }) => (
+    <div style={{ display: "grid", gridTemplateColumns: cells.map(() => "1fr").join(" "), gap: 8, padding: "8px 12px", borderBottom: `1px solid ${C.border}`, background: C.surfaceHigh }}>
+      {cells.map((cell, i) => (
+        <div key={i} style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: i > 0 ? "right" : "left" }}>{cell}</div>
+      ))}
+    </div>
+  );
+
+  const printReport = () => {
+    window.print();
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Reports</div>
+        <button onClick={printReport} style={{ ...S.btn("ghost"), fontSize: 12 }}>🖨 Print</button>
+      </div>
+
+      {/* Period selector */}
+      <div style={{ background: C.surface, borderRadius: 12, padding: 16, border: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Report Period</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: isCustom ? 12 : 0 }}>
+          {periods.map((p, i) => (
+            <button key={p.label} onClick={() => setPeriodIdx(i)}
+              style={{ ...S.btn(periodIdx === i ? "primary" : "ghost"), fontSize: 11, padding: "5px 12px" }}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {isCustom && (
+          <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>FROM</div>
+              <input type="date" style={S.input} value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>TO</div>
+              <input type="date" style={S.input} value={customTo} onChange={e => setCustomTo(e.target.value)} />
+            </div>
+          </div>
+        )}
+        {!isCustom && (
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
+            {new Date(fromDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} — {new Date(toDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+          </div>
+        )}
+      </div>
+
+      {/* Report selector */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {reports.map(r => (
+          <button key={r.id} onClick={() => setActiveReport(r.id)}
+            style={{ ...S.btn(activeReport === r.id ? "primary" : "ghost"), fontSize: 11, padding: "6px 12px" }}>
+            {r.icon} {r.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── P&L Summary ── */}
+      {activeReport === "pl" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>📊 Profit & Loss Summary</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10 }}>
+            <StatBox label="Total Revenue" value={fmt(totalRevenue)} sub={`${paidInvoices.length} paid invoices`} color={C.green} />
+            <StatBox label="Materials Cost" value={fmt(totalMaterialCost)} sub={`${periodMaterials.length} items`} color={C.red} />
+            <StatBox label="Gross Profit" value={fmt(grossProfit)} sub={`${fmtPct(grossMargin)} margin`} color={grossProfit >= 0 ? C.green : C.red} />
+            <StatBox label="Outstanding" value={fmt(totalOutstanding)} sub={`${outstandingInvoices.length} invoices`} color={C.amber} />
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <TableHeader cells={["Category", "Amount"]} />
+            <TableRow cells={["Revenue (paid invoices)", fmt(totalRevenue)]} />
+            <TableRow cells={["Less: Materials & Supplies", `(${fmt(totalMaterialCost)})`]} />
+            <TableRow cells={["Gross Profit", fmt(grossProfit)]} bold highlight />
+            <TableRow cells={["Gross Margin", fmtPct(grossMargin)]} />
+            <TableRow cells={["Outstanding (not yet paid)", fmt(totalOutstanding)]} />
+            <TableRow cells={["Overdue invoices", fmt(overdueInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0))]} />
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>Revenue by Month</div>
+            {(() => {
+              const byMonth = {};
+              paidInvoices.forEach(i => {
+                const d = new Date(i.paidDate || i.created_at || i.date);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+                byMonth[key] = (byMonth[key] || 0) + parseFloat(i.grossAmount || i.amount || 0);
+              });
+              return Object.entries(byMonth).sort().map(([month, total]) => (
+                <div key={month} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 12, width: 80 }}>{new Date(month + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}</div>
+                  <div style={{ flex: 1, background: C.border, borderRadius: 4, height: 8, overflow: "hidden" }}>
+                    <div style={{ width: `${Math.min((total / Math.max(...Object.values(byMonth))) * 100, 100)}%`, height: "100%", background: C.green, borderRadius: 4 }} />
+                  </div>
+                  <div style={{ fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.green, width: 80, textAlign: "right" }}>{fmt(total)}</div>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* ── VAT Summary ── */}
+      {activeReport === "vat" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>🏦 VAT Summary</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10 }}>
+            <StatBox label="Output VAT" value={fmt(outputVat)} sub="Collected from customers" color={C.red} />
+            <StatBox label="Input VAT" value={fmt(inputVat)} sub="Paid on materials" color={C.green} />
+            <StatBox label="Net VAT Due" value={fmt(netVat)} sub={netVat >= 0 ? "Payable to HMRC" : "Reclaimable"} color={netVat >= 0 ? C.red : C.green} />
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <TableHeader cells={["Description", "Net", "VAT"]} />
+            <TableRow cells={["Sales (Output VAT)", fmt(totalRevenue - outputVat), fmt(outputVat)]} />
+            <TableRow cells={["Purchases (Input VAT)", fmt(totalMaterialCost), `(${fmt(inputVat)})`]} />
+            <TableRow cells={["Net VAT payable to HMRC", "", fmt(netVat)]} bold highlight />
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>VAT Invoices</div>
+            <TableHeader cells={["Invoice", "Customer", "Net", "VAT", "Gross"]} />
+            {vatInvoices.map(i => {
+              const gross = parseFloat(i.grossAmount || i.amount || 0);
+              const rate = parseFloat(i.vatRate || 20) / 100;
+              const vat = gross - gross / (1 + rate);
+              const net = gross - vat;
+              return <TableRow key={i.id} cells={[i.id, i.customer, fmt(net), fmt(vat), fmt(gross)]} />;
+            })}
+            {vatInvoices.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No VAT invoices in this period</div>}
+          </div>
+        </div>
+      )}
+
+      {/* ── Outstanding Invoices ── */}
+      {activeReport === "outstanding" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>⏳ Outstanding Invoices</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10 }}>
+            <StatBox label="Total Outstanding" value={fmt(totalOutstanding)} sub={`${outstandingInvoices.length} invoices`} color={C.amber} />
+            <StatBox label="Overdue" value={fmt(overdueInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0))} sub={`${overdueInvoices.length} overdue`} color={C.red} />
+          </div>
+          {[["0–30 days", 0, 30], ["31–60 days", 31, 60], ["61–90 days", 61, 90], ["90+ days", 91, 9999]].map(([label, min, max]) => {
+            const bucket = agedDebtors.filter(i => i.daysOld >= min && i.daysOld <= max);
+            if (bucket.length === 0) return null;
+            const total = bucket.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
+            return (
+              <div key={label} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${min > 30 ? C.red + "44" : C.border}`, overflow: "hidden" }}>
+                <div style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between" }}>
+                  <span>{label}</span><span style={{ color: min > 30 ? C.red : C.amber }}>{fmt(total)}</span>
+                </div>
+                <TableHeader cells={["Invoice", "Customer", "Amount", "Days"]} />
+                {bucket.map(i => <TableRow key={i.id} cells={[i.id, i.customer, fmt(parseFloat(i.grossAmount || i.amount || 0)), `${i.daysOld}d`]} />)}
+              </div>
+            );
+          })}
+          {agedDebtors.length === 0 && <div style={{ fontSize: 12, color: C.green, fontStyle: "italic", textAlign: "center", padding: 20 }}>✓ No outstanding invoices — great work!</div>}
+        </div>
+      )}
+
+      {/* ── Job Profitability ── */}
+      {activeReport === "jobprofit" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>💼 Job Profitability</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10 }}>
+            <StatBox label="Jobs Completed" value={jobProfitData.length} />
+            <StatBox label="Total Revenue" value={fmt(jobProfitData.reduce((s, j) => s + j.revenue, 0))} color={C.green} />
+            <StatBox label="Total Costs" value={fmt(jobProfitData.reduce((s, j) => s + j.costs, 0))} color={C.red} />
+            <StatBox label="Total Profit" value={fmt(jobProfitData.reduce((s, j) => s + j.profit, 0))} color={C.green} />
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <TableHeader cells={["Job", "Revenue", "Costs", "Profit", "Margin"]} />
+            {jobProfitData.map((j, i) => (
+              <TableRow key={i} cells={[j.name, fmt(j.revenue), fmt(j.costs), fmt(j.profit), fmtPct(j.margin)]} />
+            ))}
+            {jobProfitData.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No completed jobs with invoices in this period</div>}
+          </div>
+        </div>
+      )}
+
+      {/* ── Customer Activity ── */}
+      {activeReport === "customers" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>👥 Customer Activity</div>
+          <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <TableHeader cells={["Customer", "Invoices", "Paid", "Outstanding", "Last Job"]} />
+            {customerData.map((c, i) => (
+              <TableRow key={i} cells={[
+                c.name,
+                c.invoiceCount,
+                fmt(c.totalSpend),
+                c.outstanding > 0 ? fmt(c.outstanding) : "—",
+                c.lastJobDate ? new Date(c.lastJobDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"
+              ]} />
+            ))}
+            {customerData.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No customer activity in this period</div>}
+          </div>
+        </div>
+      )}
+
+      {/* ── Materials Spend ── */}
+      {activeReport === "materials" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>🔧 Materials Spend</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10 }}>
+            <StatBox label="Total Spend" value={fmt(totalMaterialCost)} sub={`${periodMaterials.length} items`} color={C.amber} />
+            <StatBox label="Suppliers" value={supplierList.length} />
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>By Supplier</div>
+            <TableHeader cells={["Supplier", "Items", "Total"]} />
+            {supplierList.map((s, i) => (
+              <TableRow key={i} cells={[s.name, s.items, fmt(s.total)]} />
+            ))}
+            {supplierList.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials in this period</div>}
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>All Items</div>
+            <TableHeader cells={["Item", "Supplier", "Qty", "Unit", "Total"]} />
+            {periodMaterials.map((m, i) => (
+              <TableRow key={i} cells={[m.item, m.supplier || "—", m.qty, fmt(m.unitPrice), fmt((m.unitPrice || 0) * (m.qty || 1))]} />
+            ))}
+            {periodMaterials.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials in this period</div>}
+          </div>
+        </div>
+      )}
+
+      {/* ── CIS Summary ── */}
+      {activeReport === "cis" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>🏗 CIS Summary</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10 }}>
+            <StatBox label="Gross Earnings" value={fmt(cisGross)} color={C.text} />
+            <StatBox label="CIS Deductions" value={fmt(cisDeductions)} color={C.red} />
+            <StatBox label="Net Received" value={fmt(cisNet)} color={C.green} />
+            <StatBox label="CIS Invoices" value={cisInvoices.length} />
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <TableHeader cells={["Invoice", "Contractor", "Gross", "Deduction", "Net Paid"]} />
+            {cisInvoices.map(i => (
+              <TableRow key={i.id} cells={[
+                i.id, i.customer,
+                fmt(parseFloat(i.grossAmount || i.amount || 0)),
+                fmt(parseFloat(i.cisDeduction || 0)),
+                fmt(parseFloat(i.cisNetPayable || 0))
+              ]} />
+            ))}
+            {cisInvoices.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No CIS invoices in this period</div>}
+          </div>
+          <div style={{ background: C.amber + "11", border: `1px solid ${C.amber}44`, borderRadius: 8, padding: "10px 14px", fontSize: 11, color: C.amber }}>
+            Use these figures on your self-assessment tax return. CIS deductions can be offset against your tax bill.
+          </div>
+        </div>
+      )}
+
+      {/* ── Jobs Overview ── */}
+      {activeReport === "jobs" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>📋 Jobs Overview</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+            {[["Total Jobs", periodJobs.length, C.text], ["Completed", completedJobs.length, C.green], ["Pending", periodJobs.filter(j => j.status === "pending").length, C.amber], ["Confirmed", periodJobs.filter(j => j.status === "confirmed").length, C.blue]].map(([l, v, c]) => (
+              <StatBox key={l} label={l} value={v} color={c} />
+            ))}
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <TableHeader cells={["Job", "Customer", "Type", "Date", "Status"]} />
+            {periodJobs.sort((a, b) => new Date(b.dateObj || b.date) - new Date(a.dateObj || a.date)).map((j, i) => (
+              <TableRow key={i} cells={[
+                j.title || j.type || "Job",
+                j.customer,
+                j.type || "—",
+                j.date ? new Date(j.dateObj || j.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "TBC",
+                j.status
+              ]} />
+            ))}
+            {periodJobs.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No jobs in this period</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const VIEWS = ["Dashboard", "Schedule", "Enquiries", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Settings"];
 
 // Helper: convert VAPID public key for push subscription
 function urlBase64ToUint8Array(base64String) {
@@ -10560,6 +10985,7 @@ export default function App() {
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
+        {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} brand={brand} user={user} />}
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} /></ErrorBoundary>}
       </main>
     </div>
