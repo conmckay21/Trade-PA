@@ -1,99 +1,143 @@
+// api/xero/create-bills.js
+// Bulk creates purchase bills in Xero for multiple material items
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+async function refreshXeroToken(userId, refreshToken) {
+  const credentials = Buffer.from(
+    `${process.env.XERO_CLIENT_ID}:${process.env.XERO_CLIENT_SECRET}`
+  ).toString('base64');
+  const res = await fetch('https://identity.xero.com/connect/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Basic ${credentials}`,
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+  });
+  const tokens = await res.json();
+  await supabase.from('accounting_connections').update({
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+  }).eq('user_id', userId).eq('provider', 'xero');
+  return tokens.access_token;
+}
+
+async function getOrCreateContact(accessToken, tenantId, supplierName) {
+  const contactRes = await fetch(
+    `https://api.xero.com/api.xro/2.0/Contacts?where=Name="${encodeURIComponent(supplierName)}"`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Xero-tenant-id': tenantId,
+        Accept: 'application/json',
+      },
+    }
+  );
+  const contactData = await contactRes.json();
+  if (contactData.Contacts?.[0]?.ContactID) return contactData.Contacts[0].ContactID;
+
+  const newContactRes = await fetch('https://api.xero.com/api.xro/2.0/Contacts', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Xero-tenant-id': tenantId,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ Contacts: [{ Name: supplierName }] }),
+  });
+  const newContactData = await newContactRes.json();
+  return newContactData.Contacts?.[0]?.ContactID;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { userId, bill, receiptImage, receiptImageType } = req.body;
-  if (!userId || !bill) return res.status(400).json({ error: 'Missing userId or bill' });
+  const { userId, materials } = req.body;
+  if (!userId || !materials?.length) return res.status(400).json({ error: 'Missing userId or materials' });
 
   try {
-    const connRes = await fetch(
-      `${process.env.VITE_SUPABASE_URL}/rest/v1/accounting_connections?user_id=eq.${userId}&provider=eq.xero&select=*`,
-      { headers: { 'apikey': process.env.SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
-    );
-    const conns = await connRes.json();
-    const conn = conns?.[0];
+    const { data: conn } = await supabase
+      .from('accounting_connections')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('provider', 'xero')
+      .single();
+
     if (!conn) return res.status(404).json({ error: 'Xero not connected' });
 
     let accessToken = conn.access_token;
     if (new Date(conn.expires_at) < new Date()) {
-      const refreshRes = await fetch('https://identity.xero.com/connect/token', {
+      accessToken = await refreshXeroToken(userId, conn.refresh_token);
+    }
+
+    // Group materials by supplier so each supplier gets one bill
+    const bySupplier = {};
+    for (const m of materials) {
+      const supplier = m.supplier || 'Unknown Supplier';
+      if (!bySupplier[supplier]) bySupplier[supplier] = [];
+      bySupplier[supplier].push(m);
+    }
+
+    const results = [];
+
+    for (const [supplierName, items] of Object.entries(bySupplier)) {
+      const contactId = await getOrCreateContact(accessToken, conn.tenant_id, supplierName);
+
+      const lineItems = items.map(m => ({
+        Description: `${m.item}${m.job ? ` — Job: ${m.job}` : ''}`,
+        Quantity: parseFloat(m.qty || 1),
+        UnitAmount: parseFloat(m.unitPrice || 0),
+        AccountCode: '300',
+        TaxType: 'NONE',
+      }));
+
+      const bill = {
+        Invoices: [{
+          Type: 'ACCPAY',
+          Contact: { ContactID: contactId },
+          LineItems: lineItems,
+          CurrencyCode: 'GBP',
+          Status: 'AUTHORISED',
+        }],
+      };
+
+      const billRes = await fetch('https://api.xero.com/api.xro/2.0/Invoices', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: conn.refresh_token, client_id: process.env.XERO_CLIENT_ID, client_secret: process.env.XERO_CLIENT_SECRET }).toString(),
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Xero-tenant-id': conn.tenant_id,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(bill),
       });
-      const tokens = await refreshRes.json();
-      accessToken = tokens.access_token;
-      await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/accounting_connections?user_id=eq.${userId}&provider=eq.xero`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}` },
-        body: JSON.stringify({ access_token: tokens.access_token, refresh_token: tokens.refresh_token, expires_at: new Date(Date.now() + (tokens.expires_in || 1800) * 1000).toISOString() }),
+
+      const billData = await billRes.json();
+      results.push({
+        supplier: supplierName,
+        xeroId: billData.Invoices?.[0]?.InvoiceID || null,
+        error: billData.Invoices?.[0]?.InvoiceID ? null : JSON.stringify(billData),
       });
     }
 
-    const lineItems = (bill.items || []).map(item => ({
-      Description: item.description || item.item,
-      Quantity: item.qty || 1,
-      UnitAmount: parseFloat(item.unitPrice || item.totalPrice || 0),
-      AccountCode: '429',
-      TaxType: 'NONE',
-    }));
-
-    if (lineItems.length === 0) {
-      lineItems.push({ Description: bill.description || 'Supplier purchase', Quantity: 1, UnitAmount: parseFloat(bill.total || 0), AccountCode: '429', TaxType: 'NONE' });
+    const failed = results.filter(r => r.error);
+    if (failed.length > 0) {
+      return res.status(207).json({ results, message: `${results.length - failed.length} bills created, ${failed.length} failed` });
     }
+    return res.status(200).json({ success: true, results, message: `${results.length} bill${results.length !== 1 ? 's' : ''} created in Xero` });
 
-    const xeroBill = {
-      Type: 'ACCPAY',
-      Contact: { Name: bill.supplier || 'Unknown Supplier' },
-      LineItems: lineItems,
-      Date: bill.date || new Date().toISOString().split('T')[0],
-      DueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      Reference: bill.jobRef || '',
-      Status: 'DRAFT',
-      CurrencyCode: 'GBP',
-    };
-
-    const xeroRes = await fetch('https://api.xero.com/api.xro/2.0/Invoices', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Xero-tenant-id': conn.tenant_id, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Invoices: [xeroBill] }),
-    });
-
-    const xeroData = await xeroRes.json();
-    const invoiceId = xeroData.Invoices?.[0]?.InvoiceID;
-
-    if (!invoiceId) throw new Error(JSON.stringify(xeroData));
-
-    // Attach the receipt image to the bill if provided
-    if (receiptImage && invoiceId) {
-      try {
-        const base64Data = receiptImage.includes(',') ? receiptImage.split(',')[1] : receiptImage;
-        const mimeType = receiptImageType || 'image/jpeg';
-        const ext = mimeType.includes('png') ? 'png' : mimeType.includes('pdf') ? 'pdf' : 'jpg';
-        const filename = `receipt-${Date.now()}.${ext}`;
-
-        // Convert base64 to binary
-        const binaryStr = atob(base64Data);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-
-        await fetch(`https://api.xero.com/api.xro/2.0/Invoices/${invoiceId}/Attachments/${filename}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Xero-tenant-id': conn.tenant_id,
-            'Content-Type': mimeType,
-          },
-          body: bytes,
-        });
-      } catch (attachErr) {
-        console.error('Xero attachment error (non-fatal):', attachErr.message);
-        // Don't fail the whole request if attachment fails
-      }
-    }
-
-    return res.status(200).json({ success: true, xeroId: invoiceId });
   } catch (err) {
-    console.error('Xero create bill error:', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('Xero create-bills error:', err);
+    return res.status(500).json({ error: err.message });
   }
 }
