@@ -4,6 +4,13 @@ export default async function handler(req, res) {
   const { userId, invoice } = req.body;
   if (!userId || !invoice) return res.status(400).json({ error: 'Missing userId or invoice' });
 
+  // Safe JSON parser — returns readable error if Xero sends HTML
+  async function safeJson(r) {
+    const text = await r.text();
+    try { return JSON.parse(text); }
+    catch { throw new Error(`Xero returned unexpected response (status ${r.status}): ${text.slice(0, 300)}`); }
+  }
+
   try {
     const connRes = await fetch(
       `${process.env.VITE_SUPABASE_URL}/rest/v1/accounting_connections?user_id=eq.${userId}&provider=eq.xero&select=*`,
@@ -18,14 +25,24 @@ export default async function handler(req, res) {
       const refreshRes = await fetch('https://identity.xero.com/connect/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: conn.refresh_token, client_id: process.env.XERO_CLIENT_ID, client_secret: process.env.XERO_CLIENT_SECRET }).toString(),
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: conn.refresh_token,
+          client_id: process.env.XERO_CLIENT_ID,
+          client_secret: process.env.XERO_CLIENT_SECRET,
+        }).toString(),
       });
-      const tokens = await refreshRes.json();
+      const tokens = await safeJson(refreshRes);
+      if (!tokens.access_token) throw new Error('Failed to refresh Xero token');
       accessToken = tokens.access_token;
       await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/accounting_connections?user_id=eq.${userId}&provider=eq.xero`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}` },
-        body: JSON.stringify({ access_token: tokens.access_token, refresh_token: tokens.refresh_token, expires_at: new Date(Date.now() + (tokens.expires_in || 1800) * 1000).toISOString() }),
+        body: JSON.stringify({
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          expires_at: new Date(Date.now() + (tokens.expires_in || 1800) * 1000).toISOString(),
+        }),
       });
     }
 
@@ -36,7 +53,7 @@ export default async function handler(req, res) {
     else if (invoice.vatEnabled) {
       const rate = invoice.vatRate;
       if (vatType.includes('drc')) {
-        taxType = rate === 20 ? 'ECOUTPUT' : 'ECOUTPUTSERVICES'; // DRC codes
+        taxType = rate === 20 ? 'ECOUTPUT' : 'ECOUTPUTSERVICES';
       } else if (vatType === 'expenses') {
         taxType = rate === 20 ? 'INPUT2' : 'RRINPUT';
       } else {
@@ -67,15 +84,25 @@ export default async function handler(req, res) {
 
     const xeroRes = await fetch('https://api.xero.com/api.xro/2.0/Invoices', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Xero-tenant-id': conn.tenant_id, 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Xero-tenant-id': conn.tenant_id,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
       body: JSON.stringify({ Invoices: [xeroInvoice] }),
     });
 
-    const xeroData = await xeroRes.json();
+    const xeroData = await safeJson(xeroRes);
+
     if (xeroData.Invoices?.[0]?.InvoiceID) {
       return res.status(200).json({ success: true, xeroId: xeroData.Invoices[0].InvoiceID });
     } else {
-      throw new Error(JSON.stringify(xeroData));
+      // Extract Xero validation error message if available
+      const validationError = xeroData.Elements?.[0]?.ValidationErrors?.[0]?.Message
+        || xeroData.Invoices?.[0]?.ValidationErrors?.[0]?.Message
+        || JSON.stringify(xeroData);
+      throw new Error(validationError);
     }
   } catch (err) {
     console.error('Xero create invoice error:', err.message);
