@@ -1,7 +1,4 @@
 // api/calls/token.js
-// Generates a Twilio Access Token with Voice grant for the browser SDK
-// Called on login if user has call tracking active — and on token expiry refresh
-
 import twilio from "twilio";
 
 export default async function handler(req, res) {
@@ -13,12 +10,16 @@ export default async function handler(req, res) {
   const { AccessToken } = twilio.jwt;
   const { VoiceGrant } = AccessToken;
 
+  // Sanitise identity — Twilio only allows alphanumeric, underscore, hyphen
+  // UUIDs use hyphens which are fine, but replace just in case
+  const identity = userId.replace(/[^a-zA-Z0-9_-]/g, "_");
+
   try {
     const token = new AccessToken(
       process.env.TWILIO_ACCOUNT_SID,
       process.env.TWILIO_API_KEY,
       process.env.TWILIO_API_SECRET,
-      { identity: userId, ttl: 3600 }
+      { identity, ttl: 3600 }
     );
 
     const voiceGrant = new VoiceGrant({
@@ -28,7 +29,8 @@ export default async function handler(req, res) {
 
     token.addGrant(voiceGrant);
 
-    return res.status(200).json({ token: token.toJwt(), identity: userId });
+    console.log(`✓ Token generated for identity: ${identity}`);
+    return res.status(200).json({ token: token.toJwt(), identity });
   } catch (err) {
     console.error("Token generation error:", err.message);
     return res.status(500).json({ error: "Failed to generate token" });
