@@ -2704,7 +2704,7 @@ function Materials({ materials, setMaterials, user }) {
   const [syncMsg, setSyncMsg] = useState("");
 
   const [editingMaterial, setEditingMaterial] = useState(null); // {index, ...fields}
-  const emptyRow = () => ({ item: "", qty: 1, unitPrice: "", supplier: "", job: "", status: "to_order" });
+  const emptyRow = () => ({ item: "", qty: 1, unitPrice: "", supplier: "", job: "", status: "to_order", vatEnabled: false, vatRate: 20, dueDate: "" });
   const [rows, setRows] = useState([emptyRow()]);
   const updateRow = (i, k, v) => setRows(prev => prev.map((r, j) => j === i ? { ...r, [k]: v } : r));
   const addRow = () => setRows(prev => [...prev, emptyRow()]);
@@ -3035,7 +3035,8 @@ Return only JSON, no other text.` },
                       {m.qty > 1 && <span>×{m.qty}</span>}
                       {m.supplier && <span>🏪 {m.supplier}</span>}
                       {m.job && <span>📋 {m.job}</span>}
-                      {m.unitPrice > 0 && <span style={{ color: C.amber }}>£{((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)}</span>}
+                      {m.unitPrice > 0 && <span style={{ color: C.amber }}>£{((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)} ex.VAT{m.vatEnabled ? ` +${m.vatRate || 20}%` : ""}</span>}
+                      {m.dueDate && <span>📅 {new Date(m.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
                     </div>
                   </div>
                   <div style={{ ...S.badge(statusColor[m.status] || C.muted), flexShrink: 0 }}>{statusLabel[m.status] || m.status}</div>
@@ -3114,8 +3115,25 @@ Return only JSON, no other text.` },
               <div><label style={S.label}>Item Description</label><input style={S.input} value={editingMaterial.item} onChange={e => setEditingMaterial(m => ({ ...m, item: e.target.value }))} placeholder="e.g. 22mm copper pipe" /></div>
               <div style={S.grid2}>
                 <div><label style={S.label}>Qty</label><input style={S.input} type="number" min="1" value={editingMaterial.qty} onChange={e => setEditingMaterial(m => ({ ...m, qty: e.target.value }))} /></div>
-                <div><label style={S.label}>Unit Price (£)</label><input style={S.input} type="number" min="0" step="0.01" value={editingMaterial.unitPrice} onChange={e => setEditingMaterial(m => ({ ...m, unitPrice: e.target.value }))} placeholder="0.00" /></div>
+                <div><label style={S.label}>Unit Price ex. VAT (£)</label><input style={S.input} type="number" min="0" step="0.01" value={editingMaterial.unitPrice} onChange={e => setEditingMaterial(m => ({ ...m, unitPrice: e.target.value }))} placeholder="0.00" /></div>
               </div>
+              <div style={S.grid2}>
+                <div>
+                  <label style={S.label}>VAT</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[["none", "No VAT"], ["20", "20%"], ["5", "5%"]].map(([v, l]) => (
+                      <button key={v} onClick={() => setEditingMaterial(m => ({ ...m, vatRate: v === "none" ? null : parseInt(v), vatEnabled: v !== "none" }))}
+                        style={S.pill(C.amber, (v === "none" && !editingMaterial.vatEnabled) || String(editingMaterial.vatRate) === v)}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+                <div><label style={S.label}>Due Date</label><input style={S.input} type="date" value={editingMaterial.dueDate || ""} onChange={e => setEditingMaterial(m => ({ ...m, dueDate: e.target.value }))} /></div>
+              </div>
+              {editingMaterial.vatEnabled && editingMaterial.unitPrice > 0 && (
+                <div style={{ fontSize: 11, color: C.amber, background: C.amber + "11", borderRadius: 6, padding: "6px 10px" }}>
+                  Total inc. VAT: £{(parseFloat(editingMaterial.unitPrice || 0) * parseFloat(editingMaterial.qty || 1) * (1 + (editingMaterial.vatRate || 20) / 100)).toFixed(2)}
+                </div>
+              )}
               <div><label style={S.label}>Supplier</label><input style={S.input} value={editingMaterial.supplier} onChange={e => setEditingMaterial(m => ({ ...m, supplier: e.target.value }))} placeholder="e.g. Screwfix" /></div>
               <div><label style={S.label}>Job Reference</label><input style={S.input} value={editingMaterial.job} onChange={e => setEditingMaterial(m => ({ ...m, job: e.target.value }))} placeholder="e.g. Kitchen refurb" /></div>
               <div>
@@ -3130,7 +3148,7 @@ Return only JSON, no other text.` },
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
               <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => {
                 const { index, ...fields } = editingMaterial;
-                setMaterials(prev => (prev || []).map((m, j) => j === index ? { ...m, item: fields.item, qty: parseInt(fields.qty) || 1, unitPrice: parseFloat(fields.unitPrice) || 0, supplier: fields.supplier, job: fields.job, status: fields.status } : m));
+                setMaterials(prev => (prev || []).map((m, j) => j === index ? { ...m, item: fields.item, qty: parseInt(fields.qty) || 1, unitPrice: parseFloat(fields.unitPrice) || 0, supplier: fields.supplier, job: fields.job, status: fields.status, vatEnabled: fields.vatEnabled || false, vatRate: fields.vatRate || null, dueDate: fields.dueDate || null } : m));
                 setEditingMaterial(null);
               }}>Save Changes</button>
               <button style={S.btn("ghost")} onClick={() => setEditingMaterial(null)}>Cancel</button>
