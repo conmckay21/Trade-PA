@@ -9479,7 +9479,13 @@ export default function App() {
     if (!incomingCall) return;
     // Request mic permission explicitly before accepting
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
       stream.getTracks().forEach(t => t.stop());
     } catch {
       alert("Microphone access is required to answer calls. Please allow microphone access in your browser/device settings.");
@@ -9642,9 +9648,15 @@ export default function App() {
           perm.onchange = () => { if (perm.state === "denied") setMicBlocked(true); else setMicBlocked(false); };
         } catch {}
 
-        // Request mic access — triggers prompt once, remembered permanently
+        // Request mic with echo cancellation, noise suppression and auto gain
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
+          });
           stream.getTracks().forEach(t => t.stop());
           setMicBlocked(false);
         } catch {
