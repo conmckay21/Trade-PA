@@ -79,7 +79,8 @@ export default async function handler(req, res) {
 
 
     // Xero LineAmountTypes — correct casing required
-    const lineAmountTypes = (vatEnabled && !vatZeroRated && !isDRC) ? 'Inclusive' : 'Exclusive';
+    // Always Exclusive — send net amount, Xero adds VAT on top to reach customer gross
+    const lineAmountTypes = 'Exclusive';
 
     // ── Build line items ───────────────────────────────────────────────────────
     let lineItems = [];
