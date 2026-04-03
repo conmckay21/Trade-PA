@@ -2757,10 +2757,20 @@ function Materials({ materials, setMaterials, user }) {
   "supplier": "supplier name",
   "date": "YYYY-MM-DD or empty string",
   "total": 123.45,
+  "vatAmount": 20.59,
+  "vatRate": 20,
+  "pricesIncVat": true,
   "items": [
-    { "item": "item name", "qty": 1, "unitPrice": 12.50 }
+    { "item": "item name", "qty": 1, "unitPrice": 12.50, "unitPriceExVat": 10.42 }
   ]
 }
+
+Rules:
+- vatAmount: total VAT on the receipt (0 if no VAT shown)
+- vatRate: 20, 5, or 0
+- pricesIncVat: true if line item prices on receipt include VAT, false if they are ex-VAT
+- unitPrice: the price shown on the receipt per unit
+- unitPriceExVat: always the ex-VAT price per unit (divide by 1.2 if 20% VAT inclusive, by 1.05 if 5%)
 Return only JSON, no other text.` },
             ],
           }],
@@ -2788,17 +2798,29 @@ Return only JSON, no other text.` },
     if (scanImageData) {
       try { localStorage.setItem(`trade-pa-receipt-${receiptId}`, scanImageData); } catch {}
     }
-    const newMaterials = (scanResult.items || []).map(item => ({
-      item: item.item,
-      qty: item.qty || 1,
-      unitPrice: item.unitPrice || 0,
-      supplier: scanResult.supplier || "",
-      job: scanResult.jobRef || "",
-      status: "ordered", // Invoice scanned = already purchased
-      receiptId,
-      receiptImage: scanImageData || "", // Store base64 in Supabase for persistence
-      receiptDate: scanResult.date || "",
-    }));
+    const newMaterials = (scanResult.items || []).map(item => {
+      const vatEnabled = (scanResult.vatRate || 0) > 0 && (scanResult.vatAmount || 0) > 0;
+      const vatRate = scanResult.vatRate || 20;
+      // Always store ex-VAT unit price
+      const exVatPrice = item.unitPriceExVat
+        || (scanResult.pricesIncVat && vatEnabled
+          ? parseFloat((item.unitPrice / (1 + vatRate / 100)).toFixed(4))
+          : item.unitPrice) || 0;
+      return {
+        item: item.item,
+        qty: item.qty || 1,
+        unitPrice: exVatPrice,
+        supplier: scanResult.supplier || "",
+        job: scanResult.jobRef || "",
+        status: "ordered",
+        vatEnabled,
+        vatRate: vatEnabled ? vatRate : null,
+        dueDate: scanResult.date || "",
+        receiptId,
+        receiptImage: scanImageData || "",
+        receiptDate: scanResult.date || "",
+      };
+    });
     setMaterials(prev => [...(prev || []), ...newMaterials]);
     // Sync to Xero as bill, attaching the image
     if (user?.id) {
@@ -2940,6 +2962,31 @@ Return only JSON, no other text.` },
                 <label style={S.label}>Job Reference <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
                 <input style={S.input} placeholder="e.g. Kitchen refurb, Job #1042" value={scanResult.jobRef || ""} onChange={e => setScanResult(r => ({ ...r, jobRef: e.target.value }))} />
               </div>
+
+              {/* VAT info */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={S.label}>VAT on this receipt</label>
+                  <select style={S.input} value={scanResult.vatRate > 0 ? String(scanResult.vatRate) : "0"} onChange={e => setScanResult(r => ({ ...r, vatRate: parseInt(e.target.value) || 0, vatAmount: parseInt(e.target.value) > 0 ? r.vatAmount : 0 }))}>
+                    <option value="0">No VAT</option>
+                    <option value="20">20% VAT</option>
+                    <option value="5">5% VAT</option>
+                  </select>
+                </div>
+                {scanResult.vatRate > 0 && (
+                  <div style={{ flex: 1 }}>
+                    <label style={S.label}>VAT Amount (£)</label>
+                    <input style={S.input} type="number" step="0.01" value={scanResult.vatAmount || ""} onChange={e => setScanResult(r => ({ ...r, vatAmount: parseFloat(e.target.value) || 0 }))} placeholder="0.00" />
+                  </div>
+                )}
+              </div>
+              {scanResult.vatRate > 0 && (
+                <div style={{ fontSize: 11, padding: "6px 10px", background: C.amber + "11", borderRadius: 6, color: C.amber }}>
+                  {scanResult.pricesIncVat
+                    ? `Prices on receipt are inc. ${scanResult.vatRate}% VAT — ex-VAT prices will be calculated automatically`
+                    : `Prices on receipt are ex. ${scanResult.vatRate}% VAT — VAT will be added when uploading to Xero`}
+                </div>
+              )}
 
               {/* Editable line items */}
               <div>
@@ -3209,17 +3256,25 @@ Return only JSON, no other text.` },
             </div>
             <div style={{ overflowX: "auto" }}>
               <div style={{ minWidth: 560 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "3fr 50px 70px 2fr 2fr 90px 24px", gap: 6, marginBottom: 6 }}>
-                  {["Item", "Qty", "Unit £", "Job", "Supplier", "Status", ""].map(h => (
+                <div style={{ display: "grid", gridTemplateColumns: "3fr 50px 70px 70px 2fr 2fr 90px 24px", gap: 6, marginBottom: 6 }}>
+                  {["Item", "Qty", "Unit £", "VAT", "Job", "Supplier", "Status", ""].map(h => (
                     <div key={h} style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</div>
                   ))}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
                   {rows.map((row, i) => (
-                    <div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 50px 70px 2fr 2fr 90px 24px", gap: 6, alignItems: "center" }}>
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 50px 70px 70px 2fr 2fr 90px 24px", gap: 6, alignItems: "center" }}>
                       <input style={{ ...S.input, fontSize: 12 }} placeholder="e.g. Copper pipe 22mm" value={row.item} onChange={e => updateRow(i, "item", e.target.value)} />
                       <input style={{ ...S.input, fontSize: 12 }} type="number" min="1" value={row.qty} onChange={e => updateRow(i, "qty", e.target.value)} />
                       <input style={{ ...S.input, fontSize: 12 }} type="number" placeholder="0.00" value={row.unitPrice} onChange={e => updateRow(i, "unitPrice", e.target.value)} />
+                      <select style={{ ...S.input, fontSize: 11 }} value={row.vatEnabled ? String(row.vatRate || 20) : "none"} onChange={e => {
+                        const v = e.target.value;
+                        setRows(prev => prev.map((r, j) => j === i ? { ...r, vatEnabled: v !== "none", vatRate: v === "none" ? null : parseInt(v) } : r));
+                      }}>
+                        <option value="none">No VAT</option>
+                        <option value="20">20%</option>
+                        <option value="5">5%</option>
+                      </select>
                       <input style={{ ...S.input, fontSize: 12 }} placeholder="Job name" value={row.job} onChange={e => updateRow(i, "job", e.target.value)} />
                       <select style={{ ...S.input, fontSize: 11 }} value={row.supplier} onChange={e => updateRow(i, "supplier", e.target.value)}>
                         <option value="">Supplier...</option>
