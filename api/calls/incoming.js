@@ -1,7 +1,7 @@
 // api/calls/incoming.js
 // Twilio webhook — fires on every inbound call to the user's Trade PA number
-// ALL calls recorded — this is a dedicated business number
-// Fires push notification immediately so user can open app if backgrounded
+// ALL calls recorded — dedicated business number
+// Push notification fires immediately to wake app if backgrounded
 // Falls back to real mobile after 45s if app doesn't answer
 
 export default async function handler(req, res) {
@@ -16,10 +16,13 @@ export default async function handler(req, res) {
 <Response><Say>This number is not configured.</Say><Hangup/></Response>`);
   }
 
+  // Sanitise identity to match what token.js generates
+  const identity = userId.replace(/[^a-zA-Z0-9_-]/g, "_");
+
   const appUrl = process.env.APP_URL;
 
   try {
-    // 1. Fetch user's forward_to mobile for fallback
+    // 1. Fetch forward_to mobile for fallback
     const ctRes = await fetch(
       `${process.env.VITE_SUPABASE_URL}/rest/v1/call_tracking?user_id=eq.${userId}&select=forward_to&limit=1`,
       {
@@ -32,7 +35,7 @@ export default async function handler(req, res) {
     const ctData = await ctRes.json();
     const forwardTo = ctData?.[0]?.forward_to || "";
 
-    // 2. Look up caller name from customer list
+    // 2. Look up caller name
     const last10 = normalised.slice(-10);
     const custRes = await fetch(
       `${process.env.VITE_SUPABASE_URL}/rest/v1/customers?user_id=eq.${userId}&select=id,name,phone&limit=200`,
@@ -48,11 +51,9 @@ export default async function handler(req, res) {
       if (!c.phone) return false;
       return c.phone.replace(/\s/g, "").slice(-10) === last10;
     });
-
     const customerName = matched?.name || "Unknown caller";
 
-    // 3. Fire push notification immediately so user can open app if backgrounded
-    // Don't await — fire and forget so we don't delay the TwiML response
+    // 3. Fire push notification immediately (fire and forget)
     fetch(`${appUrl}/api/push/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -67,11 +68,13 @@ export default async function handler(req, res) {
       }),
     }).catch(() => {});
 
-    // 4. Build recording + fallback URLs
+    // 4. Build URLs
     const recordingCallback = `${appUrl}/api/calls/recording?userId=${encodeURIComponent(userId)}&callerNumber=${encodeURIComponent(normalised)}&customerName=${encodeURIComponent(customerName)}`;
     const fallbackUrl = `${appUrl}/api/calls/fallback?forwardTo=${encodeURIComponent(forwardTo)}&callerNumber=${encodeURIComponent(normalised)}&customerName=${encodeURIComponent(customerName)}`;
 
-    // 5. Ring app client for 45s, record everything, fall back to mobile
+    console.log(`Incoming call from ${normalised} (${customerName}) → routing to client identity: ${identity}`);
+
+    // 5. Ring app client for 45s then fall back to mobile
     res.setHeader("Content-Type", "text/xml");
     return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -83,7 +86,7 @@ export default async function handler(req, res) {
     action="${fallbackUrl}"
   >
     <Client>
-      <Identity>${userId}</Identity>
+      <Identity>${identity}</Identity>
       <Parameter name="callerName" value="${customerName}"/>
       <Parameter name="callerNumber" value="${normalised}"/>
     </Client>
@@ -97,7 +100,7 @@ export default async function handler(req, res) {
 <Response>
   <Dial timeout="45">
     <Client>
-      <Identity>${userId}</Identity>
+      <Identity>${identity}</Identity>
       <Parameter name="callerName" value="Incoming call"/>
       <Parameter name="callerNumber" value="${normalised}"/>
     </Client>
