@@ -108,7 +108,7 @@ async function processRecording(req) {
     );
     const customerJobs = activeJobs.filter(j => j.customer?.toLowerCase() === (customerName || "").toLowerCase());
 
-    // 5. Classify with Claude
+    // 5. Classify with Claude — returns multiple actions if needed
     console.log("recording.js: Calling Claude...");
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -119,17 +119,16 @@ async function processRecording(req) {
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 600,
+        max_tokens: 800,
         messages: [{
           role: "user",
-          content: `You are an AI assistant for a UK sole-trader tradesperson. Analyse this phone call transcript and classify what it's about.
+          content: `You are an AI assistant for a UK sole-trader tradesperson. Analyse this phone call and identify ALL actions needed.
 
 Customer: ${customerName || "Unknown"}
-${isOutbound ? "Called number" : "Caller number"}: ${callerNumber}
-Call direction: ${isOutbound ? "Outbound" : "Inbound"}
-Call duration: ${RecordingDuration} seconds
+Direction: ${isOutbound ? "Outbound" : "Inbound"}
+Duration: ${RecordingDuration} seconds
 
-Active jobs for this customer:
+Active jobs:
 ${customerJobs.length > 0 ? customerJobs.map(j => `- ${j.title || j.type} (${j.status}) [ID: ${j.id}]`).join("\n") : "None"}
 
 Outstanding invoices:
@@ -138,14 +137,42 @@ ${outstandingInvoices.filter(i => i.customer?.toLowerCase() === (customerName ||
 Transcript:
 ${transcript}
 
+Extract EVERY action from this call. A single call may have multiple actions.
+
+Action types available:
+- mark_invoice_paid: customer confirmed payment or paying an invoice
+- update_job: mark a job as complete or update its status  
+- create_job: new work to be booked in
+- create_enquiry: new enquiry from customer
+- chase_invoice: invoice still outstanding, needs chasing
+- none: no action needed
+
 Respond ONLY with JSON:
 {
   "category": "existing_job" | "new_enquiry" | "quote_discussion" | "invoice_payment" | "general",
-  "summary": "2-3 sentence summary",
-  "job_id": "job ID if related, or null",
-  "action_needed": "follow-up needed, or null",
-  "suggested_action_type": "create_job" | "create_enquiry" | "update_job" | "chase_invoice" | "none",
-  "key_details": "any dates, prices, or specific details mentioned"
+  "summary": "2-3 sentence summary of the full call",
+  "job_id": "existing job ID if discussed, or null",
+  "key_details": "invoice numbers, amounts, dates, job completions mentioned",
+  "actions": [
+    {
+      "action_type": "mark_invoice_paid",
+      "description": "Mark invoice 129 as paid — £1,000 received",
+      "invoice_number": "129",
+      "job_id": null
+    },
+    {
+      "action_type": "update_job",
+      "description": "Mark stage 1 job as complete",
+      "invoice_number": null,
+      "job_id": "the-job-id-here-or-null"
+    },
+    {
+      "action_type": "create_job",
+      "description": "Book stage 2 when customer is ready",
+      "invoice_number": null,
+      "job_id": null
+    }
+  ]
 }`,
         }],
       }),
@@ -153,10 +180,11 @@ Respond ONLY with JSON:
 
     const claudeData = await claudeRes.json();
     const raw = claudeData.content?.[0]?.text?.trim() || "{}";
-    const match = raw.match(/\{[\s\S]*\}/);
-    let classification = { category: "general", summary: transcript.slice(0, 200) };
-    try { if (match) classification = JSON.parse(match[0]); } catch {}
-    console.log(`recording.js: Classification: ${classification.category} — ${classification.summary?.slice(0, 80)}`);
+    const rawMatch = raw.match(/\{[\s\S]*\}/);
+    let classification = { category: "general", summary: transcript.slice(0, 200), actions: [] };
+    try { if (rawMatch) classification = JSON.parse(rawMatch[0]); } catch {}
+    if (!classification.actions) classification.actions = [];
+    console.log(`recording.js: Classification: ${classification.category} — ${classification.actions.length} actions — ${classification.summary?.slice(0, 60)}`);
 
     // 6. Save call log
     console.log("recording.js: Saving to call_logs...");
@@ -179,7 +207,7 @@ Respond ONLY with JSON:
         transcript,
         category: classification.category,
         summary: classification.summary,
-        action_needed: classification.action_needed,
+        action_needed: classification.actions.map(a => a.description).join("; "),
         key_details: classification.key_details,
         job_id: classification.job_id || null,
         created_at: new Date().toISOString(),
@@ -202,37 +230,47 @@ Respond ONLY with JSON:
         body: JSON.stringify({
           job_id: classification.job_id,
           user_id: userId,
-          note: `📞 ${directionLabel} ${customerName} (${Math.floor(parseInt(RecordingDuration)/60)}min ${parseInt(RecordingDuration)%60}s)\n\n${classification.summary}${classification.key_details ? `\n\nKey details: ${classification.key_details}` : ""}`,
+          note: `📞 ${isOutbound ? "Call to" : "Call from"} ${customerName} (${Math.floor(parseInt(RecordingDuration)/60)}min ${parseInt(RecordingDuration)%60}s)\n\n${classification.summary}${classification.key_details ? `\n\nKey details: ${classification.key_details}` : ""}`,
           created_at: new Date().toISOString(),
         }),
       });
       console.log("recording.js: ✓ Job note added");
     }
 
-    // 8. Create AI action
-    if (classification.suggested_action_type && classification.suggested_action_type !== "none") {
+    // 8. Create AI actions — one per detected action
+    const actionsToCreate = (classification.actions || []).filter(a => a.action_type && a.action_type !== "none");
+    if (actionsToCreate.length === 0 && classification.summary) {
+      console.log("recording.js: No actions to create");
+    }
+
+    for (const action of actionsToCreate) {
       const directionLabel = isOutbound ? "Outbound call to" : "Call from";
       await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_actions`, {
         method: "POST",
         headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: userId,
-          email_id: `call_${CallSid}`,
+          email_id: `call_${CallSid}_${action.action_type}`,
           email_from: `${customerName} <${callerNumber}>`,
-          email_subject: `📞 ${directionLabel} ${customerName}: ${classification.summary?.slice(0, 50)}`,
+          email_subject: `📞 ${directionLabel} ${customerName}${action.invoice_number ? ` Invoice ${action.invoice_number}` : ""}: ${action.description?.slice(0, 60)}`,
           email_snippet: classification.summary?.slice(0, 300),
-          action_type: classification.suggested_action_type,
-          action_description: classification.action_needed || classification.summary,
+          action_type: action.action_type,
+          action_description: action.description,
           action_data: {
-            customer: customerName, phone: callerNumber,
-            summary: classification.summary, key_details: classification.key_details,
-            job_id: classification.job_id, source: "phone_call",
-            direction: isOutbound ? "outbound" : "inbound", duration: RecordingDuration,
+            customer: customerName,
+            phone: callerNumber,
+            summary: classification.summary,
+            key_details: classification.key_details,
+            job_id: action.job_id || classification.job_id,
+            source: "phone_call",
+            direction: isOutbound ? "outbound" : "inbound",
+            duration: RecordingDuration,
+            invoice_number: action.invoice_number,
           },
           status: "pending",
         }),
       });
-      console.log("recording.js: ✓ AI action created");
+      console.log(`recording.js: ✓ AI action created: ${action.action_type} — ${action.description?.slice(0, 50)}`);
     }
 
     // 9. Push notification
