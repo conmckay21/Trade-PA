@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, Component } from "react";
 import { supabase } from "./supabase.js";
+import { Device } from "@twilio/voice-sdk";
 
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
@@ -108,13 +109,13 @@ function LandingPage({ onAuth }) {
             <div style={{ width: 6, height: 6, background: "#f59e0b", borderRadius: "50%", animation: "pulse 2s infinite" }} />
             Built for UK Tradespeople
           </div>
-          <h1 style={LP.h1}>Your inbox runs<br/><span style={{ color: "#f59e0b" }}>itself</span> now</h1>
-          <p style={LP.sub}>Trade PA reads your emails, books jobs, chases overdue invoices, fills in certificates by voice, and learns your business — all while you're on the tools.</p>
+          <h1 style={LP.h1}>The admin assistant<br/><span style={{ color: "#f59e0b" }}>that works when you do.</span></h1>
+          <p style={LP.sub}>Speak a quote into existence on the drive home. Dictate a Gas Safe cert on site. Let the AI handle your inbox while you're under a boiler. Trade PA does the work you don't have time for.</p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 16 }}>
             <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Get started — from £49/month →</button>
             <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
           </div>
-          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail & Outlook · Cancel anytime · UK-built</p>
+          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail & Outlook · Built-in business phone · UK-built</p>
         </div>
       </div>
 
@@ -128,9 +129,9 @@ function LandingPage({ onAuth }) {
             <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#444", marginLeft: 8 }}>Trade PA — AI Actions</span>
           </div>
           {[
-            { icon: "📩", title: "New enquiry — Lisa Thompson", body: "Boiler replacement at 42 Maple Ave. Wants a quote this week.", color: "#3b82f6" },
-            { icon: "✅", title: "Invoice paid — Steve Johnson", body: "Payment of £850 received. Mark INV-214 as paid.", color: "#10b981" },
-            { icon: "🏗", title: "CIS statement — ABC Construction", body: "Gross £4,200 · Deduction £840 · Net £3,360 — PDF attached.", color: "#f59e0b" },
+            { icon: "📋", title: "Create an invoice & create a job — Lisa Thompson", body: "Is happy with quote for 42 Maple Avenue and would like to go ahead.", color: "#3b82f6" },
+            { icon: "🔧", title: "Material — City Plumbing", body: "2× copper tube 22mm × 3m @ £29.70 — total £59.40. Upload invoice and create material note.", color: "#f59e0b" },
+            { icon: "🏗", title: "CIS statement — ABC Construction", body: "Gross £4,200 · Deduction £840 · Net £3,360 — PDF attached.", color: "#10b981" },
           ].map((item, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.12)", borderRadius: 10, marginBottom: i < 2 ? 8 : 0 }}>
               <div style={{ fontSize: 20, flexShrink: 0 }}>{item.icon}</div>
@@ -172,20 +173,60 @@ function LandingPage({ onAuth }) {
           <h2 style={LP.h2}>The full toolkit.<br/>One price.</h2>
           <div style={{ ...LP.featureGrid, marginTop: 40 }}>
             {[
-              { icon: "🎙", title: "Voice dictation everywhere", body: "Tap the mic on any form — jobs, quotes, invoices, certificates, time logs. Speak and the AI fills it in.", badge: "Unique to Trade PA" },
+              { icon: "🎙", title: "Voice dictation everywhere", body: "Tap the mic on any form — jobs, quotes, invoices, certificates, time logs. Speak and the AI fills it in.", badge: "Unique to Trade PA", badgeColor: "#10b981", badgeBg: "rgba(16,185,129,0.1)", badgeBorder: "rgba(16,185,129,0.2)" },
               { icon: "📋", title: "All-trades certificates", body: "CP12, EICR, EIC, PAT, Pressure Test, Unvented HW, CD/11, CD/12, Fire Alarm, Emergency Lighting, Part P." },
               { icon: "🏗", title: "Deep CIS support", body: "Domestic Reverse Charge invoicing, UTR on all documents, CIS monthly statement logging with PDF storage." },
               { icon: "💷", title: "Quotes & invoices", body: "Professional branded documents sent from your Gmail or Outlook. Xero and QuickBooks sync built in." },
               { icon: "📅", title: "Jobs & scheduling", body: "Full job cards with notes, photos, time logs, variation orders, daywork sheets and customer sign-off." },
               { icon: "💸", title: "Overdue payment chasing", body: "Trade PA automatically sends professional chase emails weekly until overdue invoices are paid." },
+              { icon: "📞", title: "Business phone, built in", body: "Get a dedicated business number that rings inside the app. Every call recorded, transcribed and AI-logged against the job. No second SIM needed.", badge: "Add-on · Any plan", badgeColor: "#f59e0b", badgeBg: "rgba(245,158,11,0.1)", badgeBorder: "rgba(245,158,11,0.2)" },
+              { icon: "📍", title: "GPS job tracking", body: "Auto-arrives when you reach site, auto-logs your departure. Time tracked in the background while you work — no timesheets to fill in.", badge: "Team & Pro", badgeColor: "#3b82f6", badgeBg: "rgba(59,130,246,0.1)", badgeBorder: "rgba(59,130,246,0.2)" },
             ].map((f, i) => (
               <div key={i} style={{ ...LP.feature }} className="lp-feature">
                 <div style={LP.featureIcon}>{f.icon}</div>
                 <div style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{f.title}</div>
                 <div style={{ fontSize: 13, color: "#666", lineHeight: 1.7 }}>{f.body}</div>
-                {f.badge && <div style={{ display: "inline-block", marginTop: 10, background: "rgba(16,185,129,0.1)", color: "#10b981", border: "1px solid rgba(16,185,129,0.2)", borderRadius: 100, fontFamily: "'DM Mono',monospace", fontSize: 9, padding: "3px 10px", letterSpacing: "0.06em", textTransform: "uppercase" }}>{f.badge}</div>}
+                {f.badge && <div style={{ display: "inline-block", marginTop: 10, background: f.badgeBg, color: f.badgeColor, border: `1px solid ${f.badgeBorder}`, borderRadius: 100, fontFamily: "'DM Mono',monospace", fontSize: 9, padding: "3px 10px", letterSpacing: "0.06em", textTransform: "uppercase" }}>{f.badge}</div>}
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* COMPARISON */}
+      <div style={{ ...LP.section }}>
+        <div style={LP.sectionLabel}>How we compare</div>
+        <h2 style={LP.h2}>More intelligent.<br/>Better value.</h2>
+        <p style={{ fontSize: 16, color: "#666", marginBottom: 40, lineHeight: 1.7, maxWidth: 560 }}>Tradify is £34/month with no AI. Trade PA Solo is £49/month — with an AI that runs your entire inbox, answers calls and tracks jobs for you.</p>
+        <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 14, overflow: "hidden" }}>
+          {/* Header */}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", borderBottom: "1px solid #222" }}>
+            <div style={{ padding: "16px 20px" }} />
+            <div style={{ padding: "16px 20px", fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#f59e0b", background: "rgba(245,158,11,0.08)", borderLeft: "1px solid rgba(245,158,11,0.2)", borderRight: "1px solid rgba(245,158,11,0.2)" }}>Trade PA</div>
+            <div style={{ padding: "16px 20px", fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#555" }}>Tradify</div>
+          </div>
+          {[
+            ["AI email agent (reads & processes inbox)", true, false],
+            ["Built-in business phone with call recording", true, false],
+            ["GPS job tracking & auto time logs", true, false],
+            ["Voice dictation on all forms", true, false],
+            ["AI that learns from your corrections", true, false],
+            ["Domestic Reverse Charge invoicing", true, false],
+            ["CIS statement storage with PDF", true, false],
+            ["Quotes & invoicing", true, true],
+            ["Digital certificates (CP12, EICR etc)", true, true],
+            ["Xero & QuickBooks sync", true, true],
+          ].map(([label, tp, tr], i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", borderBottom: i < 9 ? "1px solid #1e1e1e" : "none" }}>
+              <div style={{ padding: "14px 20px", fontSize: 13, color: "#666" }}>{label}</div>
+              <div style={{ padding: "14px 20px", fontSize: 16, background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)", color: tp ? "#10b981" : "#444" }}>{tp ? "✓" : "✗"}</div>
+              <div style={{ padding: "14px 20px", fontSize: 16, color: tr ? "#10b981" : "#444" }}>{tr ? "✓" : "✗"}</div>
+            </div>
+          ))}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr" }}>
+            <div style={{ padding: "14px 20px", fontSize: 13, color: "#666" }}>Monthly price (sole trader)</div>
+            <div style={{ padding: "14px 20px", fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)" }}>from £49</div>
+            <div style={{ padding: "14px 20px", fontSize: 13, color: "#555" }}>£34</div>
           </div>
         </div>
       </div>
@@ -212,7 +253,7 @@ function LandingPage({ onAuth }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 32 }}>
             {[
               { name: "Solo", price: "£49", period: "/month", annual: "£500/year", users: "1 user", features: ["AI email agent","Voice dictation everywhere","All trade certificates","Jobs, quotes & invoices","CIS, DRC, Xero & QuickBooks","Overdue payment chasing","Annual service reminders","Digital signatures","Unlimited everything"], popular: false },
-              { name: "Team", price: "£89", period: "/month", annual: "£890/year", users: "Up to 5 users", features: ["Everything in Solo","Job assignment to team","Team scheduling","Permission controls","Staff timesheets"], popular: true },
+              { name: "Team", price: "£89", period: "/month", annual: "£890/year", users: "Up to 5 users", features: ["Everything in Solo","GPS job tracking","Job assignment to team","Team scheduling","Permission controls","Staff timesheets"], popular: true },
               { name: "Pro", price: "£129", period: "/month", annual: "£1,290/year", users: "Up to 10 users", features: ["Everything in Team","Up to 10 users","Priority support"], popular: false },
             ].map(plan => (
               <div key={plan.name} style={{ ...LP.pricingCard, maxWidth: "100%", border: plan.popular ? "2px solid #f59e0b" : "1px solid #222", position: "relative" }}>
@@ -236,11 +277,25 @@ function LandingPage({ onAuth }) {
             ))}
           </div>
 
-          {/* Call Tracking add-on */}
+          {/* Business Phone add-on */}
           <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: "32px 28px", textAlign: "center" }}>
             <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📞 Add-on · Any Plan</div>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>AI Call Tracking</div>
-            <p style={{ color: "#666", fontSize: 14, maxWidth: 520, margin: "0 auto 24px", lineHeight: 1.7 }}>Known customers who call are recorded, transcribed and linked to their job automatically. Unknown callers pass straight through. Your existing number stays the same.</p>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Business Phone, Built In</div>
+            <p style={{ color: "#666", fontSize: 14, maxWidth: 560, margin: "0 auto 24px", lineHeight: 1.7 }}>Get a dedicated business number that rings directly inside the Trade PA app — no second SIM, no extra hardware. Every call from a known customer is recorded, transcribed and automatically logged against their job. Missed a call? It falls back to your mobile so you never lose a lead.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, maxWidth: 700, margin: "0 auto 24px" }}>
+              {[
+                { icon: "📱", label: "Rings in Trade PA app", desc: "Answer without a second SIM" },
+                { icon: "🎙️", label: "Auto-recorded & transcribed", desc: "AI logs every conversation" },
+                { icon: "🔗", label: "Linked to jobs & customers", desc: "Full call history in one place" },
+                { icon: "📲", label: "30s mobile fallback", desc: "Never miss a call on site" },
+              ].map(({ icon, label, desc }) => (
+                <div key={label} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 12px", textAlign: "left" }}>
+                  <div style={{ fontSize: 20, marginBottom: 6 }}>{icon}</div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, color: "#f0f0f0", marginBottom: 3 }}>{label}</div>
+                  <div style={{ fontSize: 11, color: "#555" }}>{desc}</div>
+                </div>
+              ))}
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, maxWidth: 640, margin: "0 auto 16px" }}>
               {[["100 mins","£20"],["300 mins","£40"],["600 mins","£65"],["Unlimited","£104"]].map(([mins, price]) => (
                 <div key={mins} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 12px" }}>
@@ -250,7 +305,7 @@ function LandingPage({ onAuth }) {
                 </div>
               ))}
             </div>
-            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555" }}>Works with your existing number · No number changes · UK GDPR compliant</p>
+            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555" }}>Dedicated UK number included · Want to keep your existing number? We support porting · UK GDPR compliant</p>
           </div>
         </div>
       </div>
@@ -260,9 +315,9 @@ function LandingPage({ onAuth }) {
         <div style={{ position: "absolute", width: 400, height: 400, background: "radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)", top: "50%", left: "50%", transform: "translate(-50%,-50%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
           <h2 style={{ ...LP.h2, marginBottom: 20 }}>Stop doing admin<br/>after hours.</h2>
-          <p style={{ fontSize: 17, color: "#666", marginBottom: 40, maxWidth: 440, margin: "0 auto 40px", lineHeight: 1.7 }}>Trade PA handles the paperwork while you handle the jobs.</p>
+          <p style={{ fontSize: 17, color: "#666", marginBottom: 40, maxWidth: 440, margin: "0 auto 40px", lineHeight: 1.7 }}>Trade PA handles the calls, the paperwork and the chasing while you handle the jobs.</p>
           <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, fontSize: 16, padding: "16px 40px" }} className="lp-btn-primary">Get started →</button>
-          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 16 }}>Works with Gmail · Works with Outlook · UK-built for UK trades</p>
+          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 16 }}>Works with Gmail · Works with Outlook · Built-in business phone · UK-built for UK trades</p>
         </div>
       </div>
 
@@ -555,7 +610,28 @@ const DEFAULT_BRAND = {
   email: "",
   website: "",
   address: "",
-  gasSafeNumber: "",
+  // Trade types (which registrations to show)
+  tradeTypes: [],             // e.g. ["gas","electrical","oil","renewables","plumbing","glazing"]
+  // Registration numbers — fed onto certificates automatically
+  gasSafeNumber: "",          // Gas Safe Register — gas certs
+  gasSafeLogo: null,
+  niceicNumber: "",            // NICEIC — electrical certs
+  napitNumber: "",             // NAPIT — electrical certs (alternative to NICEIC)
+  elecsaNumber: "",            // ELECSA — electrical certs (alternative)
+  oftecNumber: "",             // OFTEC — oil certs
+  hetasNumber: "",             // HETAS — solid fuel certs
+  fgasNumber: "",              // F-Gas — refrigeration/AC/heat pump certs
+  mcsNumber: "",               // MCS — renewables certs
+  aphcNumber: "",              // APHC/WaterSafe — plumbing certs
+  fensaNumber: "",             // FENSA — window/glazing certs
+  cscsNumber: "",              // CSCS card — general building
+  // Verification status (stored per field)
+  registrationVerifications: {}, // { gasSafeNumber: { verified: true, date: "2026-04-03", method: "manual" } }
+  // Certificate numbering
+  certNextNumber: 1,
+  certPrefix: "CERT",
+  // Financial
+  gasSafeLogo: null,
   vatNumber: "",
   utrNumber: "",
   bankName: "",
@@ -736,7 +812,7 @@ function downloadInvoicePDF(brand, inv) {
       <div><span>Date:</span>${date}</div>
       <div style="margin-top:3px"><span>${isQuote ? "Valid for:" : "Payment due:"}</span>${isQuote ? (inv.due || "30 days") : (inv.due || `${brand.paymentTerms || 30} days`)}</div>
     </div>
-    ${brand.vatNumber ? `<div><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
+    ${(brand.vatNumber && (brand._exemptBypass || brand.registrationVerifications?.vatNumber?.verified)) ? `<div><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
     <div><span>Ref:</span>${ref}</div>
     ${inv.jobRef ? `<div><span>Job Ref:</span>${inv.jobRef}</div>` : ""}
     ${inv.poNumber ? `<div><span>PO Number:</span>${inv.poNumber}</div>` : ""}
@@ -948,7 +1024,7 @@ function InvoicePreview({ brand, invoice }) {
         <div style={{ fontFamily: "Arial,sans-serif", fontSize: 12 }}>
           <span style={{ color: "#888", marginRight: 6 }}>Payment due:</span>{brand.paymentTerms || "30"} days
         </div>
-        {brand.vatNumber && (
+        {brand.vatNumber && (brand._exemptBypass || brand.registrationVerifications?.vatNumber?.verified) && (
           <div style={{ fontFamily: "Arial,sans-serif", fontSize: 12 }}>
             <span style={{ color: "#888", marginRight: 6 }}>VAT No:</span>{brand.vatNumber}
           </div>
@@ -1084,6 +1160,7 @@ function CallTrackingSettings({ user }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [showPortInfo, setShowPortInfo] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -1099,7 +1176,7 @@ function CallTrackingSettings({ user }) {
   }, [user?.id]);
 
   const activate = async () => {
-    if (!forwardTo.trim()) { setError("Please enter your mobile number"); return; }
+    if (!forwardTo.trim()) { setError("Please enter your mobile number for missed call fallback"); return; }
     setSaving(true); setError("");
     try {
       const res = await fetch("/api/calls/provision", {
@@ -1109,7 +1186,7 @@ function CallTrackingSettings({ user }) {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setCallTracking({ twilio_number: data.twilioNumber, forwarding_code: data.forwardingCode, disable_code: data.disableCode });
+      setCallTracking({ twilio_number: data.twilioNumber, forwarding_code: data.forwardingCode, disable_code: data.disableCode, forward_to: forwardTo.trim() });
     } catch (err) {
       setError(err.message);
     }
@@ -1120,38 +1197,77 @@ function CallTrackingSettings({ user }) {
 
   if (callTracking?.twilio_number) return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
         <div style={S.badge(C.green)}>✓ Active</div>
-        <div style={{ fontSize: 12, color: C.muted }}>Call tracking is enabled</div>
+        <div style={{ fontSize: 12, color: C.muted }}>Business phone is live</div>
       </div>
       <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
-        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Routing number</div>
-        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: C.amber }}>{callTracking.twilio_number}</div>
+        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Your business number</div>
+        <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: C.amber, marginBottom: 4 }}>{callTracking.twilio_number}</div>
+        <div style={{ fontSize: 11, color: C.muted }}>Give this number to customers — all calls ring inside the Trade PA app</div>
       </div>
-      <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14 }}>
-        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Dial these codes on your mobile</div>
-        <div style={{ fontSize: 12, display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-          <span style={{ color: C.muted }}>Enable:</span>
-          <span style={{ fontFamily: "'DM Mono',monospace", color: C.green }}>{callTracking.forwarding_code}</span>
-        </div>
-        <div style={{ fontSize: 12, display: "flex", justifyContent: "space-between" }}>
-          <span style={{ color: C.muted }}>Disable:</span>
-          <span style={{ fontFamily: "'DM Mono',monospace", color: C.amber }}>##21#</span>
+      <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>How calls work</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {[
+            { icon: "📱", label: "Rings in Trade PA app", desc: "Answer directly — no second SIM needed" },
+            { icon: "⏱️", label: "30s fallback", desc: `If you don't answer, rings ${callTracking.forward_to || "your mobile"}` },
+            { icon: "🎙️", label: "Auto-recorded", desc: "Known customers are recorded, transcribed & logged" },
+            { icon: "🤖", label: "AI classified", desc: "Every call summarised and actioned automatically" },
+          ].map(({ icon, label, desc }) => (
+            <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{label}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>{desc}</div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
+      <div onClick={() => setShowPortInfo(p => !p)} style={{ background: C.surfaceHigh, borderRadius: 8, padding: 12, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 12, color: C.muted }}>Want to use your existing number?</div>
+        <div style={{ fontSize: 11, color: C.amber }}>{showPortInfo ? "▲ Hide" : "▼ Show"}</div>
+      </div>
+      {showPortInfo && (
+        <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginTop: 2, borderTop: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.7, marginBottom: 8 }}>You can port your existing mobile or landline number into Trade PA so customers keep calling the same number they always have.</div>
+          <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>UK number porting typically takes 2–4 weeks. Contact us at <span style={{ color: C.amber }}>thetradepa@gmail.com</span> to get started — we'll handle the process with you.</div>
+        </div>
+      )}
     </div>
   );
 
   return (
     <div>
-      <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.6 }}>
-        Enter your mobile number. Calls from known customers will be recorded and transcribed automatically. Your existing number stays the same — clients call you as normal.
+      <div style={{ background: `${C.amber}12`, border: `1px solid ${C.amber}30`, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, marginBottom: 8 }}>📞 Business Phone, Built In</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {[
+            "Get a dedicated business number instantly",
+            "Calls ring inside the Trade PA app — no second SIM",
+            "Every call recorded, transcribed & AI-classified",
+            "Missed calls fall back to your real mobile",
+            "Full call history logged against customers & jobs",
+          ].map(f => (
+            <div key={f} style={{ fontSize: 12, color: C.text, display: "flex", gap: 8 }}>
+              <span style={{ color: C.green, flexShrink: 0 }}>✓</span>
+              <span>{f}</span>
+            </div>
+          ))}
+        </div>
       </div>
-      <label style={S.label}>Your mobile number</label>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
+        Enter your personal mobile as a fallback. If you don't answer in the app within 30 seconds, the call will ring your mobile instead so you never miss anything.
+      </div>
+      <label style={S.label}>Fallback mobile number</label>
       <input style={{ ...S.input, marginBottom: 10 }} placeholder="e.g. 07700 900123" value={forwardTo} onChange={e => setForwardTo(e.target.value)} />
       {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{error}</div>}
-      <button style={S.btn("primary")} disabled={saving} onClick={activate}>{saving ? "Setting up..." : "Activate Call Tracking →"}</button>
+      <button style={S.btn("primary")} disabled={saving} onClick={activate}>{saving ? "Setting up your number..." : "Activate Business Phone →"}</button>
       <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>100 mins £20/mo · 300 mins £40/mo · 600 mins £65/mo · Unlimited £104/mo</div>
+      <div style={{ marginTop: 14, padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>Already have a business number? You can port it across so customers keep calling the same number. Email <span style={{ color: C.amber }}>thetradepa@gmail.com</span> to get started.</div>
+      </div>
     </div>
   );
 }
@@ -1505,8 +1621,6 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             { k: "phone", l: "Phone Number" },
             { k: "email", l: "Email Address" },
             { k: "website", l: "Website" },
-            { k: "gasSafeNumber", l: "Gas Safe Number" },
-            { k: "vatNumber", l: "VAT Number (if registered)" },
             { k: "utrNumber", l: "UTR Number (Unique Taxpayer Reference)" },
           ].map(({ k, l }) => (
             <div key={k}>
@@ -1514,6 +1628,88 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               <input style={S.input} value={brand[k]} onChange={set(k)} />
             </div>
           ))}
+
+          {/* VAT Number — with live verification */}
+          {(() => {
+            const [vatChecking, setVatChecking] = React.useState(false);
+            const [vatError, setVatError] = React.useState("");
+            const vatVerif = brand.registrationVerifications?.vatNumber;
+            const exempt = isExemptAccount(user?.email);
+            const isVerified = exempt || vatVerif?.verified;
+
+            const checkVat = async () => {
+              const num = (brand.vatNumber || "").replace(/\s/g, "").replace(/^GB/i, "");
+              if (!num || num.length < 9) { setVatError("Enter a valid UK VAT number (9 digits)"); return; }
+              setVatChecking(true); setVatError("");
+              try {
+                // VAT Sense free API — validates against HMRC
+                const res = await fetch(`https://api.vatsense.com/1.0/validate?vat_number=GB${num}`, {
+                  headers: { "Authorization": `Basic ${btoa("user:" + (import.meta.env.VITE_VAT_SENSE_KEY || ""))}` }
+                });
+                const data = await res.json();
+                if (data.success && data.data?.valid) {
+                  const companyName = data.data?.company?.company_name || "";
+                  setBrand(b => ({ ...b,
+                    registrationVerifications: { ...(b.registrationVerifications || {}),
+                      vatNumber: { verified: true, date: new Date().toISOString(), method: "auto", companyName }
+                    }
+                  }));
+                  setVatError("");
+                } else {
+                  setVatError("VAT number not found on HMRC register — check it's correct");
+                }
+              } catch {
+                setVatError("Could not reach verification service — check your connection");
+              }
+              setVatChecking(false);
+            };
+
+            return (
+              <div>
+                <label style={S.label}>VAT Number</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      style={{ ...S.input, borderColor: (isVerified || exempt) ? C.green + "66" : brand.vatNumber ? C.amber + "66" : C.border }}
+                      placeholder="e.g. GB123456789"
+                      value={brand.vatNumber}
+                      onChange={e => {
+                        setBrand(b => ({ ...b, vatNumber: e.target.value,
+                          registrationVerifications: { ...(b.registrationVerifications || {}), vatNumber: undefined }
+                        }));
+                        setVatError("");
+                      }}
+                    />
+                    {!exempt && isVerified && (
+                      <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>
+                        ✓ Verified against HMRC · {vatVerif.companyName && <strong>{vatVerif.companyName}</strong>} · {new Date(vatVerif.date).toLocaleDateString("en-GB")}
+                      </div>
+                    )}
+                    {!exempt && !isVerified && brand.vatNumber && (
+                      <div style={{ fontSize: 11, color: C.amber, marginTop: 4 }}>
+                        ⚠ VAT number not yet verified — it will not appear on invoices until confirmed
+                      </div>
+                    )}
+                    {vatError && <div style={{ fontSize: 11, color: C.red, marginTop: 4 }}>{vatError}</div>}
+                  </div>
+                  {exempt && brand.vatNumber && (
+                    <span style={{ ...S.badge(C.blue), fontSize: 10, marginTop: 2 }}>✓ Test account</span>
+                  )}
+                  {!exempt && brand.vatNumber && !isVerified && (
+                    <button style={{ ...S.btn("primary"), fontSize: 11, flexShrink: 0, marginTop: 2 }} disabled={vatChecking} onClick={checkVat}>
+                      {vatChecking ? "Checking..." : "Verify with HMRC →"}
+                    </button>
+                  )}
+                  {!exempt && isVerified && (
+                    <button style={{ ...S.btn("ghost"), fontSize: 10, flexShrink: 0, marginTop: 2, color: C.muted }}
+                      onClick={() => setBrand(b => ({ ...b, registrationVerifications: { ...(b.registrationVerifications || {}), vatNumber: undefined } }))}>
+                      Re-check
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           <div>
             <label style={S.label}>Business Address</label>
             <textarea style={{ ...S.input, resize: "vertical", minHeight: 80 }} value={brand.address} onChange={set("address")} />
@@ -1673,6 +1869,216 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 style={{ ...S.btn("primary"), textDecoration: "none", background: "#2CA01C", fontSize: 12 }}
               >Connect QuickBooks</a>
           }
+        </div>
+      </div>
+
+      {/* Trade Registrations */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>🏗 Trade Registrations</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+          Select your trade types. Registration numbers feed directly onto certificates — they cannot be edited on the certificate itself. Verify each number to build your compliance audit trail.
+        </div>
+
+        {/* Trade type selector */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={S.label}>Your Trade Types</label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {[
+              { k: "gas", l: "🔥 Gas" },
+              { k: "electrical", l: "⚡ Electrical" },
+              { k: "oil", l: "🛢 Oil" },
+              { k: "solidfuel", l: "🪵 Solid Fuel" },
+              { k: "renewables", l: "☀️ Renewables" },
+              { k: "plumbing", l: "💧 Plumbing" },
+              { k: "glazing", l: "🪟 Glazing/Windows" },
+              { k: "refrigeration", l: "❄️ Refrigeration/AC" },
+              { k: "general", l: "🏗 General Building" },
+            ].map(({ k, l }) => {
+              const active = (brand.tradeTypes || []).includes(k);
+              return (
+                <button key={k}
+                  onClick={() => setBrand(b => ({ ...b, tradeTypes: active ? (b.tradeTypes || []).filter(t => t !== k) : [...(b.tradeTypes || []), k] }))}
+                  style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${active ? C.amber + "88" : C.border}`, background: active ? C.amber + "18" : C.surfaceHigh, color: active ? C.amber : C.muted, fontSize: 12, cursor: "pointer", fontFamily: "'DM Mono',monospace", fontWeight: active ? 700 : 400 }}>
+                  {l}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Registration fields per trade */}
+        {(brand.tradeTypes || []).length === 0 && (
+          <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>Select your trade types above to see relevant registration fields.</div>
+        )}
+
+        {(() => {
+          const trades = brand.tradeTypes || [];
+          const verifs = brand.registrationVerifications || {};
+          const fields = [];
+          const exemptUser = isExemptAccount(user?.email);
+
+          const RegField = ({ fieldKey, label, registerUrl, verifyLabel, placeholder }) => {
+            const val = brand[fieldKey] || "";
+            const v = verifs[fieldKey];
+            const verified = exemptUser || v?.verified;
+            const verifiedDate = v?.date ? new Date(v.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+            const isAutoVerified = v?.method === "auto";
+            return (
+              <div style={{ background: C.surfaceHigh, borderRadius: 10, padding: 14, marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <label style={{ ...S.label, margin: 0 }}>{label}</label>
+                  {verified && !exemptUser && <span style={{ ...S.badge(C.green), fontSize: 10 }}>{isAutoVerified ? "✓ Auto-verified" : "✓ Confirmed"} {verifiedDate}</span>}
+                  {exemptUser && val && <span style={{ ...S.badge(C.blue), fontSize: 10 }}>✓ Test account</span>}
+                  {!verified && !exemptUser && val && <span style={{ ...S.badge(C.amber), fontSize: 10 }}>⚠ Not yet verified</span>}
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    style={{ ...S.input, flex: 1, borderColor: verified ? C.green + "66" : val && !verified ? C.amber + "66" : C.border }}
+                    placeholder={placeholder || "Enter number"}
+                    value={val}
+                    onChange={e => setBrand(b => ({ ...b, [fieldKey]: e.target.value, registrationVerifications: { ...(b.registrationVerifications || {}), [fieldKey]: undefined } }))}
+                  />
+                  {!exemptUser && val && !verified && registerUrl && (
+                    <button
+                      style={{ ...S.btn("ghost"), fontSize: 11, flexShrink: 0 }}
+                      onClick={() => window.open(registerUrl, "_blank", "width=900,height=700")}
+                    >🔍 Verify →</button>
+                  )}
+                  {!exemptUser && val && !verified && (
+                    <button
+                      style={{ ...S.btn("primary"), fontSize: 11, flexShrink: 0 }}
+                      onClick={() => setBrand(b => ({ ...b, registrationVerifications: { ...(b.registrationVerifications || {}), [fieldKey]: { verified: true, date: new Date().toISOString(), method: "manual" } } }))}
+                    >✓ Confirmed</button>
+                  )}
+                  {!exemptUser && val && verified && !isAutoVerified && (
+                    <button style={{ ...S.btn("ghost"), fontSize: 10, flexShrink: 0, color: C.muted }}
+                      onClick={() => setBrand(b => ({ ...b, registrationVerifications: { ...(b.registrationVerifications || {}), [fieldKey]: undefined } }))}>
+                      Re-check
+                    </button>
+                  )}
+                </div>
+                {!exemptUser && val && !verified && registerUrl && (
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
+                    Tap Verify → to open the official register in a new window, then tap Confirmed once you've checked your number is valid and active.
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          if (trades.includes("gas")) fields.push(
+            <RegField key="gas" fieldKey="gasSafeNumber" label="🔥 Gas Safe Register Number"
+              registerUrl={`https://www.gassaferegister.co.uk/find-an-engineer-or-check-the-register/check-an-engineer/?licenceNumber=${brand.gasSafeNumber || ""}`}
+              placeholder="7-digit licence number e.g. 1234567" />
+          );
+          if (trades.includes("electrical")) {
+            fields.push(<div key="elec-header" style={{ fontSize: 11, color: C.muted, marginBottom: 6, marginTop: 4 }}>Add whichever electrical scheme you belong to:</div>);
+            fields.push(<RegField key="niceic" fieldKey="niceicNumber" label="⚡ NICEIC Number"
+              registerUrl={`https://www.niceic.com/find-a-contractor`} placeholder="e.g. 7654321" />);
+            fields.push(<RegField key="napit" fieldKey="napitNumber" label="⚡ NAPIT Number"
+              registerUrl="https://www.napit.org.uk/find-a-member" placeholder="e.g. NAP/12345" />);
+            fields.push(<RegField key="elecsa" fieldKey="elecsaNumber" label="⚡ ELECSA Number"
+              registerUrl="https://www.elecsa.co.uk/find-a-member" placeholder="e.g. 12345" />);
+          }
+          if (trades.includes("oil")) fields.push(
+            <RegField key="oftec" fieldKey="oftecNumber" label="🛢 OFTEC Registration Number"
+              registerUrl="https://www.oftec.org/consumers/find-a-registered-technician" placeholder="e.g. C12345" />
+          );
+          if (trades.includes("solidfuel")) fields.push(
+            <RegField key="hetas" fieldKey="hetasNumber" label="🪵 HETAS Registration Number"
+              registerUrl="https://www.hetas.co.uk/find-an-approved-business" placeholder="e.g. H12345" />
+          );
+          if (trades.includes("renewables")) fields.push(
+            <RegField key="mcs" fieldKey="mcsNumber" label="☀️ MCS Certification Number"
+              registerUrl="https://mcscertified.com/find-an-installer" placeholder="e.g. NAP-12345-678" />
+          );
+          if (trades.includes("refrigeration")) fields.push(
+            <RegField key="fgas" fieldKey="fgasNumber" label="❄️ F-Gas Certificate Number"
+              registerUrl="https://www.fgas.org.uk" placeholder="Company cert number" />
+          );
+          if (trades.includes("plumbing")) fields.push(
+            <RegField key="aphc" fieldKey="aphcNumber" label="💧 APHC / WaterSafe Number"
+              registerUrl="https://watersafe.org.uk/find-a-plumber" placeholder="e.g. WS12345" />
+          );
+          if (trades.includes("glazing")) fields.push(
+            <RegField key="fensa" fieldKey="fensaNumber" label="🪟 FENSA Registration Number"
+              registerUrl="https://www.fensa.org.uk/homeowner/find-a-fensa-installer" placeholder="e.g. 12345" />
+          );
+          if (trades.includes("general")) fields.push(
+            <RegField key="cscs" fieldKey="cscsNumber" label="🏗 CSCS Card Number"
+              registerUrl="https://www.cscs.uk.com/checking-cards/check-a-cscs-card" placeholder="e.g. 1234567890" />
+          );
+
+          return fields;
+        })()}
+
+        {/* Gas Safe Logo Upload — only if gas trade selected */}
+        {(brand.tradeTypes || []).includes("gas") && (
+          <div style={{ marginTop: 16 }}>
+            <label style={S.label}>Gas Safe Logo</label>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, lineHeight: 1.6 }}>
+              Contact Gas Safe Register on 0800 408 5500 to request authorisation to use their logo digitally. Once approved, upload it here and it will appear on all gas safety certificates.
+            </div>
+            {brand.gasSafeLogo ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <img src={brand.gasSafeLogo} alt="Gas Safe logo" style={{ height: 48, objectFit: "contain", background: "#fff", padding: 6, borderRadius: 6 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={S.badge(C.green)}>✓ Logo uploaded</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Appears on all gas safety certificates</div>
+                </div>
+                <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.red }} onClick={() => setBrand(b => ({ ...b, gasSafeLogo: null }))}>Remove</button>
+              </div>
+            ) : (
+              <div>
+                <input type="file" accept="image/*" style={{ display: "none" }} id="gasSafeLogoInput"
+                  onChange={e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const img = new Image();
+                    const url = URL.createObjectURL(file);
+                    img.onload = () => {
+                      const canvas = document.createElement("canvas");
+                      const scale = Math.min(1, 200 / img.width, 80 / img.height);
+                      canvas.width = img.width * scale;
+                      canvas.height = img.height * scale;
+                      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+                      setBrand(b => ({ ...b, gasSafeLogo: canvas.toDataURL("image/png") }));
+                      URL.revokeObjectURL(url);
+                    };
+                    img.src = url;
+                    e.target.value = "";
+                  }}
+                />
+                <button style={S.btn("ghost")} onClick={() => document.getElementById("gasSafeLogoInput").click()}>📤 Upload Gas Safe Logo</button>
+                <div style={{ fontSize: 11, color: C.amber, marginTop: 8 }}>⚠️ Only upload once Gas Safe Register has authorised you to use it digitally.</div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Gas Safe Certificates — Sequential Numbering */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>🔢 Certificate Numbering</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+          Sequential certificate reference numbers for your audit trail. Each certificate gets the next number automatically.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div>
+            <label style={S.label}>Certificate Prefix</label>
+            <input style={S.input} placeholder="e.g. GS or your initials" value={brand.certPrefix || "CERT"} onChange={set("certPrefix")} />
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Creates: {(brand.certPrefix || "CERT")}-001</div>
+          </div>
+          <div>
+            <label style={S.label}>Next Certificate Number</label>
+            <input style={S.input} type="number" min="1" value={brand.certNextNumber || 1} onChange={e => setBrand(b => ({ ...b, certNextNumber: parseInt(e.target.value) || 1 }))} />
+          </div>
+        </div>
+        <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14 }}>
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Next certificate will be:</div>
+          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: C.amber }}>
+            {(brand.certPrefix || "CERT")}-{String(brand.certNextNumber || 1).padStart(3, "0")}
+          </div>
         </div>
       </div>
 
@@ -3677,8 +4083,8 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
         </div>
       )}
 
-      {showInvoiceModal && <InvoiceModal brand={brand} invoices={safeInvoices} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...(prev || [])]); setShowInvoiceModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
-      {showQuoteModal && <QuoteModal brand={brand} invoices={safeInvoices} onClose={() => setShowQuoteModal(false)} onSent={(q) => { setInvoices(prev => [q, ...(prev || [])]); setShowQuoteModal(false); setDocType("quotes"); }} />}
+      {showInvoiceModal && <InvoiceModal brand={brand} invoices={safeInvoices} user={user} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...(prev || [])]); setShowInvoiceModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
+      {showQuoteModal && <QuoteModal brand={brand} invoices={safeInvoices} user={user} onClose={() => setShowQuoteModal(false)} onSent={(q) => { setInvoices(prev => [q, ...(prev || [])]); setShowQuoteModal(false); setDocType("quotes"); }} />}
     </div>
   );
 }
@@ -3927,7 +4333,7 @@ function LineItemsBuilder({ form, setForm, accentColor, isQuote }) {
 }
 
 // ─── Invoice Modal ────────────────────────────────────────────────────────────
-function InvoiceModal({ brand, onClose, onSent, initialData, invoices }) {
+function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user }) {
   const [form, setForm] = useState(() => initialData ? {
     customer: initialData.customer || "",
     email: initialData.email || "",
@@ -3953,7 +4359,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices }) {
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
-  const isVatRegistered = !!brand.vatNumber;
+  const isVatRegistered = !!(brand.vatNumber && (isExemptAccount(user?.email) || brand.registrationVerifications?.vatNumber?.verified));
 
   // CIS calculations
   const labourAmt = parseFloat(form.labour) || 0;
@@ -4248,7 +4654,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices }) {
 }
 
 // ─── Quote Modal ──────────────────────────────────────────────────────────────
-function QuoteModal({ brand, onClose, onSent, initialData, invoices }) {
+function QuoteModal({ brand, onClose, onSent, initialData, invoices, user }) {
   const [form, setForm] = useState(() => initialData ? {
     customer: initialData.customer || "",
     email: initialData.email || "",
@@ -4271,7 +4677,7 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices }) {
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
-  const isVatRegistered = !!brand.vatNumber;
+  const isVatRegistered = !!(brand.vatNumber && (isExemptAccount(user?.email) || brand.registrationVerifications?.vatNumber?.verified));
 
   const labourAmt = parseFloat(form.labour) || 0;
   const materialsAmt = parseFloat(form.materials) || 0;
@@ -4828,7 +5234,7 @@ Rules:
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 // ─── Customers ────────────────────────────────────────────────────────────────
-function Customers({ customers, setCustomers, jobs, invoices, setView, user }) {
+function Customers({ customers, setCustomers, jobs, invoices, setView, user, makeCall, hasTwilio }) {
   const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState(null);
   const [editing, setEditing] = useState(false);
@@ -4986,7 +5392,9 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user }) {
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Phone</div>
                 {selected.phone
-                  ? <a href={`tel:${selected.phone.replace(/\s/g, "")}`} style={{ fontSize: 13, color: C.amber, textDecoration: "none", fontFamily: "'DM Mono',monospace" }}>📞 {selected.phone}</a>
+                  ? hasTwilio
+                    ? <div onClick={() => makeCall(selected.phone, selected.name)} style={{ fontSize: 13, color: C.green, fontFamily: "'DM Mono',monospace", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>📞 {selected.phone} <span style={{ fontSize: 10, color: C.muted }}>(tap to call)</span></div>
+                    : <a href={`tel:${selected.phone.replace(/\s/g, "")}`} style={{ fontSize: 13, color: C.amber, textDecoration: "none", fontFamily: "'DM Mono',monospace" }}>📞 {selected.phone}</a>
                   : <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>Not set</div>}
               </div>
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
@@ -5369,8 +5777,8 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
         </div>
       )}
 
-      {showModal && <InvoiceModal brand={brand} invoices={invoices} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
-      {editingInvoice && <InvoiceModal brand={brand} invoices={invoices} initialData={editingInvoice} onClose={() => setEditingInvoice(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingInvoice.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingInvoice(null); }} />}
+      {showModal && <InvoiceModal brand={brand} invoices={invoices} user={user} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
+      {editingInvoice && <InvoiceModal brand={brand} invoices={invoices} user={user} initialData={editingInvoice} onClose={() => setEditingInvoice(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingInvoice.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingInvoice(null); }} />}
     </div>
   );
 }
@@ -5535,8 +5943,8 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
         </div>
       )}
 
-      {showModal && <QuoteModal brand={brand} invoices={invoices} onClose={() => setShowModal(false)} onSent={q => { setInvoices(prev => [q, ...(prev || [])]); setShowModal(false); }} />}
-      {editingQuote && <QuoteModal brand={brand} invoices={invoices} initialData={editingQuote} onClose={() => setEditingQuote(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingQuote.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingQuote(null); }} />}
+      {showModal && <QuoteModal brand={brand} invoices={invoices} user={user} onClose={() => setShowModal(false)} onSent={q => { setInvoices(prev => [q, ...(prev || [])]); setShowModal(false); }} />}
+      {editingQuote && <QuoteModal brand={brand} invoices={invoices} user={user} initialData={editingQuote} onClose={() => setEditingQuote(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingQuote.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingQuote(null); }} />}
     </div>
   );
 }
@@ -6719,7 +7127,7 @@ function buildComplianceDocHTML(doc, job, brand) {
     <div class="header">
       <div>
         <div class="brand-name">${brand.tradingName || ""}</div>
-        <div class="brand-detail">${brand.address || ""}${brand.phone ? `<br>${brand.phone}` : ""}${brand.email ? `<br>${brand.email}` : ""}${brand.gasSafeNumber ? `<br>Gas Safe: ${brand.gasSafeNumber}` : ""}${brand.vatNumber ? `<br>VAT: ${brand.vatNumber}` : ""}</div>
+        <div class="brand-detail">${brand.address || ""}${brand.phone ? `<br>${brand.phone}` : ""}${brand.email ? `<br>${brand.email}` : ""}${brand.gasSafeNumber ? `<br>Gas Safe: ${brand.gasSafeNumber}` : ""}${(brand.vatNumber && (brand._exemptBypass || brand.registrationVerifications?.vatNumber?.verified)) ? `<br>VAT: ${brand.vatNumber}` : ""}</div>
       </div>
       <div>
         <div class="doc-title">CERTIFICATE</div>
@@ -6952,10 +7360,29 @@ function buildCertHTML(cert, brand, job, sig) {
   }[cert.id] || "#f59e0b";
 
   const regLine = cert.id.startsWith("cp12") || cert.id === "smr" || cert.id === "pad17" || cert.id === "gas_warning"
-    ? (brand.gasSafeNumber ? `Gas Safe Reg: <strong>${brand.gasSafeNumber}</strong>` : "")
-    : cert.id.startsWith("e") || cert.id === "meic" || cert.id === "pat"
-    ? (cert.niceicNumber ? `NICEIC/NAPIT No: <strong>${cert.niceicNumber}</strong>` : "")
+    ? (brand.gasSafeNumber ? `Gas Safe Reg: <strong>${brand.gasSafeNumber}</strong>` : "<span style=\"color:#c0392b\">⚠ Gas Safe number not set — add in Settings</span>")
+    : cert.id === "eicr" || cert.id === "eic" || cert.id === "meic" || cert.id === "pat"
+    ? (brand.niceicNumber ? `NICEIC No: <strong>${brand.niceicNumber}</strong>`
+       : brand.napitNumber ? `NAPIT No: <strong>${brand.napitNumber}</strong>`
+       : brand.elecsaNumber ? `ELECSA No: <strong>${brand.elecsaNumber}</strong>`
+       : "<span style=\"color:#c0392b\">⚠ Electrical scheme number not set — add in Settings</span>")
+    : cert.id === "oil_service" || cert.id === "oil_warning"
+    ? (brand.oftecNumber ? `OFTEC No: <strong>${brand.oftecNumber}</strong>` : "<span style=\"color:#c0392b\">⚠ OFTEC number not set — add in Settings</span>")
+    : cert.id === "cd11" || cert.id === "cd12"
+    ? (brand.hetasNumber ? `HETAS No: <strong>${brand.hetasNumber}</strong>` : "<span style=\"color:#c0392b\">⚠ HETAS number not set — add in Settings</span>")
+    : cert.id === "unvented_hw" || cert.id === "pressure_test"
+    ? (brand.aphcNumber ? `APHC/WaterSafe No: <strong>${brand.aphcNumber}</strong>` : "")
+    : cert.id === "fgas"
+    ? (brand.fgasNumber ? `F-Gas Cert No: <strong>${brand.fgasNumber}</strong>` : "<span style=\"color:#c0392b\">⚠ F-Gas number not set — add in Settings</span>")
+    : cert.id === "mcs"
+    ? (brand.mcsNumber ? `MCS No: <strong>${brand.mcsNumber}</strong>` : "<span style=\"color:#c0392b\">⚠ MCS number not set — add in Settings</span>")
     : "";
+
+  // Use sequential cert number from brand settings, or fall back to manually entered certNumber
+  const isGasCert = cert.id.startsWith("cp12") || cert.id === "smr" || cert.id === "pad17" || cert.id === "gas_warning";
+  const certRef = cert.certNumber || (brand.certPrefix && brand.certNextNumber
+    ? `${brand.certPrefix}-${String(brand.certNextNumber).padStart(3, "0")}`
+    : "");
 
   const header = `<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#1a1a1a;font-size:13px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${accentColor};padding-bottom:16px;margin-bottom:20px">
@@ -6968,11 +7395,12 @@ function buildCertHTML(cert, brand, job, sig) {
           ${brand.utrNumber ? `<div style="font-size:12px;color:#666">UTR: ${brand.utrNumber}</div>` : ""}
         </div>
       </div>
-      <div style="text-align:right">
+      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        ${isGasCert && brand.gasSafeLogo ? `<img src="${brand.gasSafeLogo}" style="height:36px;object-fit:contain;margin-bottom:4px">` : ""}
         <div style="font-size:18px;font-weight:700;color:${accentColor}">${cert.short}</div>
         <div style="font-size:11px;color:#666">${cert.label}</div>
-        <div style="font-size:11px;color:#666;margin-top:4px">Date: ${today}</div>
-        ${cert.certNumber ? `<div style="font-size:11px;color:#666">Cert No: ${cert.certNumber}</div>` : ""}
+        <div style="font-size:11px;color:#666">Date: ${today}</div>
+        ${certRef ? `<div style="font-size:12px;font-weight:700;color:#1a1a1a;background:#f5f5f5;padding:4px 8px;border-radius:4px;font-family:monospace">Cert No: ${certRef}</div>` : ""}
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
@@ -7197,10 +7625,18 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
     if (!showForm) return;
     setSaving(true);
     const certType = TRADE_CERT_LIST.find(c => c.id === showForm);
-    const certData = { ...form, id: showForm, label: certType?.label || "", short: certType?.short || "", signature: sigData };
+    // Assign sequential certificate number from brand settings
+    const certNum = brand.certPrefix && brand.certNextNumber
+      ? `${brand.certPrefix}-${String(brand.certNextNumber).padStart(3, "0")}`
+      : "";
+    const certData = { ...form, id: showForm, label: certType?.label || "", short: certType?.short || "", signature: sigData, certNumber: certNum };
     const html = buildCertHTML(certData, brand, job, sigData);
     const { data } = await supabase.from("trade_certificates").insert({ job_id: job.id, user_id: user.id, cert_type: showForm, cert_label: certType?.label || "", cert_data: certData, html_content: html, signature: sigData || null, created_at: new Date().toISOString() }).select().single();
-    if (data) setCerts(prev => [data, ...prev]);
+    if (data) {
+      setCerts(prev => [data, ...prev]);
+      // Auto-increment the certificate counter in brand settings
+      if (certNum) setBrand(b => ({ ...b, certNextNumber: (b.certNextNumber || 1) + 1 }));
+    }
     setShowForm(null);
     setSaving(false);
   }
@@ -7229,7 +7665,45 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
           <div><label style={S.label}>Property Address</label><input style={S.input} value={form.address} onChange={setF("address")} /></div>
           <div><label style={S.label}>Certificate No.</label><input style={S.input} placeholder="e.g. GS-2024-001" value={form.certNumber} onChange={setF("certNumber")} /></div>
           {id === "cp12" && <div><label style={S.label}>Landlord Name</label><input style={S.input} value={form.landlord} onChange={setF("landlord")} /></div>}
-          {elec && <div><label style={S.label}>NICEIC/NAPIT No.</label><input style={S.input} value={form.niceicNumber} onChange={setF("niceicNumber")} /></div>}
+          {elec && (
+            <div>
+              <label style={S.label}>Electrical Scheme No.</label>
+              <div style={{ ...S.input, background: C.surfaceHigh, color: brand.niceicNumber || brand.napitNumber || brand.elecsaNumber ? C.green : C.amber, cursor: "default", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {brand.niceicNumber ? `NICEIC: ${brand.niceicNumber}`
+                  : brand.napitNumber ? `NAPIT: ${brand.napitNumber}`
+                  : brand.elecsaNumber ? `ELECSA: ${brand.elecsaNumber}`
+                  : "⚠ Not set — add in Settings"}
+                <span style={{ fontSize: 10, color: C.muted }}>from Settings</span>
+              </div>
+            </div>
+          )}
+          {(id === "oil_service" || id === "oil_warning") && (
+            <div>
+              <label style={S.label}>OFTEC No.</label>
+              <div style={{ ...S.input, background: C.surfaceHigh, color: brand.oftecNumber ? C.green : C.amber, cursor: "default", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {brand.oftecNumber || "⚠ Not set — add in Settings"}
+                <span style={{ fontSize: 10, color: C.muted }}>from Settings</span>
+              </div>
+            </div>
+          )}
+          {(id === "cd11" || id === "cd12") && (
+            <div>
+              <label style={S.label}>HETAS No.</label>
+              <div style={{ ...S.input, background: C.surfaceHigh, color: brand.hetasNumber ? C.green : C.amber, cursor: "default", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {brand.hetasNumber || "⚠ Not set — add in Settings"}
+                <span style={{ fontSize: 10, color: C.muted }}>from Settings</span>
+              </div>
+            </div>
+          )}
+          {id === "cp12" && (
+            <div>
+              <label style={S.label}>Gas Safe No.</label>
+              <div style={{ ...S.input, background: C.surfaceHigh, color: brand.gasSafeNumber ? C.green : C.amber, cursor: "default", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {brand.gasSafeNumber || "⚠ Not set — add in Settings"}
+                <span style={{ fontSize: 10, color: C.muted }}>from Settings</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {gas && id !== "gas_warning" && (
@@ -7377,7 +7851,12 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
               {certs.map(cert => (
                 <div key={cert.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{cert.cert_label}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{cert.cert_label}</div>
+                      {cert.cert_data?.certNumber && (
+                        <div style={{ fontSize: 11, fontFamily: "'DM Mono',monospace", color: C.amber, marginTop: 2 }}>{cert.cert_data.certNumber}</div>
+                      )}
+                    </div>
                     <div style={{ fontSize: 10, color: C.muted }}>{new Date(cert.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>
                   </div>
                   {cert.signature && <div style={{ fontSize: 11, color: C.green, marginBottom: 6 }}>✓ Signed</div>}
@@ -8832,6 +9311,97 @@ function nextQuoteId(invoices) {
   return `QTE-${String(max + 1).padStart(3, "0")}`;
 }
 
+// Exempt accounts — bypass all verification gates (test/owner accounts)
+const EXEMPT_EMAILS = [
+  "thetradepa@gmail.com",
+  "connor_mckay777@hotmail.com",
+  "connor_mckay777@hotmail.co.uk",
+  "landbheating@outlook.com",
+];
+function isExemptAccount(email) {
+  return EXEMPT_EMAILS.includes((email || "").toLowerCase());
+}
+
+// ─── Softphone UI ─────────────────────────────────────────────────────────────
+function IncomingCallScreen({ callerName, callerNumber, onAnswer, onDecline }) {
+  const [dots, setDots] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setDots(d => (d + 1) % 4), 500);
+    return () => clearInterval(t);
+  }, []);
+  const initials = callerName && callerName !== "Unknown caller" && callerName !== "Unknown"
+    ? callerName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
+    : "?";
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "linear-gradient(180deg, #0a1628 0%, #0f0f0f 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <style>{`
+        @keyframes ringPulse { 0% { transform:scale(1);opacity:0.6; } 50%,100% { transform:scale(1.5);opacity:0; } }
+        @keyframes ringPulse2 { 0% { transform:scale(1);opacity:0.4; } 50%,100% { transform:scale(1.8);opacity:0; } }
+      `}</style>
+      <div style={{ position: "relative", width: 100, height: 100, marginBottom: 32 }}>
+        <div style={{ position: "absolute", inset: -20, borderRadius: "50%", border: "2px solid #3b82f6", animation: "ringPulse 1.5s ease-out infinite" }} />
+        <div style={{ position: "absolute", inset: -20, borderRadius: "50%", border: "2px solid #3b82f6", animation: "ringPulse2 1.5s ease-out 0.4s infinite" }} />
+        <div style={{ width: 100, height: 100, borderRadius: "50%", background: "linear-gradient(135deg,#1e3a5f,#2563eb)", border: "3px solid #3b82f680", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 700, color: "#fff", fontFamily: "'DM Mono',monospace" }}>{initials}</div>
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 700, color: "#f0f0f0", marginBottom: 8, textAlign: "center", padding: "0 32px" }}>{callerName}</div>
+      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>Incoming call{".".repeat(dots)}</div>
+      {callerNumber && <div style={{ fontSize: 13, color: "#4b5563", fontFamily: "'DM Mono',monospace", marginBottom: 60 }}>{callerNumber}</div>}
+      <div style={{ display: "flex", gap: 60, alignItems: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <button onClick={onDecline} style={{ width: 70, height: 70, borderRadius: "50%", background: "#ef4444", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, boxShadow: "0 4px 20px #ef444460" }}>📵</button>
+          <div style={{ fontSize: 11, color: "#6b7280" }}>Decline</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <button onClick={onAnswer} style={{ width: 70, height: 70, borderRadius: "50%", background: "#22c55e", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, boxShadow: "0 4px 20px #22c55e60" }}>📞</button>
+          <div style={{ fontSize: 11, color: "#6b7280" }}>Answer</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActiveCallScreen({ callerName, callerNumber, direction, startTime, muted, onMute, onHangUp }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [startTime]);
+  const fmt = s => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const initials = callerName && callerName !== "Unknown" && callerName !== "Unknown caller"
+    ? callerName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
+    : "?";
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "linear-gradient(180deg,#0a2018 0%,#0f0f0f 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: "env(safe-area-inset-top,0px)", paddingBottom: "env(safe-area-inset-bottom,0px)" }}>
+      <style>{`@keyframes activePulse{0%,100%{box-shadow:0 0 0 0 #22c55e40;}50%{box-shadow:0 0 0 16px #22c55e00;}}`}</style>
+      <div style={{ fontSize: 12, color: "#22c55e", background: "#22c55e18", border: "1px solid #22c55e40", borderRadius: 20, padding: "4px 14px", marginBottom: 32, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        {direction === "outbound" ? "Calling..." : "● Connected"}
+      </div>
+      <div style={{ width: 100, height: 100, borderRadius: "50%", background: "linear-gradient(135deg,#1a3320,#166534)", border: "3px solid #22c55e40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 700, color: "#fff", fontFamily: "'DM Mono',monospace", marginBottom: 24, animation: "activePulse 2s ease infinite" }}>{initials}</div>
+      <div style={{ fontSize: 26, fontWeight: 700, color: "#f0f0f0", marginBottom: 6, textAlign: "center", padding: "0 32px" }}>{callerName}</div>
+      <div style={{ fontSize: 22, color: "#22c55e", fontFamily: "'DM Mono',monospace", marginBottom: 6, letterSpacing: "0.05em" }}>{fmt(elapsed)}</div>
+      {callerNumber && <div style={{ fontSize: 12, color: "#4b5563", fontFamily: "'DM Mono',monospace", marginBottom: 52 }}>{callerNumber}</div>}
+      <div style={{ display: "flex", gap: 32, alignItems: "flex-end", marginBottom: 48 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <button onClick={onMute} style={{ width: 56, height: 56, borderRadius: "50%", background: muted ? "#f59e0b" : "#1f2937", border: `2px solid ${muted ? "#f59e0b" : "#374151"}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, transition: "all 0.2s" }}>{muted ? "🔇" : "🎙️"}</button>
+          <div style={{ fontSize: 11, color: "#6b7280" }}>{muted ? "Unmute" : "Mute"}</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <button onClick={onHangUp} style={{ width: 70, height: 70, borderRadius: "50%", background: "#ef4444", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, boxShadow: "0 4px 20px #ef444460" }}>📵</button>
+          <div style={{ fontSize: 11, color: "#6b7280" }}>End call</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <button style={{ width: 56, height: 56, borderRadius: "50%", background: "#1f2937", border: "2px solid #374151", cursor: "default", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, opacity: 0.4 }}>🔊</button>
+          <div style={{ fontSize: 11, color: "#4b5563" }}>Speaker</div>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "#374151", display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444" }} />
+        Call is being recorded
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -8853,6 +9423,10 @@ export default function App() {
   const { reminders, add, dismiss, remove } = useReminders(user?.id);
   const [dueNow, setDueNow] = useState([]);
   const [bellFlash, setBellFlash] = useState(false);
+  const [twilioDevice, setTwilioDevice] = useState(null);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [activeCall, setActiveCall] = useState(null);
+  const [callMuted, setCallMuted] = useState(false);
   const now = Date.now();
 
   // Send push notification to this user via server
@@ -8863,6 +9437,51 @@ export default function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: user.id, ...opts }),
     }).catch(() => {});
+  };
+
+  const answerCall = () => {
+    if (!incomingCall) return;
+    const { call, callerName, callerNumber } = incomingCall;
+    call.accept();
+    setActiveCall({ call, callerName, callerNumber, direction: "inbound", startTime: Date.now() });
+    setIncomingCall(null);
+    call.on("disconnect", () => { setActiveCall(null); setCallMuted(false); });
+    call.on("error", () => { setActiveCall(null); setCallMuted(false); });
+  };
+
+  const declineCall = () => {
+    if (!incomingCall) return;
+    incomingCall.call.reject();
+    setIncomingCall(null);
+  };
+
+  const makeCall = async (phoneNumber, customerName) => {
+    if (!twilioDevice) { alert("Call tracking is not active. Enable it in Settings."); return; }
+    try {
+      let num = phoneNumber.replace(/\s/g, "");
+      if (num.startsWith("07")) num = "+44" + num.slice(1);
+      else if (num.startsWith("0")) num = "+44" + num.slice(1);
+      const call = await twilioDevice.connect({ params: { To: num, userId: user.id, customerName: customerName || "Unknown" } });
+      setActiveCall({ call, callerName: customerName || phoneNumber, callerNumber: num, direction: "outbound", startTime: Date.now() });
+      call.on("disconnect", () => { setActiveCall(null); setCallMuted(false); });
+      call.on("error", () => { setActiveCall(null); setCallMuted(false); });
+    } catch (err) {
+      console.error("makeCall error:", err.message);
+      alert("Could not connect the call. Please try again.");
+    }
+  };
+
+  const hangUp = () => {
+    if (activeCall?.call) activeCall.call.disconnect();
+    setActiveCall(null);
+    setCallMuted(false);
+  };
+
+  const toggleMute = () => {
+    if (!activeCall?.call) return;
+    const next = !callMuted;
+    activeCall.call.mute(next);
+    setCallMuted(next);
   };
 
   // PDF overlay event listener (iOS PWA fallback)
@@ -8931,6 +9550,42 @@ export default function App() {
     registerPush();
   }, [user?.id]);
 
+  // Twilio Voice SDK — register device if user has call tracking active
+  useEffect(() => {
+    if (!user?.id) return;
+    let device;
+    const initDevice = async () => {
+      try {
+        const { data: ct } = await supabase.from("call_tracking").select("twilio_number").eq("user_id", user.id).limit(1).maybeSingle();
+        if (!ct?.twilio_number) return;
+        const tokenRes = await fetch("/api/calls/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id }) });
+        const { token } = await tokenRes.json();
+        if (!token) return;
+        device = new Device(token, { logLevel: 1, codecPreferences: ["opus", "pcmu"] });
+        device.on("incoming", call => {
+          const callerName = call.customParameters?.get("callerName") || "Unknown caller";
+          const callerNumber = call.customParameters?.get("callerNumber") || "";
+          setIncomingCall({ call, callerName, callerNumber });
+          call.on("cancel", () => setIncomingCall(null));
+        });
+        device.on("tokenWillExpire", async () => {
+          try {
+            const r = await fetch("/api/calls/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id }) });
+            const d = await r.json();
+            if (d.token) device.updateToken(d.token);
+          } catch {}
+        });
+        await device.register();
+        setTwilioDevice(device);
+        console.log("✓ Twilio Device registered");
+      } catch (err) {
+        console.log("Twilio Device init:", err.message);
+      }
+    };
+    initDevice();
+    return () => { if (device) { device.destroy(); setTwilioDevice(null); } };
+  }, [user?.id]);
+
   useEffect(() => {
     const handler = (e) => setPdfHtml(e.detail);
     window.addEventListener("trade-pa-show-pdf", handler);
@@ -8994,12 +9649,18 @@ export default function App() {
   const brandSaveCount = useRef(0);
   useEffect(() => {
     if (!user) return;
-    brandSaveCount.current = 0; // reset counter so first save after login is skipped
+    brandSaveCount.current = 0;
     const saved = localStorage.getItem(`trade-pa-brand-${user.id}`);
-    if (saved) setBrand(JSON.parse(saved));
+    const loaded = saved ? JSON.parse(saved) : {};
+    // Inject exempt bypass so PDF templates can skip verification gates
+    if (isExemptAccount(user.email)) {
+      loaded._exemptBypass = true;
+    }
+    if (saved) setBrand(loaded);
     else {
       const name = user.user_metadata?.full_name;
-      if (name) setBrand(b => ({ ...b, tradingName: `${name}'s Trades` }));
+      if (name) setBrand(b => ({ ...b, tradingName: `${name}'s Trades`, _exemptBypass: isExemptAccount(user.email) }));
+      else setBrand(b => ({ ...b, _exemptBypass: isExemptAccount(user.email) }));
     }
   }, [user?.id]);
 
@@ -9350,13 +10011,7 @@ export default function App() {
   if (!user) return <LandingPage onLogin={() => {}} onAuth={setUser} />;
 
   // Accounts that bypass the subscription check (owner/test accounts)
-  const EXEMPT_EMAILS = [
-    "thetradepa@gmail.com",
-    "connor_mckay777@hotmail.com",
-    "connor_mckay777@hotmail.co.uk",
-    "landbheating@outlook.com",
-  ];
-  const isExempt = EXEMPT_EMAILS.includes(user?.email?.toLowerCase());
+  const isExempt = isExemptAccount(user?.email);
 
   // Subscription paywall — blocks access if payment has lapsed
   if (!isExempt && (subscriptionStatus === "past_due" || subscriptionStatus === "cancelled" || subscriptionStatus === "none")) {
@@ -9398,6 +10053,8 @@ export default function App() {
   return (
     <div style={S.app}>
       {pdfHtml && <PDFOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
+      {incomingCall && <IncomingCallScreen callerName={incomingCall.callerName} callerNumber={incomingCall.callerNumber} onAnswer={answerCall} onDecline={declineCall} />}
+      {activeCall && <ActiveCallScreen callerName={activeCall.callerName} callerNumber={activeCall.callerNumber} direction={activeCall.direction} startTime={activeCall.startTime} muted={callMuted} onMute={toggleMute} onHangUp={hangUp} />}
 
       {/* PWA Install Banner */}
       {showPwaBanner && !isStandalone && (
@@ -9485,7 +10142,7 @@ export default function App() {
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} />}
         {view === "Jobs" && <JobsTab user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
-        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} user={user} />}
+        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} />}
         {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} />}
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
