@@ -97,7 +97,6 @@ export default async function handler(req, res) {
         Description: `${m.item}${m.job ? ` — Job: ${m.job}` : ''}`,
         Quantity: parseFloat(m.qty || 1),
         UnitAmount: parseFloat(m.unitPrice || 0),
-        AccountCode: '300',
         TaxType: 'NONE',
       }));
 
