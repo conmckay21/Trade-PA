@@ -1,13 +1,8 @@
 // api/calls/incoming.js
-
-function xmlEscape(str) {
-  return String(str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
+// Twilio webhook — fires on every inbound call to the user's Trade PA number
+// ALL calls recorded — dedicated business number
+// Push notification fires immediately to wake app if backgrounded
+// Falls back to real mobile after 45s if app doesn't answer
 
 export default async function handler(req, res) {
   const { userId } = req.query;
@@ -41,7 +36,7 @@ export default async function handler(req, res) {
     const matched = customers.find(c => c.phone && c.phone.replace(/\s/g, "").slice(-10) === last10);
     const customerName = matched?.name || "Unknown caller";
 
-    // 3. Fire push notification (fire and forget)
+    // 3. Fire push notification immediately (fire and forget)
     fetch(`${appUrl}/api/push/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -55,10 +50,23 @@ export default async function handler(req, res) {
       }),
     }).catch(() => {});
 
-    // 4. Build callback URLs — use separate params, NO & in the XML attribute
-    // Pass params as individual encoded values, join with &amp; for XML safety
-    const recordingCallback = `${appUrl}/api/calls/recording?userId=${encodeURIComponent(userId)}&amp;callerNumber=${encodeURIComponent(normalised)}&amp;customerName=${encodeURIComponent(customerName)}`;
-    const fallbackUrl = `${appUrl}/api/calls/fallback?forwardTo=${encodeURIComponent(forwardTo)}&amp;callerNumber=${encodeURIComponent(normalised)}&amp;customerName=${encodeURIComponent(customerName)}`;
+    // 4. Build callback URLs with normal & (not &amp;)
+    // The URLs go inside XML attributes — & must be escaped as &amp; in the XML
+    // BUT the actual URL sent to recording.js/fallback.js must use real & 
+    // Solution: build URL with real &, then escape only for XML attribute context
+    const recordingCallback = [
+      `${appUrl}/api/calls/recording`,
+      `?userId=${encodeURIComponent(userId)}`,
+      `&callerNumber=${encodeURIComponent(normalised)}`,
+      `&customerName=${encodeURIComponent(customerName)}`,
+    ].join("").replace(/&/g, "&amp;");
+
+    const fallbackUrl = [
+      `${appUrl}/api/calls/fallback`,
+      `?forwardTo=${encodeURIComponent(forwardTo)}`,
+      `&callerNumber=${encodeURIComponent(normalised)}`,
+      `&customerName=${encodeURIComponent(customerName)}`,
+    ].join("").replace(/&/g, "&amp;");
 
     console.log(`Incoming call from ${normalised} (${customerName}) → client: ${identity}`);
 
@@ -67,9 +75,9 @@ export default async function handler(req, res) {
 <Response>
   <Dial timeout="45" record="record-from-answer" recordingStatusCallback="${recordingCallback}" recordingStatusCallbackMethod="POST" action="${fallbackUrl}">
     <Client>
-      <Identity>${xmlEscape(identity)}</Identity>
-      <Parameter name="callerName" value="${xmlEscape(customerName)}"/>
-      <Parameter name="callerNumber" value="${xmlEscape(normalised)}"/>
+      <Identity>${identity}</Identity>
+      <Parameter name="callerName" value="${customerName.replace(/"/g, "&quot;")}"/>
+      <Parameter name="callerNumber" value="${normalised}"/>
     </Client>
   </Dial>
 </Response>`);
@@ -81,9 +89,9 @@ export default async function handler(req, res) {
 <Response>
   <Dial timeout="45">
     <Client>
-      <Identity>${xmlEscape(identity)}</Identity>
+      <Identity>${identity}</Identity>
       <Parameter name="callerName" value="Incoming call"/>
-      <Parameter name="callerNumber" value="${xmlEscape(normalised)}"/>
+      <Parameter name="callerNumber" value="${normalised}"/>
     </Client>
   </Dial>
 </Response>`);
