@@ -10,8 +10,6 @@ export default async function handler(req, res) {
   const { AccessToken } = twilio.jwt;
   const { VoiceGrant } = AccessToken;
 
-  // Sanitise identity — Twilio only allows alphanumeric, underscore, hyphen
-  // UUIDs use hyphens which are fine, but replace just in case
   const identity = userId.replace(/[^a-zA-Z0-9_-]/g, "_");
 
   try {
@@ -19,7 +17,7 @@ export default async function handler(req, res) {
       process.env.TWILIO_ACCOUNT_SID,
       process.env.TWILIO_API_KEY,
       process.env.TWILIO_API_SECRET,
-      { identity, ttl: 3600 }
+      { identity, ttl: 3600, region: "ie1" }
     );
 
     const voiceGrant = new VoiceGrant({
@@ -29,7 +27,7 @@ export default async function handler(req, res) {
 
     token.addGrant(voiceGrant);
 
-    console.log(`✓ Token generated for identity: ${identity}`);
+    console.log(`✓ Token generated for identity: ${identity} region: ie1`);
     return res.status(200).json({ token: token.toJwt(), identity });
   } catch (err) {
     console.error("Token generation error:", err.message);
