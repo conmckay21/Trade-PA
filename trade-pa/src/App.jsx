@@ -2685,6 +2685,78 @@ const DEFAULT_SUPPLIERS = [
   { name: "Plumb Center", phone: "0330 123 1456", email: "", notes: "Plumbing wholesale" },
 ];
 
+function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, userId }) {
+  const C = COLORS;
+  const S = STYLES;
+  const [expanded, setExpanded] = useState(false);
+  const statusColor = { to_order: C.red, ordered: C.amber, collected: C.green };
+  const statusLabel = { to_order: "To Order", ordered: "Ordered", collected: "Collected" };
+
+  const viewReceipt = () => {
+    const img = m.receiptImage || localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
+    if (img) {
+      const overlay = document.createElement("div");
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
+      const closeBtn = document.createElement("button");
+      closeBtn.textContent = "← Back to app";
+      closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
+      closeBtn.onclick = () => document.body.removeChild(overlay);
+      const imgEl = document.createElement("img");
+      imgEl.src = img;
+      imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
+      overlay.appendChild(closeBtn);
+      overlay.appendChild(imgEl);
+      document.body.appendChild(overlay);
+    } else if (m.receiptSource === "email" && m.receiptFilename) {
+      alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was received via email. Open your Inbox to view the original.`);
+    } else {
+      alert("Invoice image not available.");
+    }
+  };
+
+  return (
+    <div style={{ background: C.surfaceHigh, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", cursor: "pointer" }} onClick={() => setExpanded(e => !e)}>
+        <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{m.item}</div>
+          <div style={{ fontSize: 11, color: C.muted, display: "flex", flexWrap: "wrap", gap: "2px 8px" }}>
+            {m.qty > 1 && <span>×{m.qty}</span>}
+            {m.supplier && <span>🏪 {m.supplier}</span>}
+            {m.job && <span>📋 {m.job}</span>}
+            {m.unitPrice > 0 && <span style={{ color: C.amber }}>£{((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)} ex.VAT{m.vatEnabled ? ` +${m.vatRate || 20}%` : ""}</span>}
+            {m.dueDate && <span>📅 {new Date(m.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
+          </div>
+        </div>
+        <div style={{ ...S.badge(statusColor[m.status] || C.muted), flexShrink: 0 }}>{statusLabel[m.status] || m.status}</div>
+        <div style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>{expanded ? "▲" : "▼"}</div>
+      </div>
+      {expanded && (
+        <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => cycleStatus(i)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>
+              {m.status === "to_order" ? "✓ Mark Ordered" : m.status === "ordered" ? "✓ Mark Collected" : "↺ Reset Status"}
+            </button>
+            <button onClick={() => setEditingMaterial({ index: i, item: m.item, qty: String(m.qty || 1), unitPrice: String(m.unitPrice || ""), supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order", vatEnabled: m.vatEnabled || false, vatRate: m.vatRate || 20, dueDate: m.dueDate || "" })} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px" }}>✏ Edit</button>
+            <button onClick={() => deleteMaterial(i)} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px", color: C.red, borderColor: C.red + "44" }}>Delete</button>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => fetch("/api/xero/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, material: m }) }).then(r => r.json()).then(d => alert(d.error ? `Xero: ${d.error}` : "✓ Bill created in Xero")).catch(() => alert("Xero not connected"))}
+              style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: "#13B5EA", borderColor: "#13B5EA44" }}>↑ Xero Bill</button>
+            <button onClick={() => fetch("/api/quickbooks/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, material: m }) }).then(r => r.json()).then(d => alert(d.error ? `QuickBooks: ${d.error}` : "✓ Bill created in QuickBooks")).catch(() => alert("QuickBooks not connected"))}
+              style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: "#2CA01C", borderColor: "#2CA01C44" }}>↑ QB Bill</button>
+          </div>
+          {(m.receiptId || m.receiptSource || m.receiptImage) && (
+            <div onClick={viewReceipt} style={{ fontSize: 12, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              🧾 {m.receiptFilename || "View Invoice"}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Materials({ materials, setMaterials, user }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showSuppliers, setShowSuppliers] = useState(false);
@@ -2752,25 +2824,38 @@ function Materials({ materials, setMaterials, user }) {
             role: "user",
             content: [
               fileContent,
-              { type: "text", text: `Read this supplier receipt or invoice. Extract all line items and return ONLY valid JSON:
+              { type: "text", text: `You are reading a UK supplier receipt or invoice. Extract all details carefully.
+
+IMPORTANT VAT RULES FOR UK RECEIPTS:
+- Screwfix, Travis Perkins, Toolstation, City Plumbing, Plumbbase and most UK trade suppliers show prices EX-VAT with VAT added at the bottom as a separate line
+- If you see a "VAT" line at the bottom of the receipt, pricesIncVat = false (prices are ex-VAT)
+- If there is no separate VAT line and the total appears to include VAT, pricesIncVat = true
+- UK standard VAT rate is 20%. Reduced rate is 5%.
+- unitPrice should ALWAYS be the ex-VAT price per unit
+- If pricesIncVat is true: unitPriceExVat = unitPrice / 1.2 (for 20%) or unitPrice / 1.05 (for 5%)
+- If pricesIncVat is false: unitPriceExVat = unitPrice (already ex-VAT)
+
+Return ONLY valid JSON:
 {
   "supplier": "supplier name",
   "date": "YYYY-MM-DD or empty string",
   "total": 123.45,
   "vatAmount": 20.59,
   "vatRate": 20,
-  "pricesIncVat": true,
+  "pricesIncVat": false,
   "items": [
-    { "item": "item name", "qty": 1, "unitPrice": 12.50, "unitPriceExVat": 10.42 }
+    { "item": "item name", "qty": 1, "unitPrice": 5.97, "unitPriceExVat": 5.97 }
   ]
 }
 
-Rules:
-- vatAmount: total VAT on the receipt (0 if no VAT shown)
-- vatRate: 20, 5, or 0
-- pricesIncVat: true if line item prices on receipt include VAT, false if they are ex-VAT
-- unitPrice: the price shown on the receipt per unit
-- unitPriceExVat: always the ex-VAT price per unit (divide by 1.2 if 20% VAT inclusive, by 1.05 if 5%)
+Example: Screwfix receipt showing "Tubular Latch £5.97" with "VAT £1.19" at bottom:
+- pricesIncVat: false (prices shown are ex-VAT)
+- unitPrice: 5.97
+- unitPriceExVat: 5.97
+- vatAmount: 1.19
+- vatRate: 20
+- total (inc VAT): 7.16
+
 Return only JSON, no other text.` },
             ],
           }],
@@ -2799,9 +2884,9 @@ Return only JSON, no other text.` },
       try { localStorage.setItem(`trade-pa-receipt-${receiptId}`, scanImageData); } catch {}
     }
     const newMaterials = (scanResult.items || []).map(item => {
-      const vatEnabled = (scanResult.vatRate || 0) > 0 && (scanResult.vatAmount || 0) > 0;
-      const vatRate = scanResult.vatRate || 20;
-      // Always store ex-VAT unit price
+      const vatRate = parseInt(scanResult.vatRate || 0);
+      const vatEnabled = vatRate > 0;
+      // Use unitPriceExVat if AI provided it, otherwise calculate from gross
       const exVatPrice = item.unitPriceExVat
         || (scanResult.pricesIncVat && vatEnabled
           ? parseFloat((item.unitPrice / (1 + vatRate / 100)).toFixed(4))
@@ -2809,7 +2894,7 @@ Return only JSON, no other text.` },
       return {
         item: item.item,
         qty: item.qty || 1,
-        unitPrice: exVatPrice,
+        unitPrice: parseFloat(exVatPrice.toFixed(2)),
         supplier: scanResult.supplier || "",
         job: scanResult.jobRef || "",
         status: "ordered",
@@ -3070,81 +3155,13 @@ Return only JSON, no other text.` },
           ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials yet — tap + Add Materials above or ask the AI Assistant.</div>
           : filtered.map((m, rawI) => {
             const i = (materials || []).indexOf(m);
-            const [expanded, setExpanded] = React.useState(false);
             return (
-              <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}` }}>
-                {/* Main row */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px" }} onClick={() => setExpanded(e => !e)}>
-                  <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{m.item}</div>
-                    <div style={{ fontSize: 11, color: C.muted, display: "flex", flexWrap: "wrap", gap: "2px 8px" }}>
-                      {m.qty > 1 && <span>×{m.qty}</span>}
-                      {m.supplier && <span>🏪 {m.supplier}</span>}
-                      {m.job && <span>📋 {m.job}</span>}
-                      {m.unitPrice > 0 && <span style={{ color: C.amber }}>£{((m.unitPrice || 0) * (m.qty || 1)).toFixed(2)} ex.VAT{m.vatEnabled ? ` +${m.vatRate || 20}%` : ""}</span>}
-                      {m.dueDate && <span>📅 {new Date(m.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
-                    </div>
-                  </div>
-                  <div style={{ ...S.badge(statusColor[m.status] || C.muted), flexShrink: 0 }}>{statusLabel[m.status] || m.status}</div>
-                  <div style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>{expanded ? "▲" : "▼"}</div>
-                </div>
-
-                {/* Expanded actions */}
-                {expanded && (
-                  <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-                    {/* Status + edit row */}
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => cycleStatus(i)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>
-                        {m.status === "to_order" ? "✓ Mark Ordered" : m.status === "ordered" ? "✓ Mark Collected" : "↺ Reset Status"}
-                      </button>
-                      <button onClick={() => setEditingMaterial({ index: i, item: m.item, qty: String(m.qty || 1), unitPrice: String(m.unitPrice || ""), supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order" })} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px" }}>✏ Edit</button>
-                      <button onClick={() => deleteMaterial(i)} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px", color: C.red, borderColor: C.red + "44" }}>Delete</button>
-                    </div>
-
-                    {/* Accounting row */}
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => {
-                        fetch("/api/xero/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, material: m }) })
-                          .then(r => r.json()).then(d => alert(d.error ? `Xero: ${d.error}` : "✓ Bill created in Xero")).catch(() => alert("Xero not connected — check Settings"));
-                      }} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: "#13B5EA", borderColor: "#13B5EA44" }}>↑ Xero Bill</button>
-                      <button onClick={() => {
-                        fetch("/api/quickbooks/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, material: m }) })
-                          .then(r => r.json()).then(d => alert(d.error ? `QuickBooks: ${d.error}` : "✓ Bill created in QuickBooks")).catch(() => alert("QuickBooks not connected — check Settings"));
-                      }} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: "#2CA01C", borderColor: "#2CA01C44" }}>↑ QB Bill</button>
-                    </div>
-
-                    {/* Receipt */}
-                    {(m.receiptId || m.receiptSource || m.receiptImage) && (
-                      <div
-                        style={{ fontSize: 12, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-                        onClick={e => {
-                          e.stopPropagation();
-                          const img = m.receiptImage || localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
-                          if (img) {
-                            const overlay = document.createElement("div");
-                            overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
-                            const closeBtn = document.createElement("button");
-                            closeBtn.textContent = "← Back to app";
-                            closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
-                            closeBtn.onclick = () => document.body.removeChild(overlay);
-                            const imgEl = document.createElement("img");
-                            imgEl.src = img;
-                            imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
-                            overlay.appendChild(closeBtn);
-                            overlay.appendChild(imgEl);
-                            document.body.appendChild(overlay);
-                          } else if (m.receiptSource === "email" && m.receiptFilename) {
-                            alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was received via email. Open your Inbox to view the original.`);
-                          } else {
-                            alert("Invoice image not available.");
-                          }
-                        }}
-                      >🧾 {m.receiptFilename || "View Invoice"}</div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <MaterialRow key={i} m={m} i={i}
+                cycleStatus={cycleStatus}
+                setEditingMaterial={setEditingMaterial}
+                deleteMaterial={deleteMaterial}
+                userId={user?.id}
+              />
             );
           })
         }
@@ -9524,10 +9541,10 @@ function ReportsTab({ invoices, jobs, materials, customers, brand, user }) {
     { label: "Custom", from: "", to: "" },
   ];
 
-  const [periodIdx, setPeriodIdx] = React.useState(0);
-  const [customFrom, setCustomFrom] = React.useState(fmtDate(new Date(today.getFullYear(), today.getMonth(), 1)));
-  const [customTo, setCustomTo] = React.useState(fmtDate(today));
-  const [activeReport, setActiveReport] = React.useState("pl");
+  const [periodIdx, setPeriodIdx] = useState(0);
+  const [customFrom, setCustomFrom] = useState(fmtDate(new Date(today.getFullYear(), today.getMonth(), 1)));
+  const [customTo, setCustomTo] = useState(fmtDate(today));
+  const [activeReport, setActiveReport] = useState("pl");
 
   const isCustom = periodIdx === periods.length - 1;
   const fromDate = isCustom ? customFrom : periods[periodIdx].from;
