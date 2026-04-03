@@ -2,6 +2,11 @@
   "buildCommand": "cd trade-pa && npm install && npm run build",
   "outputDirectory": "trade-pa/dist",
   "installCommand": "cd trade-pa && npm install",
+  "functions": {
+    "api/calls/recording.js": { "maxDuration": 120 },
+    "api/email-cron.js": { "maxDuration": 120 },
+    "api/email.js": { "maxDuration": 60 }
+  },
   "crons": [
     {
       "path": "/api/email-cron",
