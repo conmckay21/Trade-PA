@@ -649,6 +649,14 @@ const DEFAULT_BRAND = {
   refFormat: "invoice_number",
   refPrefix: "",
   defaultPaymentMethod: "both",
+  googleReviewUrl: "",
+  reviewUrlGoogle: "",
+  reviewUrlCheckatrade: "",
+  reviewUrlTrustpilot: "",
+  reviewUrlFacebook: "",
+  reviewUrlWhich: "",
+  reviewUrlMyBuilder: "",
+  reviewUrlRatedPeople: "",
 };
 
 // Helper: build the payment reference string for a given invoice
@@ -1311,7 +1319,7 @@ function CallTrackingSettings({ user }) {
 }
 
 function TeamInvite({ companyId, planTier, currentMemberCount }) {
-  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports"];
+  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "Purchase Orders", "RAMS"];
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [sending, setSending] = useState(false);
@@ -1659,6 +1667,13 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             { k: "phone", l: "Phone Number" },
             { k: "email", l: "Email Address" },
             { k: "website", l: "Website" },
+            { k: "googleReviewUrl", l: "Google Review Link" },
+            { k: "reviewUrlCheckatrade", l: "Checkatrade Review Link" },
+            { k: "reviewUrlTrustpilot", l: "Trustpilot Review Link" },
+            { k: "reviewUrlFacebook", l: "Facebook Review Link" },
+            { k: "reviewUrlWhich", l: "Which? Trusted Traders Link" },
+            { k: "reviewUrlMyBuilder", l: "MyBuilder Profile Link" },
+            { k: "reviewUrlRatedPeople", l: "Rated People Profile Link" },
             { k: "utrNumber", l: "UTR Number (Unique Taxpayer Reference)" },
           ].map(({ k, l }) => (
             <div key={k}>
@@ -2149,7 +2164,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           const email = m.invited_email || m.users?.email || "Team member";
           const initials = email[0].toUpperCase();
           const perms = m.permissions || {};
-          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports"];
+          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "Purchase Orders", "RAMS"];
 
           return (
             <div key={i} style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 14, marginBottom: 14 }}>
@@ -9520,7 +9535,7 @@ function CISStatementsTab({ user }) {
 }
 
 // ─── Reports Tab ─────────────────────────────────────────────────────────────
-function ReportsTab({ invoices, jobs, materials, customers, brand, user }) {
+function ReportsTab({ invoices, jobs, materials, customers, enquiries, brand, user }) {
   const today = new Date();
   const fmtDate = d => d.toISOString().split("T")[0];
 
@@ -9642,6 +9657,8 @@ function ReportsTab({ invoices, jobs, materials, customers, brand, user }) {
     { id: "materials", label: "Materials Spend", icon: "🔧" },
     { id: "cis", label: "CIS Summary", icon: "🏗" },
     { id: "jobs", label: "Jobs Overview", icon: "📋" },
+    { id: "quoteconv", label: "Quote Conversion", icon: "🤝" },
+    { id: "enqconv", label: "Enquiry to Quote", icon: "📩" },
   ];
 
   const StatBox = ({ label, value, sub, color }) => (
@@ -9671,13 +9688,10 @@ function ReportsTab({ invoices, jobs, materials, customers, brand, user }) {
   const downloadPDF = () => {
     const reportName = reports.find(r => r.id === activeReport)?.label || "Report";
     const periodLabel = isCustom
-      ? `${customFrom} to ${customTo}`
+      ? `${new Date(customFrom).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} to ${new Date(customTo).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`
       : periods[periodIdx].label;
     const businessName = brand?.tradingName || "Trade PA";
-
-    // Collect the current report content from the DOM
-    const reportEl = document.getElementById("report-content");
-    if (!reportEl) return;
+    const accent = brand?.accentColor || "#f59e0b";
 
     const html = `<!DOCTYPE html>
 <html>
@@ -9685,43 +9699,45 @@ function ReportsTab({ invoices, jobs, materials, customers, brand, user }) {
 <meta charset="UTF-8">
 <title>${reportName} — ${businessName}</title>
 <style>
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #111; margin: 0; padding: 32px; font-size: 13px; }
-  h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
-  .meta { color: #666; font-size: 12px; margin-bottom: 24px; }
-  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-  .stat { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; }
-  .stat-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
-  .stat-value { font-size: 20px; font-weight: 700; font-family: monospace; }
-  .stat-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #111; padding: 40px; font-size: 13px; background: #fff; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 3px solid ${accent}; }
+  .business { font-size: 22px; font-weight: 700; }
+  .report-title { font-size: 16px; font-weight: 700; color: #333; text-align: right; }
+  .report-meta { font-size: 12px; color: #888; margin-top: 4px; text-align: right; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 16px; }
+  .stat-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .stat-value { font-size: 20px; font-weight: 700; font-family: monospace; color: #111; }
+  .stat-sub { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+  .section-title { font-size: 14px; font-weight: 700; margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
   thead tr { background: #f9fafb; }
-  th { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+  th { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 12px; text-align: left; border-bottom: 2px solid #e5e7eb; }
   th:not(:first-child) { text-align: right; }
   td { padding: 9px 12px; border-bottom: 1px solid #f3f4f6; font-size: 12px; }
   td:not(:first-child) { text-align: right; font-family: monospace; }
-  tr.total td { font-weight: 700; background: #fef9f0; }
-  .section-title { font-size: 14px; font-weight: 700; margin: 20px 0 10px; }
-  .note { background: #fef3c7; border: 1px solid #f59e0b44; border-radius: 6px; padding: 8px 12px; font-size: 11px; color: #92400e; margin-top: 12px; }
-  @media print { body { padding: 16px; } }
+  tr.total td { font-weight: 700; background: #fef9f0; border-top: 2px solid ${accent}44; }
+  .note { background: #fef3c7; border: 1px solid #f59e0b44; border-radius: 6px; padding: 10px 14px; font-size: 11px; color: #92400e; margin-top: 12px; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; text-align: center; }
+  @media print { body { padding: 20px; } }
 </style>
 </head>
 <body>
-<h1>${businessName}</h1>
-<div class="meta">${reportName} · ${periodLabel} · Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</div>
+<div class="header">
+  <div class="business">${businessName}</div>
+  <div>
+    <div class="report-title">${reportName}</div>
+    <div class="report-meta">${periodLabel}</div>
+    <div class="report-meta">Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</div>
+  </div>
+</div>
 ${generateReportHTML()}
+<div class="footer">${businessName} · Generated by Trade PA · ${new Date().toLocaleDateString("en-GB")}</div>
 </body>
 </html>`;
 
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, "_blank");
-    if (win) {
-      win.onload = () => {
-        win.focus();
-        win.print();
-      };
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
   };
 
   const generateReportHTML = () => {
@@ -9824,6 +9840,42 @@ ${generateReportHTML()}
         ${tableHead(["Job", "Customer", "Type", "Date", "Status"])}
         <tbody>${periodJobs.map(j => tableRow([j.title||j.type||"Job", j.customer, j.type||"—", j.date ? new Date(j.dateObj||j.date).toLocaleDateString("en-GB") : "TBC", j.status])).join("")}</tbody>
       </table>`;
+
+    if (activeReport === "quoteconv") {
+      const allQuotes = (invoices || []).filter(i => i.isQuote && inRange(i.created_at || i.date));
+      const accepted = allQuotes.filter(q => q.status === "accepted");
+      const declined = allQuotes.filter(q => q.status === "declined");
+      const pending = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
+      const rate = allQuotes.length > 0 ? ((accepted.length / allQuotes.length) * 100).toFixed(1) : "0.0";
+      return `
+        <div class="stat-grid">
+          ${statBox("Total Quotes", allQuotes.length, fmtH(allQuotes.reduce((s,q)=>s+parseFloat(q.grossAmount||q.amount||0),0)))}
+          ${statBox("Converted", accepted.length, fmtH(accepted.reduce((s,q)=>s+parseFloat(q.grossAmount||q.amount||0),0)))}
+          ${statBox("Declined", declined.length, fmtH(declined.reduce((s,q)=>s+parseFloat(q.grossAmount||q.amount||0),0)))}
+          ${statBox("Conversion Rate", rate + "%", `${pending.length} pending`)}
+        </div>
+        <table>
+          ${tableHead(["Quote", "Customer", "Value", "Sent", "Outcome"])}
+          <tbody>${allQuotes.sort((a,b)=>new Date(b.created_at||b.date)-new Date(a.created_at||a.date)).map(q => tableRow([q.id, q.customer, fmtH(parseFloat(q.grossAmount||q.amount||0)), q.date ? new Date(q.created_at||q.date).toLocaleDateString("en-GB") : "—", q.status==="accepted" ? "Converted" : q.status==="declined" ? "Declined" : "Pending"])).join("")}</tbody>
+        </table>`;
+    }
+
+    if (activeReport === "enqconv") {
+      const allEnq = (enquiries || []).filter(e => inRange(e.created_at || e.date));
+      const quoted = allEnq.filter(e => ["quoted","quote_sent","won","accepted"].includes(e.status));
+      const rate = allEnq.length > 0 ? ((quoted.length / allEnq.length) * 100).toFixed(1) : "0.0";
+      return `
+        <div class="stat-grid">
+          ${statBox("Total Enquiries", allEnq.length, "")}
+          ${statBox("Quoted", quoted.length, "")}
+          ${statBox("Not Quoted", allEnq.length - quoted.length, "")}
+          ${statBox("Quote Rate", rate + "%", "")}
+        </div>
+        <table>
+          ${tableHead(["Name", "Source", "Date", "Status"])}
+          <tbody>${allEnq.sort((a,b)=>new Date(b.created_at||b.date)-new Date(a.created_at||a.date)).map(e => tableRow([e.name||e.customer||"Unknown", e.source||"—", e.created_at ? new Date(e.created_at).toLocaleDateString("en-GB") : "—", ["quoted","quote_sent"].includes(e.status) ? "Quoted" : ["won","accepted"].includes(e.status) ? "Won" : ["lost","declined"].includes(e.status) ? "Lost" : "Pending"])).join("")}</tbody>
+        </table>`;
+    }
 
     return "";
   };
@@ -10093,11 +10145,1544 @@ ${generateReportHTML()}
           </div>
         </div>
       )}
+
+      {/* ── Quote Conversion ── */}
+      {activeReport === "quoteconv" && (() => {
+        const allQuotes = (invoices || []).filter(i => i.isQuote && inRange(i.created_at || i.date));
+        const acceptedQuotes = allQuotes.filter(q => q.status === "accepted");
+        const declinedQuotes = allQuotes.filter(q => q.status === "declined");
+        const pendingQuotes = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
+        const convRate = allQuotes.length > 0 ? (acceptedQuotes.length / allQuotes.length) * 100 : 0;
+        const totalQuoteValue = allQuotes.reduce((s, q) => s + parseFloat(q.grossAmount || q.amount || 0), 0);
+        const wonValue = acceptedQuotes.reduce((s, q) => s + parseFloat(q.grossAmount || q.amount || 0), 0);
+        const lostValue = declinedQuotes.reduce((s, q) => s + parseFloat(q.grossAmount || q.amount || 0), 0);
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>🤝 Quote Conversion</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+              <StatBox label="Total Quotes" value={allQuotes.length} sub={fmt(totalQuoteValue)} />
+              <StatBox label="Converted" value={acceptedQuotes.length} sub={fmt(wonValue)} color={C.green} />
+              <StatBox label="Declined" value={declinedQuotes.length} sub={fmt(lostValue)} color={C.red} />
+              <StatBox label="Conversion Rate" value={`${convRate.toFixed(1)}%`} sub={`${pendingQuotes.length} pending`} color={convRate >= 50 ? C.green : C.amber} />
+            </div>
+            {/* Visual bar */}
+            {allQuotes.length > 0 && (
+              <div style={{ background: C.surface, borderRadius: 10, padding: 16, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Quote outcomes</div>
+                <div style={{ display: "flex", height: 24, borderRadius: 6, overflow: "hidden", gap: 2 }}>
+                  {acceptedQuotes.length > 0 && <div style={{ flex: acceptedQuotes.length, background: C.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", fontWeight: 700 }}>{acceptedQuotes.length} Won</div>}
+                  {pendingQuotes.length > 0 && <div style={{ flex: pendingQuotes.length, background: C.amber, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", fontWeight: 700 }}>{pendingQuotes.length} Pending</div>}
+                  {declinedQuotes.length > 0 && <div style={{ flex: declinedQuotes.length, background: C.red + "88", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 700 }}>{declinedQuotes.length} Lost</div>}
+                </div>
+              </div>
+            )}
+            <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <TableHeader cells={["Quote", "Customer", "Value", "Sent", "Outcome"]} />
+              {allQuotes.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date)).map((q, i) => (
+                <TableRow key={i} cells={[
+                  q.id,
+                  q.customer,
+                  fmt(parseFloat(q.grossAmount || q.amount || 0)),
+                  q.date ? new Date(q.created_at || q.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—",
+                  q.status === "accepted" ? "✓ Converted" : q.status === "declined" ? "✗ Declined" : "⏳ Pending"
+                ]} />
+              ))}
+              {allQuotes.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No quotes in this period</div>}
+            </div>
+            {allQuotes.length > 0 && (
+              <div style={{ background: C.surface, borderRadius: 10, padding: 14, border: `1px solid ${C.border}`, fontSize: 12 }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>Pipeline Summary</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, color: C.muted }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value won</span><span style={{ color: C.green, fontFamily: "'DM Mono',monospace" }}>{fmt(wonValue)}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value pending</span><span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>{fmt(pendingQuotes.reduce((s, q) => s + parseFloat(q.grossAmount || q.amount || 0), 0))}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value lost</span><span style={{ color: C.red, fontFamily: "'DM Mono',monospace" }}>{fmt(lostValue)}</span></div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Enquiry to Quote ── */}
+      {activeReport === "enqconv" && (() => {
+        const allEnquiries = (enquiries || []).filter(e => inRange(e.created_at || e.date));
+        const quotedEnquiries = allEnquiries.filter(e => e.status === "quoted" || e.status === "quote_sent");
+        const wonEnquiries = allEnquiries.filter(e => e.status === "won" || e.status === "accepted");
+        const lostEnquiries = allEnquiries.filter(e => e.status === "lost" || e.status === "declined");
+        const pendingEnquiries = allEnquiries.filter(e => !["quoted", "quote_sent", "won", "accepted", "lost", "declined"].includes(e.status));
+        const toQuoteRate = allEnquiries.length > 0 ? ((quotedEnquiries.length + wonEnquiries.length) / allEnquiries.length) * 100 : 0;
+        const bySource = {};
+        allEnquiries.forEach(e => {
+          const src = e.source || "Unknown";
+          if (!bySource[src]) bySource[src] = { total: 0, quoted: 0 };
+          bySource[src].total++;
+          if (e.status === "quoted" || e.status === "quote_sent" || e.status === "won" || e.status === "accepted") bySource[src].quoted++;
+        });
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>📩 Enquiry to Quote</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
+              <StatBox label="Total Enquiries" value={allEnquiries.length} />
+              <StatBox label="Quoted" value={quotedEnquiries.length + wonEnquiries.length} color={C.blue} />
+              <StatBox label="Not Quoted" value={pendingEnquiries.length + lostEnquiries.length} color={C.muted} />
+              <StatBox label="Quote Rate" value={`${toQuoteRate.toFixed(1)}%`} color={toQuoteRate >= 60 ? C.green : C.amber} />
+            </div>
+            {allEnquiries.length > 0 && (
+              <div style={{ background: C.surface, borderRadius: 10, padding: 16, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Enquiry outcomes</div>
+                <div style={{ display: "flex", height: 24, borderRadius: 6, overflow: "hidden", gap: 2 }}>
+                  {(quotedEnquiries.length + wonEnquiries.length) > 0 && <div style={{ flex: quotedEnquiries.length + wonEnquiries.length, background: C.blue, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 700 }}>{quotedEnquiries.length + wonEnquiries.length} Quoted</div>}
+                  {pendingEnquiries.length > 0 && <div style={{ flex: pendingEnquiries.length, background: C.amber, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", fontWeight: 700 }}>{pendingEnquiries.length} Pending</div>}
+                  {lostEnquiries.length > 0 && <div style={{ flex: lostEnquiries.length, background: C.muted + "44", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: C.muted, fontWeight: 700 }}>{lostEnquiries.length} Lost</div>}
+                </div>
+              </div>
+            )}
+            {Object.keys(bySource).length > 0 && (
+              <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                <div style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>By Source</div>
+                <TableHeader cells={["Source", "Enquiries", "Quoted", "Rate"]} />
+                {Object.entries(bySource).sort((a, b) => b[1].total - a[1].total).map(([src, d], i) => (
+                  <TableRow key={i} cells={[src, d.total, d.quoted, `${d.total > 0 ? ((d.quoted / d.total) * 100).toFixed(0) : 0}%`]} />
+                ))}
+              </div>
+            )}
+            <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <TableHeader cells={["Name", "Source", "Date", "Status"]} />
+              {allEnquiries.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date)).map((e, i) => (
+                <TableRow key={i} cells={[
+                  e.name || e.customer || "Unknown",
+                  e.source || "—",
+                  e.created_at ? new Date(e.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—",
+                  e.status === "quoted" || e.status === "quote_sent" ? "✓ Quoted" : e.status === "won" || e.status === "accepted" ? "✓ Won" : e.status === "lost" || e.status === "declined" ? "✗ Lost" : "⏳ Pending"
+                ]} />
+              ))}
+              {allEnquiries.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No enquiries in this period</div>}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
-const VIEWS = ["Dashboard", "Schedule", "Enquiries", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Settings"];
+// ─── MILEAGE TRACKING ────────────────────────────────────────────────────────
+function MileageTab({ user }) {
+  const [trips, setTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ date: new Date().toISOString().split("T")[0], from: "", to: "", miles: "", job: "", purpose: "" });
+  const [yearMiles, setYearMiles] = useState(0);
+
+  const taxYearStart = () => {
+    const now = new Date();
+    const april6 = new Date(now.getFullYear(), 3, 6);
+    return (now >= april6 ? april6 : new Date(now.getFullYear() - 1, 3, 6)).toISOString().split("T")[0];
+  };
+
+  const calcValue = (miles, priorMiles = 0) => {
+    let v = 0, m = parseFloat(miles || 0);
+    for (let i = 0; i < m; i++) v += (priorMiles + i) < 10000 ? 0.45 : 0.25;
+    return parseFloat(v.toFixed(2));
+  };
+
+  useEffect(() => { if (user?.id) load(); }, [user?.id]);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("mileage_logs").select("*").eq("user_id", user.id).order("date", { ascending: false });
+    setTrips(data || []);
+    const ym = (data || []).filter(t => t.date >= taxYearStart()).reduce((s, t) => s + parseFloat(t.miles || 0), 0);
+    setYearMiles(ym);
+    setLoading(false);
+  };
+
+  const save = async () => {
+    if (!form.miles || !form.date) return;
+    const value = calcValue(form.miles, yearMiles);
+    const { data, error } = await supabase.from("mileage_logs").insert({ user_id: user.id, date: form.date, from_location: form.from, to_location: form.to, miles: parseFloat(form.miles), job_ref: form.job, purpose: form.purpose, rate: parseFloat(form.miles) <= (10000 - yearMiles) ? 0.45 : 0.25, value, created_at: new Date().toISOString() }).select().single();
+    if (!error && data) { setTrips(p => [data, ...p]); setYearMiles(y => y + parseFloat(form.miles)); setShowAdd(false); setForm({ date: new Date().toISOString().split("T")[0], from: "", to: "", miles: "", job: "", purpose: "" }); }
+  };
+
+  const del = async (id, miles) => {
+    await supabase.from("mileage_logs").delete().eq("id", id).eq("user_id", user.id);
+    setTrips(p => p.filter(t => t.id !== id));
+    setYearMiles(y => y - parseFloat(miles || 0));
+  };
+
+  const yearValue = calcValue(yearMiles);
+
+  const exportPDF = () => {
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Mileage Log</title><style>body{font-family:Arial,sans-serif;padding:32px;font-size:12px}h1{font-size:20px;margin-bottom:4px}.meta{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;padding:8px;text-align:left;font-size:10px;text-transform:uppercase;border-bottom:2px solid #e5e7eb}td{padding:8px;border-bottom:1px solid #f3f4f6}tr.tot td{font-weight:700;background:#fef9f0}</style></head><body><h1>Mileage Log</h1><div class="meta">Tax Year · ${yearMiles.toFixed(1)} miles · £${yearValue.toFixed(2)} claimable at HMRC rates</div><table><thead><tr><th>Date</th><th>From</th><th>To</th><th>Miles</th><th>Purpose / Job</th><th>Value</th></tr></thead><tbody>${trips.map(t=>`<tr><td>${new Date(t.date).toLocaleDateString("en-GB")}</td><td>${t.from_location||"—"}</td><td>${t.to_location||"—"}</td><td>${t.miles}</td><td>${t.purpose||t.job_ref||"—"}</td><td>£${(t.value||0).toFixed(2)}</td></tr>`).join("")}<tr class="tot"><td colspan="3"><b>Total (Tax Year)</b></td><td>${yearMiles.toFixed(1)}</td><td></td><td>£${yearValue.toFixed(2)}</td></tr></tbody></table><p style="margin-top:20px;font-size:11px;color:#888">HMRC mileage rate: 45p/mile for first 10,000 miles · 25p/mile thereafter</p></body></html>`;
+    window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Mileage</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={exportPDF} style={{ ...S.btn("ghost"), fontSize: 12 }}>⬇ PDF</button>
+          <button onClick={() => setShowAdd(true)} style={S.btn("primary")}>+ Add Trip</button>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
+        {[["Miles This Tax Year", yearMiles.toFixed(1) + " mi", C.text], ["Tax Relief Value", "£" + yearValue.toFixed(2), C.green], ["Remaining at 45p", Math.max(0, 10000 - yearMiles).toFixed(0) + " mi", C.amber], ["Total Trips", trips.length, C.muted]].map(([l, v, col], i) => (
+          <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 11, color: C.amber, background: C.amber + "11", border: `1px solid ${C.amber}33`, borderRadius: 8, padding: "8px 12px" }}>
+        💡 HMRC allows 45p/mile for your first 10,000 business miles each tax year, then 25p/mile. Export this log for your self-assessment.
+      </div>
+
+      {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : trips.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No trips logged yet — tap + Add Trip</div>
+      ) : trips.map(t => (
+        <div key={t.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 4, height: 40, borderRadius: 2, background: C.amber, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.from_location || "Trip"}{t.to_location ? ` → ${t.to_location}` : ""}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{new Date(t.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{(t.purpose || t.job_ref) ? ` · ${t.purpose || t.job_ref}` : ""}</div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>{t.miles} mi</div>
+            <div style={{ fontSize: 11, color: C.green, fontFamily: "'DM Mono',monospace" }}>£{(t.value || 0).toFixed(2)}</div>
+          </div>
+          <button onClick={() => del(t.id, t.miles)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>
+        </div>
+      ))}
+
+      {showAdd && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setShowAdd(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Log Trip</div>
+              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div><label style={S.label}>Date</label><input style={S.input} type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>From</label><input style={S.input} value={form.from} onChange={e => setForm(f => ({ ...f, from: e.target.value }))} placeholder="e.g. Home" /></div>
+                <div><label style={S.label}>To</label><input style={S.input} value={form.to} onChange={e => setForm(f => ({ ...f, to: e.target.value }))} placeholder="e.g. Customer site" /></div>
+              </div>
+              <div style={S.grid2}>
+                <div>
+                  <label style={S.label}>Miles</label>
+                  <input style={S.input} type="number" step="0.1" min="0" value={form.miles} onChange={e => setForm(f => ({ ...f, miles: e.target.value }))} placeholder="0.0" />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+                  {form.miles > 0 && <div style={{ fontSize: 12, color: C.green, background: C.green + "11", borderRadius: 6, padding: "8px 10px", textAlign: "center", fontFamily: "'DM Mono',monospace" }}>£{calcValue(form.miles, yearMiles).toFixed(2)} claimable</div>}
+                </div>
+              </div>
+              <div><label style={S.label}>Job / Purpose</label><input style={S.input} value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} placeholder="e.g. Boiler service — J. Smith" /></div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={save} disabled={!form.miles}>Save Trip</button>
+              <button style={S.btn("ghost")} onClick={() => setShowAdd(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ─── SUBCONTRACTOR CIS MANAGEMENT ────────────────────────────────────────────
+function SubcontractorsTab({ user, brand }) {
+  const [subs, setSubs] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("list"); // list | add_sub | add_payment | statement
+  const [selected, setSelected] = useState(null);
+  const [subForm, setSubForm] = useState({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "" });
+  const [payForm, setPayForm] = useState({ subcontractor_id: "", date: new Date().toISOString().split("T")[0], gross: "", job_ref: "", description: "", invoice_number: "" });
+  const [filterSub, setFilterSub] = useState("all");
+
+  useEffect(() => { if (user?.id) load(); }, [user?.id]);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: s }, { data: p }] = await Promise.all([
+      supabase.from("subcontractors").select("*").eq("user_id", user.id).order("name"),
+      supabase.from("subcontractor_payments").select("*").eq("user_id", user.id).order("date", { ascending: false }),
+    ]);
+    setSubs(s || []);
+    setPayments(p || []);
+    setLoading(false);
+  };
+
+  const saveSub = async () => {
+    if (!subForm.name) return;
+    const { data, error } = await supabase.from("subcontractors").insert({ user_id: user.id, ...subForm, created_at: new Date().toISOString() }).select().single();
+    if (!error && data) { setSubs(p => [...p, data]); setView("list"); setSubForm({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "" }); }
+  };
+
+  const savePayment = async () => {
+    if (!payForm.subcontractor_id || !payForm.gross) return;
+    const sub = subs.find(s => s.id === payForm.subcontractor_id);
+    const gross = parseFloat(payForm.gross);
+    const rate = (sub?.cis_rate || 20) / 100;
+    const deduction = parseFloat((gross * rate).toFixed(2));
+    const net = parseFloat((gross - deduction).toFixed(2));
+    const { data, error } = await supabase.from("subcontractor_payments").insert({
+      user_id: user.id, subcontractor_id: payForm.subcontractor_id,
+      date: payForm.date, gross, deduction, net,
+      cis_rate: sub?.cis_rate || 20,
+      job_ref: payForm.job_ref, description: payForm.description,
+      invoice_number: payForm.invoice_number,
+      created_at: new Date().toISOString(),
+    }).select().single();
+    if (!error && data) { setPayments(p => [data, ...p]); setView("list"); setPayForm({ subcontractor_id: "", date: new Date().toISOString().split("T")[0], gross: "", job_ref: "", description: "", invoice_number: "" }); }
+  };
+
+  const generateStatement = (sub, month) => {
+    const monthPayments = payments.filter(p => p.subcontractor_id === sub.id && p.date?.startsWith(month));
+    const totalGross = monthPayments.reduce((s, p) => s + parseFloat(p.gross || 0), 0);
+    const totalDed = monthPayments.reduce((s, p) => s + parseFloat(p.deduction || 0), 0);
+    const totalNet = monthPayments.reduce((s, p) => s + parseFloat(p.net || 0), 0);
+    const monthLabel = new Date(month + "-01").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>CIS Payment Statement</title>
+    <style>body{font-family:Arial,sans-serif;padding:40px;font-size:13px}h1{font-size:20px;margin-bottom:4px}.meta{color:#666;font-size:12px;margin-bottom:32px}.box{border:2px solid #111;border-radius:8px;padding:20px;margin-bottom:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.label{font-size:10px;text-transform:uppercase;color:#666;margin-bottom:4px}.value{font-size:15px;font-weight:700}table{width:100%;border-collapse:collapse;margin-top:16px}th{background:#f3f4f6;padding:8px;text-align:left;font-size:10px;text-transform:uppercase;border-bottom:2px solid #e5e7eb}td{padding:8px;border-bottom:1px solid #f3f4f6}.tot{font-weight:700;background:#fef9f0}.notice{background:#fef3c7;border:1px solid #f59e0b44;border-radius:6px;padding:12px;font-size:11px;color:#92400e;margin-top:16px}</style>
+    </head><body>
+    <h1>${brand?.tradingName || "Trade PA"}</h1>
+    <div class="meta">CIS Payment & Deduction Statement · ${monthLabel}</div>
+    <div class="box">
+      <div class="grid">
+        <div><div class="label">Contractor</div><div class="value">${brand?.tradingName || ""}</div>${brand?.utrNumber ? `<div style="font-size:11px;color:#666;margin-top:4px">UTR: ${brand.utrNumber}</div>` : ""}</div>
+        <div><div class="label">Subcontractor</div><div class="value">${sub.name}</div>${sub.utr ? `<div style="font-size:11px;color:#666;margin-top:4px">UTR: ${sub.utr}</div>` : ""}${sub.company ? `<div style="font-size:11px;color:#666">${sub.company}</div>` : ""}</div>
+      </div>
+    </div>
+    <table><thead><tr><th>Date</th><th>Description</th><th>Invoice</th><th>Gross</th><th>Deduction (${sub.cis_rate || 20}%)</th><th>Net Paid</th></tr></thead>
+    <tbody>${monthPayments.map(p=>`<tr><td>${new Date(p.date).toLocaleDateString("en-GB")}</td><td>${p.description||p.job_ref||"—"}</td><td>${p.invoice_number||"—"}</td><td>£${parseFloat(p.gross||0).toFixed(2)}</td><td>£${parseFloat(p.deduction||0).toFixed(2)}</td><td>£${parseFloat(p.net||0).toFixed(2)}</td></tr>`).join("")}
+    <tr class="tot"><td colspan="3">Total</td><td>£${totalGross.toFixed(2)}</td><td>£${totalDed.toFixed(2)}</td><td>£${totalNet.toFixed(2)}</td></tr>
+    </tbody></table>
+    <div class="notice">Under the Construction Industry Scheme, the contractor is required to deduct ${sub.cis_rate || 20}% from payments made to this subcontractor and pay this to HMRC. The subcontractor can use this statement as evidence of deductions made when completing their self-assessment tax return.</div>
+    </body></html>`;
+    window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
+  };
+
+  const subPayments = (subId) => payments.filter(p => p.subcontractor_id === subId);
+  const subTotal = (subId) => subPayments(subId).reduce((s, p) => s + parseFloat(p.gross || 0), 0);
+  const subDeductions = (subId) => subPayments(subId).reduce((s, p) => s + parseFloat(p.deduction || 0), 0);
+
+  // Get unique months for statement generation
+  const getMonths = (subId) => {
+    const months = [...new Set(subPayments(subId).map(p => p.date?.substring(0, 7)))].sort().reverse();
+    return months;
+  };
+
+  const filteredPayments = filterSub === "all" ? payments : payments.filter(p => p.subcontractor_id === filterSub);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Subcontractors</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setView("add_payment")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Payment</button>
+          <button onClick={() => setView("add_sub")} style={S.btn("primary")}>+ Subcontractor</button>
+        </div>
+      </div>
+
+      {/* Summary */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
+        {[
+          ["Subcontractors", subs.length, C.text],
+          ["Total Paid (Gross)", "£" + payments.reduce((s,p) => s + parseFloat(p.gross||0), 0).toFixed(2), C.text],
+          ["CIS Deducted", "£" + payments.reduce((s,p) => s + parseFloat(p.deduction||0), 0).toFixed(2), C.amber],
+          ["Net Paid", "£" + payments.reduce((s,p) => s + parseFloat(p.net||0), 0).toFixed(2), C.green],
+        ].map(([l, v, col], i) => (
+          <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Subcontractor cards */}
+      {subs.length > 0 && (
+        <div style={{ ...S.card }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Your Subcontractors</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {subs.map(sub => (
+              <div key={sub.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>{sub.name}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>
+                      {sub.utr && `UTR: ${sub.utr} · `}CIS Rate: {sub.cis_rate || 20}%{sub.company && ` · ${sub.company}`}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 12, color: C.muted }}>Gross paid: <span style={{ color: C.text, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>£{subTotal(sub.id).toFixed(2)}</span></div>
+                    <div style={{ fontSize: 12, color: C.muted }}>CIS deducted: <span style={{ color: C.amber, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>£{subDeductions(sub.id).toFixed(2)}</span></div>
+                  </div>
+                </div>
+                {/* Statement buttons by month */}
+                {getMonths(sub.id).length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Generate Statement</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {getMonths(sub.id).map(month => (
+                        <button key={month} onClick={() => generateStatement(sub, month)}
+                          style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>
+                          {new Date(month + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Payment history */}
+      {payments.length > 0 && (
+        <div style={{ ...S.card }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Payment History</div>
+            <select style={{ ...S.input, width: "auto", fontSize: 11 }} value={filterSub} onChange={e => setFilterSub(e.target.value)}>
+              <option value="all">All</option>
+              {subs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          {filteredPayments.map(p => {
+            const sub = subs.find(s => s.id === p.subcontractor_id);
+            return (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{sub?.name || "Unknown"}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{new Date(p.date).toLocaleDateString("en-GB")} {p.description && `· ${p.description}`} {p.job_ref && `· ${p.job_ref}`}</div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 12, color: C.muted }}>Gross: <span style={{ color: C.text, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.gross||0).toFixed(2)}</span></div>
+                  <div style={{ fontSize: 12, color: C.muted }}>CIS: <span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.deduction||0).toFixed(2)}</span> · Net: <span style={{ color: C.green, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.net||0).toFixed(2)}</span></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {subs.length === 0 && !loading && (
+        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No subcontractors added yet</div>
+      )}
+
+      {/* Add Subcontractor Modal */}
+      {view === "add_sub" && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setView("list")}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Subcontractor</div>
+              <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div><label style={S.label}>Name</label><input style={S.input} value={subForm.name} onChange={e => setSubForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" /></div>
+              <div><label style={S.label}>Company (optional)</label><input style={S.input} value={subForm.company} onChange={e => setSubForm(f => ({ ...f, company: e.target.value }))} placeholder="Company name" /></div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>UTR Number</label><input style={S.input} value={subForm.utr} onChange={e => setSubForm(f => ({ ...f, utr: e.target.value }))} placeholder="10-digit UTR" /></div>
+                <div>
+                  <label style={S.label}>CIS Rate</label>
+                  <select style={S.input} value={subForm.cis_rate} onChange={e => setSubForm(f => ({ ...f, cis_rate: parseInt(e.target.value) }))}>
+                    <option value={20}>20% — Registered</option>
+                    <option value={30}>30% — Unregistered</option>
+                    <option value={0}>0% — Gross payment</option>
+                  </select>
+                </div>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Email</label><input style={S.input} type="email" value={subForm.email} onChange={e => setSubForm(f => ({ ...f, email: e.target.value }))} placeholder="email@example.com" /></div>
+                <div><label style={S.label}>Phone</label><input style={S.input} value={subForm.phone} onChange={e => setSubForm(f => ({ ...f, phone: e.target.value }))} placeholder="07xxx xxxxxx" /></div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={saveSub} disabled={!subForm.name}>Save</button>
+              <button style={S.btn("ghost")} onClick={() => setView("list")}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Payment Modal */}
+      {view === "add_payment" && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setView("list")}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Log Payment</div>
+              <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={S.label}>Subcontractor</label>
+                <select style={S.input} value={payForm.subcontractor_id} onChange={e => setPayForm(f => ({ ...f, subcontractor_id: e.target.value }))}>
+                  <option value="">Select subcontractor...</option>
+                  {subs.map(s => <option key={s.id} value={s.id}>{s.name} ({s.cis_rate || 20}%)</option>)}
+                </select>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Date</label><input style={S.input} type="date" value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value }))} /></div>
+                <div><label style={S.label}>Invoice Number</label><input style={S.input} value={payForm.invoice_number} onChange={e => setPayForm(f => ({ ...f, invoice_number: e.target.value }))} placeholder="Their invoice ref" /></div>
+              </div>
+              <div>
+                <label style={S.label}>Gross Amount (£)</label>
+                <input style={S.input} type="number" step="0.01" value={payForm.gross} onChange={e => setPayForm(f => ({ ...f, gross: e.target.value }))} placeholder="0.00" />
+              </div>
+              {payForm.gross && payForm.subcontractor_id && (() => {
+                const sub = subs.find(s => s.id === payForm.subcontractor_id);
+                const gross = parseFloat(payForm.gross || 0);
+                const rate = (sub?.cis_rate || 20) / 100;
+                const ded = parseFloat((gross * rate).toFixed(2));
+                const net = gross - ded;
+                return (
+                  <div style={{ background: C.amber + "11", border: `1px solid ${C.amber}33`, borderRadius: 8, padding: "10px 12px", fontSize: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>CIS deduction ({sub?.cis_rate || 20}%)</span><span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>£{ded.toFixed(2)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}><span style={{ color: C.muted }}>Net payment to subcontractor</span><span style={{ color: C.green, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>£{net.toFixed(2)}</span></div>
+                  </div>
+                );
+              })()}
+              <div><label style={S.label}>Job Reference</label><input style={S.input} value={payForm.job_ref} onChange={e => setPayForm(f => ({ ...f, job_ref: e.target.value }))} placeholder="e.g. Kitchen extension" /></div>
+              <div><label style={S.label}>Description</label><input style={S.input} value={payForm.description} onChange={e => setPayForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. First fix electrical" /></div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={savePayment} disabled={!payForm.subcontractor_id || !payForm.gross}>Save Payment</button>
+              <button style={S.btn("ghost")} onClick={() => setView("list")}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ─── DOCUMENT STORAGE ────────────────────────────────────────────────────────
+function DocumentsTab({ user, customers }) {
+  const [docs, setDocs] = useState([]);
+  const [jobCards, setJobCards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const fileRef = useRef();
+
+  const CATEGORIES = ["Insurance", "Certifications", "Risk Assessments", "COSHH", "Job Documents", "Customer Documents", "Contracts", "Other"];
+
+  useEffect(() => { if (user?.id) load(); }, [user?.id]);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: d }, { data: j }] = await Promise.all([
+      supabase.from("documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user.id).order("created_at", { ascending: false }),
+    ]);
+    setDocs(d || []);
+    setJobCards(j || []);
+    setLoading(false);
+  };
+
+  const upload = async (file, category, linkedJob, linkedCustomer) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `${user.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error: uploadError } = await supabase.storage.from("documents").upload(path, file);
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path);
+      const { data, error } = await supabase.from("documents").insert({
+        user_id: user.id, name: file.name, type: file.type, category: category || "Other",
+        job_id: linkedJob || null, customer_id: linkedCustomer || null,
+        storage_path: path, file_size: file.size, public_url: publicUrl,
+        created_at: new Date().toISOString(),
+      }).select().single();
+      if (!error && data) setDocs(p => [data, ...p]);
+    } catch (e) { alert("Upload failed: " + e.message); }
+    setUploading(false);
+  };
+
+  const del = async (doc) => {
+    if (!confirm(`Delete "${doc.name}"?`)) return;
+    await supabase.storage.from("documents").remove([doc.storage_path]);
+    await supabase.from("documents").delete().eq("id", doc.id).eq("user_id", user.id);
+    setDocs(p => p.filter(d => d.id !== doc.id));
+  };
+
+  const openDoc = (doc) => { if (doc.public_url) window.open(doc.public_url, "_blank"); };
+
+  const fileIcon = (type) => {
+    if (!type) return "📄";
+    if (type.includes("pdf")) return "📋";
+    if (type.includes("image")) return "🖼";
+    if (type.includes("word") || type.includes("document")) return "📝";
+    if (type.includes("sheet") || type.includes("excel")) return "📊";
+    return "📄";
+  };
+
+  const fmtSize = (bytes) => {
+    if (!bytes) return "";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / 1048576).toFixed(1) + " MB";
+  };
+
+  const filtered = docs.filter(d =>
+    (filter === "all" || d.category === filter) &&
+    (!search || d.name?.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadForm, setUploadForm] = useState({ category: "Other", job_id: "", customer_id: "" });
+  const [pendingFile, setPendingFile] = useState(null);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Documents</div>
+        <button onClick={() => fileRef.current?.click()} style={S.btn("primary")} disabled={uploading}>
+          {uploading ? "Uploading..." : "⬆ Upload"}
+        </button>
+        <input ref={fileRef} type="file" accept="*/*" style={{ display: "none" }} onChange={e => { if (e.target.files?.[0]) { setPendingFile(e.target.files[0]); setShowUpload(true); } e.target.value = ""; }} />
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 10 }}>
+        {[["Total Files", docs.length, C.text], ["Storage Used", fmtSize(docs.reduce((s,d) => s+(d.file_size||0),0)), C.muted]].map(([l,v,col],i) => (
+          <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: col }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Search + filter */}
+      <div style={{ display: "flex", gap: 8 }}>
+        <input style={{ ...S.input, flex: 1 }} placeholder="Search documents..." value={search} onChange={e => setSearch(e.target.value)} />
+        <select style={{ ...S.input, width: "auto" }} value={filter} onChange={e => setFilter(e.target.value)}>
+          <option value="all">All</option>
+          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {/* Category sections */}
+      {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> :
+        filtered.length === 0 ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No documents found</div> :
+        filtered.map(doc => (
+          <div key={doc.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ fontSize: 28, flexShrink: 0 }}>{fileIcon(doc.type)}</div>
+            <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => openDoc(doc)}>
+              <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                {doc.category}{doc.file_size ? ` · ${fmtSize(doc.file_size)}` : ""}
+                {" · "}{new Date(doc.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              </div>
+            </div>
+            <button onClick={() => openDoc(doc)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>Open</button>
+            <button onClick={() => del(doc)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>
+          </div>
+        ))
+      }
+
+      {/* Upload modal */}
+      {showUpload && pendingFile && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => { setShowUpload(false); setPendingFile(null); }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Upload Document</div>
+              <button onClick={() => { setShowUpload(false); setPendingFile(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>
+                📄 {pendingFile.name} <span style={{ color: C.muted, fontSize: 11 }}>({fmtSize(pendingFile.size)})</span>
+              </div>
+              <div>
+                <label style={S.label}>Category</label>
+                <select style={S.input} value={uploadForm.category} onChange={e => setUploadForm(f => ({ ...f, category: e.target.value }))}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={S.label}>Link to Job (optional)</label>
+                <select style={S.input} value={uploadForm.job_id} onChange={e => setUploadForm(f => ({ ...f, job_id: e.target.value }))}>
+                  <option value="">No job link</option>
+                  {jobCards.map(j => <option key={j.id} value={j.id}>{j.title || j.type} — {j.customer}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={S.label}>Link to Customer (optional)</label>
+                <select style={S.input} value={uploadForm.customer_id} onChange={e => setUploadForm(f => ({ ...f, customer_id: e.target.value }))}>
+                  <option value="">No customer link</option>
+                  {(customers || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={async () => { await upload(pendingFile, uploadForm.category, uploadForm.job_id, uploadForm.customer_id); setShowUpload(false); setPendingFile(null); }}>Upload</button>
+              <button style={S.btn("ghost")} onClick={() => { setShowUpload(false); setPendingFile(null); }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ─── CUSTOMER REVIEWS ────────────────────────────────────────────────────────
+function ReviewsTab({ user, brand, customers }) {
+  const [requests, setRequests] = useState([]);
+  const [completedJobs, setCompletedJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(null);
+  const [showSendModal, setShowSendModal] = useState(null); // job object
+  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+
+  const PLATFORMS = [
+    { id: "google", label: "Google", icon: "🔍", urlKey: "reviewUrlGoogle", color: "#4285F4" },
+    { id: "checkatrade", label: "Checkatrade", icon: "✅", urlKey: "reviewUrlCheckatrade", color: "#00A651" },
+    { id: "trustpilot", label: "Trustpilot", icon: "⭐", urlKey: "reviewUrlTrustpilot", color: "#00B67A" },
+    { id: "facebook", label: "Facebook", icon: "👍", urlKey: "reviewUrlFacebook", color: "#1877F2" },
+    { id: "which", label: "Which? Trusted Traders", icon: "🏆", urlKey: "reviewUrlWhich", color: "#E31B23" },
+    { id: "mybuilder", label: "MyBuilder", icon: "🔨", urlKey: "reviewUrlMyBuilder", color: "#FF6B35" },
+    { id: "ratedpeople", label: "Rated People", icon: "👷", urlKey: "reviewUrlRatedPeople", color: "#0052CC" },
+  ];
+
+  const activePlatforms = PLATFORMS.filter(p => brand?.[p.urlKey]);
+
+  useEffect(() => { if (user?.id) load(); }, [user?.id]);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: reqs }, { data: jobData }] = await Promise.all([
+      supabase.from("review_requests").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("job_cards").select("*").eq("user_id", user.id).eq("status", "completed").order("completion_date", { ascending: false }),
+    ]);
+    setRequests(reqs || []);
+    const sent = new Set((reqs || []).map(r => r.job_id));
+    setCompletedJobs((jobData || []).map(j => ({ ...j, reviewSent: sent.has(j.id) })));
+    setLoading(false);
+  };
+
+  const openSendModal = (job) => {
+    setShowSendModal(job);
+    setSelectedPlatforms(activePlatforms.map(p => p.id)); // default all active
+  };
+
+  const sendRequest = async () => {
+    const job = showSendModal;
+    const cust = (customers || []).find(c => c.name?.toLowerCase() === job.customer?.toLowerCase());
+    const email = cust?.email || job.email;
+    if (!email) { alert("No email address for this customer. Add one in the Customers tab first."); return; }
+    if (selectedPlatforms.length === 0) { alert("Select at least one platform."); return; }
+
+    setSending(job.id);
+    const businessName = brand.tradingName || "us";
+    const chosenPlatforms = PLATFORMS.filter(p => selectedPlatforms.includes(p.id) && brand?.[p.urlKey]);
+
+    // Build review buttons for each chosen platform
+    const buttons = chosenPlatforms.map(p =>
+      `<a href="${brand[p.urlKey]}" style="display:inline-block;background:${p.color};color:#fff;padding:10px 20px;border-radius:8px;font-weight:700;text-decoration:none;margin:4px">${p.icon} ${p.label}</a>`
+    ).join("\n");
+
+    const body = `<p>Dear ${job.customer},</p>
+<p>Thank you for choosing ${businessName} for your recent ${job.type || "work"} — we really appreciate your business and hope everything is to your satisfaction.</p>
+<p>If you're happy with the service, we'd be very grateful if you could spare a minute to leave us a review. It makes a huge difference to our business.</p>
+<p style="margin:20px 0">${buttons}</p>
+<p>Even a quick rating helps — thank you so much for your support.</p>
+<p>Kind regards,<br>${businessName}${brand.phone ? `<br>${brand.phone}` : ""}${brand.website ? `<br>${brand.website}` : ""}</p>`;
+
+    try {
+      const endpoint = import.meta.env.VITE_EMAIL_ENDPOINT || "/api/email";
+      await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id, to: email, subject: `How did we do? — ${businessName}`, body }) });
+      const { data } = await supabase.from("review_requests").insert({
+        user_id: user.id, job_id: job.id, customer: job.customer, email,
+        platforms: selectedPlatforms.join(","),
+        sent_at: new Date().toISOString(), created_at: new Date().toISOString()
+      }).select().single();
+      if (data) setRequests(p => [data, ...p]);
+      setCompletedJobs(prev => prev.map(j => j.id === job.id ? { ...j, reviewSent: true } : j));
+      setShowSendModal(null);
+      alert(`✓ Review request sent to ${email}`);
+    } catch (e) { alert("Failed to send: " + e.message); }
+    setSending(null);
+  };
+
+  const sentCount = requests.length;
+  const pendingJobs = completedJobs.filter(j => !j.reviewSent);
+  const hasAnyPlatform = activePlatforms.length > 0;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
+      <div style={{ fontSize: 18, fontWeight: 700 }}>Customer Reviews</div>
+
+      {/* Platform setup status */}
+      <div style={{ ...S.card }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Review Platforms</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {PLATFORMS.map(p => {
+            const isSet = !!brand?.[p.urlKey];
+            return (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${isSet ? p.color + "44" : C.border}` }}>
+                <div style={{ fontSize: 18, width: 28, textAlign: "center", flexShrink: 0 }}>{p.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>{p.label}</div>
+                  {isSet
+                    ? <div style={{ fontSize: 11, color: C.green }}>✓ Linked</div>
+                    : <div style={{ fontSize: 11, color: C.muted }}>Add link in Settings → Business Details</div>
+                  }
+                </div>
+                <div style={{ ...S.badge(isSet ? C.green : C.muted), flexShrink: 0 }}>{isSet ? "Active" : "Not set"}</div>
+              </div>
+            );
+          })}
+        </div>
+        {!hasAnyPlatform && (
+          <div style={{ fontSize: 11, color: C.amber, marginTop: 10 }}>
+            ⚙ Add at least one review platform link in Settings → Business Details to start sending requests.
+          </div>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
+        {[["Requests Sent", sentCount, C.green], ["Awaiting Request", pendingJobs.length, C.amber]].map(([l,v,col],i) => (
+          <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Completed jobs */}
+      {pendingJobs.length > 0 && (
+        <div style={S.card}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Completed Jobs — Send Review Request</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingJobs.slice(0, 15).map(j => {
+              const cust = (customers || []).find(c => c.name?.toLowerCase() === j.customer?.toLowerCase());
+              const hasEmail = !!(cust?.email || j.email);
+              return (
+                <div key={j.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{j.customer}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>
+                      {j.type || "Job"}{j.completion_date ? ` · Completed ${new Date(j.completion_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
+                    </div>
+                    {!hasEmail && <div style={{ fontSize: 11, color: C.red, marginTop: 2 }}>⚠ No email — add in Customers tab</div>}
+                  </div>
+                  <button
+                    onClick={() => openSendModal(j)}
+                    disabled={!hasEmail || !hasAnyPlatform}
+                    style={{ ...S.btn(hasEmail && hasAnyPlatform ? "primary" : "ghost"), fontSize: 11, padding: "6px 12px", flexShrink: 0 }}>
+                    ⭐ Request
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Sent history */}
+      {requests.length > 0 && (
+        <div style={S.card}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Sent History</div>
+          {requests.map(r => (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{r.customer}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>
+                  {r.email} · Sent {new Date(r.sent_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  {r.platforms && ` · ${r.platforms.split(",").join(", ")}`}
+                </div>
+              </div>
+              <div style={{ ...S.badge(C.green), flexShrink: 0 }}>Sent ✓</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {completedJobs.length === 0 && !loading && (
+        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No completed jobs yet</div>
+      )}
+
+      {/* Send modal — choose platforms */}
+      {showSendModal && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setShowSendModal(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Send Review Request</div>
+              <button onClick={() => setShowSendModal(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
+              Sending to <strong style={{ color: C.text }}>{showSendModal.customer}</strong> — choose which platforms to include:
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+              {activePlatforms.map(p => (
+                <div key={p.id}
+                  onClick={() => setSelectedPlatforms(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id])}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: `2px solid ${selectedPlatforms.includes(p.id) ? p.color : C.border}`, background: selectedPlatforms.includes(p.id) ? p.color + "11" : C.surfaceHigh, cursor: "pointer" }}>
+                  <div style={{ fontSize: 20, width: 28, textAlign: "center" }}>{p.icon}</div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{p.label}</div>
+                  <div style={{ width: 20, height: 20, borderRadius: 4, background: selectedPlatforms.includes(p.id) ? p.color : C.surface, border: `2px solid ${selectedPlatforms.includes(p.id) ? p.color : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#000" }}>
+                    {selectedPlatforms.includes(p.id) ? "✓" : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={sendRequest} disabled={sending || selectedPlatforms.length === 0}>
+                {sending ? "Sending..." : `Send to ${showSendModal.customer}`}
+              </button>
+              <button style={S.btn("ghost")} onClick={() => setShowSendModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ─── STOCK INVENTORY ─────────────────────────────────────────────────────────
+function StockTab({ user }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
+  const [form, setForm] = useState({ name: "", sku: "", quantity: "", unit: "unit", reorder_level: "", unit_cost: "", location: "" });
+
+  const UNITS = ["unit", "m", "m²", "m³", "length", "sheet", "box", "bag", "roll", "litre", "kg"];
+
+  useEffect(() => { if (user?.id) load(); }, [user?.id]);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("stock_items").select("*").eq("user_id", user.id).order("name");
+    setItems(data || []);
+    setLoading(false);
+  };
+
+  const save = async () => {
+    if (!form.name) return;
+    const payload = { user_id: user.id, name: form.name, sku: form.sku, quantity: parseFloat(form.quantity || 0), unit: form.unit, reorder_level: parseFloat(form.reorder_level || 0), unit_cost: parseFloat(form.unit_cost || 0), location: form.location, updated_at: new Date().toISOString() };
+    if (editing) {
+      const { data, error } = await supabase.from("stock_items").update(payload).eq("id", editing.id).eq("user_id", user.id).select().single();
+      if (!error && data) { setItems(p => p.map(i => i.id === data.id ? data : i)); setEditing(null); }
+    } else {
+      const { data, error } = await supabase.from("stock_items").insert({ ...payload, created_at: new Date().toISOString() }).select().single();
+      if (!error && data) { setItems(p => [...p, data]); setShowAdd(false); }
+    }
+    setForm({ name: "", sku: "", quantity: "", unit: "unit", reorder_level: "", unit_cost: "", location: "" });
+  };
+
+  const adjust = async (id, delta) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    const newQty = Math.max(0, parseFloat(item.quantity || 0) + delta);
+    const { data, error } = await supabase.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", user.id).select().single();
+    if (!error && data) setItems(p => p.map(i => i.id === data.id ? data : i));
+  };
+
+  const del = async (id) => {
+    if (!confirm("Delete this stock item?")) return;
+    await supabase.from("stock_items").delete().eq("id", id).eq("user_id", user.id);
+    setItems(p => p.filter(i => i.id !== id));
+  };
+
+  const openEdit = (item) => {
+    setEditing(item);
+    setForm({ name: item.name, sku: item.sku || "", quantity: String(item.quantity || 0), unit: item.unit || "unit", reorder_level: String(item.reorder_level || ""), unit_cost: String(item.unit_cost || ""), location: item.location || "" });
+  };
+
+  const filtered = items.filter(i => !search || i.name?.toLowerCase().includes(search.toLowerCase()) || i.sku?.toLowerCase().includes(search.toLowerCase()));
+  const lowStock = items.filter(i => i.reorder_level > 0 && parseFloat(i.quantity || 0) <= parseFloat(i.reorder_level || 0));
+  const totalValue = items.reduce((s, i) => s + parseFloat(i.quantity || 0) * parseFloat(i.unit_cost || 0), 0);
+
+  const FormModal = ({ title, onClose }) => (
+    <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div><label style={S.label}>Item Name</label><input style={S.input} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. 22mm Copper Pipe" /></div>
+          <div style={S.grid2}>
+            <div><label style={S.label}>SKU / Code</label><input style={S.input} value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="Optional" /></div>
+            <div><label style={S.label}>Location</label><input style={S.input} value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Van shelf 2" /></div>
+          </div>
+          <div style={S.grid2}>
+            <div><label style={S.label}>Quantity</label><input style={S.input} type="number" step="0.1" min="0" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} placeholder="0" /></div>
+            <div>
+              <label style={S.label}>Unit</label>
+              <select style={S.input} value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
+                {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={S.grid2}>
+            <div><label style={S.label}>Unit Cost (£)</label><input style={S.input} type="number" step="0.01" min="0" value={form.unit_cost} onChange={e => setForm(f => ({ ...f, unit_cost: e.target.value }))} placeholder="0.00" /></div>
+            <div><label style={S.label}>Reorder Level</label><input style={S.input} type="number" step="0.1" min="0" value={form.reorder_level} onChange={e => setForm(f => ({ ...f, reorder_level: e.target.value }))} placeholder="Alert when below" /></div>
+          </div>
+          {form.quantity && form.unit_cost && <div style={{ fontSize: 11, color: C.green, background: C.green + "11", borderRadius: 6, padding: "6px 10px" }}>Stock value: £{(parseFloat(form.quantity||0) * parseFloat(form.unit_cost||0)).toFixed(2)}</div>}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+          <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={save} disabled={!form.name}>Save</button>
+          <button style={S.btn("ghost")} onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Stock</div>
+        <button onClick={() => setShowAdd(true)} style={S.btn("primary")}>+ Add Item</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 10 }}>
+        {[["Items", items.length, C.text], ["Stock Value", "£" + totalValue.toFixed(2), C.green], ["Low Stock", lowStock.length, lowStock.length > 0 ? C.red : C.muted]].map(([l,v,col],i) => (
+          <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {lowStock.length > 0 && (
+        <div style={{ background: C.red + "11", border: `1px solid ${C.red}44`, borderRadius: 10, padding: "12px 14px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 6 }}>⚠ Low Stock Alert</div>
+          {lowStock.map(i => <div key={i.id} style={{ fontSize: 12, color: C.muted }}>{i.name} — {i.quantity} {i.unit} remaining (reorder at {i.reorder_level})</div>)}
+        </div>
+      )}
+
+      <input style={S.input} placeholder="Search stock..." value={search} onChange={e => setSearch(e.target.value)} />
+
+      {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : filtered.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No stock items yet</div>
+      ) : filtered.map(item => {
+        const isLow = item.reorder_level > 0 && parseFloat(item.quantity || 0) <= parseFloat(item.reorder_level || 0);
+        return (
+          <div key={item.id} style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${isLow ? C.red + "66" : C.border}`, overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px" }}>
+              <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: isLow ? C.red : C.green, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{item.name}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                  {item.sku && `SKU: ${item.sku} · `}
+                  {item.location && `📍 ${item.location} · `}
+                  {item.unit_cost > 0 && `£${parseFloat(item.unit_cost).toFixed(2)}/${item.unit}`}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <button onClick={() => adjust(item.id, -1)} style={{ width: 28, height: 28, borderRadius: 6, background: C.surfaceHigh, border: `1px solid ${C.border}`, color: C.text, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+                <div style={{ textAlign: "center", minWidth: 50 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: isLow ? C.red : C.text }}>{item.quantity}</div>
+                  <div style={{ fontSize: 10, color: C.muted }}>{item.unit}</div>
+                </div>
+                <button onClick={() => adjust(item.id, 1)} style={{ width: 28, height: 28, borderRadius: 6, background: C.surfaceHigh, border: `1px solid ${C.border}`, color: C.text, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+              </div>
+              <button onClick={() => openEdit(item)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>✏</button>
+              <button onClick={() => del(item.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>
+            </div>
+          </div>
+        );
+      })}
+
+      {showAdd && <FormModal title="Add Stock Item" onClose={() => { setShowAdd(false); setForm({ name: "", sku: "", quantity: "", unit: "unit", reorder_level: "", unit_cost: "", location: "" }); }} />}
+      {editing && <FormModal title="Edit Stock Item" onClose={() => { setEditing(null); setForm({ name: "", sku: "", quantity: "", unit: "unit", reorder_level: "", unit_cost: "", location: "" }); }} />}
+    </div>
+  );
+}
+// ─── PURCHASE ORDERS ─────────────────────────────────────────────────────────
+function PurchaseOrdersTab({ user, brand }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [form, setForm] = useState({ supplier: "", supplier_email: "", job_ref: "", notes: "", expected_delivery: "", items: [{ description: "", qty: 1, unit_price: "", unit: "unit" }] });
+
+  useEffect(() => { if (user?.id) load(); }, [user?.id]);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("purchase_orders").select("*, purchase_order_items(*)").eq("user_id", user.id).order("created_at", { ascending: false });
+    setOrders(data || []);
+    setLoading(false);
+  };
+
+  const nextPONumber = () => `PO-${String(orders.length + 1).padStart(4, "0")}`;
+
+  const lineTotal = (item) => parseFloat(item.qty || 1) * parseFloat(item.unit_price || 0);
+  const orderTotal = (items) => (items || []).reduce((s, i) => s + lineTotal(i), 0);
+
+  const save = async () => {
+    if (!form.supplier) return;
+    const poNumber = nextPONumber();
+    const total = orderTotal(form.items);
+    const { data: order, error } = await supabase.from("purchase_orders").insert({
+      user_id: user.id, po_number: poNumber, supplier: form.supplier,
+      supplier_email: form.supplier_email, job_ref: form.job_ref, notes: form.notes,
+      expected_delivery: form.expected_delivery || null, status: "sent", total,
+      created_at: new Date().toISOString(),
+    }).select().single();
+    if (error || !order) return;
+    if (form.items.length > 0) {
+      await supabase.from("purchase_order_items").insert(form.items.filter(i => i.description).map(i => ({
+        po_id: order.id, description: i.description, qty: parseFloat(i.qty || 1),
+        unit_price: parseFloat(i.unit_price || 0), unit: i.unit, total: lineTotal(i),
+      })));
+    }
+    setOrders(p => [{ ...order, purchase_order_items: form.items }, ...p]);
+    setShowAdd(false);
+    setForm({ supplier: "", supplier_email: "", job_ref: "", notes: "", expected_delivery: "", items: [{ description: "", qty: 1, unit_price: "", unit: "unit" }] });
+    // Optionally send PO email
+    if (form.supplier_email) {
+      generatePO({ ...order, purchase_order_items: form.items }, true);
+    }
+  };
+
+  const updateStatus = async (id, status) => {
+    await supabase.from("purchase_orders").update({ status }).eq("id", id).eq("user_id", user.id);
+    setOrders(p => p.map(o => o.id === id ? { ...o, status } : o));
+    if (selected?.id === id) setSelected(s => ({ ...s, status }));
+  };
+
+  const generatePO = (order, send = false) => {
+    const items = order.purchase_order_items || [];
+    const total = orderTotal(items);
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Purchase Order ${order.po_number}</title>
+    <style>body{font-family:Arial,sans-serif;padding:40px;font-size:13px;color:#111}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #f59e0b}
+    .business{font-size:20px;font-weight:700}.po-title{font-size:16px;font-weight:700;text-align:right}.po-meta{font-size:12px;color:#666;text-align:right;margin-top:4px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+    .box{background:#f9fafb;border-radius:8px;padding:16px}.box-label{font-size:10px;text-transform:uppercase;color:#6b7280;margin-bottom:8px;letter-spacing:0.06em}
+    table{width:100%;border-collapse:collapse;margin-bottom:20px}
+    th{background:#f3f4f6;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;border-bottom:2px solid #e5e7eb}
+    th:not(:first-child){text-align:right}td{padding:9px 12px;border-bottom:1px solid #f3f4f6}td:not(:first-child){text-align:right;font-family:monospace}
+    .total{font-weight:700;font-size:14px;background:#fef9f0}.notice{background:#fef3c7;border:1px solid #f59e0b44;border-radius:6px;padding:12px;font-size:11px;color:#92400e;margin-top:16px}
+    </style></head><body>
+    <div class="header">
+      <div><div class="business">${brand?.tradingName || "Trade PA"}</div>${brand?.address ? `<div style="font-size:12px;color:#666;margin-top:4px">${brand.address}</div>` : ""}${brand?.phone ? `<div style="font-size:12px;color:#666">${brand.phone}</div>` : ""}</div>
+      <div><div class="po-title">Purchase Order</div><div class="po-meta">${order.po_number}</div><div class="po-meta">${new Date(order.created_at).toLocaleDateString("en-GB", { day:"numeric",month:"long",year:"numeric" })}</div></div>
+    </div>
+    <div class="grid">
+      <div class="box"><div class="box-label">Supplier</div><div style="font-weight:700">${order.supplier}</div>${order.supplier_email ? `<div style="font-size:12px;color:#666;margin-top:4px">${order.supplier_email}</div>` : ""}</div>
+      <div class="box"><div class="box-label">Delivery</div>${order.expected_delivery ? `<div style="font-weight:700">${new Date(order.expected_delivery).toLocaleDateString("en-GB")}</div>` : '<div style="color:#9ca3af">No date specified</div>'}${order.job_ref ? `<div style="font-size:12px;color:#666;margin-top:4px">Job: ${order.job_ref}</div>` : ""}</div>
+    </div>
+    <table><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit Price</th><th>Total</th></tr></thead>
+    <tbody>${items.map(i => `<tr><td>${i.description}</td><td>${i.qty}</td><td>${i.unit||"unit"}</td><td>£${parseFloat(i.unit_price||0).toFixed(2)}</td><td>£${lineTotal(i).toFixed(2)}</td></tr>`).join("")}
+    <tr class="total"><td colspan="4">Total</td><td>£${total.toFixed(2)}</td></tr></tbody></table>
+    ${order.notes ? `<div class="notice"><b>Notes:</b> ${order.notes}</div>` : ""}
+    </body></html>`;
+    window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
+  };
+
+  const statusColor = { draft: C.muted, sent: C.blue, received: C.green, cancelled: C.red };
+  const UNITS = ["unit", "m", "m²", "length", "sheet", "box", "bag", "roll", "litre", "kg"];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Purchase Orders</div>
+        <button onClick={() => setShowAdd(true)} style={S.btn("primary")}>+ New PO</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 10 }}>
+        {[["Total POs", orders.length, C.text], ["Awaiting Delivery", orders.filter(o=>o.status==="sent").length, C.amber], ["Received", orders.filter(o=>o.status==="received").length, C.green]].map(([l,v,col],i) => (
+          <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : orders.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No purchase orders yet</div>
+      ) : orders.map(o => (
+        <div key={o.id} style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", cursor: "pointer" }} onClick={() => setSelected(selected?.id === o.id ? null : o)}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{o.po_number}</div>
+                <div style={{ ...S.badge(statusColor[o.status] || C.muted) }}>{o.status}</div>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{o.supplier}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{new Date(o.created_at).toLocaleDateString("en-GB")}{o.job_ref && ` · ${o.job_ref}`}</div>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(o.total||0).toFixed(2)}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{(o.purchase_order_items||[]).length} items</div>
+            </div>
+          </div>
+          {selected?.id === o.id && (
+            <div style={{ borderTop: `1px solid ${C.border}`, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {(o.purchase_order_items || []).map((item, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                  <span>{item.description} × {item.qty} {item.unit}</span>
+                  <span style={{ fontFamily: "'DM Mono',monospace" }}>£{lineTotal(item).toFixed(2)}</span>
+                </div>
+              ))}
+              {o.notes && <div style={{ fontSize: 11, color: C.muted, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>Note: {o.notes}</div>}
+              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                <button onClick={() => generatePO(o)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>⬇ PDF</button>
+                {o.status === "sent" && <button onClick={() => updateStatus(o.id, "received")} style={{ ...S.btn("primary"), flex: 1, justifyContent: "center", fontSize: 12 }}>✓ Mark Received</button>}
+                {o.status === "draft" && <button onClick={() => updateStatus(o.id, "sent")} style={{ ...S.btn("primary"), flex: 1, justifyContent: "center", fontSize: 12 }}>Send PO</button>}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Add PO Modal */}
+      {showAdd && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setShowAdd(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 600, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>New Purchase Order</div>
+              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Supplier</label><input style={S.input} value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Supplier name" /></div>
+                <div><label style={S.label}>Supplier Email</label><input style={S.input} type="email" value={form.supplier_email} onChange={e => setForm(f => ({ ...f, supplier_email: e.target.value }))} placeholder="orders@supplier.com" /></div>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Job Reference</label><input style={S.input} value={form.job_ref} onChange={e => setForm(f => ({ ...f, job_ref: e.target.value }))} placeholder="Which job is this for?" /></div>
+                <div><label style={S.label}>Expected Delivery</label><input style={S.input} type="date" value={form.expected_delivery} onChange={e => setForm(f => ({ ...f, expected_delivery: e.target.value }))} /></div>
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <label style={S.label}>Items</label>
+                  <button onClick={() => setForm(f => ({ ...f, items: [...f.items, { description: "", qty: 1, unit_price: "", unit: "unit" }] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "3px 10px" }}>+ Add Line</button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 50px 70px 70px 24px", gap: 6 }}>
+                    {["Description", "Qty", "Unit", "Price £", ""].map(h => <div key={h} style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</div>)}
+                  </div>
+                  {form.items.map((item, i) => (
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 50px 70px 70px 24px", gap: 6, alignItems: "center" }}>
+                      <input style={{ ...S.input, fontSize: 12 }} value={item.description} onChange={e => setForm(f => ({ ...f, items: f.items.map((x,j) => j===i ? {...x, description: e.target.value} : x) }))} placeholder="Item" />
+                      <input style={{ ...S.input, fontSize: 12 }} type="number" min="1" value={item.qty} onChange={e => setForm(f => ({ ...f, items: f.items.map((x,j) => j===i ? {...x, qty: e.target.value} : x) }))} />
+                      <select style={{ ...S.input, fontSize: 11 }} value={item.unit} onChange={e => setForm(f => ({ ...f, items: f.items.map((x,j) => j===i ? {...x, unit: e.target.value} : x) }))}>
+                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                      <input style={{ ...S.input, fontSize: 12 }} type="number" step="0.01" placeholder="0.00" value={item.unit_price} onChange={e => setForm(f => ({ ...f, items: f.items.map((x,j) => j===i ? {...x, unit_price: e.target.value} : x) }))} />
+                      <button onClick={() => setForm(f => ({ ...f, items: f.items.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }} disabled={form.items.length===1}>×</button>
+                    </div>
+                  ))}
+                  {orderTotal(form.items) > 0 && <div style={{ fontSize: 12, fontWeight: 700, textAlign: "right", color: C.amber, fontFamily: "'DM Mono',monospace" }}>Total: £{orderTotal(form.items).toFixed(2)}</div>}
+                </div>
+              </div>
+              <div><label style={S.label}>Notes</label><textarea style={{ ...S.input, minHeight: 60 }} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special instructions..." /></div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={save} disabled={!form.supplier}>Create PO</button>
+              <button style={S.btn("ghost")} onClick={() => setShowAdd(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ─── RAMS BUILDER ────────────────────────────────────────────────────────────
+function RAMSTab({ user, brand }) {
+  const [rams, setRams] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("list");
+  const [selected, setSelected] = useState(null);
+  const [form, setForm] = useState({
+    title: "", job_ref: "", site_address: "", prepared_by: "", date: new Date().toISOString().split("T")[0],
+    scope: "", hazards: [{ hazard: "", risk: "Medium", control: "", ppe: "" }],
+    method_steps: [""], emergency_procedure: "", first_aider: "", nearest_hospital: "",
+    reviewed_by: "", cdm_notifiable: false,
+  });
+  const [generating, setGenerating] = useState(false);
+
+  const RISK_LEVELS = ["Low", "Medium", "High", "Critical"];
+  const TEMPLATES = [
+    { name: "General Construction", hazards: [
+      { hazard: "Working at height", risk: "High", control: "Edge protection, harness and lanyard, exclusion zones below", ppe: "Hard hat, harness, safety boots" },
+      { hazard: "Manual handling", risk: "Medium", control: "Mechanical aids where possible, team lifts, training", ppe: "Gloves, safety boots" },
+      { hazard: "Power tools", risk: "Medium", control: "PAT tested tools, correct guards, trained operators only", ppe: "Eye protection, gloves, ear protection" },
+      { hazard: "Dust and debris", risk: "Medium", control: "Wet cutting, LEV, RPE where required", ppe: "RPE P2 mask, eye protection" },
+    ], steps: ["Secure site, erect appropriate barriers and signage", "Brief all operatives on RAMS before work commences", "Carry out task as per method statement", "Regular housekeeping throughout", "Final inspection and sign-off"] },
+    { name: "Gas Work", hazards: [
+      { hazard: "Gas leak", risk: "Critical", control: "Gas detector in use at all times, isolation procedures, ventilation", ppe: "Gas detector, safety boots" },
+      { hazard: "CO exposure", risk: "High", control: "CO monitor in use, adequate ventilation, evacuation procedures", ppe: "CO monitor" },
+      { hazard: "Burns / hot surfaces", risk: "Medium", control: "Allow cooling, appropriate PPE, fire extinguisher on site", ppe: "Heat-resistant gloves, eye protection" },
+      { hazard: "Confined spaces", risk: "High", control: "Confined space assessment, buddy system, escape route clear", ppe: "Torch, CO monitor, harness if required" },
+    ], steps: ["Isolate gas supply and lock off", "Check for gas with detector", "Carry out works as per Gas Safe regulations", "Test all joints and connections", "Commission and check for spillage/leaks", "Complete Gas Safe documentation"] },
+    { name: "Electrical Installation", hazards: [
+      { hazard: "Electric shock", risk: "Critical", control: "Isolate and lock off before work, test dead, LOTO procedures", ppe: "Insulated tools, rubber gloves if required" },
+      { hazard: "Fire risk", risk: "High", control: "Cable routes fire-stopped, correct cable ratings, no overloading", ppe: "Fire extinguisher on site" },
+      { hazard: "Working in ceiling/roof voids", risk: "Medium", control: "Adequate lighting, dust mask, check for asbestos before entry", ppe: "Hard hat, dust mask, head torch, gloves" },
+      { hazard: "Power tools", risk: "Medium", control: "PAT tested, RCD protected, no damaged cables", ppe: "Eye protection, ear protection" },
+    ], steps: ["Isolate supply and confirm dead with approved voltage indicator", "Display caution notices on distribution board", "Carry out installation works to BS 7671", "Inspect and test completed installation", "Restore supply and commission", "Issue Electrical Installation Certificate"] },
+    { name: "Plumbing / Heating", hazards: [
+      { hazard: "Scalding from hot water", risk: "Medium", control: "Allow system to cool, drain down, use PPE", ppe: "Heat-resistant gloves, eye protection" },
+      { hazard: "Flooding/water damage", risk: "High", control: "Isolate water supply, have mop and bucket ready, protect floors", ppe: "Waterproof boots if required" },
+      { hazard: "Soldering/hot work", risk: "High", control: "Fire-resistant mat, fire extinguisher on site, 60-minute fire watch after", ppe: "Heat-resistant gloves, eye protection" },
+      { hazard: "Manual handling of heavy plant", risk: "Medium", control: "Two-person lift, sack truck, check weight before lifting", ppe: "Gloves, safety boots" },
+    ], steps: ["Isolate water/heating system and drain down", "Carry out works to Water Regulations and manufacturer specifications", "Pressure test all joints before reinstatement", "Refill and vent system", "Commission and check for leaks", "Complete benchmark checklist"] },
+  ];
+
+  useEffect(() => { if (user?.id) load(); }, [user?.id]);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("rams_documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    setRams(data || []);
+    setLoading(false);
+  };
+
+  const applyTemplate = (template) => {
+    setForm(f => ({ ...f, hazards: template.hazards, method_steps: template.steps }));
+  };
+
+  const aiGenerate = async () => {
+    if (!form.scope) { alert("Add a scope of work first so the AI knows what to generate."); return; }
+    setGenerating(true);
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6", max_tokens: 1000,
+          messages: [{ role: "user", content: `Generate a RAMS (Risk Assessment and Method Statement) for this UK construction/trade work: "${form.scope}". Return ONLY valid JSON with this exact structure: {"hazards": [{"hazard": "string", "risk": "Low|Medium|High|Critical", "control": "string", "ppe": "string"}], "method_steps": ["step1", "step2"]}. Maximum 6 hazards and 8 method steps. Use UK trade industry terminology.` }],
+        }),
+      });
+      const data = await response.json();
+      const text = data.content?.[0]?.text || "";
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        setForm(f => ({ ...f, hazards: parsed.hazards || f.hazards, method_steps: parsed.method_steps || f.method_steps }));
+      }
+    } catch (e) { alert("AI generation failed — please fill in manually or use a template."); }
+    setGenerating(false);
+  };
+
+  const save = async () => {
+    if (!form.title) return;
+    const payload = { user_id: user.id, ...form, hazards: JSON.stringify(form.hazards), method_steps: JSON.stringify(form.method_steps), created_at: new Date().toISOString() };
+    const { data, error } = await supabase.from("rams_documents").insert(payload).select().single();
+    if (!error && data) {
+      setRams(p => [data, ...p]);
+      setView("list");
+      setForm({ title: "", job_ref: "", site_address: "", prepared_by: "", date: new Date().toISOString().split("T")[0], scope: "", hazards: [{ hazard: "", risk: "Medium", control: "", ppe: "" }], method_steps: [""], emergency_procedure: "", first_aider: "", nearest_hospital: "", reviewed_by: "", cdm_notifiable: false });
+    }
+  };
+
+  const generatePDF = (doc) => {
+    const hazards = typeof doc.hazards === "string" ? JSON.parse(doc.hazards || "[]") : (doc.hazards || []);
+    const steps = typeof doc.method_steps === "string" ? JSON.parse(doc.method_steps || "[]") : (doc.method_steps || []);
+    const riskColor = { Low: "#10b981", Medium: "#f59e0b", High: "#ef4444", Critical: "#7c3aed" };
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>RAMS — ${doc.title}</title>
+    <style>body{font-family:Arial,sans-serif;padding:40px;font-size:12px;color:#111}
+    h1{font-size:20px;margin-bottom:4px}h2{font-size:14px;margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid #f59e0b}
+    .header{display:flex;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #f59e0b}
+    .meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+    .meta-box{background:#f9fafb;border-radius:6px;padding:10px}.meta-label{font-size:9px;text-transform:uppercase;color:#6b7280;margin-bottom:4px;letter-spacing:0.06em}
+    table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f3f4f6;padding:8px;text-align:left;font-size:10px;text-transform:uppercase;border-bottom:2px solid #e5e7eb}
+    td{padding:8px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+    .risk{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;color:#fff}
+    .steps{margin:0;padding-left:20px}.steps li{margin-bottom:6px;line-height:1.5}
+    .signature-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px}
+    .sig-box{border:1px solid #e5e7eb;border-radius:8px;padding:16px;min-height:80px}
+    .sig-label{font-size:10px;text-transform:uppercase;color:#6b7280;margin-bottom:4px}
+    .warning{background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:10px;font-size:11px;color:#92400e;margin-bottom:16px}
+    </style></head><body>
+    <div class="header">
+      <div><h1>${doc.title}</h1><div style="color:#666;font-size:12px">${brand?.tradingName || ""}</div></div>
+      <div style="text-align:right"><div style="font-weight:700;font-size:13px">Risk Assessment & Method Statement</div><div style="color:#666;font-size:12px">Date: ${new Date(doc.date).toLocaleDateString("en-GB")}</div>${doc.cdm_notifiable ? '<div style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;margin-top:4px;display:inline-block">CDM NOTIFIABLE PROJECT</div>' : ""}</div>
+    </div>
+    <div class="meta-grid">
+      ${doc.site_address ? `<div class="meta-box"><div class="meta-label">Site Address</div><div>${doc.site_address}</div></div>` : ""}
+      ${doc.job_ref ? `<div class="meta-box"><div class="meta-label">Job Reference</div><div>${doc.job_ref}</div></div>` : ""}
+      ${doc.prepared_by ? `<div class="meta-box"><div class="meta-label">Prepared By</div><div>${doc.prepared_by}</div></div>` : ""}
+      ${doc.first_aider ? `<div class="meta-box"><div class="meta-label">First Aider</div><div>${doc.first_aider}</div></div>` : ""}
+      ${doc.nearest_hospital ? `<div class="meta-box"><div class="meta-label">Nearest Hospital</div><div>${doc.nearest_hospital}</div></div>` : ""}
+    </div>
+    ${doc.scope ? `<h2>Scope of Work</h2><p>${doc.scope}</p>` : ""}
+    <h2>Risk Assessment</h2>
+    <table><thead><tr><th>Hazard</th><th>Risk Level</th><th>Control Measures</th><th>PPE Required</th></tr></thead>
+    <tbody>${hazards.map(h => `<tr><td>${h.hazard}</td><td><span class="risk" style="background:${riskColor[h.risk]||"#666"}">${h.risk}</span></td><td>${h.control}</td><td>${h.ppe}</td></tr>`).join("")}</tbody></table>
+    <h2>Method Statement</h2>
+    <ol class="steps">${steps.map(s => `<li>${s}</li>`).join("")}</ol>
+    ${doc.emergency_procedure ? `<h2>Emergency Procedures</h2><p>${doc.emergency_procedure}</p>` : ""}
+    <h2>Operative Sign-off</h2>
+    <p style="font-size:11px;color:#666;margin-bottom:12px">All operatives must read and sign this document before commencing work. By signing, you confirm you understand and will comply with all control measures stated above.</p>
+    <div class="signature-grid">
+      <div class="sig-box"><div class="sig-label">Operative Name & Signature</div><div style="margin-top:30px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af">Sign and date</div></div>
+      <div class="sig-box"><div class="sig-label">Supervisor / Client Sign-off</div><div style="margin-top:30px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af">Sign and date</div></div>
+    </div>
+    </body></html>`;
+    window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
+  };
+
+  const del = async (id) => {
+    if (!confirm("Delete this RAMS document?")) return;
+    await supabase.from("rams_documents").delete().eq("id", id).eq("user_id", user.id);
+    setRams(p => p.filter(r => r.id !== id));
+  };
+
+  if (view === "add") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontSize: 22 }}>←</button>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>New RAMS</div>
+        </div>
+
+        {/* Templates */}
+        <div style={S.card}>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Quick Start Templates</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {TEMPLATES.map(t => (
+              <button key={t.name} onClick={() => applyTemplate(t)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 12px" }}>{t.name}</button>
+            ))}
+            <button onClick={aiGenerate} disabled={generating} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>
+              {generating ? "⏳ Generating..." : "🤖 AI Generate"}
+            </button>
+          </div>
+          {!form.scope && <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Fill in the scope of work below before using AI Generate</div>}
+        </div>
+
+        {/* Basic info */}
+        <div style={S.card}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Document Details</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div><label style={S.label}>RAMS Title</label><input style={S.input} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Boiler replacement — 42 High Street" /></div>
+            <div style={S.grid2}>
+              <div><label style={S.label}>Job Reference</label><input style={S.input} value={form.job_ref} onChange={e => setForm(f => ({ ...f, job_ref: e.target.value }))} placeholder="Job ref or number" /></div>
+              <div><label style={S.label}>Date</label><input style={S.input} type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+            </div>
+            <div><label style={S.label}>Site Address</label><input style={S.input} value={form.site_address} onChange={e => setForm(f => ({ ...f, site_address: e.target.value }))} placeholder="Full site address" /></div>
+            <div style={S.grid2}>
+              <div><label style={S.label}>Prepared By</label><input style={S.input} value={form.prepared_by} onChange={e => setForm(f => ({ ...f, prepared_by: e.target.value }))} placeholder="Your name" /></div>
+              <div><label style={S.label}>Reviewed By</label><input style={S.input} value={form.reviewed_by} onChange={e => setForm(f => ({ ...f, reviewed_by: e.target.value }))} placeholder="Supervisor / manager" /></div>
+            </div>
+            <div><label style={S.label}>Scope of Work</label><textarea style={{ ...S.input, minHeight: 80 }} value={form.scope} onChange={e => setForm(f => ({ ...f, scope: e.target.value }))} placeholder="Describe the work to be carried out in detail..." /></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input type="checkbox" id="cdm" checked={form.cdm_notifiable} onChange={e => setForm(f => ({ ...f, cdm_notifiable: e.target.checked }))} />
+              <label htmlFor="cdm" style={{ fontSize: 12, color: C.text }}>CDM Notifiable Project (notify HSE via F10)</label>
+            </div>
+          </div>
+        </div>
+
+        {/* Risk Assessment */}
+        <div style={S.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Risk Assessment</div>
+            <button onClick={() => setForm(f => ({ ...f, hazards: [...f.hazards, { hazard: "", risk: "Medium", control: "", ppe: "" }] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>+ Hazard</button>
+          </div>
+          {form.hazards.map((h, i) => (
+            <div key={i} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "12px 14px", marginBottom: 10, border: `1px solid ${C.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Hazard {i + 1}</div>
+                {form.hazards.length > 1 && <button onClick={() => setForm(f => ({ ...f, hazards: f.hazards.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Hazard</label><input style={S.input} value={h.hazard} onChange={e => setForm(f => ({ ...f, hazards: f.hazards.map((x,j) => j===i ? {...x, hazard: e.target.value} : x) }))} placeholder="e.g. Working at height" /></div>
+                  <div>
+                    <label style={S.label}>Risk Level</label>
+                    <select style={S.input} value={h.risk} onChange={e => setForm(f => ({ ...f, hazards: f.hazards.map((x,j) => j===i ? {...x, risk: e.target.value} : x) }))}>
+                      {RISK_LEVELS.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div><label style={S.label}>Control Measures</label><input style={S.input} value={h.control} onChange={e => setForm(f => ({ ...f, hazards: f.hazards.map((x,j) => j===i ? {...x, control: e.target.value} : x) }))} placeholder="How will you control this risk?" /></div>
+                <div><label style={S.label}>PPE Required</label><input style={S.input} value={h.ppe} onChange={e => setForm(f => ({ ...f, hazards: f.hazards.map((x,j) => j===i ? {...x, ppe: e.target.value} : x) }))} placeholder="e.g. Hard hat, gloves, safety boots" /></div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Method Statement */}
+        <div style={S.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Method Statement</div>
+            <button onClick={() => setForm(f => ({ ...f, method_steps: [...f.method_steps, ""] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>+ Step</button>
+          </div>
+          {form.method_steps.map((step, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
+              <div style={{ width: 24, height: 24, borderRadius: "50%", background: C.amber, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 8 }}>{i+1}</div>
+              <input style={{ ...S.input, flex: 1 }} value={step} onChange={e => setForm(f => ({ ...f, method_steps: f.method_steps.map((s,j) => j===i ? e.target.value : s) }))} placeholder={`Step ${i+1}...`} />
+              {form.method_steps.length > 1 && <button onClick={() => setForm(f => ({ ...f, method_steps: f.method_steps.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginTop: 8 }}>×</button>}
+            </div>
+          ))}
+        </div>
+
+        {/* Emergency & Welfare */}
+        <div style={S.card}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Emergency & Welfare</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={S.grid2}>
+              <div><label style={S.label}>First Aider on Site</label><input style={S.input} value={form.first_aider} onChange={e => setForm(f => ({ ...f, first_aider: e.target.value }))} placeholder="Name" /></div>
+              <div><label style={S.label}>Nearest A&E</label><input style={S.input} value={form.nearest_hospital} onChange={e => setForm(f => ({ ...f, nearest_hospital: e.target.value }))} placeholder="Hospital name & address" /></div>
+            </div>
+            <div><label style={S.label}>Emergency Procedures</label><textarea style={{ ...S.input, minHeight: 60 }} value={form.emergency_procedure} onChange={e => setForm(f => ({ ...f, emergency_procedure: e.target.value }))} placeholder="What to do in an emergency..." /></div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={save} disabled={!form.title}>Save RAMS</button>
+          <button style={S.btn("ghost")} onClick={() => setView("list")}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>RAMS</div>
+        <button onClick={() => setView("add")} style={S.btn("primary")}>+ New RAMS</button>
+      </div>
+
+      <div style={{ fontSize: 11, color: C.muted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px" }}>
+        Risk Assessment & Method Statement documents. Create one per job — use templates or AI to pre-fill, then customise and get signed off on site.
+      </div>
+
+      {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : rams.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No RAMS documents yet — tap + New RAMS</div>
+      ) : rams.map(r => {
+        const hazards = typeof r.hazards === "string" ? JSON.parse(r.hazards || "[]") : (r.hazards || []);
+        const highRisk = hazards.filter(h => h.risk === "High" || h.risk === "Critical").length;
+        return (
+          <div key={r.id} style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", cursor: "pointer" }} onClick={() => setSelected(selected?.id === r.id ? null : r)}>
+              <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: highRisk > 0 ? C.red : C.green, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{r.title}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                  {new Date(r.date).toLocaleDateString("en-GB")}
+                  {r.job_ref && ` · ${r.job_ref}`}
+                  {r.site_address && ` · ${r.site_address}`}
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{hazards.length} hazards{highRisk > 0 ? ` · ${highRisk} high/critical` : " · all low-medium"}</div>
+              </div>
+              {r.cdm_notifiable && <div style={{ ...S.badge(C.red), flexShrink: 0 }}>CDM</div>}
+              <div style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>{selected?.id === r.id ? "▲" : "▼"}</div>
+            </div>
+            {selected?.id === r.id && (
+              <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 14px", display: "flex", gap: 8 }}>
+                <button onClick={() => generatePDF(r)} style={{ ...S.btn("primary"), flex: 1, justifyContent: "center", fontSize: 12 }}>⬇ PDF / Sign-off</button>
+                <button onClick={() => del(r.id)} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px", color: C.red, borderColor: C.red + "44" }}>Delete</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
+const VIEWS = ["Dashboard", "Schedule", "Enquiries", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "Purchase Orders", "RAMS", "Settings"];
 
 // Helper: convert VAPID public key for push subscription
 function urlBase64ToUint8Array(base64String) {
@@ -11153,7 +12738,14 @@ export default function App() {
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
-        {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} brand={brand} user={user} />}
+        {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} brand={brand} user={user} />}
+        {view === "Mileage" && <MileageTab user={user} />}
+        {view === "Subcontractors" && <SubcontractorsTab user={user} brand={brand} />}
+        {view === "Documents" && <DocumentsTab user={user} customers={customers} />}
+        {view === "Reviews" && <ReviewsTab user={user} brand={brand} customers={customers} />}
+        {view === "Stock" && <StockTab user={user} />}
+        {view === "Purchase Orders" && <PurchaseOrdersTab user={user} brand={brand} />}
+        {view === "RAMS" && <RAMSTab user={user} brand={brand} />}
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} /></ErrorBoundary>}
       </main>
     </div>
