@@ -988,7 +988,7 @@ function PDFOverlay({ html, onClose }) {
   }, [onClose]);
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", flexDirection: "column", background: "#fff" }}>
-      <div style={{ display: "flex", gap: 8, padding: "12px 16px", background: "#1a1a1a", flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 8, padding: "12px 16px", paddingTop: "max(12px, env(safe-area-inset-top, 12px))", background: "#1a1a1a", flexShrink: 0 }}>
         <button onClick={onClose} style={{ background: C.amber, border: "none", padding: "10px 18px", borderRadius: 6, fontWeight: 700, cursor: "pointer", fontSize: 14, color: "#000" }}>✕ Close</button>
         <button onClick={() => { try { iframeRef.current?.contentWindow?.print(); } catch(e) {} }} style={{ background: "#444", color: "#fff", border: "none", padding: "10px 18px", borderRadius: 6, fontWeight: 700, cursor: "pointer", fontSize: 14 }}>🖨 Print / Save</button>
       </div>
@@ -11387,46 +11387,177 @@ function PurchaseOrdersTab({ user, brand }) {
   );
 }
 // ─── RAMS BUILDER ────────────────────────────────────────────────────────────
+
+const HAZARD_LIBRARY = {
+  "Working at Height": [
+    { id: "wah1", hazard: "Falls from ladders", risk: "High", control: "Use correct ladder for the task, maintain 3-point contact, ensure ladder is on firm level ground and secured at the top. Do not overreach. Never use the top 3 rungs.", ppe: "Hard hat, safety boots, hi-vis" },
+    { id: "wah2", hazard: "Falls from scaffold or elevated platform", risk: "High", control: "Ensure scaffold is erected and inspected by a competent person. Guardrails and toe boards in place. Never remove any scaffold components. Report any damage immediately.", ppe: "Hard hat, safety boots, hi-vis" },
+    { id: "wah3", hazard: "Falls through fragile roofs or surfaces", risk: "Critical", control: "Never walk on fragile surfaces. Use crawl boards across rafters. Ensure roof lights and openings are covered and clearly marked.", ppe: "Hard hat, harness and lanyard, safety boots" },
+    { id: "wah4", hazard: "Falling objects striking persons below", risk: "High", control: "Exclusion zone below work area. Toe boards on all elevated platforms. Use tool lanyards. Never throw materials from height.", ppe: "Hard hat mandatory for all in area, hi-vis" },
+    { id: "wah5", hazard: "Use of MEWP / cherry picker", risk: "High", control: "Trained and authorised operators only. Daily pre-use inspection. Ground must be firm and level. Outriggers deployed. Never exceed SWL.", ppe: "Hard hat, harness clipped to anchor point, safety boots" },
+  ],
+  "Electricity": [
+    { id: "elec1", hazard: "Contact with live electrical conductors", risk: "Critical", control: "Isolate supply using approved isolation procedure. Use approved voltage indicator to confirm dead. Lock off and apply personal safety locks. Display caution notices at distribution board.", ppe: "Insulated tools, rubber matting if required, safety glasses" },
+    { id: "elec2", hazard: "Electric shock from faulty equipment", risk: "High", control: "All portable electrical equipment to be PAT tested. RCD protection on all 230V supplies. Inspect leads and plugs before use. Remove any damaged equipment from use.", ppe: "Insulated tools, safety footwear" },
+    { id: "elec3", hazard: "Arc flash during electrical work", risk: "Critical", control: "Only trained and competent electricians to work on electrical installations. Confirm dead before working. Maintain safe distances from live parts.", ppe: "Arc flash PPE where required, safety glasses, insulated gloves" },
+    { id: "elec4", hazard: "Overhead power lines", risk: "Critical", control: "Identify all overhead lines before work commences. Maintain safe clearance distances. Use goal post barriers if working near lines. Contact DNO before any work near overhead lines.", ppe: "Hi-vis, hard hat" },
+  ],
+  "Gas & Combustion": [
+    { id: "gas1", hazard: "Gas leak causing fire or explosion", risk: "Critical", control: "Use calibrated gas detector throughout works. Ensure adequate ventilation. Isolate gas supply before work. Never use open flames near gas pipework. Emergency action: evacuate and call 0800 111 999.", ppe: "Gas detector, safety boots" },
+    { id: "gas2", hazard: "Carbon monoxide (CO) poisoning", risk: "Critical", control: "CO detector in use at all times during commissioning and testing. Ensure adequate ventilation. Test for combustion spillage. Never leave appliances running in confined spaces unventilated.", ppe: "CO detector alarm, adequate ventilation maintained" },
+    { id: "gas3", hazard: "Burns from hot surfaces or hot water", risk: "Medium", control: "Allow appliances and pipework to cool before working. Warn others of hot surfaces. Use heat-resistant gloves when handling hot components.", ppe: "Heat-resistant gloves, eye protection" },
+    { id: "gas4", hazard: "Fire from use of gas torch / hot works", risk: "High", control: "Fire extinguisher on site during all hot works. Use fire-resistant mat. Check area for flammable materials. 60-minute fire watch after completion.", ppe: "Heat-resistant gloves, eye protection, fire extinguisher available" },
+    { id: "gas5", hazard: "Pressurised system failure", risk: "High", control: "Depressurise system before work. Check system pressure before recommissioning. Never exceed maximum working pressure.", ppe: "Eye protection, gloves" },
+  ],
+  "Plumbing & Water": [
+    { id: "plumb1", hazard: "Scalding from hot water systems", risk: "Medium", control: "Drain down and allow to cool before working on hot water systems. Turn off immersion/boiler. Check temperature before opening system. Use appropriate PPE.", ppe: "Heat-resistant gloves, eye protection" },
+    { id: "plumb2", hazard: "Flooding causing slip hazards or damage", risk: "High", control: "Isolate water supply before any work on pipework. Have mop, bucket and towels available. Warn building occupants. Protect floors and contents with dust sheets.", ppe: "Waterproof footwear if required, gloves" },
+    { id: "plumb3", hazard: "Legionella from stagnant water systems", risk: "Medium", control: "Do not disturb or stagnate water systems unnecessarily. Flush dead legs. Report any discoloured or smelling water to client. Do not spray or atomise water from unknown sources.", ppe: "Gloves, wash hands thoroughly after work" },
+    { id: "plumb4", hazard: "Hitting concealed services when drilling", risk: "High", control: "Use cable and pipe detector before drilling or cutting. Refer to building drawings where available. Mark up services. Proceed with caution.", ppe: "Safety glasses, insulated tools, gloves" },
+  ],
+  "Manual Handling": [
+    { id: "mh1", hazard: "Musculoskeletal injury from lifting heavy loads", risk: "Medium", control: "Assess load weight before lifting. Use mechanical aids (sack truck, pallet truck) where possible. Team lift for loads over 20kg. Use correct manual handling technique — bend knees, keep back straight.", ppe: "Gloves, safety boots" },
+    { id: "mh2", hazard: "Injury from carrying awkward or bulky items", risk: "Medium", control: "Plan the route before carrying. Remove obstacles. Use carrying aids. Get assistance for large items. Take short rest breaks on long carries.", ppe: "Gloves, safety boots" },
+    { id: "mh3", hazard: "Back injury from working in awkward postures", risk: "Medium", control: "Use kneeling pads. Adjust work height where possible. Take regular breaks and stretch. Rotate tasks with colleagues.", ppe: "Kneeling pads, gloves" },
+  ],
+  "Power Tools & Equipment": [
+    { id: "pt1", hazard: "Injury from angle grinder disc failure or kickback", risk: "High", control: "Check disc is correct grade and undamaged before use. Guards must always be in place. Maximum RPM on disc must exceed tool RPM. Clamp workpiece. Never use side of disc unless disc is designed for it.", ppe: "Full face visor, cut-resistant gloves, hearing protection, safety boots" },
+    { id: "pt2", hazard: "Cuts from circular saw or reciprocating saw", risk: "High", control: "Ensure blade is sharp and correct for material. Guards in place and functioning. Clamp or secure workpiece. Never reach under material being cut.", ppe: "Safety gloves, safety glasses, hearing protection, safety boots" },
+    { id: "pt3", hazard: "Eye injury from flying debris", risk: "Medium", control: "Safety glasses or goggles to be worn at all times when using power tools. Erect screens to protect others in the area.", ppe: "Safety glasses or full face visor" },
+    { id: "pt4", hazard: "Hearing damage from prolonged tool use", risk: "Medium", control: "Limit continuous exposure to high noise tools. Use quieter tools where available. Provide hearing protection to all in area. Rotate operators where possible.", ppe: "Ear defenders or ear plugs (minimum SNR 25dB)" },
+    { id: "pt5", hazard: "Hand-arm vibration (HAVs) from power tools", risk: "Medium", control: "Use low vibration tools where available. Limit daily exposure — monitor trigger time. Use anti-vibration gloves. Rotate operators. Report tingling or numbness immediately.", ppe: "Anti-vibration gloves" },
+  ],
+  "Dust & Air Quality": [
+    { id: "dust1", hazard: "Inhalation of silica dust from cutting masonry", risk: "High", control: "Wet cutting methods where possible. Local exhaust ventilation (LEV). RPE to be worn — minimum FFP2/P2. Keep others clear of dust cloud. H-class vacuum for cleaning.", ppe: "FFP2 or FFP3 dust mask, safety glasses" },
+    { id: "dust2", hazard: "Inhalation of wood dust", risk: "Medium", control: "LEV at source. Dust extraction bag on tools. RPE where dust cannot be controlled at source. Good ventilation.", ppe: "FFP2 dust mask, safety glasses" },
+    { id: "dust3", hazard: "Asbestos exposure from drilling/cutting in older buildings", risk: "Critical", control: "Presume asbestos is present in buildings built before 2000. Do not drill, cut or disturb any suspect material. Check asbestos register / survey before work. Stop work immediately if ACMs suspected — contact asbestos removal specialist.", ppe: "Do not proceed — specialist required for asbestos removal" },
+    { id: "dust4", hazard: "Fumes from solvents, adhesives or paints", risk: "Medium", control: "Ensure adequate ventilation. Open windows and doors. Use LEV / forced ventilation. Check COSHH data sheet. Take breaks in fresh air.", ppe: "Appropriate respirator per COSHH assessment, gloves, eye protection" },
+  ],
+  "Slips, Trips & Falls": [
+    { id: "stf1", hazard: "Slipping on wet floors", risk: "Medium", control: "Display wet floor signs. Clean up spillages immediately. Use absorbent matting. Wear appropriate footwear.", ppe: "Non-slip safety footwear" },
+    { id: "stf2", hazard: "Tripping over cables, tools and debris", risk: "Medium", control: "Keep work area tidy at all times. Secure cables with cable protectors or tape. Remove waste regularly. Ensure adequate lighting.", ppe: "Safety footwear" },
+    { id: "stf3", hazard: "Slipping or falling on stairs or in roof voids", risk: "High", control: "Use torch or head torch in dark areas. Never rush in confined or low-lit areas. Keep both hands free when climbing. Clear debris from stairs.", ppe: "Head torch, safety footwear, hard hat where required" },
+  ],
+  "Fire & Hot Works": [
+    { id: "fire1", hazard: "Fire from hot works (welding, grinding, torch)", risk: "High", control: "Hot works permit required. Remove all flammable materials from 3m radius. Use fire-resistant blanket. Fire extinguisher on site. 60-minute fire watch on completion. Check building alarm not disabled.", ppe: "Fire-resistant overalls, face shield, heat-resistant gloves, fire extinguisher" },
+    { id: "fire2", hazard: "Fire from flammable gases or liquids", risk: "High", control: "Store flammable materials in designated areas away from ignition sources. No smoking in area. Maintain minimum stock on site. Ensure good ventilation.", ppe: "Appropriate RPE, fire extinguisher available" },
+  ],
+  "Confined Spaces": [
+    { id: "cs1", hazard: "Asphyxiation or toxic atmosphere in confined space", risk: "Critical", control: "Classified confined space entry procedure required. Atmospheric testing before and during entry. Buddy system — never enter alone. Emergency rescue plan in place. Do not enter without authorisation.", ppe: "Gas detector, harness, lifeline, communication device" },
+    { id: "cs2", hazard: "Working in loft voids or ceiling spaces", risk: "Medium", control: "Check for asbestos, live services, insulation. Adequate lighting. Crawl boards across joists. Ensure means of escape is clear. Work with another person nearby.", ppe: "Hard hat, dust mask FFP2, gloves, head torch, knee pads" },
+  ],
+  "Site & Environment": [
+    { id: "site1", hazard: "Unauthorised access by public or children", risk: "High", control: "Secure site with hoarding, barriers or fencing. Lock gates when unattended. Display warning signs. Secure ladders so they cannot be used by others.", ppe: "Hi-vis when near public" },
+    { id: "site2", hazard: "Working in adverse weather conditions", risk: "Medium", control: "Monitor weather forecasts. Stop work in high winds if working at height. Extra caution in wet conditions. Provide appropriate welfare facilities.", ppe: "Waterproof clothing, hi-vis, safety footwear" },
+    { id: "site3", hazard: "Excavation and ground instability", risk: "High", control: "Locate all underground services before excavation. Support excavations over 1.2m deep. Inspect excavations daily. No undermining of structures. Safe access and egress.", ppe: "Hard hat, safety boots, hi-vis" },
+    { id: "site4", hazard: "Working near traffic or on public highway", risk: "High", control: "Traffic management plan required. Chapter 8 signing, lighting and guarding. Lookout person if required. Hi-vis must be worn at all times.", ppe: "Hi-vis (minimum Class 2), hard hat, safety boots" },
+  ],
+};
+
+const METHOD_LIBRARY = {
+  "Site Setup": [
+    "Carry out a site visit / survey before works commence",
+    "Attend site induction and sign in",
+    "Identify location of first aid kit and fire exits",
+    "Brief all operatives on this RAMS before work commences",
+    "Erect appropriate barriers, signs and exclusion zones",
+    "Obtain all required permits to work before starting",
+    "Confirm all services (gas, electric, water) have been isolated and locked off",
+    "Protect existing fixtures, fittings and surfaces with dust sheets",
+  ],
+  "Electrical Works": [
+    "Isolate supply using approved isolation procedure and confirm dead with approved voltage indicator",
+    "Apply personal safety lock and display caution notice at distribution board",
+    "Carry out all installation work to BS 7671 18th Edition (or current edition)",
+    "Inspect completed installation before energising",
+    "Carry out required tests to BS 7671 Appendix 6",
+    "Restore supply gradually and commission installation",
+    "Confirm correct operation of all protective devices",
+    "Issue Electrical Installation Certificate / EICR to client",
+    "Clean up and remove all waste from site",
+  ],
+  "Gas Works": [
+    "Isolate gas supply at meter and check with detector for residual gas",
+    "Carry out all work to Gas Safe requirements and relevant Gas Industry Unsafe Situations Procedure (GIUSP)",
+    "Purge and test all gas pipework with approved equipment",
+    "Test all joints with approved leak detection fluid — check all joints are gas-tight",
+    "Commission appliance(s) to manufacturer's specification",
+    "Check for combustion spillage / CO production",
+    "Set and check gas rate and operating pressure",
+    "Carry out tightness test to BS 6891",
+    "Complete all Gas Safe documentation and leave copy with client",
+  ],
+  "Plumbing Works": [
+    "Isolate and drain down existing system before commencing work",
+    "Carry out all work to Water Regulations 1999 and current British Standards",
+    "Ensure all joints and connections are mechanically sound before pressure testing",
+    "Pressure test pipework to 1.5x working pressure for minimum 1 hour — document results",
+    "Refill and vent system ensuring all air locks are cleared",
+    "Check all controls and thermostats operate correctly",
+    "Commission boiler / heat source to manufacturer's specification",
+    "Complete benchmark checklist and leave copy with client",
+    "Advise client on correct operation and maintenance requirements",
+  ],
+  "General Building": [
+    "Set out work area and confirm dimensions with client",
+    "Carry out all structural work in accordance with approved Building Regulations drawings",
+    "Ensure temporary support (acro props, needles) are in place before removing structural elements",
+    "Use correct mix ratios for all mortars, screeds and concrete",
+    "Allow adequate curing time before loading structural elements",
+    "Carry out work to appropriate British Standards and NHBC guidance",
+    "Arrange Building Control inspections at required stages",
+    "Clean up all debris and waste progressively throughout works",
+    "Carry out snagging inspection with client before completion",
+  ],
+  "Completion & Handover": [
+    "Carry out final inspection of all works",
+    "Test all systems and confirm correct operation",
+    "Remove all tools, equipment and waste from site",
+    "Make good any minor damage caused during works",
+    "Clean work area thoroughly",
+    "Issue all completion certificates, warranties and documentation to client",
+    "Walk through completed works with client and address any queries",
+    "Obtain client sign-off on completed works",
+  ],
+};
+
+const COSHH_SUBSTANCES = [
+  { name: "LPG / Natural Gas", hazard: "Flammable, asphyxiant", exposure: "Ventilation, gas detector", ppe: "Gas detector" },
+  { name: "Flux / Solder", hazard: "Fumes — respiratory irritant", exposure: "Adequate ventilation, LEV", ppe: "FFP2 mask" },
+  { name: "PTFE / Thread tape — low risk", hazard: "Low risk, skin irritant", exposure: "Handwashing", ppe: "Gloves" },
+  { name: "Silicone sealant", hazard: "Skin and eye irritant, acetic acid fumes", exposure: "Ventilation", ppe: "Gloves, safety glasses" },
+  { name: "Solvent cement (push-fit pipes)", hazard: "Flammable, VOCs — respiratory irritant", exposure: "Ventilation, short exposures only", ppe: "Gloves, FFP2 mask, safety glasses" },
+  { name: "Expanding foam", hazard: "Skin and eye irritant, isocyanates", exposure: "Ventilation, short exposure", ppe: "Gloves, safety glasses, FFP2 if large amounts" },
+  { name: "Mortar / Cement", hazard: "Alkaline — skin burns, dust hazard", exposure: "Gloves, knee pads, avoid dust", ppe: "Gloves, FFP2 dust mask, safety glasses, knee pads" },
+  { name: "Wood preservative / stain", hazard: "Skin and eye irritant, solvent fumes", exposure: "Ventilation, gloves", ppe: "Chemical-resistant gloves, safety glasses, FFP2 if spraying" },
+  { name: "Adhesive (contact/solvent)", hazard: "Flammable, VOCs, narcotic in concentration", exposure: "Ventilation, short bursts", ppe: "Gloves, FFP2 organic vapour, safety glasses" },
+  { name: "Bitumen / roofing compound", hazard: "Hot material burns, PAH compounds in fumes", exposure: "Ventilation, cool before applying where possible", ppe: "Heat-resistant gloves, FFP2 mask, safety glasses" },
+];
+
 function RAMSTab({ user, brand }) {
   const [rams, setRams] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState("list");
+  const [screen, setScreen] = useState("list"); // list | wizard | preview
+  const [step, setStep] = useState(1); // 1=details, 2=hazards, 3=method, 4=coshh, 5=welfare
   const [selected, setSelected] = useState(null);
-  const [form, setForm] = useState({
-    title: "", job_ref: "", site_address: "", prepared_by: "", date: new Date().toISOString().split("T")[0],
-    scope: "", hazards: [{ hazard: "", risk: "Medium", control: "", ppe: "" }],
-    method_steps: [""], emergency_procedure: "", first_aider: "", nearest_hospital: "",
-    reviewed_by: "", cdm_notifiable: false,
-  });
   const [generating, setGenerating] = useState(false);
 
-  const RISK_LEVELS = ["Low", "Medium", "High", "Critical"];
-  const TEMPLATES = [
-    { name: "General Construction", hazards: [
-      { hazard: "Working at height", risk: "High", control: "Edge protection, harness and lanyard, exclusion zones below", ppe: "Hard hat, harness, safety boots" },
-      { hazard: "Manual handling", risk: "Medium", control: "Mechanical aids where possible, team lifts, training", ppe: "Gloves, safety boots" },
-      { hazard: "Power tools", risk: "Medium", control: "PAT tested tools, correct guards, trained operators only", ppe: "Eye protection, gloves, ear protection" },
-      { hazard: "Dust and debris", risk: "Medium", control: "Wet cutting, LEV, RPE where required", ppe: "RPE P2 mask, eye protection" },
-    ], steps: ["Secure site, erect appropriate barriers and signage", "Brief all operatives on RAMS before work commences", "Carry out task as per method statement", "Regular housekeeping throughout", "Final inspection and sign-off"] },
-    { name: "Gas Work", hazards: [
-      { hazard: "Gas leak", risk: "Critical", control: "Gas detector in use at all times, isolation procedures, ventilation", ppe: "Gas detector, safety boots" },
-      { hazard: "CO exposure", risk: "High", control: "CO monitor in use, adequate ventilation, evacuation procedures", ppe: "CO monitor" },
-      { hazard: "Burns / hot surfaces", risk: "Medium", control: "Allow cooling, appropriate PPE, fire extinguisher on site", ppe: "Heat-resistant gloves, eye protection" },
-      { hazard: "Confined spaces", risk: "High", control: "Confined space assessment, buddy system, escape route clear", ppe: "Torch, CO monitor, harness if required" },
-    ], steps: ["Isolate gas supply and lock off", "Check for gas with detector", "Carry out works as per Gas Safe regulations", "Test all joints and connections", "Commission and check for spillage/leaks", "Complete Gas Safe documentation"] },
-    { name: "Electrical Installation", hazards: [
-      { hazard: "Electric shock", risk: "Critical", control: "Isolate and lock off before work, test dead, LOTO procedures", ppe: "Insulated tools, rubber gloves if required" },
-      { hazard: "Fire risk", risk: "High", control: "Cable routes fire-stopped, correct cable ratings, no overloading", ppe: "Fire extinguisher on site" },
-      { hazard: "Working in ceiling/roof voids", risk: "Medium", control: "Adequate lighting, dust mask, check for asbestos before entry", ppe: "Hard hat, dust mask, head torch, gloves" },
-      { hazard: "Power tools", risk: "Medium", control: "PAT tested, RCD protected, no damaged cables", ppe: "Eye protection, ear protection" },
-    ], steps: ["Isolate supply and confirm dead with approved voltage indicator", "Display caution notices on distribution board", "Carry out installation works to BS 7671", "Inspect and test completed installation", "Restore supply and commission", "Issue Electrical Installation Certificate"] },
-    { name: "Plumbing / Heating", hazards: [
-      { hazard: "Scalding from hot water", risk: "Medium", control: "Allow system to cool, drain down, use PPE", ppe: "Heat-resistant gloves, eye protection" },
-      { hazard: "Flooding/water damage", risk: "High", control: "Isolate water supply, have mop and bucket ready, protect floors", ppe: "Waterproof boots if required" },
-      { hazard: "Soldering/hot work", risk: "High", control: "Fire-resistant mat, fire extinguisher on site, 60-minute fire watch after", ppe: "Heat-resistant gloves, eye protection" },
-      { hazard: "Manual handling of heavy plant", risk: "Medium", control: "Two-person lift, sack truck, check weight before lifting", ppe: "Gloves, safety boots" },
-    ], steps: ["Isolate water/heating system and drain down", "Carry out works to Water Regulations and manufacturer specifications", "Pressure test all joints before reinstatement", "Refill and vent system", "Commission and check for leaks", "Complete benchmark checklist"] },
-  ];
+  const blankForm = () => ({
+    title: "", job_ref: "", site_address: "", client_name: "", start_date: "", end_date: "",
+    prepared_by: brand?.tradingName || "", reviewed_by: "", scope: "",
+    cdm_notifiable: false, cdm_coordinator: "", cdm_principal_contractor: "",
+    selected_hazards: [], // array of hazard ids
+    custom_hazards: [], // [{hazard,risk,control,ppe}]
+    selected_method_cats: [], // categories selected
+    selected_method_steps: [], // array of step strings
+    custom_method_steps: [],
+    coshh_substances: [], // array of substance names from library or custom
+    custom_coshh: [], // [{name,hazard,exposure,ppe}]
+    first_aider: "", nearest_ae: "", muster_point: "", emergency_procedure: "",
+    welfare_location: "", nearest_toilet: "",
+  });
+
+  const [form, setForm] = useState(blankForm());
 
   useEffect(() => { if (user?.id) load(); }, [user?.id]);
 
@@ -11437,20 +11568,60 @@ function RAMSTab({ user, brand }) {
     setLoading(false);
   };
 
-  const applyTemplate = (template) => {
-    setForm(f => ({ ...f, hazards: template.hazards, method_steps: template.steps }));
+  const duplicateRAMS = (r) => {
+    const d = typeof r.form_data === "string" ? JSON.parse(r.form_data) : r.form_data;
+    setForm({ ...d, title: `${d.title} (Copy)`, start_date: "", end_date: "" });
+    setStep(1);
+    setScreen("wizard");
   };
 
+  const saveRAMS = async () => {
+    if (!form.title) return;
+    const { data, error } = await supabase.from("rams_documents").insert({
+      user_id: user.id, title: form.title, job_ref: form.job_ref,
+      site_address: form.site_address, prepared_by: form.prepared_by,
+      date: form.start_date || new Date().toISOString().split("T")[0],
+      scope: form.scope, cdm_notifiable: form.cdm_notifiable,
+      form_data: JSON.stringify(form),
+      created_at: new Date().toISOString(),
+    }).select().single();
+    if (!error && data) {
+      setRams(p => [data, ...p]);
+      setScreen("list");
+      setForm(blankForm());
+      setStep(1);
+    }
+  };
+
+  // Get all selected hazards as full objects
+  const getSelectedHazards = () => {
+    const all = Object.values(HAZARD_LIBRARY).flat();
+    return [
+      ...all.filter(h => form.selected_hazards.includes(h.id)),
+      ...form.custom_hazards,
+    ];
+  };
+
+  const getSelectedSteps = () => [
+    ...form.selected_method_steps,
+    ...form.custom_method_steps,
+  ];
+
+  const getSelectedCOSHH = () => [
+    ...COSHH_SUBSTANCES.filter(s => form.coshh_substances.includes(s.name)),
+    ...form.custom_coshh,
+  ];
+
   const aiGenerate = async () => {
-    if (!form.scope) { alert("Add a scope of work first so the AI knows what to generate."); return; }
+    if (!form.scope) { alert("Add a scope of work first."); return; }
     setGenerating(true);
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6", max_tokens: 1000,
-          messages: [{ role: "user", content: `Generate a RAMS (Risk Assessment and Method Statement) for this UK construction/trade work: "${form.scope}". Return ONLY valid JSON with this exact structure: {"hazards": [{"hazard": "string", "risk": "Low|Medium|High|Critical", "control": "string", "ppe": "string"}], "method_steps": ["step1", "step2"]}. Maximum 6 hazards and 8 method steps. Use UK trade industry terminology.` }],
+          model: "claude-sonnet-4-6", max_tokens: 800,
+          messages: [{ role: "user", content: `For this UK trade work: "${form.scope}", return ONLY JSON: {"hazard_ids": ["list of relevant hazard ids from: wah1,wah2,wah3,wah4,wah5,elec1,elec2,elec3,elec4,gas1,gas2,gas3,gas4,gas5,plumb1,plumb2,plumb3,plumb4,mh1,mh2,mh3,pt1,pt2,pt3,pt4,pt5,dust1,dust2,dust3,dust4,stf1,stf2,stf3,fire1,fire2,cs1,cs2,site1,site2,site3,site4"], "method_steps": ["up to 8 specific work steps"]}` }],
         }),
       });
       const data = await response.json();
@@ -11458,68 +11629,129 @@ function RAMSTab({ user, brand }) {
       const match = text.match(/\{[\s\S]*\}/);
       if (match) {
         const parsed = JSON.parse(match[0]);
-        setForm(f => ({ ...f, hazards: parsed.hazards || f.hazards, method_steps: parsed.method_steps || f.method_steps }));
+        setForm(f => ({
+          ...f,
+          selected_hazards: [...new Set([...f.selected_hazards, ...(parsed.hazard_ids || [])])],
+          custom_method_steps: [...f.custom_method_steps, ...(parsed.method_steps || [])],
+        }));
       }
-    } catch (e) { alert("AI generation failed — please fill in manually or use a template."); }
+    } catch (e) { console.error(e); }
     setGenerating(false);
   };
 
-  const save = async () => {
-    if (!form.title) return;
-    const payload = { user_id: user.id, ...form, hazards: JSON.stringify(form.hazards), method_steps: JSON.stringify(form.method_steps), created_at: new Date().toISOString() };
-    const { data, error } = await supabase.from("rams_documents").insert(payload).select().single();
-    if (!error && data) {
-      setRams(p => [data, ...p]);
-      setView("list");
-      setForm({ title: "", job_ref: "", site_address: "", prepared_by: "", date: new Date().toISOString().split("T")[0], scope: "", hazards: [{ hazard: "", risk: "Medium", control: "", ppe: "" }], method_steps: [""], emergency_procedure: "", first_aider: "", nearest_hospital: "", reviewed_by: "", cdm_notifiable: false });
-    }
+  const generatePDF = (r) => {
+    const d = typeof r.form_data === "string" ? JSON.parse(r.form_data || "{}") : (r.form_data || {});
+    const hazards = getSelectedHazardsFromData(d);
+    const steps = [...(d.selected_method_steps || []), ...(d.custom_method_steps || [])];
+    const coshh = [...COSHH_SUBSTANCES.filter(s => (d.coshh_substances || []).includes(s.name)), ...(d.custom_coshh || [])];
+    const riskColor = { Low: "#10b981", Medium: "#f59e0b", High: "#ef4444", Critical: "#7c3aed" };
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>RAMS — ${r.title}</title>
+<style>
+  body{font-family:Arial,sans-serif;padding:32px;font-size:12px;color:#111;line-height:1.4}
+  @page{margin:20mm}
+  h1{font-size:20px;font-weight:700;margin:0 0 4px}
+  h2{font-size:13px;font-weight:700;margin:20px 0 8px;padding:6px 10px;background:#f3f4f6;border-left:4px solid #f59e0b}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:16px;border-bottom:3px solid #f59e0b}
+  .meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+  .meta-box{background:#f9fafb;border-radius:4px;padding:8px 10px}
+  .meta-label{font-size:9px;text-transform:uppercase;color:#6b7280;letter-spacing:0.06em;margin-bottom:3px}
+  .meta-value{font-size:11px;font-weight:600}
+  table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px}
+  th{background:#f3f4f6;padding:7px 8px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:0.06em;border-bottom:2px solid #e5e7eb}
+  td{padding:7px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+  .risk{display:inline-block;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;color:#fff}
+  .steps{counter-reset:step;margin:0;padding:0;list-style:none}
+  .steps li{counter-increment:step;padding:6px 0 6px 28px;border-bottom:1px solid #f3f4f6;position:relative}
+  .steps li::before{content:counter(step);position:absolute;left:0;top:6px;width:18px;height:18px;background:#f59e0b;color:#000;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:18px;text-align:center}
+  .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  .sig-box{border:1px solid #e5e7eb;border-radius:6px;padding:14px;min-height:70px}
+  .sig-label{font-size:9px;text-transform:uppercase;color:#6b7280;letter-spacing:0.06em;margin-bottom:4px}
+  .cdm-badge{display:inline-block;background:#ef4444;color:#fff;padding:2px 8px;border-radius:3px;font-size:9px;font-weight:700}
+  .warning{background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:8px 10px;font-size:10px;color:#92400e;margin-bottom:12px}
+  .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:9px;color:#9ca3af;display:flex;justify-content:space-between}
+</style></head><body>
+
+<div class="header">
+  <div>
+    ${brand?.logo ? `<img src="${brand.logo}" style="height:48px;margin-bottom:8px;display:block">` : ""}
+    <h1>${brand?.tradingName || "Trade PA"}</h1>
+    <div style="font-size:11px;color:#666">${brand?.address || ""}${brand?.phone ? ` · ${brand.phone}` : ""}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-weight:700;font-size:14px">Risk Assessment &amp; Method Statement</div>
+    <div style="font-size:11px;color:#666;margin-top:4px">${r.title}</div>
+    ${d.cdm_notifiable ? '<div style="margin-top:6px"><span class="cdm-badge">CDM NOTIFIABLE PROJECT</span></div>' : ""}
+  </div>
+</div>
+
+<div class="meta-grid">
+  ${d.site_address ? `<div class="meta-box"><div class="meta-label">Site Address</div><div class="meta-value">${d.site_address}</div></div>` : ""}
+  ${d.client_name ? `<div class="meta-box"><div class="meta-label">Client</div><div class="meta-value">${d.client_name}</div></div>` : ""}
+  ${d.job_ref ? `<div class="meta-box"><div class="meta-label">Job Reference</div><div class="meta-value">${d.job_ref}</div></div>` : ""}
+  ${d.start_date ? `<div class="meta-box"><div class="meta-label">Start Date</div><div class="meta-value">${new Date(d.start_date).toLocaleDateString("en-GB")}</div></div>` : ""}
+  ${d.end_date ? `<div class="meta-box"><div class="meta-label">End Date</div><div class="meta-value">${new Date(d.end_date).toLocaleDateString("en-GB")}</div></div>` : ""}
+  ${d.prepared_by ? `<div class="meta-box"><div class="meta-label">Prepared By</div><div class="meta-value">${d.prepared_by}</div></div>` : ""}
+</div>
+
+${d.scope ? `<h2>Scope of Work</h2><p style="margin:0 0 8px">${d.scope}</p>` : ""}
+
+<h2>Risk Assessment</h2>
+${hazards.length === 0 ? "<p style='color:#9ca3af;font-size:11px'>No hazards recorded</p>" : `
+<table>
+  <thead><tr><th>Hazard</th><th style="width:80px">Risk Level</th><th>Control Measures</th><th>PPE Required</th></tr></thead>
+  <tbody>${hazards.map(h => `<tr>
+    <td>${h.hazard}</td>
+    <td><span class="risk" style="background:${riskColor[h.risk] || "#666"}">${h.risk}</span></td>
+    <td>${h.control}</td>
+    <td>${h.ppe}</td>
+  </tr>`).join("")}</tbody>
+</table>`}
+
+${steps.length > 0 ? `
+<h2>Method Statement</h2>
+<ol class="steps">${steps.map(s => `<li>${s}</li>`).join("")}</ol>` : ""}
+
+${coshh.length > 0 ? `
+<h2>COSHH Substances</h2>
+<table>
+  <thead><tr><th>Substance</th><th>Hazard</th><th>Control Measure</th><th>PPE</th></tr></thead>
+  <tbody>${coshh.map(s => `<tr><td>${s.name}</td><td>${s.hazard}</td><td>${s.exposure}</td><td>${s.ppe}</td></tr>`).join("")}</tbody>
+</table>` : ""}
+
+${(d.first_aider || d.nearest_ae || d.emergency_procedure) ? `
+<h2>Emergency Arrangements</h2>
+<div class="meta-grid">
+  ${d.first_aider ? `<div class="meta-box"><div class="meta-label">First Aider</div><div class="meta-value">${d.first_aider}</div></div>` : ""}
+  ${d.nearest_ae ? `<div class="meta-box"><div class="meta-label">Nearest A&amp;E</div><div class="meta-value">${d.nearest_ae}</div></div>` : ""}
+  ${d.muster_point ? `<div class="meta-box"><div class="meta-label">Muster Point</div><div class="meta-value">${d.muster_point}</div></div>` : ""}
+</div>
+${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_procedure}</p>` : ""}` : ""}
+
+<h2>Operative Acknowledgement</h2>
+<div class="warning">All operatives must read and sign this document before commencing work. By signing, you confirm that you have read, understood and will comply with all control measures and procedures described in this document.</div>
+<div class="sig-grid">
+  <div class="sig-box"><div class="sig-label">Operative Name</div><div style="margin-top:8px;height:30px;border-bottom:1px solid #e5e7eb"></div><div style="margin-top:8px;font-size:9px;color:#9ca3af">Signature &amp; Date</div></div>
+  <div class="sig-box"><div class="sig-label">Operative Name</div><div style="margin-top:8px;height:30px;border-bottom:1px solid #e5e7eb"></div><div style="margin-top:8px;font-size:9px;color:#9ca3af">Signature &amp; Date</div></div>
+  <div class="sig-box"><div class="sig-label">Operative Name</div><div style="margin-top:8px;height:30px;border-bottom:1px solid #e5e7eb"></div><div style="margin-top:8px;font-size:9px;color:#9ca3af">Signature &amp; Date</div></div>
+  <div class="sig-box"><div class="sig-label">Client / Site Manager</div><div style="margin-top:8px;height:30px;border-bottom:1px solid #e5e7eb"></div><div style="margin-top:8px;font-size:9px;color:#9ca3af">Signature &amp; Date</div></div>
+</div>
+
+<div class="footer">
+  <span>${brand?.tradingName || "Trade PA"} · Generated by Trade PA</span>
+  <span>Document Date: ${new Date(r.created_at).toLocaleDateString("en-GB")}</span>
+</div>
+</body></html>`;
+
+    window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
   };
 
-  const generatePDF = (doc) => {
-    const hazards = typeof doc.hazards === "string" ? JSON.parse(doc.hazards || "[]") : (doc.hazards || []);
-    const steps = typeof doc.method_steps === "string" ? JSON.parse(doc.method_steps || "[]") : (doc.method_steps || []);
-    const riskColor = { Low: "#10b981", Medium: "#f59e0b", High: "#ef4444", Critical: "#7c3aed" };
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>RAMS — ${doc.title}</title>
-    <style>body{font-family:Arial,sans-serif;padding:40px;font-size:12px;color:#111}
-    h1{font-size:20px;margin-bottom:4px}h2{font-size:14px;margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid #f59e0b}
-    .header{display:flex;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #f59e0b}
-    .meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
-    .meta-box{background:#f9fafb;border-radius:6px;padding:10px}.meta-label{font-size:9px;text-transform:uppercase;color:#6b7280;margin-bottom:4px;letter-spacing:0.06em}
-    table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f3f4f6;padding:8px;text-align:left;font-size:10px;text-transform:uppercase;border-bottom:2px solid #e5e7eb}
-    td{padding:8px;border-bottom:1px solid #f3f4f6;vertical-align:top}
-    .risk{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;color:#fff}
-    .steps{margin:0;padding-left:20px}.steps li{margin-bottom:6px;line-height:1.5}
-    .signature-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px}
-    .sig-box{border:1px solid #e5e7eb;border-radius:8px;padding:16px;min-height:80px}
-    .sig-label{font-size:10px;text-transform:uppercase;color:#6b7280;margin-bottom:4px}
-    .warning{background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:10px;font-size:11px;color:#92400e;margin-bottom:16px}
-    </style></head><body>
-    <div class="header">
-      <div><h1>${doc.title}</h1><div style="color:#666;font-size:12px">${brand?.tradingName || ""}</div></div>
-      <div style="text-align:right"><div style="font-weight:700;font-size:13px">Risk Assessment & Method Statement</div><div style="color:#666;font-size:12px">Date: ${new Date(doc.date).toLocaleDateString("en-GB")}</div>${doc.cdm_notifiable ? '<div style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;margin-top:4px;display:inline-block">CDM NOTIFIABLE PROJECT</div>' : ""}</div>
-    </div>
-    <div class="meta-grid">
-      ${doc.site_address ? `<div class="meta-box"><div class="meta-label">Site Address</div><div>${doc.site_address}</div></div>` : ""}
-      ${doc.job_ref ? `<div class="meta-box"><div class="meta-label">Job Reference</div><div>${doc.job_ref}</div></div>` : ""}
-      ${doc.prepared_by ? `<div class="meta-box"><div class="meta-label">Prepared By</div><div>${doc.prepared_by}</div></div>` : ""}
-      ${doc.first_aider ? `<div class="meta-box"><div class="meta-label">First Aider</div><div>${doc.first_aider}</div></div>` : ""}
-      ${doc.nearest_hospital ? `<div class="meta-box"><div class="meta-label">Nearest Hospital</div><div>${doc.nearest_hospital}</div></div>` : ""}
-    </div>
-    ${doc.scope ? `<h2>Scope of Work</h2><p>${doc.scope}</p>` : ""}
-    <h2>Risk Assessment</h2>
-    <table><thead><tr><th>Hazard</th><th>Risk Level</th><th>Control Measures</th><th>PPE Required</th></tr></thead>
-    <tbody>${hazards.map(h => `<tr><td>${h.hazard}</td><td><span class="risk" style="background:${riskColor[h.risk]||"#666"}">${h.risk}</span></td><td>${h.control}</td><td>${h.ppe}</td></tr>`).join("")}</tbody></table>
-    <h2>Method Statement</h2>
-    <ol class="steps">${steps.map(s => `<li>${s}</li>`).join("")}</ol>
-    ${doc.emergency_procedure ? `<h2>Emergency Procedures</h2><p>${doc.emergency_procedure}</p>` : ""}
-    <h2>Operative Sign-off</h2>
-    <p style="font-size:11px;color:#666;margin-bottom:12px">All operatives must read and sign this document before commencing work. By signing, you confirm you understand and will comply with all control measures stated above.</p>
-    <div class="signature-grid">
-      <div class="sig-box"><div class="sig-label">Operative Name & Signature</div><div style="margin-top:30px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af">Sign and date</div></div>
-      <div class="sig-box"><div class="sig-label">Supervisor / Client Sign-off</div><div style="margin-top:30px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af">Sign and date</div></div>
-    </div>
-    </body></html>`;
-    window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
+  const getSelectedHazardsFromData = (d) => {
+    const all = Object.values(HAZARD_LIBRARY).flat();
+    return [
+      ...all.filter(h => (d.selected_hazards || []).includes(h.id)),
+      ...(d.custom_hazards || []),
+    ];
   };
 
   const del = async (id) => {
@@ -11528,155 +11760,288 @@ function RAMSTab({ user, brand }) {
     setRams(p => p.filter(r => r.id !== id));
   };
 
-  if (view === "add") {
+  const STEPS = ["Project Details", "Hazards", "Method Statement", "COSHH", "Welfare & Emergency"];
+
+  // ── WIZARD ────────────────────────────────────────────────────────────────
+  if (screen === "wizard") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontSize: 22 }}>←</button>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>New RAMS</div>
-        </div>
-
-        {/* Templates */}
-        <div style={S.card}>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Quick Start Templates</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {TEMPLATES.map(t => (
-              <button key={t.name} onClick={() => applyTemplate(t)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 12px" }}>{t.name}</button>
-            ))}
-            <button onClick={aiGenerate} disabled={generating} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>
-              {generating ? "⏳ Generating..." : "🤖 AI Generate"}
-            </button>
+      <div style={{ display: "flex", flexDirection: "column", gap: 0, paddingBottom: 100 }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <button onClick={() => { setScreen("list"); setForm(blankForm()); setStep(1); }} style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontSize: 22, padding: 0 }}>←</button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{form.title || "New RAMS"}</div>
+            <div style={{ fontSize: 11, color: C.muted }}>Step {step} of {STEPS.length} — {STEPS[step - 1]}</div>
           </div>
-          {!form.scope && <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Fill in the scope of work below before using AI Generate</div>}
         </div>
 
-        {/* Basic info */}
-        <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Document Details</div>
+        {/* Progress bar */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+          {STEPS.map((s, i) => (
+            <div key={i} onClick={() => { if (i < step) setStep(i + 1); }}
+              style={{ flex: 1, height: 4, borderRadius: 2, background: i < step ? C.amber : C.border, cursor: i < step ? "pointer" : "default", transition: "background 0.2s" }} />
+          ))}
+        </div>
+
+        {/* Step 1: Project Details */}
+        {step === 1 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div><label style={S.label}>RAMS Title</label><input style={S.input} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Boiler replacement — 42 High Street" /></div>
-            <div style={S.grid2}>
-              <div><label style={S.label}>Job Reference</label><input style={S.input} value={form.job_ref} onChange={e => setForm(f => ({ ...f, job_ref: e.target.value }))} placeholder="Job ref or number" /></div>
-              <div><label style={S.label}>Date</label><input style={S.input} type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-            </div>
-            <div><label style={S.label}>Site Address</label><input style={S.input} value={form.site_address} onChange={e => setForm(f => ({ ...f, site_address: e.target.value }))} placeholder="Full site address" /></div>
-            <div style={S.grid2}>
-              <div><label style={S.label}>Prepared By</label><input style={S.input} value={form.prepared_by} onChange={e => setForm(f => ({ ...f, prepared_by: e.target.value }))} placeholder="Your name" /></div>
-              <div><label style={S.label}>Reviewed By</label><input style={S.input} value={form.reviewed_by} onChange={e => setForm(f => ({ ...f, reviewed_by: e.target.value }))} placeholder="Supervisor / manager" /></div>
-            </div>
-            <div><label style={S.label}>Scope of Work</label><textarea style={{ ...S.input, minHeight: 80 }} value={form.scope} onChange={e => setForm(f => ({ ...f, scope: e.target.value }))} placeholder="Describe the work to be carried out in detail..." /></div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <input type="checkbox" id="cdm" checked={form.cdm_notifiable} onChange={e => setForm(f => ({ ...f, cdm_notifiable: e.target.checked }))} />
-              <label htmlFor="cdm" style={{ fontSize: 12, color: C.text }}>CDM Notifiable Project (notify HSE via F10)</label>
-            </div>
-          </div>
-        </div>
-
-        {/* Risk Assessment */}
-        <div style={S.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>Risk Assessment</div>
-            <button onClick={() => setForm(f => ({ ...f, hazards: [...f.hazards, { hazard: "", risk: "Medium", control: "", ppe: "" }] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>+ Hazard</button>
-          </div>
-          {form.hazards.map((h, i) => (
-            <div key={i} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "12px 14px", marginBottom: 10, border: `1px solid ${C.border}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Hazard {i + 1}</div>
-                {form.hazards.length > 1 && <button onClick={() => setForm(f => ({ ...f, hazards: f.hazards.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={S.card}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Project Details</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div><label style={S.label}>RAMS Title *</label><input style={S.input} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Gas boiler replacement — 12 High Street" /></div>
+                <div><label style={S.label}>Scope of Work</label><textarea style={{ ...S.input, minHeight: 80 }} value={form.scope} onChange={e => setForm(f => ({ ...f, scope: e.target.value }))} placeholder="Describe the work to be carried out..." /></div>
                 <div style={S.grid2}>
-                  <div><label style={S.label}>Hazard</label><input style={S.input} value={h.hazard} onChange={e => setForm(f => ({ ...f, hazards: f.hazards.map((x,j) => j===i ? {...x, hazard: e.target.value} : x) }))} placeholder="e.g. Working at height" /></div>
-                  <div>
-                    <label style={S.label}>Risk Level</label>
-                    <select style={S.input} value={h.risk} onChange={e => setForm(f => ({ ...f, hazards: f.hazards.map((x,j) => j===i ? {...x, risk: e.target.value} : x) }))}>
-                      {RISK_LEVELS.map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
+                  <div><label style={S.label}>Site Address</label><input style={S.input} value={form.site_address} onChange={e => setForm(f => ({ ...f, site_address: e.target.value }))} placeholder="Full site address" /></div>
+                  <div><label style={S.label}>Client Name</label><input style={S.input} value={form.client_name} onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))} placeholder="Client or contractor name" /></div>
                 </div>
-                <div><label style={S.label}>Control Measures</label><input style={S.input} value={h.control} onChange={e => setForm(f => ({ ...f, hazards: f.hazards.map((x,j) => j===i ? {...x, control: e.target.value} : x) }))} placeholder="How will you control this risk?" /></div>
-                <div><label style={S.label}>PPE Required</label><input style={S.input} value={h.ppe} onChange={e => setForm(f => ({ ...f, hazards: f.hazards.map((x,j) => j===i ? {...x, ppe: e.target.value} : x) }))} placeholder="e.g. Hard hat, gloves, safety boots" /></div>
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Start Date</label><input style={S.input} type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
+                  <div><label style={S.label}>End Date</label><input style={S.input} type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} /></div>
+                </div>
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Prepared By</label><input style={S.input} value={form.prepared_by} onChange={e => setForm(f => ({ ...f, prepared_by: e.target.value }))} placeholder="Your name" /></div>
+                  <div><label style={S.label}>Reviewed By</label><input style={S.input} value={form.reviewed_by} onChange={e => setForm(f => ({ ...f, reviewed_by: e.target.value }))} placeholder="Supervisor / manager" /></div>
+                </div>
+                <div><label style={S.label}>Job Reference</label><input style={S.input} value={form.job_ref} onChange={e => setForm(f => ({ ...f, job_ref: e.target.value }))} placeholder="Optional job reference" /></div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: C.red + "11", border: `1px solid ${C.red}33`, borderRadius: 8 }}>
+                  <input type="checkbox" id="cdm" checked={form.cdm_notifiable} onChange={e => setForm(f => ({ ...f, cdm_notifiable: e.target.checked }))} style={{ width: 16, height: 16 }} />
+                  <label htmlFor="cdm" style={{ fontSize: 12, cursor: "pointer" }}>This is a CDM Notifiable Project (notify HSE via F10 — project over 30 days with 20+ workers, or over 500 person-days)</label>
+                </div>
+                {form.cdm_notifiable && (
+                  <div style={S.grid2}>
+                    <div><label style={S.label}>CDM Coordinator</label><input style={S.input} value={form.cdm_coordinator} onChange={e => setForm(f => ({ ...f, cdm_coordinator: e.target.value }))} /></div>
+                    <div><label style={S.label}>Principal Contractor</label><input style={S.input} value={form.cdm_principal_contractor} onChange={e => setForm(f => ({ ...f, cdm_principal_contractor: e.target.value }))} /></div>
+                  </div>
+                )}
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* Method Statement */}
-        <div style={S.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>Method Statement</div>
-            <button onClick={() => setForm(f => ({ ...f, method_steps: [...f.method_steps, ""] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>+ Step</button>
           </div>
-          {form.method_steps.map((step, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
-              <div style={{ width: 24, height: 24, borderRadius: "50%", background: C.amber, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 8 }}>{i+1}</div>
-              <input style={{ ...S.input, flex: 1 }} value={step} onChange={e => setForm(f => ({ ...f, method_steps: f.method_steps.map((s,j) => j===i ? e.target.value : s) }))} placeholder={`Step ${i+1}...`} />
-              {form.method_steps.length > 1 && <button onClick={() => setForm(f => ({ ...f, method_steps: f.method_steps.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, marginTop: 8 }}>×</button>}
-            </div>
-          ))}
-        </div>
+        )}
 
-        {/* Emergency & Welfare */}
-        <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Emergency & Welfare</div>
+        {/* Step 2: Hazards */}
+        {step === 2 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={S.grid2}>
-              <div><label style={S.label}>First Aider on Site</label><input style={S.input} value={form.first_aider} onChange={e => setForm(f => ({ ...f, first_aider: e.target.value }))} placeholder="Name" /></div>
-              <div><label style={S.label}>Nearest A&E</label><input style={S.input} value={form.nearest_hospital} onChange={e => setForm(f => ({ ...f, nearest_hospital: e.target.value }))} placeholder="Hospital name & address" /></div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: C.muted }}>{form.selected_hazards.length} hazards selected</div>
+              <button onClick={aiGenerate} disabled={generating} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 12px" }}>
+                {generating ? "⏳ Suggesting..." : "🤖 AI Suggest from Scope"}
+              </button>
             </div>
-            <div><label style={S.label}>Emergency Procedures</label><textarea style={{ ...S.input, minHeight: 60 }} value={form.emergency_procedure} onChange={e => setForm(f => ({ ...f, emergency_procedure: e.target.value }))} placeholder="What to do in an emergency..." /></div>
+            {Object.entries(HAZARD_LIBRARY).map(([category, hazards]) => (
+              <div key={category} style={S.card}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: C.amber }}>{category}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {hazards.map(h => {
+                    const selected = form.selected_hazards.includes(h.id);
+                    const riskColors = { Low: C.green, Medium: C.amber, High: C.red, Critical: "#7c3aed" };
+                    return (
+                      <div key={h.id} onClick={() => setForm(f => ({ ...f, selected_hazards: selected ? f.selected_hazards.filter(x => x !== h.id) : [...f.selected_hazards, h.id] }))}
+                        style={{ display: "flex", gap: 10, padding: "10px 12px", borderRadius: 8, border: `2px solid ${selected ? riskColors[h.risk] : C.border}`, background: selected ? riskColors[h.risk] + "0f" : C.surfaceHigh, cursor: "pointer" }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${selected ? riskColors[h.risk] : C.border}`, background: selected ? riskColors[h.risk] : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0, marginTop: 1 }}>
+                          {selected ? "✓" : ""}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{h.hazard}</div>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: riskColors[h.risk], padding: "1px 6px", borderRadius: 3 }}>{h.risk}</div>
+                          </div>
+                          {selected && <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{h.control}</div>}
+                          {selected && <div style={{ fontSize: 11, color: C.amber, marginTop: 3 }}>PPE: {h.ppe}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {/* Custom hazards */}
+            <div style={S.card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>Custom Hazards</div>
+                <button onClick={() => setForm(f => ({ ...f, custom_hazards: [...f.custom_hazards, { hazard: "", risk: "Medium", control: "", ppe: "" }] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>+ Add</button>
+              </div>
+              {form.custom_hazards.map((h, i) => (
+                <div key={i} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 12px", marginBottom: 8, border: `1px solid ${C.border}` }}>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <input style={{ ...S.input, flex: 2, fontSize: 12 }} value={h.hazard} onChange={e => setForm(f => ({ ...f, custom_hazards: f.custom_hazards.map((x,j) => j===i ? {...x,hazard:e.target.value} : x) }))} placeholder="Hazard description" />
+                    <select style={{ ...S.input, flex: 1, fontSize: 11 }} value={h.risk} onChange={e => setForm(f => ({ ...f, custom_hazards: f.custom_hazards.map((x,j) => j===i ? {...x,risk:e.target.value} : x) }))}>
+                      {["Low","Medium","High","Critical"].map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                    <button onClick={() => setForm(f => ({ ...f, custom_hazards: f.custom_hazards.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18 }}>×</button>
+                  </div>
+                  <input style={{ ...S.input, fontSize: 12, marginBottom: 6 }} value={h.control} onChange={e => setForm(f => ({ ...f, custom_hazards: f.custom_hazards.map((x,j) => j===i ? {...x,control:e.target.value} : x) }))} placeholder="Control measures" />
+                  <input style={{ ...S.input, fontSize: 12 }} value={h.ppe} onChange={e => setForm(f => ({ ...f, custom_hazards: f.custom_hazards.map((x,j) => j===i ? {...x,ppe:e.target.value} : x) }))} placeholder="PPE required" />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={save} disabled={!form.title}>Save RAMS</button>
-          <button style={S.btn("ghost")} onClick={() => setView("list")}>Cancel</button>
+        {/* Step 3: Method Statement */}
+        {step === 3 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ fontSize: 12, color: C.muted }}>{getSelectedSteps().length} steps in method statement</div>
+            {Object.entries(METHOD_LIBRARY).map(([category, steps]) => (
+              <div key={category} style={S.card}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: C.amber }}>{category}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {steps.map((step, si) => {
+                    const sel = form.selected_method_steps.includes(step);
+                    return (
+                      <div key={si} onClick={() => setForm(f => ({ ...f, selected_method_steps: sel ? f.selected_method_steps.filter(x => x !== step) : [...f.selected_method_steps, step] }))}
+                        style={{ display: "flex", gap: 10, padding: "8px 10px", borderRadius: 6, border: `1px solid ${sel ? C.amber + "88" : C.border}`, background: sel ? C.amber + "0a" : "transparent", cursor: "pointer" }}>
+                        <div style={{ width: 18, height: 18, borderRadius: 3, border: `2px solid ${sel ? C.amber : C.border}`, background: sel ? C.amber : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", flexShrink: 0, marginTop: 1 }}>
+                          {sel ? "✓" : ""}
+                        </div>
+                        <div style={{ fontSize: 12, lineHeight: 1.4 }}>{step}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {/* Custom steps */}
+            <div style={S.card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>Custom Steps</div>
+                <button onClick={() => setForm(f => ({ ...f, custom_method_steps: [...f.custom_method_steps, ""] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>+ Add Step</button>
+              </div>
+              {form.custom_method_steps.map((s, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                  <input style={{ ...S.input, flex: 1, fontSize: 12 }} value={s} onChange={e => setForm(f => ({ ...f, custom_method_steps: f.custom_method_steps.map((x,j) => j===i ? e.target.value : x) }))} placeholder="Custom step..." />
+                  <button onClick={() => setForm(f => ({ ...f, custom_method_steps: f.custom_method_steps.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18 }}>×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: COSHH */}
+        {step === 4 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ fontSize: 12, color: C.muted }}>Select any hazardous substances being used on this job</div>
+            <div style={S.card}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Substance Library</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {COSHH_SUBSTANCES.map((s, i) => {
+                  const sel = form.coshh_substances.includes(s.name);
+                  return (
+                    <div key={i} onClick={() => setForm(f => ({ ...f, coshh_substances: sel ? f.coshh_substances.filter(x => x !== s.name) : [...f.coshh_substances, s.name] }))}
+                      style={{ display: "flex", gap: 10, padding: "8px 10px", borderRadius: 6, border: `1px solid ${sel ? C.amber + "88" : C.border}`, background: sel ? C.amber + "0a" : "transparent", cursor: "pointer" }}>
+                      <div style={{ width: 18, height: 18, borderRadius: 3, border: `2px solid ${sel ? C.amber : C.border}`, background: sel ? C.amber : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", flexShrink: 0 }}>
+                        {sel ? "✓" : ""}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{s.name}</div>
+                        {sel && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{s.hazard} · PPE: {s.ppe}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Custom substances */}
+            <div style={S.card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>Custom Substances</div>
+                <button onClick={() => setForm(f => ({ ...f, custom_coshh: [...f.custom_coshh, { name: "", hazard: "", exposure: "", ppe: "" }] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>+ Add</button>
+              </div>
+              {form.custom_coshh.map((s, i) => (
+                <div key={i} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 12px", marginBottom: 8, border: `1px solid ${C.border}` }}>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                    <input style={{ ...S.input, flex: 1, fontSize: 12 }} value={s.name} onChange={e => setForm(f => ({ ...f, custom_coshh: f.custom_coshh.map((x,j) => j===i ? {...x,name:e.target.value} : x) }))} placeholder="Substance name" />
+                    <button onClick={() => setForm(f => ({ ...f, custom_coshh: f.custom_coshh.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18 }}>×</button>
+                  </div>
+                  <input style={{ ...S.input, fontSize: 12, marginBottom: 6 }} value={s.hazard} onChange={e => setForm(f => ({ ...f, custom_coshh: f.custom_coshh.map((x,j) => j===i ? {...x,hazard:e.target.value} : x) }))} placeholder="Hazard" />
+                  <input style={{ ...S.input, fontSize: 12, marginBottom: 6 }} value={s.exposure} onChange={e => setForm(f => ({ ...f, custom_coshh: f.custom_coshh.map((x,j) => j===i ? {...x,exposure:e.target.value} : x) }))} placeholder="Control measure / exposure limit" />
+                  <input style={{ ...S.input, fontSize: 12 }} value={s.ppe} onChange={e => setForm(f => ({ ...f, custom_coshh: f.custom_coshh.map((x,j) => j===i ? {...x,ppe:e.target.value} : x) }))} placeholder="PPE required" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: Welfare & Emergency */}
+        {step === 5 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={S.card}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Emergency Arrangements</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={S.grid2}>
+                  <div><label style={S.label}>First Aider on Site</label><input style={S.input} value={form.first_aider} onChange={e => setForm(f => ({ ...f, first_aider: e.target.value }))} placeholder="Name & phone" /></div>
+                  <div><label style={S.label}>Nearest A&E Hospital</label><input style={S.input} value={form.nearest_ae} onChange={e => setForm(f => ({ ...f, nearest_ae: e.target.value }))} placeholder="Hospital name & address" /></div>
+                </div>
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Muster / Assembly Point</label><input style={S.input} value={form.muster_point} onChange={e => setForm(f => ({ ...f, muster_point: e.target.value }))} placeholder="Where to go in emergency" /></div>
+                  <div><label style={S.label}>Welfare Facilities</label><input style={S.input} value={form.welfare_location} onChange={e => setForm(f => ({ ...f, welfare_location: e.target.value }))} placeholder="Location of toilets / welfare" /></div>
+                </div>
+                <div><label style={S.label}>Emergency Procedure</label><textarea style={{ ...S.input, minHeight: 80 }} value={form.emergency_procedure} onChange={e => setForm(f => ({ ...f, emergency_procedure: e.target.value }))} placeholder="What to do in the event of an emergency, fire, accident or gas leak..." /></div>
+              </div>
+            </div>
+            <div style={{ background: C.amber + "11", border: `1px solid ${C.amber}33`, borderRadius: 8, padding: "10px 12px", fontSize: 11, color: C.amber }}>
+              Emergency services: 999 · Gas emergency: 0800 111 999 · HSE incident line: 0345 300 9923
+            </div>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <div style={{ display: "flex", gap: 8, marginTop: 20, position: "sticky", bottom: 80, background: C.bg, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+          {step > 1 && <button onClick={() => setStep(s => s - 1)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }}>← Back</button>}
+          {step < STEPS.length
+            ? <button onClick={() => setStep(s => s + 1)} disabled={step === 1 && !form.title} style={{ ...S.btn("primary"), flex: 2, justifyContent: "center" }}>Next → {STEPS[step]}</button>
+            : <button onClick={saveRAMS} disabled={!form.title} style={{ ...S.btn("primary"), flex: 2, justifyContent: "center" }}>💾 Save RAMS</button>
+          }
         </div>
       </div>
     );
   }
 
+  // ── LIST VIEW ─────────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>RAMS</div>
-        <button onClick={() => setView("add")} style={S.btn("primary")}>+ New RAMS</button>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>RAMS Builder</div>
+        <button onClick={() => { setForm(blankForm()); setStep(1); setScreen("wizard"); }} style={S.btn("primary")}>+ New RAMS</button>
       </div>
 
-      <div style={{ fontSize: 11, color: C.muted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px" }}>
-        Risk Assessment & Method Statement documents. Create one per job — use templates or AI to pre-fill, then customise and get signed off on site.
+      <div style={{ fontSize: 11, color: C.muted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", lineHeight: 1.6 }}>
+        Create Risk Assessment & Method Statements for any job. Choose from a library of pre-written hazards and method statement steps, or add your own. Generate a professional branded PDF for client sign-off.
       </div>
 
-      {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : rams.length === 0 ? (
-        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No RAMS documents yet — tap + New RAMS</div>
-      ) : rams.map(r => {
-        const hazards = typeof r.hazards === "string" ? JSON.parse(r.hazards || "[]") : (r.hazards || []);
-        const highRisk = hazards.filter(h => h.risk === "High" || h.risk === "Critical").length;
-        return (
-          <div key={r.id} style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", cursor: "pointer" }} onClick={() => setSelected(selected?.id === r.id ? null : r)}>
-              <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: highRisk > 0 ? C.red : C.green, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>{r.title}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                  {new Date(r.date).toLocaleDateString("en-GB")}
-                  {r.job_ref && ` · ${r.job_ref}`}
-                  {r.site_address && ` · ${r.site_address}`}
+      {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> :
+        rams.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 40 }}>No RAMS documents yet — tap + New RAMS to get started</div>
+        ) : rams.map(r => {
+          const d = typeof r.form_data === "string" ? JSON.parse(r.form_data || "{}") : (r.form_data || {});
+          const hazardCount = (d.selected_hazards || []).length + (d.custom_hazards || []).length;
+          const stepCount = (d.selected_method_steps || []).length + (d.custom_method_steps || []).length;
+          return (
+            <div key={r.id} style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>{r.title}</div>
+                    {r.cdm_notifiable && <div style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: C.red, padding: "1px 6px", borderRadius: 3 }}>CDM</div>}
+                  </div>
+                  {r.site_address && <div style={{ fontSize: 11, color: C.muted }}>📍 {r.site_address}</div>}
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    {new Date(r.created_at).toLocaleDateString("en-GB")}
+                    {r.job_ref && ` · ${r.job_ref}`}
+                    {hazardCount > 0 && ` · ${hazardCount} hazards`}
+                    {stepCount > 0 && ` · ${stepCount} steps`}
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{hazards.length} hazards{highRisk > 0 ? ` · ${highRisk} high/critical` : " · all low-medium"}</div>
               </div>
-              {r.cdm_notifiable && <div style={{ ...S.badge(C.red), flexShrink: 0 }}>CDM</div>}
-              <div style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>{selected?.id === r.id ? "▲" : "▼"}</div>
+              <div style={{ borderTop: `1px solid ${C.border}`, display: "flex", gap: 1 }}>
+                <button onClick={() => generatePDF(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}` }}>⬇ PDF</button>
+                <button onClick={() => duplicateRAMS(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}` }}>📋 Duplicate</button>
+                <button onClick={() => del(r.id)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", color: C.red }}>Delete</button>
+              </div>
             </div>
-            {selected?.id === r.id && (
-              <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 14px", display: "flex", gap: 8 }}>
-                <button onClick={() => generatePDF(r)} style={{ ...S.btn("primary"), flex: 1, justifyContent: "center", fontSize: 12 }}>⬇ PDF / Sign-off</button>
-                <button onClick={() => del(r.id)} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px", color: C.red, borderColor: C.red + "44" }}>Delete</button>
-              </div>
-            )}
-          </div>
-        );
-      })}
+          );
+        })
+      }
     </div>
   );
 }
