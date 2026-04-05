@@ -11660,6 +11660,7 @@ function StockTab({ user }) {
             <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
           </div>
         </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={S.grid2}>
             <div><label style={S.label}>SKU / Code</label><input style={S.input} value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="Optional" /></div>
             <div><label style={S.label}>Location</label><input style={S.input} value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Van shelf 2" /></div>
@@ -11678,6 +11679,7 @@ function StockTab({ user }) {
             <div><label style={S.label}>Reorder Level</label><input style={S.input} type="number" step="0.1" min="0" value={form.reorder_level} onChange={e => setForm(f => ({ ...f, reorder_level: e.target.value }))} placeholder="Alert when below" /></div>
           </div>
           {form.quantity && form.unit_cost && <div style={{ fontSize: 11, color: C.green, background: C.green + "11", borderRadius: 6, padding: "6px 10px" }}>Stock value: £{(parseFloat(form.quantity||0) * parseFloat(form.unit_cost||0)).toFixed(2)}</div>}
+        </div>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
           <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={save} disabled={!form.name}>Save</button>
