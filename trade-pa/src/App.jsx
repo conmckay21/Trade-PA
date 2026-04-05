@@ -3420,7 +3420,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user }) {
+function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user, refreshJobs }) {
   const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can handle everything in the app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Quote Sarah Chen £450 for new bathroom"\n• "Invoice Kevin Nash £85 for leak repair"\n• "Mark the invoice for Kevin as paid"\n• "Convert Sarah's quote to an invoice"\n• "Confirm the boiler service for John"\n• "Mark copper pipe as ordered"\n• "Delete the enquiry from Dave"\n• "Save Emma Taylor, 07700 900123, emma@email.com"\n\nOr tap 🎙 and speak naturally.` }]);
 
   const quick = [
@@ -3443,7 +3443,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
   const TOOLS = [
     {
       name: "create_job",
-      description: "Create a new job in the schedule. Use when the user mentions booking in a customer, scheduling work, or adding a job.",
+      description: "Create a new scheduled job in the calendar/schedule. Use ONLY when user specifies a date and time for the work e.g. 'book John Smith boiler service Friday 10am'. For job cards without specific times, use create_job_card instead.",
       input_schema: {
         type: "object",
         properties: {
@@ -3668,10 +3668,110 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         required: ["item", "status"],
       },
     },
+    {
+      name: "create_job_card",
+      description: "Create a job card to track work, costs and profitability. Use when user says 'add a job for [customer]', 'create a job card', or describes work without a specific date/time. Job cards are different from scheduled calendar jobs.",
+      input_schema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Job title e.g. Boiler replacement, Kitchen extension" },
+          customer: { type: "string", description: "Customer full name" },
+          address: { type: "string", description: "Job site address" },
+          type: { type: "string", description: "Type of work e.g. Plumbing, Gas, Electrical" },
+          value: { type: "number", description: "Job value in pounds" },
+          status: { type: "string", enum: ["enquiry", "quoted", "accepted", "in_progress", "completed"], description: "Job status, default accepted" },
+          notes: { type: "string", description: "Any notes about the job" },
+          scope_of_work: { type: "string", description: "Detailed description of work to be done" },
+        },
+        required: ["customer"],
+      },
+    },
+    {
+      name: "assign_material_to_job",
+      description: "Link a material to a job card so it shows in job profitability. Use when user says 'assign [material] to [job/customer]' or 'add [material] to [customer] job'.",
+      input_schema: {
+        type: "object",
+        properties: {
+          item: { type: "string", description: "Material item name to match" },
+          customer: { type: "string", description: "Customer name of the job to link to" },
+        },
+        required: ["item", "customer"],
+      },
+    },
+    {
+      name: "log_time",
+      description: "Log labour time against a job. Handles hourly rate, day rate, or price work. Use when user says 'log X hours at £Y/hr for [customer]' or 'log X days at £Y/day' or 'log price work of £X'.",
+      input_schema: {
+        type: "object",
+        properties: {
+          customer: { type: "string", description: "Customer name to find the job" },
+          labour_type: { type: "string", enum: ["hourly", "day_rate", "price_work"], description: "Type of labour" },
+          hours: { type: "number", description: "Number of hours (hourly only)" },
+          days: { type: "number", description: "Number of days (day_rate only)" },
+          rate: { type: "number", description: "Hourly or day rate in £ (not for price_work)" },
+          total: { type: "number", description: "Fixed total amount in £ (price_work only)" },
+          description: { type: "string", description: "Description of work done" },
+          date: { type: "string", description: "Date in YYYY-MM-DD format, default today" },
+        },
+        required: ["customer", "labour_type"],
+      },
+    },
+    {
+      name: "log_mileage",
+      description: "Log a mileage trip for HMRC tax purposes. Use when user mentions travelling to a job or site visit.",
+      input_schema: {
+        type: "object",
+        properties: {
+          from_location: { type: "string", description: "Start location e.g. Home" },
+          to_location: { type: "string", description: "Destination e.g. customer address" },
+          miles: { type: "number", description: "Miles travelled" },
+          purpose: { type: "string", description: "Purpose e.g. site visit, materials collection" },
+          date: { type: "string", description: "Date in YYYY-MM-DD format, default today" },
+        },
+        required: ["miles"],
+      },
+    },
+    {
+      name: "add_job_note",
+      description: "Add a note to an existing job card. Use when user says 'add note to [customer] job' or 'note for [job]'.",
+      input_schema: {
+        type: "object",
+        properties: {
+          customer: { type: "string", description: "Customer name to find the job" },
+          note: { type: "string", description: "The note text to add" },
+        },
+        required: ["customer", "note"],
+      },
+    },
+    {
+      name: "create_purchase_order",
+      description: "Create a purchase order for a supplier. Use when user says 'order [items] from [supplier]' or 'create PO for [supplier]'.",
+      input_schema: {
+        type: "object",
+        properties: {
+          supplier: { type: "string", description: "Supplier name" },
+          items: { type: "array", items: { type: "object", properties: { description: { type: "string" }, qty: { type: "number" }, unit_price: { type: "number" } } }, description: "List of items to order" },
+          job_ref: { type: "string", description: "Job reference this PO is for" },
+        },
+        required: ["supplier"],
+      },
+    },
+    {
+      name: "update_stock",
+      description: "Adjust stock quantity for an item. Use when user says they've used X of something or received stock.",
+      input_schema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Stock item name to match" },
+          adjustment: { type: "number", description: "Amount to add (positive) or remove (negative)" },
+        },
+        required: ["name", "adjustment"],
+      },
+    },
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
-  const executeTool = (name, input) => {
+  const executeTool = async (name, input) => {
     try {
       switch (name) {
         case "create_customer": {
@@ -3755,6 +3855,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         case "create_material": {
           const mat = { item: input.item, qty: input.qty || 1, supplier: input.supplier || "", job: input.job || "", status: "to_order" };
           setMaterials(prev => [...(prev || []), mat]);
+          setTimeout(() => setView("Materials"), 300);
           setLastAction({ type: "material", label: `${input.item} x${input.qty || 1}`, view: "Materials" });
           return `Material added: ${input.item} x${input.qty || 1}${input.supplier ? ` from ${input.supplier}` : ""}${input.job ? ` for ${input.job}` : ""}.`;
         }
@@ -3838,6 +3939,112 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           setLastAction({ type: "material", label: `${input.status}: ${match.item}`, view: "Materials" });
           return `Material "${match.item}" marked as ${input.status}.`;
         }
+        case "create_job_card": {
+          const payload = {
+            user_id: user?.id,
+            title: input.title || input.type || "",
+            customer: input.customer,
+            address: input.address || "",
+            type: input.type || "",
+            status: input.status || "accepted",
+            value: parseFloat(input.value || 0),
+            notes: input.notes || "",
+            scope_of_work: input.scope_of_work || "",
+            annual_service: false,
+            updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+          };
+          const { data: jobCard, error: jcErr } = await supabase.from("job_cards").insert(payload).select().single();
+          if (jcErr) return `Failed to create job card: ${jcErr.message}`;
+          if (refreshJobs) refreshJobs();
+          setTimeout(() => setView("Jobs"), 300);
+          setLastAction({ type: "job_card", label: `${input.title || input.customer}`, view: "Jobs" });
+          return `Job card created for ${input.customer}${input.title ? ` — ${input.title}` : ""}${input.value ? ` (£${input.value})` : ""}. Go to the Jobs tab to see it.`;
+        }
+        case "assign_material_to_job": {
+          const matIdx = (materials || []).findIndex(m => m.item?.toLowerCase().includes(input.item.toLowerCase()));
+          if (matIdx < 0) return `Couldn't find material "${input.item}". Check the Materials tab.`;
+          const mat = (materials || [])[matIdx];
+          const { data: jobMatches } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).limit(5);
+          if (!jobMatches?.length) return `Couldn't find a job for "${input.customer}". Check the Jobs tab.`;
+          const job = jobMatches[0];
+          // Update in state by index (not by reference which can fail)
+          setMaterials(prev => (prev || []).map((m, i) => i === matIdx ? { ...m, job_id: job.id, job: job.title || job.type || input.customer } : m));
+          // Also persist to Supabase if material has an ID
+          if (mat.id) {
+            await supabase.from("materials").update({ job_id: job.id }).eq("id", mat.id).eq("user_id", user?.id);
+          }
+          setLastAction({ type: "material", label: `${mat.item} → ${job.customer}`, view: "Materials" });
+          return `"${mat.item}" linked to ${job.customer}'s job. It will now show in that job's profit breakdown.`;
+        }
+        case "log_time": {
+          // Find job by customer name
+          const { data: timeJobs } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).limit(5);
+          if (!timeJobs?.length) return `Couldn't find a job for "${input.customer}". Check the Jobs tab and make sure a job card exists for this customer.`;
+          const timeJob = timeJobs[0];
+          const today = new Date().toISOString().split("T")[0];
+          const type = input.labour_type || "hourly";
+          let hours = 0, total = 0;
+          if (type === "hourly") { hours = parseFloat(input.hours || 0); total = hours * parseFloat(input.rate || 0); }
+          else if (type === "day_rate") { hours = parseFloat(input.days || 0) * 8; total = parseFloat(input.days || 0) * parseFloat(input.rate || 0); }
+          else { total = parseFloat(input.total || 0); }
+          await supabase.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
+          setTimeout(() => setView("Jobs"), 300);
+          setLastAction({ type: "job", label: `Time logged — ${input.customer}`, view: "Jobs" });
+          const label = type === "hourly" ? `${input.hours}hrs @ £${input.rate}/hr` : type === "day_rate" ? `${input.days} days @ £${input.rate}/day` : `Price work £${input.total}`;
+          return `Labour logged for ${input.customer}: ${label} = £${total.toFixed(2)}.`;
+        }
+        case "log_mileage": {
+          const today = new Date().toISOString().split("T")[0];
+          const miles = parseFloat(input.miles || 0);
+          // Calculate HMRC value (simplified — 45p/mile)
+          const value = parseFloat((miles * 0.45).toFixed(2));
+          await supabase.from("mileage_logs").insert({ user_id: user?.id, date: input.date || today, from_location: input.from_location || "", to_location: input.to_location || "", miles, purpose: input.purpose || "", rate: 0.45, value, created_at: new Date().toISOString() });
+          setTimeout(() => setView("Mileage"), 300);
+          setLastAction({ type: "mileage", label: `${miles} miles logged`, view: "Mileage" });
+          return `Mileage logged: ${miles} miles${input.from_location ? ` from ${input.from_location}` : ""}${input.to_location ? ` to ${input.to_location}` : ""} — £${value} claimable.`;
+        }
+        case "add_job_note": {
+          const { data: noteJobs } = await supabase.from("job_cards").select("id,title,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).limit(5);
+          if (!noteJobs?.length) return `Couldn't find a job for "${input.customer}". Check the Jobs tab.`;
+          const noteJob = noteJobs[0];
+          await supabase.from("job_notes").insert({ job_id: noteJob.id, user_id: user?.id, note: input.note, created_at: new Date().toISOString() });
+          setTimeout(() => setView("Jobs"), 300);
+          setLastAction({ type: "job", label: `Note added — ${input.customer}`, view: "Jobs" });
+          return `Note added to ${input.customer}'s job: "${input.note.slice(0, 60)}${input.note.length > 60 ? "..." : ""}"`;
+        }
+        case "create_purchase_order": {
+          const poItems = (input.items || []).map(i => ({ description: i.description, qty: i.qty || 1, unit_price: i.unit_price || 0, unit: "unit", total: (i.qty || 1) * (i.unit_price || 0) }));
+          const total = poItems.reduce((s, i) => s + i.total, 0);
+          const poNum = `PO-${Date.now().toString().slice(-4)}`;
+          const { data: po } = await supabase.from("purchase_orders").insert({ user_id: user?.id, po_number: poNum, supplier: input.supplier, job_ref: input.job_ref || "", status: "sent", total, created_at: new Date().toISOString() }).select().single();
+          if (po && poItems.length > 0) await supabase.from("purchase_order_items").insert(poItems.map(i => ({ ...i, po_id: po.id })));
+          // Auto-create materials from PO items so they appear in Materials tab
+          if (poItems.length > 0) {
+            const newMats = poItems.map(i => ({
+              item: i.description,
+              qty: i.qty,
+              unitPrice: i.unit_price,
+              supplier: input.supplier,
+              job: input.job_ref || "",
+              status: "to_order",
+              vatEnabled: false,
+            }));
+            setMaterials(prev => [...(prev || []), ...newMats]);
+          }
+          setTimeout(() => setView("Purchase Orders"), 300);
+          setLastAction({ type: "po", label: `${poNum} — ${input.supplier}`, view: "Purchase Orders" });
+          return `Purchase order ${poNum} created for ${input.supplier}${input.job_ref ? ` (job: ${input.job_ref})` : ""}${total > 0 ? ` — total £${total.toFixed(2)}` : ""}. ${poItems.length} item${poItems.length !== 1 ? "s" : ""} also added to Materials.`;
+        }
+        case "update_stock": {
+          const { data: stockItems } = await supabase.from("stock_items").select("*").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          if (!stockItems?.length) return `Couldn't find stock item "${input.name}". Check the Stock tab.`;
+          const item = stockItems[0];
+          const newQty = Math.max(0, parseFloat(item.quantity || 0) + parseFloat(input.adjustment));
+          await supabase.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", item.id);
+          const direction = input.adjustment > 0 ? "added" : "removed";
+          return `Stock updated: ${item.name} — ${Math.abs(input.adjustment)} ${item.unit || "units"} ${direction}. New quantity: ${newQty} ${item.unit || "units"}.`;
+        }
         default:
           return `Unknown action: ${name}`;
       }
@@ -3854,21 +4061,30 @@ Current data you can act on:
 - Invoices: ${invoices.filter(i => !i.isQuote).length === 0 ? "none" : invoices.filter(i => !i.isQuote).map(i => `${i.id} ${i.customer} £${i.amount} (${i.status})`).join(", ")}
 - Quotes: ${invoices.filter(i => i.isQuote).length === 0 ? "none" : invoices.filter(i => i.isQuote).map(i => `${i.id} ${i.customer} £${i.amount} (${i.status})`).join(", ")}
 - Enquiries: ${enquiries.length === 0 ? "none" : enquiries.map(e => e.name).join(", ")}
-- Materials: ${materials.length === 0 ? "none" : materials.map(m => `${m.item} x${m.qty} (${m.status})`).join(", ")}
+- Materials: ${materials.length === 0 ? "none" : materials.map(m => `${m.item} x${m.qty} (${m.status})${m.job ? ` [job: ${m.job}]` : ""}`).join(", ")}
 - Customers: ${customers.length === 0 ? "none" : customers.map(c => `${c.name}${c.phone ? ` (${c.phone})` : ""}${c.email ? ` <${c.email}>` : ""}`).join(", ")}
 
 You can perform ALL of the following actions — always use a tool, never just describe what you'd do:
 
-CREATE: create_job, create_invoice, create_quote, log_enquiry, set_reminder, create_material, create_customer
+CREATE: create_job (scheduled with date/time), create_job_card (job tracking without date), create_invoice, create_quote, log_enquiry, set_reminder, create_material, create_customer, create_purchase_order
 DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material
-UPDATE: mark_invoice_paid, update_job_status, update_material_status, convert_quote_to_invoice
+UPDATE: mark_invoice_paid, update_job_status, update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock
+LOG: log_time (hourly/day rate/price work), log_mileage, add_job_note
 
-Rules:
+Key rules:
 - For jobs: if no year given assume ${new Date().getFullYear()}. Calculate actual dates from "Friday", "next Monday" etc.
 - For reminders: calculate minutes_from_now from the time mentioned.
 - For updates/deletes: match by name or ID. If no match, say so clearly.
 - After every tool use: confirm in 1-2 sentences what you did. Use £ not $. Be concise.
-- For invoices/quotes: ALWAYS use the line_items array — one object per item with description and amount. If someone says "invoice for labour £200 and materials £150" create TWO line items: [{description:"Labour",amount:200},{description:"Materials",amount:150}]. Never put multiple items in one description string. Total amount is calculated automatically from the line items.`;
+- For invoices/quotes: ALWAYS use the line_items array — one object per item with description and amount.
+- For labour: ask if hourly, day rate, or price work if not clear. Day rate is common for builders/subbies.
+- create_job = calendar/schedule job with specific date+time. create_job_card = job card for tracking profitability without needing a date.
+- When user says "add a job for X" or "create a job for X" without a date, use create_job_card.
+- When a PO is created, items automatically appear in Materials tab too.
+- For materials assigned to jobs: use assign_material_to_job — this links the cost to the job profitability.
+- For mileage: 45p/mile for first 10,000 miles per tax year (HMRC rate).
+- When user mentions travelling to a job, offer to log mileage.`;
+
 
   const send = async (text) => {
     if (!text.trim() || loading) return;
@@ -3923,7 +4139,7 @@ Rules:
         if (block.type === "text") {
           replyText += block.text;
         } else if (block.type === "tool_use") {
-          const result = executeTool(block.name, block.input);
+          const result = await executeTool(block.name, block.input);
           toolResults.push(result);
         }
       }
@@ -5716,7 +5932,9 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
 function CustomerForm({ form, set, onSave, onCancel }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {[
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <VoiceFillButton form={form} setForm={updates => Object.keys(updates).forEach(k => { if (k in form) set(k)({ target: { value: updates[k] } }); })} fieldDescriptions="name (full name e.g. John Smith), phone (mobile number e.g. 07700 900123), email (email address), address (full address including postcode), notes (any notes)" />
+      </div>
         { k: "name", l: "Full Name", p: "e.g. John Smith", required: true },
         { k: "phone", l: "Phone Number", p: "e.g. 07700 900123" },
         { k: "email", l: "Email Address", p: "e.g. john@email.com" },
@@ -8456,33 +8674,55 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   async function addTimeLog() {
     if (!selected) return;
     const type = addTime.labour_type || "hourly";
-    let hours = 0, rate = 0, total = 0;
+    let hours = 0, rate = 0, total = 0, days = null;
     if (type === "hourly") {
       if (!addTime.hours || !addTime.rate) return;
       hours = parseFloat(addTime.hours);
       rate = parseFloat(addTime.rate);
-      total = hours * rate;
+      total = parseFloat((hours * rate).toFixed(2));
     } else if (type === "day_rate") {
       if (!addTime.days || !addTime.rate) return;
-      hours = parseFloat(addTime.days) * 8; // store as hours equivalent
+      days = parseFloat(addTime.days);
+      hours = days * 8;
       rate = parseFloat(addTime.rate);
-      total = parseFloat(addTime.days) * rate;
+      total = parseFloat((days * rate).toFixed(2));
     } else if (type === "price_work") {
       if (!addTime.total) return;
       total = parseFloat(addTime.total);
-      hours = 0; rate = 0;
     }
-    const { data } = await supabase.from("time_logs").insert({
-      job_id: selected.id, user_id: user.id,
+
+    const payload = {
+      job_id: selected.id,
+      user_id: user.id,
       date: addTime.date,
-      labour_type: type,
       hours,
-      days: type === "day_rate" ? parseFloat(addTime.days) : null,
       rate,
-      total,
-      worker: addTime.worker || null,
-      description: addTime.description,
-    }).select().single();
+      description: addTime.description || "",
+    };
+
+    // Add new columns conditionally — gracefully handles if columns don't exist yet
+    try {
+      payload.labour_type = type;
+      payload.total = total;
+      if (days) payload.days = days;
+      if (addTime.worker) payload.worker = addTime.worker;
+    } catch(e) {}
+
+    const { data, error } = await supabase.from("time_logs").insert(payload).select().single();
+
+    if (error) {
+      // If new columns don't exist, retry with basic payload
+      if (error.message?.includes("labour_type") || error.message?.includes("total") || error.message?.includes("worker") || error.message?.includes("days")) {
+        const basicPayload = { job_id: selected.id, user_id: user.id, date: addTime.date, hours, rate, description: `${addTime.description || ""}${type !== "hourly" ? ` [${type}: £${total.toFixed(2)}]` : ""}` };
+        const { data: d2, error: e2 } = await supabase.from("time_logs").insert(basicPayload).select().single();
+        if (e2) { alert(`Failed to log labour: ${e2.message}\n\nRun the SQL update in Supabase to add the new columns.`); return; }
+        if (d2) { setTimeLogs(prev => [{ ...d2, labour_type: type, total, days }, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" }); }
+      } else {
+        alert(`Failed to log labour: ${error.message}`);
+      }
+      return;
+    }
+
     if (data) {
       setTimeLogs(prev => [data, ...prev]);
       setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" });
@@ -8650,7 +8890,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
 
             {/* Sub-tabs */}
             <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: "auto" }}>
-              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"],["plans","📐 Plans"],["calls",`📞${jobCallLogs.length > 0 ? ` (${jobCallLogs.length})` : ""}`],["profit","💰 Profit"]].map(([v,l]) => (
+              {[["notes","Notes"],["photos","Photos"],["labour","Labour"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"],["plans","📐 Plans"],["calls",`📞${jobCallLogs.length > 0 ? ` (${jobCallLogs.length})` : ""}`],["profit","💰 Profit"]].map(([v,l]) => (
                 <button key={v} onClick={() => setTab(v)}
                   style={{ padding: "8px 12px", border: "none", borderBottom: tab === v ? `2px solid ${C.amber}` : "2px solid transparent", background: "transparent", color: tab === v ? C.amber : C.muted, fontSize: 11, fontWeight: tab === v ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'DM Mono',monospace" }}>
                   {l}
@@ -8716,12 +8956,12 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               )}
 
               {/* TIME */}
-              {tab === "time" && (
+              {tab === "labour" && (
                 <div>
                   <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                       <div style={{ fontSize: 12, fontWeight: 700 }}>Log Labour</div>
-                    </div>
+                      <VoiceFillButton form={addTime} setForm={setAddTime} fieldDescriptions="labour_type (hourly/day_rate/price_work), hours (number of hours if hourly), days (number of days if day rate), rate (£ per hour or per day), total (fixed £ amount if price work), description (work carried out), worker (who did the work)" />
 
                     {/* Labour type selector */}
                     <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
@@ -9114,7 +9354,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                       {[
                         { label: "Invoice Value", value: revenue, color: C.green, icon: "💷" },
                         { label: `Materials (${linkedMaterials.length} items)`, value: matCost, color: C.red, icon: "🔧", negative: true },
-                        { label: `Labour (${totalTime.toFixed(1)}h)`, value: labourCost, color: C.red, icon: "⏱", negative: true },
+                        { label: `Labour (${totalDays > 0 ? `${totalDays} days` : `${totalTime.toFixed(1)}h`})`, value: labourCost, color: C.red, icon: "⏱", negative: true },
                       ].map(({ label, value, color, icon, negative }) => (
                         <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                           <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>{icon}</div>
@@ -9181,7 +9421,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
 
                     {linkedMaterials.length === 0 && labourCost === 0 && (
                       <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "12px 0" }}>
-                        Link materials and log time to this job to see a full profit breakdown.
+                        Link materials and log labour to this job to see a full profit breakdown.
                       </div>
                     )}
                   </div>
@@ -10665,7 +10905,10 @@ function MileageTab({ user }) {
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Log Trip</div>
-              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="date (YYYY-MM-DD), from (start location e.g. Home), to (destination), miles (number), purpose (e.g. site visit)" />
+                <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div><label style={S.label}>Date</label><input style={S.input} type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
@@ -10882,7 +11125,10 @@ function SubcontractorsTab({ user, brand }) {
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Subcontractor</div>
-              <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <VoiceFillButton form={subForm} setForm={setSubForm} fieldDescriptions="name (full name), company (company name), utr (10-digit UTR number), cis_rate (20 for registered, 30 for unregistered, 0 for gross), email, phone" />
+                <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div><label style={S.label}>Name</label><input style={S.input} value={subForm.name} onChange={e => setSubForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" /></div>
@@ -10917,7 +11163,10 @@ function SubcontractorsTab({ user, brand }) {
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Log Payment</div>
-              <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <VoiceFillButton form={payForm} setForm={setPayForm} fieldDescriptions="date (YYYY-MM-DD), gross (gross amount in pounds), invoice_number (their invoice ref), job_ref (job reference), description (work description)" />
+                <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
@@ -11406,10 +11655,11 @@ function StockTab({ user }) {
       <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="name (item name e.g. 22mm copper pipe), sku (stock code), quantity (number in stock), unit (unit e.g. m/unit/box/kg), unit_cost (cost per unit in pounds), reorder_level (alert when below this number), location (where stored e.g. van shelf 2)" />
+            <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+          </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div><label style={S.label}>Item Name</label><input style={S.input} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. 22mm Copper Pipe" /></div>
           <div style={S.grid2}>
             <div><label style={S.label}>SKU / Code</label><input style={S.input} value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="Optional" /></div>
             <div><label style={S.label}>Location</label><input style={S.input} value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Van shelf 2" /></div>
@@ -11652,7 +11902,10 @@ function PurchaseOrdersTab({ user, brand }) {
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 600, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>New Purchase Order</div>
-              <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="supplier (supplier name), supplier_email (email address), job_ref (which job this is for), notes (any special instructions), expected_delivery (date YYYY-MM-DD)" />
+                <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={S.grid2}>
@@ -12125,7 +12378,10 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
         {step === 1 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={S.card}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Project Details</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>Project Details</div>
+                <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="title (RAMS document title e.g. Boiler replacement 12 High Street), scope (describe the work), site_address (full site address), client_name (client or contractor name), start_date (YYYY-MM-DD), end_date (YYYY-MM-DD), prepared_by (your name), reviewed_by (supervisor name), job_ref (job reference)" />
+              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div><label style={S.label}>RAMS Title *</label><input style={S.input} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Gas boiler replacement — 12 High Street" /></div>
                 <div><label style={S.label}>Scope of Work</label><textarea style={{ ...S.input, minHeight: 80 }} value={form.scope} onChange={e => setForm(f => ({ ...f, scope: e.target.value }))} placeholder="Describe the work to be carried out..." /></div>
@@ -12304,7 +12560,10 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
         {step === 5 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={S.card}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Emergency Arrangements</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>Emergency Arrangements</div>
+                <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="first_aider (first aider name and phone), nearest_ae (nearest A&E hospital name and address), muster_point (emergency assembly point), welfare_location (toilet and welfare facilities location), emergency_procedure (what to do in an emergency)" />
+              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={S.grid2}>
                   <div><label style={S.label}>First Aider on Site</label><input style={S.input} value={form.first_aider} onChange={e => setForm(f => ({ ...f, first_aider: e.target.value }))} placeholder="Name & phone" /></div>
@@ -12990,6 +13249,7 @@ export default function App() {
   const [materials, setMaterialsRaw] = useState([]);
   const [customers, setCustomersRaw] = useState([]);
   const [dbLoading, setDbLoading] = useState(false);
+  const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
   const [companyId, setCompanyId] = useState(null);
   const [companyName, setCompanyName] = useState("");
   const [userRole, setUserRole] = useState("owner");
@@ -13232,7 +13492,7 @@ export default function App() {
           await supabase.from("materials").delete().eq("company_id", companyId);
           if (next.length > 0) {
             await supabase.from("materials").insert(
-              next.map(m => ({ company_id: companyId, user_id: user.id, item: m.item, qty: m.qty || 1, unit_price: m.unitPrice || 0, supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order", receipt_id: m.receiptId || "", receipt_source: m.receiptSource || "", receipt_filename: m.receiptFilename || "", receipt_image: m.receiptImage || "" }))
+              next.map(m => ({ company_id: companyId, user_id: user.id, item: m.item, qty: m.qty || 1, unit_price: m.unitPrice || 0, supplier: m.supplier || "", job: m.job || "", job_id: m.job_id || null, status: m.status || "to_order", receipt_id: m.receiptId || "", receipt_source: m.receiptSource || "", receipt_filename: m.receiptFilename || "", receipt_image: m.receiptImage || "" }))
             );
           }
         } catch (e) { console.error("Materials sync:", e); }
@@ -13443,7 +13703,7 @@ export default function App() {
         {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} />}
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} />}
-        {view === "Jobs" && <JobsTab user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
+        {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} />}
         {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} />}
