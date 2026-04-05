@@ -77,8 +77,7 @@ export default async function handler(req, res) {
         const lineItems = items.map(m => {
           const qty = parseFloat(m.qty || 1);
           const unitPrice = parseFloat(m.unitPrice || 0);
-          // Xero requires AccountCode on every line — 300 = Purchases
-          const accountCode = '300';
+          // Tax type: INPUT2 = 20% VAT, RRINPUT = 5% VAT, NONE = no VAT
           const taxType = m.vatEnabled
             ? (m.vatRate === 5 ? 'RRINPUT' : 'INPUT2')
             : 'NONE';
@@ -87,8 +86,8 @@ export default async function handler(req, res) {
             Description: desc,
             Quantity: qty,
             UnitAmount: unitPrice,
-            AccountCode: accountCode,
             TaxType: taxType,
+            // No AccountCode — varies per business, user assigns in Xero when approving draft
           };
         });
 
@@ -99,7 +98,7 @@ export default async function handler(req, res) {
             Date: today,
             DueDate: dueDate,
             LineAmountTypes: 'Exclusive',
-            Status: 'AUTHORISED',
+            Status: 'DRAFT',  // Draft — user assigns account codes in Xero before approving
             CurrencyCode: 'GBP',
             LineItems: lineItems,
           }],
