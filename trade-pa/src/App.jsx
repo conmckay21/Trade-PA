@@ -9355,7 +9355,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                       {[
                         { label: "Invoice Value", value: revenue, color: C.green, icon: "💷" },
                         { label: `Materials (${linkedMaterials.length} items)`, value: matCost, color: C.red, icon: "🔧", negative: true },
-                        { label: `Labour (${totalDays > 0 ? `${totalDays} days` : `${totalTime.toFixed(1)}h`})`, value: labourCost, color: C.red, icon: "⏱", negative: true },
+                        { label: "Labour (" + (totalDays > 0 ? totalDays + " days" : totalTime.toFixed(1) + "h") + ")", value: labourCost, color: C.red, icon: "⏱", negative: true },
                       ].map(({ label, value, color, icon, negative }) => (
                         <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                           <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>{icon}</div>
