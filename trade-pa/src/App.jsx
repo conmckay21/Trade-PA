@@ -829,7 +829,6 @@ function downloadInvoicePDF(brand, inv) {
       <div><span>${isQuote ? "Valid for:" : "Payment due:"}</span>${isQuote ? (inv.due || "30 days") : (inv.due || `${brand.paymentTerms || 30} days`)}</div>
     </div>
     <div class="infobar-right">
-      <div><span>Ref:</span>${ref}</div>
       ${inv.jobRef ? `<div><span>Job Ref:</span>${inv.jobRef}</div>` : ""}
       ${inv.poNumber ? `<div><span>PO:</span>${inv.poNumber}</div>` : ""}
       ${(brand.vatNumber && (brand._exemptBypass || brand.registrationVerifications?.vatNumber?.verified)) ? `<div><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
