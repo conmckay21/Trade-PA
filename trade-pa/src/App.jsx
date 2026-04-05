@@ -2700,7 +2700,7 @@ const DEFAULT_SUPPLIERS = [
   { name: "Plumb Center", phone: "0330 123 1456", email: "", notes: "Plumbing wholesale" },
 ];
 
-function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, userId }) {
+function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, userId, onAssignJob }) {
   const [expanded, setExpanded] = useState(false);
   const statusColor = { to_order: C.red, ordered: C.amber, collected: C.green };
   const statusLabel = { to_order: "To Order", ordered: "Ordered", collected: "Collected" };
@@ -2754,6 +2754,11 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, us
             <button onClick={() => deleteMaterial(i)} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px", color: C.red, borderColor: C.red + "44" }}>Delete</button>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => onAssignJob && onAssignJob(i)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: m.job_id ? C.green : C.muted, borderColor: m.job_id ? C.green + "44" : C.border }}>
+              🔗 {m.job_id ? (m.job || "Linked") : "Assign to Job"}
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => fetch("/api/xero/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, material: m }) }).then(r => r.json()).then(d => alert(d.error ? `Xero: ${d.error}` : "✓ Bill created in Xero")).catch(() => alert("Xero not connected"))}
               style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: "#13B5EA", borderColor: "#13B5EA44" }}>↑ Xero Bill</button>
             <button onClick={() => fetch("/api/quickbooks/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, material: m }) }).then(r => r.json()).then(d => alert(d.error ? `QuickBooks: ${d.error}` : "✓ Bill created in QuickBooks")).catch(() => alert("QuickBooks not connected"))}
@@ -2776,13 +2781,23 @@ function Materials({ materials, setMaterials, user }) {
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
-  const [scanImageData, setScanImageData] = useState(null); // base64 data URL of receipt
+  const [scanImageData, setScanImageData] = useState(null);
   const [scanImageType, setScanImageType] = useState("image/jpeg");
   const [scanError, setScanError] = useState("");
   const fileRef = useRef();
   const uploadRef = useRef();
   const suppliers = DEFAULT_SUPPLIERS;
   const [editingSupplier, setEditingSupplier] = useState(null);
+  const [assigningMaterialIdx, setAssigningMaterialIdx] = useState(null);
+
+  const handleAssignMaterialToJob = (jobId, jobTitle) => {
+    if (assigningMaterialIdx === null) return;
+    setMaterials(prev => (prev || []).map((m, j) => j === assigningMaterialIdx
+      ? { ...m, job_id: jobId, job: jobTitle || m.job }
+      : m
+    ));
+    setAssigningMaterialIdx(null);
+  };
   const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "", notes: "" });
   const [filterJob, setFilterJob] = useState("all");
   const [syncing, setSyncing] = useState(false);
@@ -3174,6 +3189,7 @@ Return only JSON, no other text.` },
                 setEditingMaterial={setEditingMaterial}
                 deleteMaterial={deleteMaterial}
                 userId={user?.id}
+                onAssignJob={(idx) => setAssigningMaterialIdx(idx)}
               />
             );
           })
@@ -3392,10 +3408,19 @@ Return only JSON, no other text.` },
           </div>
         </div>
       )}
+
+      {/* Assign material to job modal */}
+      {assigningMaterialIdx !== null && (
+        <AssignToJobModal
+          user={user}
+          currentJobId={(materials || [])[assigningMaterialIdx]?.job_id}
+          onAssign={handleAssignMaterialToJob}
+          onClose={() => setAssigningMaterialIdx(null)}
+        />
+      )}
     </div>
   );
-}
-function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user }) {
+}({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user }) {
   const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can handle everything in the app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Quote Sarah Chen £450 for new bathroom"\n• "Invoice Kevin Nash £85 for leak repair"\n• "Mark the invoice for Kevin as paid"\n• "Convert Sarah's quote to an invoice"\n• "Confirm the boiler service for John"\n• "Mark copper pipe as ordered"\n• "Delete the enquiry from Dave"\n• "Save Emma Taylor, 07700 900123, emma@email.com"\n\nOr tap 🎙 and speak naturally.` }]);
 
   const quick = [
@@ -8178,6 +8203,9 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   const [form, setForm] = useState({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", scope_of_work: "", annual_service: false });
   const [drawings, setDrawings] = useState([]);
   const [notes, setNotes] = useState([]);
+  const [linkedRams, setLinkedRams] = useState([]);
+  const [linkedMaterials, setLinkedMaterials] = useState([]);
+  const [linkedPOs, setLinkedPOs] = useState([]);
   const [photos, setPhotos] = useState([]);
   const [timeLogs, setTimeLogs] = useState([]);
   const [vos, setVos] = useState([]);
@@ -8185,7 +8213,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   const [daysheets, setDaysheets] = useState([]);
   const [saving, setSaving] = useState(false);
   const [addNote, setAddNote] = useState("");
-  const [addTime, setAddTime] = useState({ date: new Date().toISOString().slice(0,10), hours: "", rate: "", description: "" });
+  const [addTime, setAddTime] = useState({ date: new Date().toISOString().slice(0,10), labour_type: "hourly", hours: "", days: "", rate: "", total: "", worker: "", description: "" });
   const [addVO, setAddVO] = useState({ vo_number: "", description: "", amount: "" });
   const [addDoc, setAddDoc] = useState({ doc_type: "", doc_number: "", issued_date: "", expiry_date: "", notes: "" });
   const [addDaysheet, setAddDaysheet] = useState({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" });
@@ -8343,7 +8371,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
 
   async function loadJobDetails(jobId) {
     try {
-      const [n, p, t, v, d, ds, dr] = await Promise.all([
+      const [n, p, t, v, d, ds, dr, rams, mats, pos] = await Promise.all([
         supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("time_logs").select("*").eq("job_id", jobId).order("date", { ascending: false }),
@@ -8351,6 +8379,9 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
         supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
         supabase.from("job_drawings").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        supabase.from("rams_documents").select("id,title,site_address,created_at").eq("job_id", jobId).eq("user_id", user.id),
+        supabase.from("materials").select("*").eq("job_id", jobId).eq("user_id", user.id),
+        supabase.from("purchase_orders").select("*, purchase_order_items(*)").eq("job_id", jobId).eq("user_id", user.id),
       ]);
       setNotes(n.data || []);
       setPhotos(p.data || []);
@@ -8359,6 +8390,9 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
       setCompDocs(d.data || []);
       setDaysheets(ds.data || []);
       setDrawings(dr.data || []);
+      setLinkedRams(rams.data || []);
+      setLinkedMaterials(mats.data || []);
+      setLinkedPOs(pos.data || []);
     } catch (err) {
       console.error("loadJobDetails error:", err.message);
       // Still load critical data even if drawings table missing
@@ -8377,6 +8411,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
       setCompDocs(d.data || []);
       setDaysheets(ds.data || []);
       setDrawings([]);
+      setLinkedRams([]); setLinkedMaterials([]); setLinkedPOs([]);
     }
   }
 
@@ -8416,9 +8451,39 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   }
 
   async function addTimeLog() {
-    if (!addTime.hours || !addTime.rate || !selected) return;
-    const { data } = await supabase.from("time_logs").insert({ job_id: selected.id, user_id: user.id, ...addTime, hours: parseFloat(addTime.hours), rate: parseFloat(addTime.rate) }).select().single();
-    if (data) { setTimeLogs(prev => [data, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), hours: "", rate: "", description: "" }); }
+    if (!selected) return;
+    const type = addTime.labour_type || "hourly";
+    let hours = 0, rate = 0, total = 0;
+    if (type === "hourly") {
+      if (!addTime.hours || !addTime.rate) return;
+      hours = parseFloat(addTime.hours);
+      rate = parseFloat(addTime.rate);
+      total = hours * rate;
+    } else if (type === "day_rate") {
+      if (!addTime.days || !addTime.rate) return;
+      hours = parseFloat(addTime.days) * 8; // store as hours equivalent
+      rate = parseFloat(addTime.rate);
+      total = parseFloat(addTime.days) * rate;
+    } else if (type === "price_work") {
+      if (!addTime.total) return;
+      total = parseFloat(addTime.total);
+      hours = 0; rate = 0;
+    }
+    const { data } = await supabase.from("time_logs").insert({
+      job_id: selected.id, user_id: user.id,
+      date: addTime.date,
+      labour_type: type,
+      hours,
+      days: type === "day_rate" ? parseFloat(addTime.days) : null,
+      rate,
+      total,
+      worker: addTime.worker || null,
+      description: addTime.description,
+    }).select().single();
+    if (data) {
+      setTimeLogs(prev => [data, ...prev]);
+      setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" });
+    }
   }
 
   async function addVariationOrder() {
@@ -8442,8 +8507,9 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   const COMPLIANCE_TYPES = ["Gas Safety Certificate","Boiler Commissioning Sheet","EICR","Electrical Installation Certificate","Minor Works Certificate","PAT Testing","Pressure Test Certificate","Part P Certificate","Oil Safety Certificate","Other"];
 
   const statusOptions = ["enquiry","quoted","accepted","in_progress","completed","on_hold"];
-  const totalTime = timeLogs.reduce((s, t) => s + (t.hours || 0), 0);
-  const totalLabour = timeLogs.reduce((s, t) => s + ((t.hours || 0) * (t.rate || 0)), 0);
+  const totalTime = timeLogs.reduce((s, t) => s + (t.labour_type === "day_rate" ? (t.days || 0) : t.labour_type === "price_work" ? 0 : (t.hours || 0)), 0);
+  const totalDays = timeLogs.reduce((s, t) => s + (t.labour_type === "day_rate" ? (t.days || 0) : 0), 0);
+  const totalLabour = timeLogs.reduce((s, t) => s + (parseFloat(t.total || 0) || (parseFloat(t.hours || 0) * parseFloat(t.rate || 0))), 0);
   const totalVO = vos.filter(v => v.status === "approved").reduce((s, v) => s + (v.amount || 0), 0);
 
   return (
@@ -8581,7 +8647,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
 
             {/* Sub-tabs */}
             <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: "auto" }}>
-              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"],["plans","📐 Plans"],["calls",`📞${jobCallLogs.length > 0 ? ` (${jobCallLogs.length})` : ""}`]].map(([v,l]) => (
+              {[["notes","Notes"],["photos","Photos"],["time","Time"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"],["plans","📐 Plans"],["calls",`📞${jobCallLogs.length > 0 ? ` (${jobCallLogs.length})` : ""}`],["profit","💰 Profit"]].map(([v,l]) => (
                 <button key={v} onClick={() => setTab(v)}
                   style={{ padding: "8px 12px", border: "none", borderBottom: tab === v ? `2px solid ${C.amber}` : "2px solid transparent", background: "transparent", color: tab === v ? C.amber : C.muted, fontSize: 11, fontWeight: tab === v ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'DM Mono',monospace" }}>
                   {l}
@@ -8650,28 +8716,98 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               {tab === "time" && (
                 <div>
                   <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700 }}>Log Time</div>
-                      <VoiceFillButton form={addTime} setForm={setAddTime} fieldDescriptions="date (date in YYYY-MM-DD format), hours (number of hours e.g. 4 or 2.5), rate (hourly rate in pounds e.g. 55), description (what work was done)" />
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700 }}>Log Labour</div>
                     </div>
+
+                    {/* Labour type selector */}
+                    <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+                      {[["hourly","⏱ Hourly"],["day_rate","📅 Day Rate"],["price_work","💷 Price Work"]].map(([v,l]) => (
+                        <button key={v} onClick={() => setAddTime(p => ({ ...p, labour_type: v }))}
+                          style={{ flex: 1, padding: "7px 4px", borderRadius: 8, border: `2px solid ${addTime.labour_type === v ? C.amber : C.border}`, background: addTime.labour_type === v ? C.amber + "18" : C.surface, color: addTime.labour_type === v ? C.amber : C.muted, fontSize: 11, fontWeight: addTime.labour_type === v ? 700 : 400, cursor: "pointer" }}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       <div><label style={S.label}>Date</label><input type="date" style={S.input} value={addTime.date} onChange={e => setAddTime(p => ({ ...p, date: e.target.value }))} /></div>
-                      <div><label style={S.label}>Hours</label><input type="number" step="0.5" style={S.input} placeholder="e.g. 4" value={addTime.hours} onChange={e => setAddTime(p => ({ ...p, hours: e.target.value }))} /></div>
-                      <div><label style={S.label}>Rate (£/hr)</label><input type="number" style={S.input} placeholder="e.g. 55" value={addTime.rate} onChange={e => setAddTime(p => ({ ...p, rate: e.target.value }))} /></div>
-                      <div><label style={S.label}>Description</label><input style={S.input} placeholder="Work done" value={addTime.description} onChange={e => setAddTime(p => ({ ...p, description: e.target.value }))} /></div>
+                      <div><label style={S.label}>Worker (optional)</label><input style={S.input} placeholder="e.g. John, Subbie" value={addTime.worker} onChange={e => setAddTime(p => ({ ...p, worker: e.target.value }))} /></div>
+
+                      {/* Hourly fields */}
+                      {addTime.labour_type === "hourly" && <>
+                        <div><label style={S.label}>Hours</label><input type="number" step="0.5" min="0" style={S.input} placeholder="e.g. 6" value={addTime.hours} onChange={e => setAddTime(p => ({ ...p, hours: e.target.value }))} /></div>
+                        <div><label style={S.label}>Rate (£/hr)</label><input type="number" step="0.50" min="0" style={S.input} placeholder="e.g. 55" value={addTime.rate} onChange={e => setAddTime(p => ({ ...p, rate: e.target.value }))} /></div>
+                        {addTime.hours && addTime.rate && <div style={{ gridColumn: "1/-1", fontSize: 12, color: C.amber, background: C.amber + "11", borderRadius: 6, padding: "6px 10px" }}>
+                          Labour cost: £{(parseFloat(addTime.hours || 0) * parseFloat(addTime.rate || 0)).toFixed(2)}
+                        </div>}
+                      </>}
+
+                      {/* Day rate fields */}
+                      {addTime.labour_type === "day_rate" && <>
+                        <div><label style={S.label}>Number of Days</label><input type="number" step="0.5" min="0" style={S.input} placeholder="e.g. 2.5" value={addTime.days} onChange={e => setAddTime(p => ({ ...p, days: e.target.value }))} /></div>
+                        <div><label style={S.label}>Day Rate (£/day)</label><input type="number" step="1" min="0" style={S.input} placeholder="e.g. 350" value={addTime.rate} onChange={e => setAddTime(p => ({ ...p, rate: e.target.value }))} /></div>
+                        {addTime.days && addTime.rate && <div style={{ gridColumn: "1/-1", fontSize: 12, color: C.amber, background: C.amber + "11", borderRadius: 6, padding: "6px 10px" }}>
+                          Labour cost: £{(parseFloat(addTime.days || 0) * parseFloat(addTime.rate || 0)).toFixed(2)}
+                        </div>}
+                      </>}
+
+                      {/* Price work fields */}
+                      {addTime.labour_type === "price_work" && <>
+                        <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Agreed Price (£)</label><input type="number" step="0.01" min="0" style={S.input} placeholder="e.g. 1200" value={addTime.total} onChange={e => setAddTime(p => ({ ...p, total: e.target.value }))} /></div>
+                        <div style={{ gridColumn: "1/-1", fontSize: 11, color: C.muted, background: C.surfaceHigh, borderRadius: 6, padding: "6px 10px" }}>
+                          Price work — fixed agreed amount for the job or task, no hourly or day rate tracking needed.
+                        </div>
+                      </>}
+
+                      <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Description</label><input style={S.input} placeholder={addTime.labour_type === "price_work" ? "e.g. First fix plumbing" : "Work carried out"} value={addTime.description} onChange={e => setAddTime(p => ({ ...p, description: e.target.value }))} /></div>
                     </div>
-                    <button style={{ ...S.btn("primary"), marginTop: 8 }} disabled={!addTime.hours || !addTime.rate} onClick={addTimeLog}>Log Time →</button>
+
+                    <button style={{ ...S.btn("primary"), marginTop: 10, width: "100%", justifyContent: "center" }}
+                      disabled={addTime.labour_type === "hourly" ? (!addTime.hours || !addTime.rate) : addTime.labour_type === "day_rate" ? (!addTime.days || !addTime.rate) : !addTime.total}
+                      onClick={addTimeLog}>
+                      + Log Labour
+                    </button>
                   </div>
-                  {totalTime > 0 && <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Total: {totalTime}hrs · £{totalLabour.toFixed(2)} labour</div>}
-                  {timeLogs.map(t => (
-                    <div key={t.id} style={{ ...S.row }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{t.hours}hrs @ £{t.rate}/hr</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>{t.description} · {t.date}</div>
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{(t.hours * t.rate).toFixed(2)}</div>
+
+                  {/* Summary */}
+                  {timeLogs.length > 0 && (
+                    <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                      {totalTime > 0 && <div style={{ fontSize: 11, color: C.muted, background: C.surfaceHigh, borderRadius: 6, padding: "4px 10px" }}>⏱ {totalTime.toFixed(1)} hrs</div>}
+                      {totalDays > 0 && <div style={{ fontSize: 11, color: C.muted, background: C.surfaceHigh, borderRadius: 6, padding: "4px 10px" }}>📅 {totalDays} days</div>}
+                      <div style={{ fontSize: 11, color: C.amber, background: C.amber + "11", borderRadius: 6, padding: "4px 10px", fontWeight: 700 }}>£{totalLabour.toFixed(2)} total labour</div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* Log list */}
+                  {timeLogs.map(t => {
+                    const type = t.labour_type || "hourly";
+                    const cost = parseFloat(t.total || 0) || (parseFloat(t.hours || 0) * parseFloat(t.rate || 0));
+                    const label = type === "day_rate"
+                      ? `${t.days || (t.hours / 8)} day${(t.days || t.hours / 8) !== 1 ? "s" : ""} @ £${t.rate}/day`
+                      : type === "price_work"
+                      ? "Price work"
+                      : `${t.hours}hrs @ £${t.rate}/hr`;
+                    const icon = type === "day_rate" ? "📅" : type === "price_work" ? "💷" : "⏱";
+                    return (
+                      <div key={t.id} style={{ ...S.row, marginBottom: 8 }}>
+                        <div style={{ fontSize: 18, flexShrink: 0 }}>{icon}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{label}{t.worker ? ` · ${t.worker}` : ""}</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>{t.description}{t.description && " · "}{t.date}</div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{cost.toFixed(2)}</div>
+                          <button onClick={async () => {
+                            await supabase.from("time_logs").delete().eq("id", t.id);
+                            setTimeLogs(prev => prev.filter(x => x.id !== t.id));
+                          }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {timeLogs.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "16px 0" }}>No labour logged yet</div>}
                 </div>
               )}
 
@@ -8936,6 +9072,118 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                   ))}
                 </div>
               )}
+
+              {/* PROFIT */}
+              {tab === "profit" && (() => {
+                const revenue = parseFloat(selected.value || 0);
+                const matCost = linkedMaterials.reduce((s, m) => s + parseFloat(m.unit_price || 0) * parseFloat(m.qty || 1), 0);
+                const labourCost = totalLabour;
+                const poValue = linkedPOs.reduce((s, po) => s + parseFloat(po.total || 0), 0);
+                const totalCost = matCost + labourCost;
+                const grossProfit = revenue - totalCost;
+                const margin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+                const fmt = n => `£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const isGood = margin >= 30;
+                const isOk = margin >= 15;
+                const profitColor = isGood ? C.green : isOk ? C.amber : C.red;
+
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {/* Profit summary card */}
+                    <div style={{ background: profitColor + "11", border: `2px solid ${profitColor}44`, borderRadius: 12, padding: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Gross Profit</div>
+                          <div style={{ fontSize: 28, fontWeight: 700, color: profitColor, fontFamily: "'DM Mono',monospace" }}>
+                            {grossProfit < 0 ? "-" : ""}{fmt(grossProfit)}
+                          </div>
+                          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{margin.toFixed(1)}% margin</div>
+                        </div>
+                        <div style={{ fontSize: 32 }}>
+                          {isGood ? "✅" : isOk ? "⚠️" : revenue === 0 ? "❓" : "🔴"}
+                        </div>
+                      </div>
+                      {revenue === 0 && <div style={{ fontSize: 11, color: C.amber, marginTop: 8 }}>⚠ No job value set — add a value to the job to see profit</div>}
+                    </div>
+
+                    {/* Breakdown */}
+                    <div style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                      {[
+                        { label: "Invoice Value", value: revenue, color: C.green, icon: "💷" },
+                        { label: `Materials (${linkedMaterials.length} items)`, value: matCost, color: C.red, icon: "🔧", negative: true },
+                        { label: `Labour (${totalTime.toFixed(1)}h)`, value: labourCost, color: C.red, icon: "⏱", negative: true },
+                      ].map(({ label, value, color, icon, negative }) => (
+                        <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                          <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>{icon}</div>
+                          <div style={{ flex: 1, fontSize: 12 }}>{label}</div>
+                          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, fontWeight: 600, color }}>
+                            {negative ? "−" : "+"}{fmt(value)}
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: C.border + "44" }}>
+                        <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>📊</div>
+                        <div style={{ flex: 1, fontSize: 12, fontWeight: 700 }}>Gross Profit</div>
+                        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 14, fontWeight: 700, color: profitColor }}>
+                          {grossProfit < 0 ? "−" : "+"}{fmt(grossProfit)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Linked materials */}
+                    {linkedMaterials.length > 0 && (
+                      <div style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                        <div style={{ padding: "8px 14px", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${C.border}` }}>Materials</div>
+                        {linkedMaterials.map((m, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: i < linkedMaterials.length - 1 ? `1px solid ${C.border}` : "none", gap: 8 }}>
+                            <div style={{ flex: 1, fontSize: 12 }}>{m.item} ×{m.qty}</div>
+                            <div style={{ fontSize: 12, color: C.red, fontFamily: "'DM Mono',monospace" }}>£{(parseFloat(m.unit_price || 0) * parseFloat(m.qty || 1)).toFixed(2)}</div>
+                          </div>
+                        ))}
+                        <div style={{ display: "flex", padding: "8px 14px", borderTop: `1px solid ${C.border}` }}>
+                          <div style={{ flex: 1, fontSize: 12, fontWeight: 700 }}>Total</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.red, fontFamily: "'DM Mono',monospace" }}>£{matCost.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Linked POs */}
+                    {linkedPOs.length > 0 && (
+                      <div style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                        <div style={{ padding: "8px 14px", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${C.border}` }}>Purchase Orders</div>
+                        {linkedPOs.map((po, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: i < linkedPOs.length - 1 ? `1px solid ${C.border}` : "none", gap: 8 }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 12 }}>{po.po_number} · {po.supplier}</div>
+                              <div style={{ fontSize: 11, color: C.muted }}>{po.status}</div>
+                            </div>
+                            <div style={{ fontSize: 12, color: C.amber, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(po.total || 0).toFixed(2)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Linked RAMS */}
+                    {linkedRams.length > 0 && (
+                      <div style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                        <div style={{ padding: "8px 14px", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${C.border}` }}>RAMS Documents</div>
+                        {linkedRams.map((r, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: i < linkedRams.length - 1 ? `1px solid ${C.border}` : "none", gap: 8 }}>
+                            <div style={{ flex: 1, fontSize: 12 }}>⚠️ {r.title}</div>
+                            <div style={{ fontSize: 11, color: C.muted }}>{new Date(r.created_at).toLocaleDateString("en-GB")}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {linkedMaterials.length === 0 && labourCost === 0 && (
+                      <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "12px 0" }}>
+                        Link materials and log time to this job to see a full profit breakdown.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Footer */}
@@ -10265,6 +10513,59 @@ ${generateReportHTML()}
   );
 }
 
+// ─── ASSIGN TO JOB MODAL ─────────────────────────────────────────────────────
+function AssignToJobModal({ user, onAssign, onClose, currentJobId }) {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    supabase.from("job_cards").select("id,title,type,customer,status").eq("user_id", user.id)
+      .order("created_at", { ascending: false }).then(({ data }) => { setJobs(data || []); setLoading(false); });
+  }, [user?.id]);
+
+  const filtered = jobs.filter(j =>
+    !search || j.customer?.toLowerCase().includes(search.toLowerCase()) ||
+    j.title?.toLowerCase().includes(search.toLowerCase()) ||
+    j.type?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const statusColor = { completed: C.green, in_progress: C.blue, accepted: C.amber, quoted: C.muted, enquiry: C.muted };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 400, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Assign to Job</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+        </div>
+        <input style={{ ...S.input, marginBottom: 12 }} placeholder="Search jobs..." value={search} onChange={e => setSearch(e.target.value)} autoFocus />
+        {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16, textAlign: "center" }}>Loading jobs...</div> :
+          filtered.length === 0 ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 16 }}>No jobs found</div> :
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 360, overflowY: "auto" }}>
+            {currentJobId && (
+              <div onClick={() => onAssign(null, null)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.red}44`, background: C.red + "0a", cursor: "pointer" }}>
+                <div style={{ fontSize: 12, color: C.red }}>✕ Remove job link</div>
+              </div>
+            )}
+            {filtered.map(j => (
+              <div key={j.id} onClick={() => onAssign(j.id, j.title || j.type || j.customer)}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: `2px solid ${j.id === currentJobId ? C.amber : C.border}`, background: j.id === currentJobId ? C.amber + "0a" : C.surfaceHigh, cursor: "pointer" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{j.customer}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{j.title || j.type || "Job"}</div>
+                </div>
+                <div style={{ ...S.badge(statusColor[j.status] || C.muted), flexShrink: 0 }}>{j.status}</div>
+                {j.id === currentJobId && <div style={{ fontSize: 11, color: C.amber }}>✓ Linked</div>}
+              </div>
+            ))}
+          </div>
+        }
+      </div>
+    </div>
+  );
+}
+
 // ─── MILEAGE TRACKING ────────────────────────────────────────────────────────
 function MileageTab({ user }) {
   const [trips, setTrips] = useState([]);
@@ -11200,7 +11501,14 @@ function PurchaseOrdersTab({ user, brand }) {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [assigningPO, setAssigningPO] = useState(null);
   const [form, setForm] = useState({ supplier: "", supplier_email: "", job_ref: "", notes: "", expected_delivery: "", items: [{ description: "", qty: 1, unit_price: "", unit: "unit" }] });
+
+  const assignPOToJob = async (orderId, jobId, jobTitle) => {
+    await supabase.from("purchase_orders").update({ job_id: jobId, job_ref: jobTitle || "" }).eq("id", orderId).eq("user_id", user.id);
+    setOrders(p => p.map(o => o.id === orderId ? { ...o, job_id: jobId, job_ref: jobTitle || o.job_ref } : o));
+    setAssigningPO(null);
+  };
 
   useEffect(() => { if (user?.id) load(); }, [user?.id]);
 
@@ -11326,6 +11634,7 @@ function PurchaseOrdersTab({ user, brand }) {
               {o.notes && <div style={{ fontSize: 11, color: C.muted, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>Note: {o.notes}</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                 <button onClick={() => generatePO(o)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>⬇ PDF</button>
+                <button onClick={() => setAssigningPO(o)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: o.job_id ? C.green : C.muted }}>🔗 {o.job_id ? "Linked" : "Job"}</button>
                 {o.status === "sent" && <button onClick={() => updateStatus(o.id, "received")} style={{ ...S.btn("primary"), flex: 1, justifyContent: "center", fontSize: 12 }}>✓ Mark Received</button>}
                 {o.status === "draft" && <button onClick={() => updateStatus(o.id, "sent")} style={{ ...S.btn("primary"), flex: 1, justifyContent: "center", fontSize: 12 }}>Send PO</button>}
               </div>
@@ -11382,6 +11691,15 @@ function PurchaseOrdersTab({ user, brand }) {
             </div>
           </div>
         </div>
+      )}
+
+      {assigningPO && (
+        <AssignToJobModal
+          user={user}
+          currentJobId={assigningPO.job_id}
+          onAssign={(jobId, jobTitle) => assignPOToJob(assigningPO.id, jobId, jobTitle)}
+          onClose={() => setAssigningPO(null)}
+        />
       )}
     </div>
   );
@@ -11537,10 +11855,11 @@ const COSHH_SUBSTANCES = [
 function RAMSTab({ user, brand }) {
   const [rams, setRams] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [screen, setScreen] = useState("list"); // list | wizard | preview
-  const [step, setStep] = useState(1); // 1=details, 2=hazards, 3=method, 4=coshh, 5=welfare
+  const [screen, setScreen] = useState("list");
+  const [step, setStep] = useState(1);
   const [selected, setSelected] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   const blankForm = () => ({
     title: "", job_ref: "", site_address: "", client_name: "", start_date: "", end_date: "",
@@ -11577,20 +11896,19 @@ function RAMSTab({ user, brand }) {
 
   const saveRAMS = async () => {
     if (!form.title) return;
-    const { data, error } = await supabase.from("rams_documents").insert({
-      user_id: user.id, title: form.title, job_ref: form.job_ref,
-      site_address: form.site_address, prepared_by: form.prepared_by,
-      date: form.start_date || new Date().toISOString().split("T")[0],
-      scope: form.scope, cdm_notifiable: form.cdm_notifiable,
-      form_data: JSON.stringify(form),
-      created_at: new Date().toISOString(),
-    }).select().single();
-    if (!error && data) {
-      setRams(p => [data, ...p]);
-      setScreen("list");
-      setForm(blankForm());
-      setStep(1);
+    const payload = {
+      title: form.title, job_ref: form.job_ref, site_address: form.site_address,
+      prepared_by: form.prepared_by, date: form.start_date || new Date().toISOString().split("T")[0],
+      scope: form.scope, cdm_notifiable: form.cdm_notifiable, form_data: JSON.stringify(form),
+    };
+    if (editingId) {
+      const { data, error } = await supabase.from("rams_documents").update(payload).eq("id", editingId).eq("user_id", user.id).select().single();
+      if (!error && data) { setRams(p => p.map(r => r.id === editingId ? data : r)); }
+    } else {
+      const { data, error } = await supabase.from("rams_documents").insert({ user_id: user.id, ...payload, created_at: new Date().toISOString() }).select().single();
+      if (!error && data) { setRams(p => [data, ...p]); }
     }
+    setScreen("list"); setForm(blankForm()); setStep(1); setEditingId(null);
   };
 
   // Get all selected hazards as full objects
@@ -11639,7 +11957,23 @@ function RAMSTab({ user, brand }) {
     setGenerating(false);
   };
 
-  const generatePDF = (r) => {
+  const [assigningRams, setAssigningRams] = useState(null);
+
+  const assignRamsToJob = async (ramsId, jobId, jobTitle) => {
+    await supabase.from("rams_documents").update({ job_id: jobId, job_ref: jobTitle || "" }).eq("id", ramsId).eq("user_id", user.id);
+    setRams(p => p.map(r => r.id === ramsId ? { ...r, job_id: jobId, job_ref: jobTitle || "" } : r));
+    setAssigningRams(null);
+  };
+
+  const startEdit = (r) => {
+    const d = typeof r.form_data === "string" ? JSON.parse(r.form_data || "{}") : (r.form_data || {});
+    setForm({ ...blankForm(), ...d, title: r.title, job_ref: r.job_ref || "", site_address: r.site_address || "", prepared_by: r.prepared_by || "" });
+    setEditingId(r.id);
+    setStep(1);
+    setScreen("wizard");
+  };
+
+
     const d = typeof r.form_data === "string" ? JSON.parse(r.form_data || "{}") : (r.form_data || {});
     const hazards = getSelectedHazardsFromData(d);
     const steps = [...(d.selected_method_steps || []), ...(d.custom_method_steps || [])];
@@ -12002,7 +12336,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
     <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 18, fontWeight: 700 }}>RAMS Builder</div>
-        <button onClick={() => { setForm(blankForm()); setStep(1); setScreen("wizard"); }} style={S.btn("primary")}>+ New RAMS</button>
+        <button onClick={() => { setForm(blankForm()); setStep(1); setEditingId(null); setScreen("wizard"); }} style={S.btn("primary")}>+ New RAMS</button>
       </div>
 
       <div style={{ fontSize: 11, color: C.muted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", lineHeight: 1.6 }}>
@@ -12031,17 +12365,30 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
                     {hazardCount > 0 && ` · ${hazardCount} hazards`}
                     {stepCount > 0 && ` · ${stepCount} steps`}
                   </div>
+                  {r.job_id && <div style={{ fontSize: 11, color: C.green, marginTop: 2 }}>🔗 {r.job_ref || "Linked to job"}</div>}
                 </div>
               </div>
               <div style={{ borderTop: `1px solid ${C.border}`, display: "flex", gap: 1 }}>
                 <button onClick={() => generatePDF(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}` }}>⬇ PDF</button>
-                <button onClick={() => duplicateRAMS(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}` }}>📋 Duplicate</button>
+                <button onClick={() => startEdit(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}` }}>✏ Edit</button>
+                <button onClick={() => duplicateRAMS(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}` }}>📋 Copy</button>
+                <button onClick={() => setAssigningRams(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}`, color: r.job_id ? C.green : C.muted }}>🔗 {r.job_id ? "Linked" : "Job"}</button>
                 <button onClick={() => del(r.id)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", color: C.red }}>Delete</button>
               </div>
             </div>
           );
         })
       }
+
+      {/* Assign to job modal */}
+      {assigningRams && (
+        <AssignToJobModal
+          user={user}
+          currentJobId={assigningRams.job_id}
+          onAssign={(jobId, jobTitle) => assignRamsToJob(assigningRams.id, jobId, jobTitle)}
+          onClose={() => setAssigningRams(null)}
+        />
+      )}
     </div>
   );
 }
