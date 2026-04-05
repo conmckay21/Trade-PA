@@ -11977,6 +11977,7 @@ function RAMSTab({ user, brand }) {
   };
 
 
+  const generatePDF = (r) => {
     const d = typeof r.form_data === "string" ? JSON.parse(r.form_data || "{}") : (r.form_data || {});
     const hazards = getSelectedHazardsFromData(d);
     const steps = [...(d.selected_method_steps || []), ...(d.custom_method_steps || [])];
