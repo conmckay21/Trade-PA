@@ -523,15 +523,16 @@ function useWhisper(onTranscript) {
         if (blob.size < 500) { setTranscribing(false); return; }
         setTranscribing(true);
         try {
-          const ext = mimeType.includes("webm") ? "webm" : "mp4";
-          const fd = new FormData();
-          fd.append("file", blob, `rec.${ext}`);
-          fd.append("model", "whisper-1");
-          fd.append("language", "en");
-          const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          // Server-side transcription — key never exposed to browser
+          const audioBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(",")[1]);
+            reader.readAsDataURL(blob);
+          });
+          const res = await fetch("/api/transcribe", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${import.meta.env.VITE_OPENAI_KEY}` },
-            body: fd,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audio: audioBase64, mimeType }),
           });
           const data = await res.json();
           if (data.text) onTranscript(data.text.trim());
@@ -2837,14 +2838,11 @@ function Materials({ materials, setMaterials, user }) {
         ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
         : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/claude", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
+          },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 1000,
@@ -3420,7 +3418,9 @@ Return only JSON, no other text.` },
       )}
     </div>
   );
-}({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user }) {
+}
+
+function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user }) {
   const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can handle everything in the app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Quote Sarah Chen £450 for new bathroom"\n• "Invoice Kevin Nash £85 for leak repair"\n• "Mark the invoice for Kevin as paid"\n• "Convert Sarah's quote to an invoice"\n• "Confirm the boiler service for John"\n• "Mark copper pipe as ordered"\n• "Delete the enquiry from Dave"\n• "Save Emma Taylor, 07700 900123, emma@email.com"\n\nOr tap 🎙 and speak naturally.` }]);
 
   const quick = [
@@ -3885,14 +3885,11 @@ Rules:
         .filter(m => typeof m.content === "string")
         .map(m => ({ role: m.role, content: m.content }));
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/claude", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
+          },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 1000,
@@ -4325,19 +4322,23 @@ function MicButton({ form, setForm, accentColor }) {
         setProcessing(true);
         try {
           const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-          const fd = new FormData();
-          fd.append("file", blob, "audio.webm");
-          fd.append("model", "whisper-1");
-          const wr = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-            method: "POST", headers: { Authorization: `Bearer ${import.meta.env.VITE_OPENAI_KEY}` }, body: fd,
+          const audioBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(",")[1]);
+            reader.readAsDataURL(blob);
           });
-          const { text } = await wr.json();
+          const transcribeRes = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audio: audioBase64, mimeType: "audio/webm" }),
+          });
+          const { text } = await transcribeRes.json();
           if (!text) { setProcessing(false); return; }
 
           // Ask Claude to interpret the voice and return updated fields
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
+          const res = await fetch("/api/claude", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+            headers: { "Content-Type": "application/json", },
             body: JSON.stringify({
               model: "claude-sonnet-4-6",
               max_tokens: 400,
@@ -4403,20 +4404,22 @@ function VoiceFillButton({ form, setForm, fieldDescriptions, color }) {
         setProcessing(true);
         try {
           const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-          const fd = new FormData();
-          fd.append("file", blob, "audio.webm");
-          fd.append("model", "whisper-1");
-          const wr = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${import.meta.env.VITE_OPENAI_KEY}` },
-            body: fd,
+          const audioBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(",")[1]);
+            reader.readAsDataURL(blob);
           });
-          const { text } = await wr.json();
+          const transcribeRes = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audio: audioBase64, mimeType: "audio/webm" }),
+          });
+          const { text } = await transcribeRes.json();
           if (!text) { setProcessing(false); return; }
 
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
+          const res = await fetch("/api/claude", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+            headers: { "Content-Type": "application/json", },
             body: JSON.stringify({
               model: "claude-sonnet-4-6",
               max_tokens: 400,
@@ -5253,9 +5256,9 @@ Rules:
     setParsing(true);
     setParseError("");
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        headers: { "Content-Type": "application/json", },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 200,
@@ -6691,9 +6694,9 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
               const pdfDataUrl = `data:application/pdf;base64,${base64Clean}`;
 
               // Use Claude to extract CIS data from the PDF
-              const parseRes = await fetch("https://api.anthropic.com/v1/messages", {
+              const parseRes = await fetch("/api/claude", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+                headers: { "Content-Type": "application/json", },
                 body: JSON.stringify({
                   model: "claude-sonnet-4-6",
                   max_tokens: 400,
@@ -11934,9 +11937,9 @@ function RAMSTab({ user, brand }) {
     if (!form.scope) { alert("Add a scope of work first."); return; }
     setGenerating(true);
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        headers: { "Content-Type": "application/json", },
         body: JSON.stringify({
           model: "claude-sonnet-4-6", max_tokens: 800,
           messages: [{ role: "user", content: `For this UK trade work: "${form.scope}", return ONLY JSON: {"hazard_ids": ["list of relevant hazard ids from: wah1,wah2,wah3,wah4,wah5,elec1,elec2,elec3,elec4,gas1,gas2,gas3,gas4,gas5,plumb1,plumb2,plumb3,plumb4,mh1,mh2,mh3,pt1,pt2,pt3,pt4,pt5,dust1,dust2,dust3,dust4,stf1,stf2,stf3,fire1,fire2,cs1,cs2,site1,site2,site3,site4"], "method_steps": ["up to 8 specific work steps"]}` }],
