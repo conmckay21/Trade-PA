@@ -64,10 +64,6 @@ export default async function handler(req, res) {
     const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const contactId = await getOrCreateContact(accessToken, conn.tenant_id, supplierName);
 
-    // Xero requires AccountCode on every line item
-    // 300 = Purchases (standard UK chart of accounts for trade materials)
-    const accountCode = '300';
-
     // Tax type: INPUT2 = 20% VAT, RRINPUT = 5% VAT, NONE = no VAT
     const taxType = material.vatEnabled
       ? (material.vatRate === 5 ? 'RRINPUT' : 'INPUT2')
@@ -85,14 +81,14 @@ export default async function handler(req, res) {
         Date: today,
         DueDate: material.dueDate || dueDate,
         LineAmountTypes: 'Exclusive',
-        Status: 'AUTHORISED',
+        Status: 'DRAFT',  // Draft — user assigns their own account code in Xero before approving
         CurrencyCode: 'GBP',
         LineItems: [{
           Description: description,
           Quantity: qty,
           UnitAmount: unitPrice,
-          AccountCode: accountCode,
           TaxType: taxType,
+          // No AccountCode — Xero-specific codes vary per business, user sets in Xero
         }],
       }],
     };
