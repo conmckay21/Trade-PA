@@ -8713,11 +8713,11 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
 
     if (error) {
       // If new columns don't exist, retry with basic payload
-      if (error.message?.includes("labour_type") || error.message?.includes("total") || error.message?.includes("worker") || error.message?.includes("days")) {
-        const basicPayload = { job_id: selected.id, user_id: user.id, date: addTime.date, hours, rate, description: `${addTime.description || ""}${type !== "hourly" ? ` [${type}: £${total.toFixed(2)}]` : ""}` };
+      if (error.message?.includes("labour_type") || error.message?.includes("total") || error.message?.includes("worker") || error.message?.includes("days") || error.message?.includes("date")) {
+        const basicPayload = { job_id: selected.id, user_id: user.id, hours, rate, description: `${addTime.description || ""}${type !== "hourly" ? ` [${type}: £${total.toFixed(2)}]` : ""}` };
         const { data: d2, error: e2 } = await supabase.from("time_logs").insert(basicPayload).select().single();
-        if (e2) { alert(`Failed to log labour: ${e2.message}\n\nRun the SQL update in Supabase to add the new columns.`); return; }
-        if (d2) { setTimeLogs(prev => [{ ...d2, labour_type: type, total, days }, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" }); }
+        if (e2) { alert(`Failed to log labour: ${e2.message}\n\nPlease run the SQL migration in Supabase to add missing columns.`); return; }
+        if (d2) { setTimeLogs(prev => [{ ...d2, labour_type: type, total, days, date: addTime.date }, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" }); }
       } else {
         alert(`Failed to log labour: ${error.message}`);
       }
@@ -8975,6 +8975,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                       <div style={{ fontSize: 12, fontWeight: 700 }}>Log Labour</div>
                       <VoiceFillButton form={addTime} setForm={setAddTime} fieldDescriptions="labour_type (hourly/day_rate/price_work), hours (number of hours if hourly), days (number of days if day rate), rate (£ per hour or per day), total (fixed £ amount if price work), description (work carried out), worker (who did the work)" />
+                    </div>
 
                     {/* Labour type selector */}
                     <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
