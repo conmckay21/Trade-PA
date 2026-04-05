@@ -11680,7 +11680,6 @@ function StockTab({ user }) {
           </div>
           {form.quantity && form.unit_cost && <div style={{ fontSize: 11, color: C.green, background: C.green + "11", borderRadius: 6, padding: "6px 10px" }}>Stock value: £{(parseFloat(form.quantity||0) * parseFloat(form.unit_cost||0)).toFixed(2)}</div>}
         </div>
-        </div>
         <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
           <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={save} disabled={!form.name}>Save</button>
           <button style={S.btn("ghost")} onClick={onClose}>Cancel</button>
