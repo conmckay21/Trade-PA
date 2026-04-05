@@ -1,90 +1,113 @@
 // api/calls/incoming.js
-// Twilio webhook — fires on every inbound call to the user's Trade PA number
-// ALL calls recorded — dedicated business number
-// Push notification fires immediately to wake app if backgrounded
-// Falls back to real mobile after 45s if app doesn't answer
+// Conference bridge approach — Twilio stays in the middle of EVERY call
+// Whether answered on app or mobile, the call is always recorded and transcribed
+// Call flow:
+// 1. Caller rings Twilio number
+// 2. Twilio creates a named conference room
+// 3. Twilio dials app client into conference (push notification fires simultaneously)
+// 4. If app doesn't answer in 20s, Twilio dials mobile into conference too
+// 5. Recording happens at conference level — always captured regardless of answer method
+
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 export default async function handler(req, res) {
   const { userId } = req.query;
-  const callerNumber = req.body?.From || "";
-  const normalised = callerNumber.replace(/\s/g, "");
+  const callerNumber = req.body?.From || '';
+  const normalised = callerNumber.replace(/\s/g, '');
 
   if (!userId) {
-    res.setHeader("Content-Type", "text/xml");
+    res.setHeader('Content-Type', 'text/xml');
     return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>This number is not configured.</Say><Hangup/></Response>`);
   }
 
-  const identity = userId.replace(/[^a-zA-Z0-9_-]/g, "_");
   const appUrl = process.env.APP_URL;
+  const identity = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
 
   try {
-    // 1. Fetch forward_to mobile for fallback
+    // Fetch call_tracking settings (forward_to mobile)
     const ctRes = await fetch(
       `${process.env.VITE_SUPABASE_URL}/rest/v1/call_tracking?user_id=eq.${userId}&select=forward_to&limit=1`,
       { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
     );
     const ctData = await ctRes.json();
-    const forwardTo = ctData?.[0]?.forward_to || "";
+    const forwardTo = ctData?.[0]?.forward_to || '';
 
-    // 2. Look up caller name
+    // Look up caller name from customers
     const last10 = normalised.slice(-10);
     const custRes = await fetch(
       `${process.env.VITE_SUPABASE_URL}/rest/v1/customers?user_id=eq.${userId}&select=id,name,phone&limit=200`,
       { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
     );
     const customers = await custRes.json() || [];
-    const matched = customers.find(c => c.phone && c.phone.replace(/\s/g, "").slice(-10) === last10);
-    const customerName = matched?.name || "Unknown caller";
+    const matched = customers.find(c => c.phone && c.phone.replace(/\s/g, '').slice(-10) === last10);
+    const customerName = matched?.name || 'Unknown caller';
 
-    // 3. Fire push notification immediately (fire and forget)
+    // Create a unique conference room name for this call
+    // Use timestamp + callerNumber to make it unique
+    const confName = `tradpa_${userId.slice(0,8)}_${Date.now()}`;
+
+    // Fire push notification immediately to wake app
     fetch(`${appUrl}/api/push/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         userId,
         title: `📞 Incoming call — ${customerName}`,
         body: `${normalised} · Tap to answer in Trade PA`,
-        url: "/", type: "call",
+        url: '/', type: 'call',
         tag: `incoming-${normalised}`,
         requireInteraction: true,
       }),
     }).catch(() => {});
 
-    // 4. Build callback URLs with normal & (not &amp;)
-    // The URLs go inside XML attributes — & must be escaped as &amp; in the XML
-    // BUT the actual URL sent to recording.js/fallback.js must use real & 
-    // Solution: build URL with real &, then escape only for XML attribute context
+    // Build conference status callback URLs (& must be &amp; in XML)
+    const confStatusCallback = [
+      `${appUrl}/api/calls/conf-status`,
+      `?userId=${encodeURIComponent(userId)}`,
+      `&callerNumber=${encodeURIComponent(normalised)}`,
+      `&customerName=${encodeURIComponent(customerName)}`,
+      `&confName=${encodeURIComponent(confName)}`,
+      `&forwardTo=${encodeURIComponent(forwardTo)}`,
+    ].join('').replace(/&/g, '&amp;');
+
     const recordingCallback = [
       `${appUrl}/api/calls/recording`,
       `?userId=${encodeURIComponent(userId)}`,
       `&callerNumber=${encodeURIComponent(normalised)}`,
       `&customerName=${encodeURIComponent(customerName)}`,
-    ].join("").replace(/&/g, "&amp;");
+    ].join('').replace(/&/g, '&amp;');
 
-    const fallbackUrl = [
-      `${appUrl}/api/calls/fallback`,
-      `?forwardTo=${encodeURIComponent(forwardTo)}`,
-      `&callerNumber=${encodeURIComponent(normalised)}`,
-      `&customerName=${encodeURIComponent(customerName)}`,
-    ].join("").replace(/&/g, "&amp;");
+    console.log(`Conference bridge: ${normalised} (${customerName}) → conf: ${confName}`);
 
-    console.log(`Incoming call from ${normalised} (${customerName}) → client: ${identity}`);
-
-    res.setHeader("Content-Type", "text/xml");
+    // Put caller into conference room first (they hear hold music while we connect the other party)
+    // The conference is set to start recording immediately
+    // conf-status webhook fires when participant count changes — that's when we dial mobile fallback
+    res.setHeader('Content-Type', 'text/xml');
     return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="45" record="record-from-answer" recordingStatusCallback="${recordingCallback}" recordingStatusCallbackMethod="POST" action="${fallbackUrl}">
-    <Client>
-      <Identity>${identity}</Identity>
-      <Parameter name="callerName" value="${customerName.replace(/"/g, "&quot;")}"/>
-      <Parameter name="callerNumber" value="${normalised}"/>
-    </Client>
+  <Dial>
+    <Conference
+      statusCallback="${confStatusCallback}"
+      statusCallbackMethod="POST"
+      statusCallbackEvent="start end join leave"
+      record="record-from-start"
+      recordingStatusCallback="${recordingCallback}"
+      recordingStatusCallbackMethod="POST"
+      startConferenceOnEnter="true"
+      endConferenceOnExit="true"
+      waitUrl="http://twimlets.com/holdmusic?Bucket=com.twilio.music.classical"
+      maxParticipants="3"
+      beep="false">
+      ${confName}
+    </Conference>
   </Dial>
 </Response>`);
 
   } catch (err) {
-    console.error("Incoming call error:", err.message);
-    res.setHeader("Content-Type", "text/xml");
+    console.error('Incoming call error:', err.message);
+    // Fallback — direct dial to app client if conference setup fails
+    res.setHeader('Content-Type', 'text/xml');
     return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial timeout="45">
