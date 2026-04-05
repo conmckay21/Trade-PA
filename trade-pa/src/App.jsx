@@ -8756,6 +8756,18 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   const totalLabour = timeLogs.reduce((s, t) => s + (parseFloat(t.total || 0) || (parseFloat(t.hours || 0) * parseFloat(t.rate || 0))), 0);
   const totalVO = vos.filter(v => v.status === "approved").reduce((s, v) => s + (v.amount || 0), 0);
 
+  // Pre-compute profit tab values (used when tab === "profit")
+  const profitRevenue = parseFloat(selected?.value || 0);
+  const profitMatCost = linkedMaterials.reduce((s, m) => s + parseFloat(m.unit_price || 0) * parseFloat(m.qty || 1), 0);
+  const profitLabourCost = totalLabour;
+  const profitTotalCost = profitMatCost + profitLabourCost;
+  const profitGross = profitRevenue - profitTotalCost;
+  const profitMargin = profitRevenue > 0 ? (profitGross / profitRevenue) * 100 : 0;
+  const profitFmt = n => "£" + Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const profitIsGood = profitMargin >= 30;
+  const profitIsOk = profitMargin >= 15;
+  const profitColor = profitIsGood ? C.green : profitIsOk ? C.amber : C.red;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Header */}
@@ -9318,20 +9330,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               )}
 
               {/* PROFIT */}
-              {tab === "profit" && (() => {
-                const revenue = parseFloat(selected.value || 0);
-                const matCost = linkedMaterials.reduce((s, m) => s + parseFloat(m.unit_price || 0) * parseFloat(m.qty || 1), 0);
-                const labourCost = totalLabour;
-                const poValue = linkedPOs.reduce((s, po) => s + parseFloat(po.total || 0), 0);
-                const totalCost = matCost + labourCost;
-                const grossProfit = revenue - totalCost;
-                const margin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
-                const fmt = n => `£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                const isGood = margin >= 30;
-                const isOk = margin >= 15;
-                const profitColor = isGood ? C.green : isOk ? C.amber : C.red;
-
-                return (
+              {tab === "profit" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {/* Profit summary card */}
                     <div style={{ background: profitColor + "11", border: `2px solid ${profitColor}44`, borderRadius: 12, padding: 16 }}>
@@ -9339,29 +9338,29 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                         <div>
                           <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Gross Profit</div>
                           <div style={{ fontSize: 28, fontWeight: 700, color: profitColor, fontFamily: "'DM Mono',monospace" }}>
-                            {grossProfit < 0 ? "-" : ""}{fmt(grossProfit)}
+                            {profitGross < 0 ? "-" : ""}{profitFmt(profitGross)}
                           </div>
-                          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{margin.toFixed(1)}% margin</div>
+                          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{profitMargin.toFixed(1)}% margin</div>
                         </div>
                         <div style={{ fontSize: 32 }}>
-                          {isGood ? "✅" : isOk ? "⚠️" : revenue === 0 ? "❓" : "🔴"}
+                          {profitIsGood ? "✅" : profitIsOk ? "⚠️" : profitRevenue === 0 ? "❓" : "🔴"}
                         </div>
                       </div>
-                      {revenue === 0 && <div style={{ fontSize: 11, color: C.amber, marginTop: 8 }}>⚠ No job value set — add a value to the job to see profit</div>}
+                      {profitRevenue === 0 && <div style={{ fontSize: 11, color: C.amber, marginTop: 8 }}>⚠ No job value set — add a value to the job to see profit</div>}
                     </div>
 
                     {/* Breakdown */}
                     <div style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
                       {[
-                        { label: "Invoice Value", value: revenue, color: C.green, icon: "💷" },
-                        { label: `Materials (${linkedMaterials.length} items)`, value: matCost, color: C.red, icon: "🔧", negative: true },
-                        { label: "Labour (" + (totalDays > 0 ? totalDays + " days" : totalTime.toFixed(1) + "h") + ")", value: labourCost, color: C.red, icon: "⏱", negative: true },
+                        { label: "Invoice Value", value: profitRevenue, color: C.green, icon: "💷" },
+                        { label: `Materials (${linkedMaterials.length} items)`, value: profitMatCost, color: C.red, icon: "🔧", negative: true },
+                        { label: "Labour (" + (totalDays > 0 ? totalDays + " days" : totalTime.toFixed(1) + "h") + ")", value: profitLabourCost, color: C.red, icon: "⏱", negative: true },
                       ].map(({ label, value, color, icon, negative }) => (
                         <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                           <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>{icon}</div>
                           <div style={{ flex: 1, fontSize: 12 }}>{label}</div>
                           <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, fontWeight: 600, color }}>
-                            {negative ? "−" : "+"}{fmt(value)}
+                            {negative ? "−" : "+"}{profitFmt(value)}
                           </div>
                         </div>
                       ))}
@@ -9369,7 +9368,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                         <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>📊</div>
                         <div style={{ flex: 1, fontSize: 12, fontWeight: 700 }}>Gross Profit</div>
                         <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 14, fontWeight: 700, color: profitColor }}>
-                          {grossProfit < 0 ? "−" : "+"}{fmt(grossProfit)}
+                          {profitGross < 0 ? "−" : "+"}{profitFmt(profitGross)}
                         </div>
                       </div>
                     </div>
@@ -9386,7 +9385,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                         ))}
                         <div style={{ display: "flex", padding: "8px 14px", borderTop: `1px solid ${C.border}` }}>
                           <div style={{ flex: 1, fontSize: 12, fontWeight: 700 }}>Total</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.red, fontFamily: "'DM Mono',monospace" }}>£{matCost.toFixed(2)}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.red, fontFamily: "'DM Mono',monospace" }}>£{profitMatCost.toFixed(2)}</div>
                         </div>
                       </div>
                     )}
@@ -9420,14 +9419,13 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                       </div>
                     )}
 
-                    {linkedMaterials.length === 0 && labourCost === 0 && (
+                    {linkedMaterials.length === 0 && profitLabourCost === 0 && (
                       <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "12px 0" }}>
                         Link materials and log labour to this job to see a full profit breakdown.
                       </div>
                     )}
                   </div>
-                );
-              })()}
+              )}
             </div>
 
             {/* Footer */}
