@@ -693,8 +693,8 @@ function downloadInvoicePDF(brand, inv) {
   const showCard = payMethod === "card" || payMethod === "both";
   const vatEnabled = inv.vatEnabled && brand.vatNumber;
   const vatRate = Number(inv.vatZeroRated ? 0 : (inv.vatRate || 20));
-  const grossAmount = parseFloat(inv.grossAmount || inv.amount) || 0;
-  const netAmount = (vatEnabled && !inv.vatZeroRated) ? parseFloat((grossAmount / (1 + vatRate / 100)).toFixed(2)) : grossAmount;
+  const netAmount = (vatEnabled && !inv.vatZeroRated) ? parseFloat(inv.amount || inv.grossAmount || 0) : parseFloat(inv.grossAmount || inv.amount) || 0;
+  const grossAmount = (vatEnabled && !inv.vatZeroRated) ? parseFloat((netAmount * (1 + vatRate / 100)).toFixed(2)) : netAmount;
   const vatAmount = (vatEnabled && !inv.vatZeroRated) ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
   const date = inv.date || new Date().toLocaleDateString("en-GB");
   const isQuote = inv.isQuote;
@@ -764,8 +764,10 @@ function downloadInvoicePDF(brand, inv) {
   .header-right .doc-type{font-size:24px;font-weight:700;color:#fff;letter-spacing:0.05em;}
   .header-right .doc-id{font-size:14px;color:rgba(255,255,255,0.8);margin-top:4px;}
   .logo{max-height:60px;max-width:180px;object-fit:contain;margin-bottom:6px;display:block;}
-  .infobar{background:#f8f8f8;padding:12px 36px;display:flex;justify-content:space-between;border-bottom:1px solid #eee;font-size:12px;}
+  .infobar{background:#f8f8f8;padding:12px 28px;display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;border-bottom:1px solid #eee;font-size:12px;}
   .infobar span{color:#999;margin-right:4px;}
+  .infobar-left{display:flex;flex-direction:column;gap:4px;}
+  .infobar-right{display:flex;flex-direction:column;gap:4px;text-align:right;}
   .addresses{padding:24px 36px;display:grid;grid-template-columns:1fr 1fr;gap:28px;border-bottom:1px solid #eee;}
   .addr-label{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px;}
   .addr-name{font-size:14px;font-weight:700;margin-bottom:4px;}
@@ -822,14 +824,16 @@ function downloadInvoicePDF(brand, inv) {
   </div>
 
   <div class="infobar">
-    <div>
+    <div class="infobar-left">
       <div><span>Date:</span>${date}</div>
-      <div style="margin-top:3px"><span>${isQuote ? "Valid for:" : "Payment due:"}</span>${isQuote ? (inv.due || "30 days") : (inv.due || `${brand.paymentTerms || 30} days`)}</div>
+      <div><span>${isQuote ? "Valid for:" : "Payment due:"}</span>${isQuote ? (inv.due || "30 days") : (inv.due || `${brand.paymentTerms || 30} days`)}</div>
     </div>
-    ${(brand.vatNumber && (brand._exemptBypass || brand.registrationVerifications?.vatNumber?.verified)) ? `<div><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
-    <div><span>Ref:</span>${ref}</div>
-    ${inv.jobRef ? `<div><span>Job Ref:</span>${inv.jobRef}</div>` : ""}
-    ${inv.poNumber ? `<div><span>PO Number:</span>${inv.poNumber}</div>` : ""}
+    <div class="infobar-right">
+      <div><span>Ref:</span>${ref}</div>
+      ${inv.jobRef ? `<div><span>Job Ref:</span>${inv.jobRef}</div>` : ""}
+      ${inv.poNumber ? `<div><span>PO:</span>${inv.poNumber}</div>` : ""}
+      ${(brand.vatNumber && (brand._exemptBypass || brand.registrationVerifications?.vatNumber?.verified)) ? `<div><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
+    </div>
   </div>
 
   <div class="addresses">
@@ -1010,9 +1014,9 @@ function InvoicePreview({ brand, invoice }) {
   // VAT calculations — only if VAT number is set AND invoice has VAT enabled
   const vatEnabled = inv.vatEnabled && brand.vatNumber;
   const vatRate = inv.vatRate || 20;
-  const netAmount = vatEnabled ? parseFloat((inv.amount / (1 + vatRate / 100)).toFixed(2)) : inv.amount;
-  const vatAmount = vatEnabled ? parseFloat((inv.amount - netAmount).toFixed(2)) : 0;
-  const grossAmount = inv.amount;
+  const netAmount = parseFloat(inv.amount) || 0;
+  const vatAmount = vatEnabled ? parseFloat((netAmount * vatRate / 100).toFixed(2)) : 0;
+  const grossAmount = netAmount + vatAmount;
 
   return (
     <div style={{ background: "#fff", borderRadius: 8, overflow: "hidden", fontFamily: "Georgia, serif", color: "#1a1a1a", boxShadow: "0 4px 24px #0008", maxWidth: 560, width: "100%" }}>
@@ -4845,10 +4849,10 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user }) {
     : null;
 
   // grossAmount uses lineItemsTotal when available
-  const grossAmount = form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : (parseFloat(form.amount) || 0));
+  const netAmount = form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : (parseFloat(form.amount) || 0));
   const vatRate = form.vatZeroRated ? 0 : (form.vatRate || 20);
-  const netAmount = (form.vatEnabled && !form.vatZeroRated) ? parseFloat((grossAmount / (1 + vatRate / 100)).toFixed(2)) : grossAmount;
-  const vatAmount = (form.vatEnabled && !form.vatZeroRated) ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
+  const vatAmount = (form.vatEnabled && !form.vatZeroRated) ? parseFloat((netAmount * vatRate / 100).toFixed(2)) : 0;
+  const grossAmount = netAmount + vatAmount;
 
   const previewRef = buildRef(brand, { id: "INV-043", customer: form.customer || "Customer Name" });
 
@@ -4861,12 +4865,13 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user }) {
       const finalDesc = form.lineItems && form.lineItems.length > 0
         ? form.lineItems.map(l => l.amount && l.amount !== "" ? `${l.desc || l.description}|${l.amount}` : (l.desc || l.description || "")).filter(Boolean).join("\n")
         : form.desc;
-      const finalAmount = form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount);
+      const finalAmount = form.cisEnabled ? cisNetPayable : netAmount;
+      const finalGross = form.cisEnabled ? cisGross : grossAmount;
       const payload = {
         id: initialData?.id || nextInvoiceId(invoices),
         customer: form.customer, email: form.email, address: form.address,
         amount: finalAmount,
-        grossAmount: form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : grossAmount),
+        grossAmount: finalGross,
         due: `Due in ${form.due} days`, status: initialData?.status || "sent",
         description: finalDesc, paymentMethod: form.paymentMethod || "bacs",
         lineItems: form.lineItems || [],
@@ -5160,9 +5165,9 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user }) {
     ? form.lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
     : null;
 
-  const grossAmount = form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : (parseFloat(form.amount) || 0));
-  const netAmount = form.vatEnabled ? parseFloat((grossAmount / (1 + form.vatRate / 100)).toFixed(2)) : grossAmount;
-  const vatAmount = form.vatEnabled ? parseFloat((grossAmount - netAmount).toFixed(2)) : 0;
+  const netAmount = form.cisEnabled ? cisGross : (lineItemsTotal !== null ? lineItemsTotal : (parseFloat(form.amount) || 0));
+  const vatAmount = form.vatEnabled ? parseFloat((netAmount * form.vatRate / 100).toFixed(2)) : 0;
+  const grossAmount = netAmount + vatAmount;
 
   const hasAmount = form.cisEnabled ? (form.labour || form.materials) : (lineItemsTotal !== null || !!form.amount);
   const valid = form.customer && hasAmount;
@@ -5173,7 +5178,7 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user }) {
       const finalDesc = form.lineItems && form.lineItems.length > 0
         ? form.lineItems.map(l => l.amount && l.amount !== "" ? `${l.desc || l.description}|${l.amount}` : (l.desc || l.description || "")).filter(Boolean).join("\n")
         : form.desc;
-      const finalAmount = form.cisEnabled ? cisNetPayable : (lineItemsTotal !== null ? lineItemsTotal : grossAmount);
+      const finalAmount = form.cisEnabled ? cisNetPayable : netAmount;
       const payload = {
         id, customer: form.customer, email: form.email, address: form.address,
         amount: finalAmount,
@@ -5967,9 +5972,6 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
 function CustomerForm({ form, set, onSave, onCancel }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <VoiceFillButton form={form} setForm={updates => Object.keys(updates).forEach(k => { if (k in form) set(k)({ target: { value: updates[k] } }); })} fieldDescriptions="name (full name e.g. John Smith), phone (mobile number e.g. 07700 900123), email (email address), address (full address including postcode), notes (any notes)" />
-      </div>
       {[
         { k: "name", l: "Full Name", p: "e.g. John Smith", required: true },
         { k: "phone", l: "Phone Number", p: "e.g. 07700 900123" },
