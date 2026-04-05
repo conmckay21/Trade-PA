@@ -3988,7 +3988,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           if (type === "hourly") { hours = parseFloat(input.hours || 0); total = hours * parseFloat(input.rate || 0); }
           else if (type === "day_rate") { hours = parseFloat(input.days || 0) * 8; total = parseFloat(input.days || 0) * parseFloat(input.rate || 0); }
           else { total = parseFloat(input.total || 0); }
-          await supabase.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
+          await supabase.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, log_date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
           setTimeout(() => setView("Jobs"), 300);
           setLastAction({ type: "job", label: `Time logged — ${input.customer}`, view: "Jobs" });
           const label = type === "hourly" ? `${input.hours}hrs @ £${input.rate}/hr` : type === "day_rate" ? `${input.days} days @ £${input.rate}/day` : `Price work £${input.total}`;
@@ -8536,7 +8536,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
     if (job?.id && user?.id) {
       const { data } = await supabase.from("time_logs").insert({
         job_id: job.id, user_id: user.id,
-        date: arrival.toISOString().slice(0, 10),
+        log_date: arrival.toISOString().slice(0, 10),
         hours,
         rate: parseFloat(brand?.defaultHourlyRate || 0) || 0,
         description: `On site ${arrStr}–${depStr} · auto-tracked`,
@@ -8596,7 +8596,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
       const [n, p, t, v, d, ds, dr, rams, mats, pos] = await Promise.all([
         supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("time_logs").select("*").eq("job_id", jobId).order("date", { ascending: false }),
+        supabase.from("time_logs").select("*").eq("job_id", jobId).order("log_date", { ascending: false }),
         supabase.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
@@ -8621,7 +8621,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
       const [n, p, t, v, d, ds] = await Promise.all([
         supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("time_logs").select("*").eq("job_id", jobId).order("date", { ascending: false }),
+        supabase.from("time_logs").select("*").eq("job_id", jobId).order("log_date", { ascending: false }),
         supabase.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
@@ -8695,7 +8695,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
     const payload = {
       job_id: selected.id,
       user_id: user.id,
-      date: addTime.date,
+      log_date: addTime.date,
       hours,
       rate,
       description: addTime.description || "",
@@ -8717,7 +8717,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
         const basicPayload = { job_id: selected.id, user_id: user.id, hours, rate, description: `${addTime.description || ""}${type !== "hourly" ? ` [${type}: £${total.toFixed(2)}]` : ""}` };
         const { data: d2, error: e2 } = await supabase.from("time_logs").insert(basicPayload).select().single();
         if (e2) { alert(`Failed to log labour: ${e2.message}\n\nPlease run the SQL migration in Supabase to add missing columns.`); return; }
-        if (d2) { setTimeLogs(prev => [{ ...d2, labour_type: type, total, days, date: addTime.date }, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" }); }
+        if (d2) { setTimeLogs(prev => [{ ...d2, labour_type: type, total, days, log_date: addTime.date }, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" }); }
       } else {
         alert(`Failed to log labour: ${error.message}`);
       }
@@ -9051,7 +9051,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                         <div style={{ fontSize: 18, flexShrink: 0 }}>{icon}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600 }}>{label}{t.worker ? ` · ${t.worker}` : ""}</div>
-                          <div style={{ fontSize: 11, color: C.muted }}>{t.description}{t.description && " · "}{t.date}</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>{t.description}{t.description && " · "}{t.log_date}</div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{cost.toFixed(2)}</div>
