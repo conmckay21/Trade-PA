@@ -1031,12 +1031,10 @@ function InvoicePreview({ brand, invoice }) {
       </div>
 
       {/* Info bar */}
-      <div style={{ background: "#f8f8f8", padding: "14px 28px", display: "flex", justifyContent: "space-between", borderBottom: "1px solid #eee" }}>
-        <div style={{ fontFamily: "Arial,sans-serif", fontSize: 12 }}>
-          <span style={{ color: "#888", marginRight: 6 }}>Date:</span>{inv.date}
-        </div>
-        <div style={{ fontFamily: "Arial,sans-serif", fontSize: 12 }}>
-          <span style={{ color: "#888", marginRight: 6 }}>Payment due:</span>{brand.paymentTerms || "30"} days
+      <div style={{ background: "#f8f8f8", padding: "14px 28px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid #eee" }}>
+        <div style={{ fontFamily: "Arial,sans-serif", fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+          <div><span style={{ color: "#888", marginRight: 6 }}>Date:</span>{inv.date}</div>
+          <div><span style={{ color: "#888", marginRight: 6 }}>Payment due:</span>{brand.paymentTerms || "30"} days</div>
         </div>
         {brand.vatNumber && (brand._exemptBypass || brand.registrationVerifications?.vatNumber?.verified) && (
           <div style={{ fontFamily: "Arial,sans-serif", fontSize: 12 }}>
@@ -1668,20 +1666,57 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             { k: "phone", l: "Phone Number" },
             { k: "email", l: "Email Address" },
             { k: "website", l: "Website" },
-            { k: "googleReviewUrl", l: "Google Review Link" },
-            { k: "reviewUrlCheckatrade", l: "Checkatrade Review Link" },
-            { k: "reviewUrlTrustpilot", l: "Trustpilot Review Link" },
-            { k: "reviewUrlFacebook", l: "Facebook Review Link" },
-            { k: "reviewUrlWhich", l: "Which? Trusted Traders Link" },
-            { k: "reviewUrlMyBuilder", l: "MyBuilder Profile Link" },
-            { k: "reviewUrlRatedPeople", l: "Rated People Profile Link" },
-            { k: "utrNumber", l: "UTR Number (Unique Taxpayer Reference)" },
           ].map(({ k, l }) => (
             <div key={k}>
               <label style={S.label}>{l}</label>
               <input style={S.input} value={brand[k]} onChange={set(k)} />
             </div>
           ))}
+
+          {/* Review & Profile Links — collapsible */}
+          {(() => {
+            const [open, setOpen] = React.useState(false);
+            const reviewFields = [
+              { k: "googleReviewUrl", l: "Google Review", icon: "🔍" },
+              { k: "reviewUrlCheckatrade", l: "Checkatrade", icon: "🏠" },
+              { k: "reviewUrlTrustpilot", l: "Trustpilot", icon: "⭐" },
+              { k: "reviewUrlFacebook", l: "Facebook", icon: "👍" },
+              { k: "reviewUrlWhich", l: "Which? Trusted Traders", icon: "✅" },
+              { k: "reviewUrlMyBuilder", l: "MyBuilder", icon: "🔨" },
+              { k: "reviewUrlRatedPeople", l: "Rated People", icon: "👷" },
+            ];
+            const filledCount = reviewFields.filter(f => brand[f.k]).length;
+            return (
+              <div>
+                <div onClick={() => setOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, cursor: "pointer", userSelect: "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 14 }}>🔗</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>Review & Profile Links</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{filledCount > 0 ? `${filledCount} link${filledCount !== 1 ? "s" : ""} added` : "Add your review platform links"}</div>
+                    </div>
+                  </div>
+                  <span style={{ color: C.muted, fontSize: 16, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▾</span>
+                </div>
+                {open && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10, padding: "12px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                    {reviewFields.map(({ k, l, icon }) => (
+                      <div key={k}>
+                        <label style={S.label}>{icon} {l}</label>
+                        <input style={S.input} value={brand[k] || ""} onChange={set(k)} placeholder="https://" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* VAT Number — with live verification */}
+          <div>
+            <label style={S.label}>UTR Number (Unique Taxpayer Reference)</label>
+            <input style={S.input} value={brand.utrNumber || ""} onChange={set("utrNumber")} placeholder="e.g. 1234567890" />
+          </div>
 
           {/* VAT Number — with live verification */}
           {(() => {
