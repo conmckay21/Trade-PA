@@ -5935,6 +5935,7 @@ function CustomerForm({ form, set, onSave, onCancel }) {
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <VoiceFillButton form={form} setForm={updates => Object.keys(updates).forEach(k => { if (k in form) set(k)({ target: { value: updates[k] } }); })} fieldDescriptions="name (full name e.g. John Smith), phone (mobile number e.g. 07700 900123), email (email address), address (full address including postcode), notes (any notes)" />
       </div>
+      {[
         { k: "name", l: "Full Name", p: "e.g. John Smith", required: true },
         { k: "phone", l: "Phone Number", p: "e.g. 07700 900123" },
         { k: "email", l: "Email Address", p: "e.g. john@email.com" },
