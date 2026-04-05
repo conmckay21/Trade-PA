@@ -9065,7 +9065,8 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
 
                   {timeLogs.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "16px 0" }}>No labour logged yet</div>}
                 </div>
-              )}
+              </div>
+            )}
 
               {/* VARIATION ORDERS */}
               {tab === "vo" && (
