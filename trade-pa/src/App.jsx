@@ -5288,7 +5288,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- For expenses say: log_expense. For CIS say: log_cis_statement. For subcontractor payments say: log_subcontractor_payment.\n"
   + "- For certificates say: add_compliance_cert. For extra work say: add_variation_order. For reports say: get_report.\n"
   + "- Never tell the user to go to a tab — do everything here and show it inline.\n"
-  + "- SEND: send_invoice, send_quote, chase_invoice, sync_to_xero, sync_to_quickbooks (push invoice to accounting), sync_material_to_xero, sync_material_to_quickbooks (create purchase bill), mark_invoice_paid_xero.\n""- SIGNATURE: request_signature navigates to the Jobs tab and opens the signature pad for customer sign-off.\n"
+  + "- SEND: send_invoice, send_quote, chase_invoice, sync_to_xero, sync_to_quickbooks (push invoice to accounting), sync_material_to_xero, sync_material_to_quickbooks (create purchase bill), mark_invoice_paid_xero.\n"
+  + "- SIGNATURE: request_signature navigates to the Jobs tab and opens the signature pad for customer sign-off.\n"
   + "- INBOX: list_inbox_actions shows pending email actions WITH the email snippet so user can review before approving. approve_inbox_action / reject_inbox_action to action them.\n"
   + "- STOCK: add_stock_item, list_stock, update_stock, delete_stock_item.\n"
   + "- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n"
@@ -15864,5 +15865,4 @@ export default function App() {
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} /></ErrorBoundary>}
       </main>
     </div>
-  );
-}
+  
