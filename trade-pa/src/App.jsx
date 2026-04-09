@@ -4975,12 +4975,24 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- For invoices/quotes: use line_items array — one object per item with description and amount.\n"
   + "- After tool use: confirm naturally in 1-2 sentences.\n"
   + "- For mileage: HMRC rate is 45p/mile for first 10,000 miles.\n"
-  + "- When user says show me or what are my anything — use a list_ or find_ tool, never tell them to go somewhere.\n""- For schedule/diary/what\'s on today or this week — use list_schedule.\n""- For full job detail including notes, photos, materials — use get_job_full.\n""- For RAMS or method statements — use start_rams, then guide through steps using rams_save_step1 through rams_save_step5.\n"
+  + "- When user says show me or what are my anything — use a list_ or find_ tool, never tell them to go somewhere.\n"
+  + "- For schedule/diary/what\'s on today or this week — use list_schedule.\n"
+  + "- For full job detail including notes, photos, materials — use get_job_full.\n"
+  + "- For RAMS or method statements — use start_rams, then guide through steps using rams_save_step1 through rams_save_step5.\n"
   + "- RAMS flow: start_rams → rams_save_step1 → rams_save_step2 (categories) → rams_confirm_hazards (after user reviews) → rams_save_step3 (after user reviews method steps) → rams_save_step4 (COSHH) → rams_save_step5 (emergency/save).\n"
   + "- After user answers each RAMS question, immediately call the matching rams_save_stepN tool.\n"
   + "- Current RAMS session active: " + (ramsSession ? "YES - step " + ramsSession.step : "none") + "\n"
   + "- When ramsSession is active, keep focused on completing it — guide user step by step.\n"
-  + "- EVERY feature of the app is actionable here — jobs, invoices, quotes, materials, labour, mileage, expenses, CIS, subcontractors, reminders, RAMS, stock, purchase orders, compliance certificates, variation orders, daywork, review requests, reports.\n""- For expenses say: log_expense. For CIS say: log_cis_statement. For subcontractor payments say: log_subcontractor_payment.\n""- For certificates say: add_compliance_cert. For extra work say: add_variation_order. For reports say: get_report.\n""- Never tell the user to go to a tab — do everything here and show it inline.\n""- SEND: send_invoice, send_quote, chase_invoice (overdue payment reminder email).\n""- INBOX: list_inbox_actions shows pending email actions WITH the email snippet so user can review before approving. approve_inbox_action / reject_inbox_action to action them.\n""- STOCK: add_stock_item, list_stock, update_stock, delete_stock_item.\n""- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n""- SUBCONTRACTOR STATEMENTS: generate_subcontractor_statement shows CIS statement for a month.\n""- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.";
+  + "- EVERY feature of the app is actionable here — jobs, invoices, quotes, materials, labour, mileage, expenses, CIS, subcontractors, reminders, RAMS, stock, purchase orders, compliance certificates, variation orders, daywork, review requests, reports.\n"
+  + "- For expenses say: log_expense. For CIS say: log_cis_statement. For subcontractor payments say: log_subcontractor_payment.\n"
+  + "- For certificates say: add_compliance_cert. For extra work say: add_variation_order. For reports say: get_report.\n"
+  + "- Never tell the user to go to a tab — do everything here and show it inline.\n"
+  + "- SEND: send_invoice, send_quote, chase_invoice (overdue payment reminder email).\n"
+  + "- INBOX: list_inbox_actions shows pending email actions WITH the email snippet so user can review before approving. approve_inbox_action / reject_inbox_action to action them.\n"
+  + "- STOCK: add_stock_item, list_stock, update_stock, delete_stock_item.\n"
+  + "- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n"
+  + "- SUBCONTRACTOR STATEMENTS: generate_subcontractor_statement shows CIS statement for a month.\n"
+  + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.";
 
 
   // Auto-trigger onboarding for new users — placed here so isNewUser and send are both defined
