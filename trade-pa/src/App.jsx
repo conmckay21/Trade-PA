@@ -4382,7 +4382,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   // ── Home screen context ───────────────────────────────────────────────────
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const firstName = (brand.tradingName || "").split(" ")[0] || "there";
+  const firstName = brand.ownerName || (brand.tradingName && !brand.tradingName.toLowerCase().includes("trade pa") && !brand.tradingName.toLowerCase().includes("trades") ? brand.tradingName.split(" ")[0] : "") || "there";
   const today = new Date().toDateString();
   const todayJobs = (jobs || []).filter(j => {
     const d = j.date || j.scheduled_date || j.created_at;
@@ -4414,11 +4414,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const isHome = messages.length === 0 && !loading;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 140px)", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 140px)", minHeight: 400, gap: 12 }}>
 
       {/* ── HOME SCREEN ─────────────────────────────────────────────────── */}
       {isHome && (
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 8 }}>
+        <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 8 }}>
 
           {/* Greeting */}
           <div style={{ paddingTop: 8 }}>
@@ -4644,7 +4644,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       )}
 
       {/* ── INPUT BAR — always visible ──────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0, paddingTop: 4, background: "transparent" }}>
         <textarea
           style={{ ...S.input, flex: 1, minHeight: 60, maxHeight: 140, resize: "none", fontSize: 14, padding: "12px 14px" }}
           placeholder={isHome ? "Ask Trade PA anything..." : "Type here, or tap 🎙 to speak..."}
