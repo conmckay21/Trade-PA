@@ -3517,61 +3517,48 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [expandedWidget, setExpandedWidget] = useState(null);
   const [ramsSession, setRamsSession] = useState(null);
   const [sessionData, setSessionData] = useState({});
-  const ttsEnabledRef = useRef(false); // ref so speak() always sees current value
+  const ttsEnabledRef = useRef(false);
+  const ttsAudioRef = useRef(null); // current playing Audio object
   const bottomRef = useRef(null);
 
   // Keep ref in sync with state
   useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
 
-  // Load voices — iOS needs voiceschanged event before they're available
-  const [voices, setVoices] = useState([]);
-  useEffect(() => {
-    const load = () => setVoices(window.speechSynthesis?.getVoices() || []);
-    load();
-    window.speechSynthesis?.addEventListener("voiceschanged", load);
-    return () => window.speechSynthesis?.removeEventListener("voiceschanged", load);
-  }, []);
-
-  const speak = (text) => {
-    if (!ttsEnabledRef.current || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const clean = text.replace(/[\u2022\*#_~`]/g, "").replace(/\n+/g, " ").trim();
+  const speak = async (text) => {
+    if (!ttsEnabledRef.current) return;
+    // Stop any currently playing audio
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
+    }
+    const clean = text.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
     if (!clean) return;
-    const utt = new SpeechSynthesisUtterance(clean);
-    utt.rate = 0.92; utt.pitch = 1; utt.lang = "en-GB";
-    utt.volume = 1;
-    const allVoices = voices.length ? voices : (window.speechSynthesis.getVoices() || []);
-    // Prefer British female voices
-    const preferred = allVoices.find(v => v.name.includes("Kate"))    // iOS British female
-      || allVoices.find(v => v.name.includes("Serena"))               // iOS British female alt
-      || allVoices.find(v => v.name.includes("Martha"))               // macOS British female
-      || allVoices.find(v => v.name.includes("Moira"))                // Irish female (similar)
-      || allVoices.find(v => v.lang === "en-GB" && v.name.toLowerCase().includes("female"))
-      || allVoices.find(v => v.lang === "en-GB")
-      || allVoices.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("female"))
-      || allVoices.find(v => v.lang.startsWith("en"));
-    if (preferred) utt.voice = preferred;
-    // iOS PWA: sometimes needs a short delay after cancel
-    setTimeout(() => {
-      try { window.speechSynthesis.speak(utt); } catch(e) {}
-    }, 50);
+    try {
+      // Deepgram Aura TTS — routed through our proxy to keep API key server-side
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: clean }),
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+      audio.onended = () => { URL.revokeObjectURL(url); ttsAudioRef.current = null; };
+      audio.play().catch(() => {});
+    } catch (e) {
+      console.warn("TTS error:", e.message);
+    }
   };
 
-  // Prime audio on TTS toggle (iOS requires gesture-initiated audio)
   const toggleTts = () => {
     const newVal = !ttsEnabledRef.current;
     setTtsEnabled(newVal);
     ttsEnabledRef.current = newVal;
-    if (newVal) {
-      // Immediately speak a silent utterance to unlock iOS audio
-      try {
-        window.speechSynthesis.cancel();
-        const primer = new SpeechSynthesisUtterance(" ");
-        primer.volume = 0;
-        window.speechSynthesis.speak(primer);
-      } catch(e) {}
-    } else {
-      window.speechSynthesis?.cancel();
+    if (!newVal && ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
     }
   };
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
