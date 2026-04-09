@@ -3515,20 +3515,59 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [lastAction, setLastAction] = useState(null);
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [expandedWidget, setExpandedWidget] = useState(null);
-  const [ramsSession, setRamsSession] = useState(null); // { step, form } — active RAMS being built in chat
-  const [sessionData, setSessionData] = useState({}); // generic multi-step session state
+  const [ramsSession, setRamsSession] = useState(null);
+  const [sessionData, setSessionData] = useState({});
+  const ttsEnabledRef = useRef(false); // ref so speak() always sees current value
   const bottomRef = useRef(null);
 
+  // Keep ref in sync with state
+  useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
+
+  // Load voices — iOS needs voiceschanged event before they're available
+  const [voices, setVoices] = useState([]);
+  useEffect(() => {
+    const load = () => setVoices(window.speechSynthesis?.getVoices() || []);
+    load();
+    window.speechSynthesis?.addEventListener("voiceschanged", load);
+    return () => window.speechSynthesis?.removeEventListener("voiceschanged", load);
+  }, []);
+
   const speak = (text) => {
-    if (!ttsEnabled || !window.speechSynthesis) return;
+    if (!ttsEnabledRef.current || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const clean = text.replace(/[\u2022\*#_~`]/g, "").replace(/\n+/g, " ").trim();
+    if (!clean) return;
     const utt = new SpeechSynthesisUtterance(clean);
-    utt.rate = 0.95; utt.pitch = 1; utt.lang = "en-GB";
-    const voices = window.speechSynthesis.getVoices();
-    const british = voices.find(v => v.lang === "en-GB") || voices.find(v => v.lang.startsWith("en"));
-    if (british) utt.voice = british;
-    window.speechSynthesis.speak(utt);
+    utt.rate = 0.92; utt.pitch = 1; utt.lang = "en-GB";
+    utt.volume = 1;
+    const allVoices = voices.length ? voices : (window.speechSynthesis.getVoices() || []);
+    const preferred = allVoices.find(v => v.name.includes("Daniel")) // iOS British male
+      || allVoices.find(v => v.name.includes("Kate"))               // iOS British female
+      || allVoices.find(v => v.lang === "en-GB")
+      || allVoices.find(v => v.lang.startsWith("en"));
+    if (preferred) utt.voice = preferred;
+    // iOS PWA: sometimes needs a short delay after cancel
+    setTimeout(() => {
+      try { window.speechSynthesis.speak(utt); } catch(e) {}
+    }, 50);
+  };
+
+  // Prime audio on TTS toggle (iOS requires gesture-initiated audio)
+  const toggleTts = () => {
+    const newVal = !ttsEnabledRef.current;
+    setTtsEnabled(newVal);
+    ttsEnabledRef.current = newVal;
+    if (newVal) {
+      // Immediately speak a silent utterance to unlock iOS audio
+      try {
+        window.speechSynthesis.cancel();
+        const primer = new SpeechSynthesisUtterance(" ");
+        primer.volume = 0;
+        window.speechSynthesis.speak(primer);
+      } catch(e) {}
+    } else {
+      window.speechSynthesis?.cancel();
+    }
   };
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -3973,7 +4012,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     { name: "add_variation_order", description: "Add a variation order (extra work / change to scope) to a job card.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, description: { type: "string" }, amount: { type: "string" }, vo_number: { type: "string" } }, required: ["description","amount"] } },
     { name: "log_daywork", description: "Log a daywork sheet on a job.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, date: { type: "string" }, worker_name: { type: "string" }, hours: { type: "string" }, rate: { type: "string" }, description: { type: "string" }, contractor_name: { type: "string" } }, required: ["hours","rate"] } },
     { name: "send_review_request", description: "Send a review request email to a customer.", input_schema: { type: "object", properties: { customer: { type: "string" }, email: { type: "string" } }, required: ["customer"] } },
-    { name: "get_report", description: "Show a financial report inline. Use when user asks how they are doing, what they have earned, revenue summary.", input_schema: { type: "object", properties: { period: { type: "string", enum: ["this_month","last_month","this_year","last_year"] } } } },
+    { name: "get_report", description: "Show a financial report inline. Use when user asks how they are doing, what they have earned, revenue summary, last 3 months, last 6 months, this quarter etc.", input_schema: { type: "object", properties: { period: { type: "string", enum: ["this_month","last_month","last_3_months","last_6_months","this_quarter","last_quarter","this_year","last_year"] } } } },
     { name: "list_purchase_orders", description: "Show recent purchase orders.", input_schema: { type: "object", properties: {} } },
     { name: "list_reminders", description: "Show active reminders.", input_schema: { type: "object", properties: {} } },
     { name: "list_enquiries", description: "Show recent enquiries.", input_schema: { type: "object", properties: {} } },
@@ -4290,7 +4329,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
             type: "job_full",
             data: {
               ...job,
-              notes: notes.data || [],
+              jobNotes: notes.data || [],
               photos: photos.data || [],
               timeLogs: timeLogs.data || [],
               linkedMaterials: materials.data || [],
@@ -4700,9 +4739,26 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           } else if (period === "last_month") {
             fromDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
             toDate = new Date(now.getFullYear(), now.getMonth(), 0); label = "Last Month";
+          } else if (period === "last_3_months") {
+            fromDate = new Date(now.getFullYear(), now.getMonth()-3, 1);
+            toDate = now; label = "Last 3 Months";
+          } else if (period === "last_6_months") {
+            fromDate = new Date(now.getFullYear(), now.getMonth()-6, 1);
+            toDate = now; label = "Last 6 Months";
+          } else if (period === "this_quarter") {
+            const qStart = Math.floor(now.getMonth() / 3) * 3;
+            fromDate = new Date(now.getFullYear(), qStart, 1);
+            toDate = now; label = "This Quarter";
+          } else if (period === "last_quarter") {
+            const lqStart = Math.floor(now.getMonth() / 3) * 3 - 3;
+            fromDate = new Date(now.getFullYear(), lqStart, 1);
+            toDate = new Date(now.getFullYear(), lqStart + 3, 0); label = "Last Quarter";
           } else if (period === "this_year") {
             fromDate = new Date(now.getFullYear(), 0, 1);
             toDate = now; label = "This Year";
+          } else if (period === "last_year") {
+            fromDate = new Date(now.getFullYear()-1, 0, 1);
+            toDate = new Date(now.getFullYear()-1, 11, 31); label = "Last Year";
           } else {
             fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
             toDate = now; label = "This Month";
@@ -5136,7 +5192,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const isHome = messages.length === 0 && !loading;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 140px)", minHeight: 400, gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 140px)", minHeight: 400, gap: 12, overflow: "hidden" }}>
 
       {/* ── HOME SCREEN ─────────────────────────────────────────────────── */}
       {isHome && (
@@ -5220,7 +5276,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
               <button key={i} onClick={() => send(q)} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, color: C.textDim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>{q}</button>
             ))}
             <button onClick={() => setMessages([])} style={{ padding: "5px 12px", background: "none", border: `1px solid ${C.border}`, borderRadius: 20, color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", marginLeft: "auto" }}>🏠 Home</button>
-            <button onClick={() => { setTtsEnabled(e => !e); if (window.speechSynthesis) window.speechSynthesis.cancel(); }} style={{ padding: "5px 10px", background: ttsEnabled ? C.amber + "22" : "none", border: `1px solid ${ttsEnabled ? C.amber + "66" : C.border}`, borderRadius: 20, color: ttsEnabled ? C.amber : C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", flexShrink: 0 }} title={ttsEnabled ? "Tap to mute" : "Tap to hear responses"}>
+            <button onClick={toggleTts} style={{ padding: "5px 10px", background: ttsEnabled ? C.amber + "22" : "none", border: `1px solid ${ttsEnabled ? C.amber + "66" : C.border}`, borderRadius: 20, color: ttsEnabled ? C.amber : C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", flexShrink: 0 }} title={ttsEnabled ? "Tap to mute" : "Tap to hear responses"}>
               {ttsEnabled ? "🔊" : "🔇"}
             </button>
           </div>
@@ -5396,7 +5452,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                             <div style={{ fontSize: 10, color: mat.status === "to_order" ? C.red : mat.status === "ordered" ? C.amber : C.green }}>{mat.status?.replace(/_/g, " ")}</div>
                           </div>
                           {img ? (
-                            <div>
+                            <div style={{ background: "#fff" }}>
                               <img src={img} alt="Receipt" style={{ width: "100%", display: "block", borderRadius: "0 0 10px 10px" }} />
                             </div>
                           ) : mat.receiptSource === "email" ? (
@@ -5431,11 +5487,12 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                     )}
                     {m.widget.type === "job_full" && (() => {
                       const job = m.widget.data;
-                      const expanded = expandedWidget === m.widget;
+                      const expanded = expandedWidget === i || expandedWidget === null;
+                      const hasDetails = (job.jobNotes?.length > 0) || (job.timeLogs?.length > 0) || (job.linkedMaterials?.length > 0) || (job.drawings?.length > 0) || (job.vos?.length > 0) || (job.docs?.length > 0);
                       return (
                         <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
-                          {/* Header — always visible */}
-                          <div onClick={() => setExpandedWidget(expanded ? null : m.widget)} style={{ padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }}>
+                          {/* Header */}
+                          <div onClick={() => setExpandedWidget(expanded ? -1 : i)} style={{ padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }}>
                             <div>
                               <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Job Card</div>
                               <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginTop: 2 }}>{job.title || job.type || "Job"}</div>
@@ -5443,38 +5500,39 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                             </div>
                             <div style={{ textAlign: "right", flexShrink: 0 }}>
                               {job.value > 0 && <div style={{ fontSize: 15, fontWeight: 700, color: C.amber }}>£{parseFloat(job.value).toLocaleString()}</div>}
-                              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{expanded ? "▲ Less" : "▼ Full details"}</div>
+                              {hasDetails && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{expanded ? "▲ Less" : "▼ Full details"}</div>}
                             </div>
                           </div>
+                          {/* Always-visible summary */}
+                          {job.address && <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}>📍 {job.address}</div>}
+                          {job.notes && typeof job.notes === "string" && <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}>{job.notes}</div>}
+                          {job.scope_of_work && <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}><span style={{ color: C.muted, fontSize: 10, display: "block", marginBottom: 2 }}>SCOPE</span>{job.scope_of_work}</div>}
                           {/* Expanded detail */}
-                          {expanded && (
+                          {expanded && hasDetails && (
                             <div style={{ borderTop: `1px solid ${C.border}` }}>
-                              {job.address && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}>📍 {job.address}</div>}
-                              {job.scope_of_work && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}><span style={{ color: C.muted, fontSize: 10, display: "block", marginBottom: 4 }}>SCOPE</span>{job.scope_of_work}</div>}
-                              {job.notes && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}><span style={{ color: C.muted, fontSize: 10, display: "block", marginBottom: 4 }}>NOTES</span>{job.notes}</div>}
-                              {job.notes?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
-                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>JOB NOTES ({job.notes.length})</div>
-                                {job.notes.map((n,i) => <div key={i} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {n.note || n}</div>)}
+                              {job.jobNotes?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>JOB NOTES ({job.jobNotes.length})</div>
+                                {job.jobNotes.map((n,ni) => <div key={ni} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {n.note || n}</div>)}
                               </div>}
                               {job.timeLogs?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
-                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>LABOUR ({job.timeLogs.length} entries)</div>
-                                {job.timeLogs.map((t,i) => <div key={i} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {t.labour_type === "day_rate" ? `${t.days} days @ £${t.rate}/day` : `${t.hours}hrs @ £${t.rate}/hr`} — £{(parseFloat(t.total || 0) || (t.hours * t.rate)).toFixed(2)}</div>)}
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>LABOUR ({job.timeLogs.length} entries · £{job.timeLogs.reduce((s,t) => s + parseFloat(t.total || (t.hours||0)*(t.rate||0) || 0), 0).toFixed(2)})</div>
+                                {job.timeLogs.map((t,ti) => <div key={ti} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {t.labour_type === "day_rate" ? `${t.days} days @ £${t.rate}/day` : `${t.hours}hrs @ £${t.rate}/hr`} — £{parseFloat(t.total || (t.hours||0)*(t.rate||0)).toFixed(2)}</div>)}
                               </div>}
                               {job.linkedMaterials?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>MATERIALS ({job.linkedMaterials.length})</div>
-                                {job.linkedMaterials.map((m,i) => <div key={i} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {m.item} ×{m.qty} — {m.supplier}</div>)}
+                                {job.linkedMaterials.map((mat,mi) => <div key={mi} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {mat.item} ×{mat.qty}{mat.supplier ? ` — ${mat.supplier}` : ""}{mat.unitPrice > 0 ? ` · £${((mat.unitPrice||0)*(mat.qty||1)).toFixed(2)}` : ""}</div>)}
                               </div>}
                               {job.drawings?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>DRAWINGS ({job.drawings.length})</div>
-                                {job.drawings.map((d,i) => <div key={i} style={{ fontSize: 12, color: C.amber, paddingBottom: 4 }}>📐 {d.file_name}</div>)}
+                                {job.drawings.map((d,di) => <div key={di} style={{ fontSize: 12, color: C.amber, paddingBottom: 4 }}>📐 {d.file_name}</div>)}
                               </div>}
                               {job.vos?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
-                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>VARIATION ORDERS ({job.vos.length})</div>
-                                {job.vos.map((v,i) => <div key={i} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {v.description} — £{v.amount}</div>)}
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>VARIATION ORDERS ({job.vos.length} · £{job.vos.reduce((s,v) => s + parseFloat(v.amount||0), 0).toFixed(2)})</div>
+                                {job.vos.map((v,vi) => <div key={vi} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {v.vo_number ? v.vo_number + " — " : ""}{v.description} — £{parseFloat(v.amount||0).toFixed(2)}</div>)}
                               </div>}
                               {job.docs?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>CERTIFICATES ({job.docs.length})</div>
-                                {job.docs.map((d,i) => <div key={i} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>📄 {d.doc_type}{d.doc_number ? " · " + d.doc_number : ""}</div>)}
+                                {job.docs.map((d,di) => <div key={di} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>📄 {d.doc_type}{d.doc_number ? " · " + d.doc_number : ""}{d.expiry_date ? ` · Expires ${d.expiry_date}` : ""}</div>)}
                               </div>}
                               <div style={{ display: "flex", gap: 8, padding: "10px 14px" }}>
                                 <button onClick={() => setView("Jobs")} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>Open in Jobs tab →</button>
@@ -15492,7 +15550,7 @@ export default function App() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
-        {view === "AI Assistant" && <AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => setPdfHtml(buildInvoiceHtml(brand, inv))} onScanReceipt={handleScanReceipt} />}
+        {view === "AI Assistant" && <AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
