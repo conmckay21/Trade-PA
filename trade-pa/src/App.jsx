@@ -15656,6 +15656,46 @@ export default function App() {
   const alertCount = dueNow.length + overdueCount;
 
   // Auth gate
+
+  const handleScanReceipt = async (file) => {
+    if (!file) return null;
+    const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+    const { base64, dataUrl } = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = e => { const f = e.target.result; res({ base64: f.split(",")[1], dataUrl: f }); };
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const fileContent = isPdf
+      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+      : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
+    const resp = await fetch("/api/claude", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: [fileContent, { type: "text", text: "You are reading a UK supplier receipt. Return ONLY valid JSON with keys: supplier, date, total, vatAmount, vatRate, pricesIncVat, items (array of item, qty, unitPrice, unitPriceExVat)" }] }],
+      }),
+    });
+    const data = await resp.json();
+    const raw = (data.content && data.content[0] && data.content[0].text) || "";
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start === -1 || end === -1) throw new Error("Could not parse receipt");
+    const parsed = JSON.parse(raw.slice(start, end + 1));
+    const receiptId = "rcpt_" + Date.now();
+    try { localStorage.setItem("trade-pa-receipt-" + receiptId, dataUrl); } catch (e2) {}
+    const newMats = (parsed.items || []).map(function(item) {
+      var vr = parseInt(parsed.vatRate || 0);
+      var ve = vr > 0;
+      var exVat = item.unitPriceExVat || (parsed.pricesIncVat && ve ? parseFloat((item.unitPrice / (1 + vr / 100)).toFixed(4)) : item.unitPrice) || 0;
+      return { item: item.item, qty: item.qty || 1, unitPrice: parseFloat(exVat.toFixed(2)), supplier: parsed.supplier || "", status: "ordered", vatEnabled: ve, vatRate: ve ? vr : null, dueDate: parsed.date || "", receiptId: receiptId, receiptImage: dataUrl };
+    });
+    setMaterials(function(prev) { return [...(prev || []), ...newMats]; });
+    return Object.assign({}, parsed, { receiptId: receiptId, receiptImage: dataUrl });
+  };
+
   if (authLoading) return (
     <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&display=swap');`}</style>
@@ -15704,44 +15744,6 @@ export default function App() {
       <div>Loading your data...</div>
     </div>
   );
-
-  const handleScanReceipt = async (file) => {
-    if (!file) return null;
-    const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
-    const { base64, dataUrl } = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = e => { const f = e.target.result; res({ base64: f.split(",")[1], dataUrl: f }); };
-      r.onerror = rej;
-      r.readAsDataURL(file);
-    });
-    const fileContent = isPdf
-      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
-      : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
-    const resp = await fetch("/api/claude", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: [fileContent, { type: "text", text: "You are reading a UK supplier receipt. Return ONLY valid JSON with keys: supplier, date (YYYY-MM-DD), total, vatAmount, vatRate, pricesIncVat, items (array of {item, qty, unitPrice, unitPriceExVat})" }] }],
-      }),
-    });
-    const data = await resp.json();
-    const text = data.content?.[0]?.text || "";
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Could not parse receipt");
-    const parsed = JSON.parse(match[0]);
-    const receiptId = "rcpt_" + Date.now();
-    try { localStorage.setItem("trade-pa-receipt-" + receiptId, dataUrl); } catch {}
-    const newMats = (parsed.items || []).map(item => {
-      const vr = parseInt(parsed.vatRate || 0);
-      const ve = vr > 0;
-      const exVat = item.unitPriceExVat || (parsed.pricesIncVat && ve ? parseFloat((item.unitPrice / (1 + vr / 100)).toFixed(4)) : item.unitPrice) || 0;
-      return { item: item.item, qty: item.qty || 1, unitPrice: parseFloat(exVat.toFixed(2)), supplier: parsed.supplier || "", status: "ordered", vatEnabled: ve, vatRate: ve ? vr : null, dueDate: parsed.date || "", receiptId, receiptImage: dataUrl };
-    });
-    setMaterials(prev => [...(prev || []), ...newMats]);
-    return { ...parsed, receiptId, receiptImage: dataUrl };
-  };
 
   return (
     <div style={S.app}>
@@ -15864,7 +15866,6 @@ export default function App() {
         {view === "RAMS" && <RAMSTab user={user} brand={brand} />}
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} /></ErrorBoundary>}
       </main>
-    </div>
     </div>
   );
 }
