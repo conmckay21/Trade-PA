@@ -3541,9 +3541,14 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     utt.rate = 0.92; utt.pitch = 1; utt.lang = "en-GB";
     utt.volume = 1;
     const allVoices = voices.length ? voices : (window.speechSynthesis.getVoices() || []);
-    const preferred = allVoices.find(v => v.name.includes("Daniel")) // iOS British male
-      || allVoices.find(v => v.name.includes("Kate"))               // iOS British female
+    // Prefer British female voices
+    const preferred = allVoices.find(v => v.name.includes("Kate"))    // iOS British female
+      || allVoices.find(v => v.name.includes("Serena"))               // iOS British female alt
+      || allVoices.find(v => v.name.includes("Martha"))               // macOS British female
+      || allVoices.find(v => v.name.includes("Moira"))                // Irish female (similar)
+      || allVoices.find(v => v.lang === "en-GB" && v.name.toLowerCase().includes("female"))
       || allVoices.find(v => v.lang === "en-GB")
+      || allVoices.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("female"))
       || allVoices.find(v => v.lang.startsWith("en"));
     if (preferred) utt.voice = preferred;
     // iOS PWA: sometimes needs a short delay after cancel
@@ -4031,6 +4036,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     { name: "approve_inbox_action", description: "Approve a pending inbox action.", input_schema: { type: "object", properties: { action_id: { type: "string" }, description: { type: "string" } } } },
     { name: "reject_inbox_action", description: "Reject/dismiss a pending inbox action.", input_schema: { type: "object", properties: { action_id: { type: "string" } } } },
     { name: "generate_subcontractor_statement", description: "Generate a CIS statement for a subcontractor for a given month.", input_schema: { type: "object", properties: { name: { type: "string" }, month: { type: "string", description: "YYYY-MM" } }, required: ["name"] } },
+    { name: "update_job_card", description: "Update any field on a job card — title, customer, address, value, status, notes, scope of work, PO number. Use when user asks to change, edit or update a job card.", input_schema: { type: "object", properties: { customer: { type: "string", description: "Current customer name to find the job" }, title: { type: "string", description: "Current job title to find the job" }, new_title: { type: "string" }, new_customer: { type: "string" }, new_address: { type: "string" }, new_value: { type: "string" }, new_status: { type: "string", enum: ["enquiry","quoted","accepted","in_progress","completed","on_hold"] }, new_notes: { type: "string" }, new_scope: { type: "string" }, new_po_number: { type: "string" } } } },
+    { name: "update_invoice", description: "Update an invoice — change customer, amount, due date, status, or add/remove line items. Use when user asks to edit or change an invoice.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_due: { type: "string" }, new_status: { type: "string" }, new_address: { type: "string" }, add_line_item: { type: "string", description: "Add a line item as 'description|amount' e.g. 'Extra labour|150'" }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
@@ -4989,6 +4996,76 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           return `Here's the CIS statement for ${sub.name} — ${month}: gross £${totalGross.toFixed(2)}, deduction £${totalDed.toFixed(2)}, net £${totalNet.toFixed(2)}.`;
         }
 
+
+        case "update_job_card": {
+          const term = (input.customer || input.title || "").toLowerCase();
+          const { data: found } = await supabase.from("job_cards")
+            .select("*").eq("user_id", user?.id)
+            .or(`customer.ilike.%${term}%,title.ilike.%${term}%,type.ilike.%${term}%`)
+            .order("created_at", { ascending: false }).limit(1);
+          const job = found?.[0];
+          if (!job) return `Couldn't find a job card for "${input.customer || input.title}".`;
+          const updates = {};
+          if (input.new_title !== undefined) updates.title = input.new_title;
+          if (input.new_customer !== undefined) updates.customer = input.new_customer;
+          if (input.new_address !== undefined) updates.address = input.new_address;
+          if (input.new_value !== undefined) updates.value = parseFloat(input.new_value) || 0;
+          if (input.new_status !== undefined) updates.status = input.new_status;
+          if (input.new_notes !== undefined) updates.notes = input.new_notes;
+          if (input.new_scope !== undefined) updates.scope_of_work = input.new_scope;
+          if (input.new_po_number !== undefined) updates.po_number = input.new_po_number;
+          if (!Object.keys(updates).length) return "No changes specified. Tell me what to update.";
+          updates.updated_at = new Date().toISOString();
+          const { data: updated, error } = await supabase.from("job_cards").update(updates).eq("id", job.id).select("*").single();
+          if (error) return `Failed to update job card: ${error.message}`;
+          // Re-fetch all related data
+          const [notes, timeLogs, materials, drawings, vos, docs] = await Promise.all([
+            supabase.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
+            supabase.from("time_logs").select("*").eq("job_id", job.id),
+            supabase.from("materials").select("*").eq("job_id", job.id),
+            supabase.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
+            supabase.from("variation_orders").select("*").eq("job_id", job.id),
+            supabase.from("compliance_docs").select("*").eq("job_id", job.id),
+          ]);
+          pendingWidgetRef.current = {
+            type: "job_full",
+            data: { ...updated, jobNotes: notes.data || [], timeLogs: timeLogs.data || [], linkedMaterials: materials.data || [], drawings: drawings.data || [], vos: vos.data || [], docs: docs.data || [] }
+          };
+          const changed = Object.keys(updates).filter(k => k !== "updated_at").map(k => k.replace("_", " ")).join(", ");
+          return `Job card updated — ${changed} changed. Here's the updated card:`;
+        }
+        case "update_invoice": {
+          const term = (input.customer || input.invoice_id || "").toLowerCase();
+          const all = (invoices || []).filter(i => !i.isQuote);
+          const inv = all.find(i =>
+            (i.id || "").toLowerCase().includes(term) ||
+            (i.customer || "").toLowerCase().includes(term)
+          );
+          if (!inv) return `Couldn't find an invoice for "${input.customer || input.invoice_id}".`;
+          const updates = { ...inv };
+          if (input.new_customer !== undefined) updates.customer = input.new_customer;
+          if (input.new_amount !== undefined) { updates.amount = parseFloat(input.new_amount); updates.grossAmount = parseFloat(input.new_amount); }
+          if (input.new_due !== undefined) updates.due = input.new_due;
+          if (input.new_status !== undefined) updates.status = input.new_status;
+          if (input.new_address !== undefined) updates.address = input.new_address;
+          if (input.add_line_item !== undefined) {
+            const parts = input.add_line_item.split("|");
+            const newLine = { description: parts[0].trim(), amount: parseFloat(parts[1]) || 0 };
+            updates.lineItems = [...(inv.lineItems || []), newLine];
+            updates.amount = updates.lineItems.reduce((s, l) => s + l.amount, 0);
+            updates.grossAmount = updates.amount;
+          }
+          if (input.remove_line_item !== undefined) {
+            const removeIdx = parseInt(input.remove_line_item) - 1;
+            updates.lineItems = (inv.lineItems || []).filter((_, i) => i !== removeIdx);
+            updates.amount = updates.lineItems.reduce((s, l) => s + l.amount, 0);
+            updates.grossAmount = updates.amount;
+          }
+          setInvoices(prev => (prev || []).map(i => i.id === inv.id ? updates : i));
+          pendingWidgetRef.current = { type: "invoice", data: updates };
+          return `Invoice ${inv.id} updated. Here's the updated invoice:`;
+        }
+
         default:
           return `Unknown action: ${name}`;
       }
@@ -5024,7 +5101,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "FIND/SHOW INLINE: find_invoice, find_quote, find_job_card, list_invoices, list_jobs, list_materials, find_material_receipt, list_schedule, get_job_full, list_expenses, list_cis_statements, list_subcontractors, list_purchase_orders, list_reminders, list_enquiries, list_customers, list_mileage, list_stock, list_rams, get_report, list_inbox_actions (show pending email actions with email snippet for review)\n"
   + "UPDATE BRAND: update_brand (use during onboarding or when user wants to update business details)\n"
   + "DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material\n"
-  + "UPDATE: mark_invoice_paid, update_job_status, update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock, delete_stock_item\n"
+  + "UPDATE: mark_invoice_paid, update_job_status, update_job_card (edit any field), update_invoice (edit any field/line item), update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock, delete_stock_item\n"
   + "LOG: log_time, log_mileage, add_job_note\n"
   + "\nRules:\n"
   + "- create_job = scheduled with date+time. create_job_card = job tracking card without a date.\n"
@@ -5327,9 +5404,12 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                               ))}
                             </div>
                           )}
-                          <div style={{ padding: "10px 14px" }}>
-                            <button onClick={() => onShowPdf && onShowPdf(inv)} style={{ width: "100%", padding: "8px", background: C.amber + "22", border: `1px solid ${C.amber}44`, borderRadius: 6, color: C.amber, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
-                              📄 View {isQ ? "Quote" : "Invoice"} PDF
+                          <div style={{ padding: "10px 14px", display: "flex", gap: 8 }}>
+                            <button onClick={() => onShowPdf && onShowPdf(inv)} style={{ flex: 1, padding: "8px", background: C.amber + "22", border: `1px solid ${C.amber}44`, borderRadius: 6, color: C.amber, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+                              📄 View PDF
+                            </button>
+                            <button onClick={() => send("Update invoice " + inv.id + " for " + inv.customer)} style={{ flex: 1, padding: "8px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+                              ✏ Edit invoice
                             </button>
                           </div>
                         </div>
@@ -5535,7 +5615,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                                 {job.docs.map((d,di) => <div key={di} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>📄 {d.doc_type}{d.doc_number ? " · " + d.doc_number : ""}{d.expiry_date ? ` · Expires ${d.expiry_date}` : ""}</div>)}
                               </div>}
                               <div style={{ display: "flex", gap: 8, padding: "10px 14px" }}>
-                                <button onClick={() => setView("Jobs")} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>Open in Jobs tab →</button>
+                                <button onClick={() => send("Update " + job.customer + "'s job card")} style={{ ...S.btn("primary"), flex: 1, justifyContent: "center", fontSize: 12 }}>✏ Edit this job</button>
+                                <button onClick={() => setView("Jobs")} style={{ ...S.btn("ghost"), fontSize: 12 }}>Open in Jobs tab →</button>
                               </div>
                             </div>
                           )}
