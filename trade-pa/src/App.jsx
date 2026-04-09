@@ -3499,7 +3499,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user, refreshJobs, onShowPdf }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user, refreshJobs, onShowPdf, onScanReceipt }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -3513,7 +3513,23 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState(null);
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [expandedWidget, setExpandedWidget] = useState(null);
+  const [ramsSession, setRamsSession] = useState(null); // { step, form } — active RAMS being built in chat
+  const [sessionData, setSessionData] = useState({}); // generic multi-step session state
   const bottomRef = useRef(null);
+
+  const speak = (text) => {
+    if (!ttsEnabled || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const clean = text.replace(/[\u2022\*#_~`]/g, "").replace(/\n+/g, " ").trim();
+    const utt = new SpeechSynthesisUtterance(clean);
+    utt.rate = 0.95; utt.pitch = 1; utt.lang = "en-GB";
+    const voices = window.speechSynthesis.getVoices();
+    const british = voices.find(v => v.lang === "en-GB") || voices.find(v => v.lang.startsWith("en"));
+    if (british) utt.voice = british;
+    window.speechSynthesis.speak(utt);
+  };
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const { recording, transcribing, toggle } = useWhisper((text) => {
@@ -3880,6 +3896,56 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       input_schema: { type: "object", properties: { filter: { type: "string", enum: ["all", "to_order", "ordered", "collected"], description: "Which materials to show" } } },
     },
     {
+      name: "find_material_receipt",
+      description: "Show a material's receipt/invoice image inline. Use when user asks to see, show, or pull up a receipt or invoice for a material or supplier.",
+      input_schema: { type: "object", properties: { item: { type: "string", description: "Material item name" }, supplier: { type: "string", description: "Supplier name" } } },
+    },
+    {
+      name: "list_schedule",
+      description: "Show this week's or today's scheduled jobs (calendar jobs with date/time). Use for 'what have I got on today', 'show my schedule', 'what's on this week', 'what jobs are booked'.",
+      input_schema: { type: "object", properties: { filter: { type: "string", enum: ["today", "this_week", "next_week"], description: "Which period to show" } } },
+    },
+    {
+      name: "get_job_full",
+      description: "Fetch and display a complete job card with all details including notes, photos, documents, time logs, materials, drawings, variation orders, certificates. Use when user wants to see everything about a job.",
+      input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, title: { type: "string", description: "Job title or type" } } },
+    },
+    {
+      name: "start_rams",
+      description: "Start building a RAMS conversationally. Use when user asks to create RAMS or method statement.",
+      input_schema: { type: "object", properties: { job_ref: { type: "string" }, site_address: { type: "string" } } },
+    },
+    {
+      name: "rams_save_step1",
+      description: "Save RAMS step 1 (project details) and move to step 2. Use when user provides title, scope, site address, client, dates.",
+      input_schema: { type: "object", properties: { title: { type: "string" }, scope: { type: "string" }, site_address: { type: "string" }, client_name: { type: "string" }, start_date: { type: "string" }, end_date: { type: "string" }, prepared_by: { type: "string" } } },
+    },
+    {
+      name: "rams_save_step2",
+      description: "Save RAMS step 2 — present hazard categories for user to choose from. Call with the categories or work types the user mentions.",
+      input_schema: { type: "object", properties: { categories: { type: "string", description: "Categories or work types the user chose" }, work_types: { type: "string", description: "Alternative: types of work described" } } },
+    },
+    {
+      name: "rams_confirm_hazards",
+      description: "Confirm the hazard list after user reviews it. Call when user says confirmed, ok, yes, or specifies removals/additions.",
+      input_schema: { type: "object", properties: { remove: { type: "string", description: "Hazards to remove, comma separated" }, add: { type: "string", description: "Custom hazards to add, one per line" } } },
+    },
+    {
+      name: "rams_save_step3",
+      description: "Confirm the method statement steps after user reviews them. Call when user confirms or specifies changes.",
+      input_schema: { type: "object", properties: { remove_numbers: { type: "string", description: "Step numbers to remove e.g. 3,7" }, add: { type: "string", description: "Additional steps to add, one per line" } } },
+    },
+    {
+      name: "rams_save_step4",
+      description: "Save RAMS step 4 (COSHH substances). Call with substances list or 'none'.",
+      input_schema: { type: "object", properties: { substances: { type: "string", description: "Comma-separated substances or 'none'" } } },
+    },
+    {
+      name: "rams_save_step5",
+      description: "Save RAMS step 5 (emergency/welfare) and SAVE the completed RAMS to the database.",
+      input_schema: { type: "object", properties: { first_aider: { type: "string" }, nearest_ae: { type: "string" }, muster_point: { type: "string" }, welfare_location: { type: "string" }, emergency_procedure: { type: "string" } } },
+    },
+    {
       name: "update_brand",
       description: "Save or update the user's business settings. Use during onboarding to save name, trade, phone, address, VAT status etc.",
       input_schema: {
@@ -3896,6 +3962,36 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         },
       },
     },
+    { name: "log_expense", description: "Log a business expense — fuel, parking, tools, accommodation, etc.", input_schema: { type: "object", properties: { exp_type: { type: "string", enum: ["fuel","parking","tools","accommodation","meals","other","mileage"] }, description: { type: "string" }, amount: { type: "string" }, miles: { type: "string" }, exp_date: { type: "string" } }, required: ["description"] } },
+    { name: "list_expenses", description: "Show recent expenses.", input_schema: { type: "object", properties: {} } },
+    { name: "log_cis_statement", description: "Log a CIS deduction statement from a contractor.", input_schema: { type: "object", properties: { contractor_name: { type: "string" }, gross_amount: { type: "string" }, deduction_amount: { type: "string" }, tax_month: { type: "string" }, notes: { type: "string" } }, required: ["contractor_name","gross_amount","deduction_amount"] } },
+    { name: "list_cis_statements", description: "Show CIS deduction statements.", input_schema: { type: "object", properties: {} } },
+    { name: "add_subcontractor", description: "Add a new subcontractor.", input_schema: { type: "object", properties: { name: { type: "string" }, company: { type: "string" }, utr: { type: "string" }, cis_rate: { type: "string", description: "20 registered, 30 unregistered, 0 gross" }, email: { type: "string" }, phone: { type: "string" } }, required: ["name"] } },
+    { name: "log_subcontractor_payment", description: "Log a payment to a subcontractor.", input_schema: { type: "object", properties: { name: { type: "string" }, gross: { type: "string" }, date: { type: "string" }, job_ref: { type: "string" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name","gross"] } },
+    { name: "list_subcontractors", description: "Show all subcontractors.", input_schema: { type: "object", properties: {} } },
+    { name: "add_compliance_cert", description: "Add a compliance certificate to a job card — CP12, EICR, PAT, EIC, Pressure Test, Part P etc.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, doc_type: { type: "string" }, doc_number: { type: "string" }, issued_date: { type: "string" }, expiry_date: { type: "string" }, notes: { type: "string" } }, required: ["doc_type"] } },
+    { name: "add_variation_order", description: "Add a variation order (extra work / change to scope) to a job card.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, description: { type: "string" }, amount: { type: "string" }, vo_number: { type: "string" } }, required: ["description","amount"] } },
+    { name: "log_daywork", description: "Log a daywork sheet on a job.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, date: { type: "string" }, worker_name: { type: "string" }, hours: { type: "string" }, rate: { type: "string" }, description: { type: "string" }, contractor_name: { type: "string" } }, required: ["hours","rate"] } },
+    { name: "send_review_request", description: "Send a review request email to a customer.", input_schema: { type: "object", properties: { customer: { type: "string" }, email: { type: "string" } }, required: ["customer"] } },
+    { name: "get_report", description: "Show a financial report inline. Use when user asks how they are doing, what they have earned, revenue summary.", input_schema: { type: "object", properties: { period: { type: "string", enum: ["this_month","last_month","this_year","last_year"] } } } },
+    { name: "list_purchase_orders", description: "Show recent purchase orders.", input_schema: { type: "object", properties: {} } },
+    { name: "list_reminders", description: "Show active reminders.", input_schema: { type: "object", properties: {} } },
+    { name: "list_enquiries", description: "Show recent enquiries.", input_schema: { type: "object", properties: {} } },
+    { name: "list_customers", description: "Show all customers.", input_schema: { type: "object", properties: {} } },
+    { name: "list_mileage", description: "Show recent mileage logs.", input_schema: { type: "object", properties: {} } },
+    { name: "list_stock", description: "Show all stock items.", input_schema: { type: "object", properties: {} } },
+    { name: "add_stock_item", description: "Add a new stock item.", input_schema: { type: "object", properties: { name: { type: "string" }, quantity: { type: "string" }, unit: { type: "string" }, unit_cost: { type: "string" }, reorder_level: { type: "string" }, location: { type: "string" }, sku: { type: "string" } }, required: ["name"] } },
+    { name: "delete_stock_item", description: "Delete a stock item.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+    { name: "list_rams", description: "Show saved RAMS documents.", input_schema: { type: "object", properties: {} } },
+    { name: "send_invoice", description: "Send an invoice to a customer by email.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, email: { type: "string" } } } },
+    { name: "send_quote", description: "Send a quote to a customer by email.", input_schema: { type: "object", properties: { customer: { type: "string" }, quote_id: { type: "string" }, email: { type: "string" } } } },
+    { name: "chase_invoice", description: "Send a payment chase/reminder email for an overdue or unpaid invoice.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, email: { type: "string" } } } },
+    { name: "create_invoice_from_job", description: "Create an invoice directly from a job card, pulling in all logged labour and materials.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" } } } },
+    { name: "add_stage_payment", description: "Add stage payment milestones to a job card.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, stages: { type: "string", description: "JSON array of stages [{label,type,value}] or leave empty for default 30/40/30 split" } } } },
+    { name: "list_inbox_actions", description: "Show pending inbox email actions — suggested actions from emails that need approval. Use when user asks about inbox, emails, or pending actions.", input_schema: { type: "object", properties: {} } },
+    { name: "approve_inbox_action", description: "Approve a pending inbox action.", input_schema: { type: "object", properties: { action_id: { type: "string" }, description: { type: "string" } } } },
+    { name: "reject_inbox_action", description: "Reject/dismiss a pending inbox action.", input_schema: { type: "object", properties: { action_id: { type: "string" } } } },
+    { name: "generate_subcontractor_statement", description: "Generate a CIS statement for a subcontractor for a given month.", input_schema: { type: "object", properties: { name: { type: "string" }, month: { type: "string", description: "YYYY-MM" } }, required: ["name"] } },
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
@@ -4135,6 +4231,207 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           pendingWidgetRef.current = { type: "material_list", data: list.slice(0, 15) };
           return `Here are your ${filter === "all" ? "" : filter + " "}materials:`;
         }
+        case "find_material_receipt": {
+          const term = (input.item || input.supplier || "").toLowerCase();
+          const all = materials || [];
+          const match = all.find(m =>
+            (m.item || "").toLowerCase().includes(term) ||
+            (m.supplier || "").toLowerCase().includes(term)
+          );
+          if (!match) return `No material found matching "${input.item || input.supplier}".`;
+          const img = match.receiptImage || (match.receiptId ? localStorage.getItem(`trade-pa-receipt-${match.receiptId}`) : null);
+          if (!img && !match.receiptSource) return `Found "${match.item}" from ${match.supplier || "unknown supplier"} but no receipt has been scanned for it yet.`;
+          pendingWidgetRef.current = { type: "material_receipt", data: { ...match, resolvedImage: img } };
+          return `Here's the receipt for ${match.item}${match.supplier ? ` from ${match.supplier}` : ""}:`;
+        }
+        case "list_schedule": {
+          const filter = input.filter || "today";
+          const now = new Date();
+          const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
+          const todayEnd = new Date(now); todayEnd.setHours(23,59,59,999);
+          const weekStart = new Date(todayStart); weekStart.setDate(todayStart.getDate() - todayStart.getDay() + 1);
+          const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23,59,59,999);
+          const nextWeekStart = new Date(weekEnd); nextWeekStart.setDate(weekEnd.getDate() + 1); nextWeekStart.setHours(0,0,0,0);
+          const nextWeekEnd = new Date(nextWeekStart); nextWeekEnd.setDate(nextWeekStart.getDate() + 6); nextWeekEnd.setHours(23,59,59,999);
+          const start = filter === "today" ? todayStart : filter === "next_week" ? nextWeekStart : weekStart;
+          const end   = filter === "today" ? todayEnd   : filter === "next_week" ? nextWeekEnd   : weekEnd;
+          const all = (jobs || []).filter(j => {
+            if (!j.dateObj) return false;
+            const d = new Date(j.dateObj);
+            return d >= start && d <= end;
+          }).sort((a,b) => new Date(a.dateObj) - new Date(b.dateObj));
+          if (!all.length) {
+            const label = filter === "today" ? "today" : filter === "next_week" ? "next week" : "this week";
+            pendingWidgetRef.current = { type: "schedule_list", data: [], filter };
+            return `Nothing booked ${label}.`;
+          }
+          pendingWidgetRef.current = { type: "schedule_list", data: all, filter };
+          const label = filter === "today" ? "today" : filter === "next_week" ? "next week" : "this week";
+          return `Here's your schedule for ${label} — ${all.length} job${all.length !== 1 ? "s" : ""}:`;
+        }
+        case "get_job_full": {
+          const term = (input.customer || input.title || "").toLowerCase();
+          const { data: found } = await supabase.from("job_cards")
+            .select("*").eq("user_id", user?.id)
+            .or(`customer.ilike.%${term}%,title.ilike.%${term}%,type.ilike.%${term}%`)
+            .order("created_at", { ascending: false }).limit(1);
+          const job = found?.[0];
+          if (!job) return `No job card found for "${input.customer || input.title}".`;
+          const [notes, photos, timeLogs, materials, drawings, vos, docs] = await Promise.all([
+            supabase.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
+            supabase.from("job_photos").select("id,filename,created_at").eq("job_id", job.id),
+            supabase.from("time_logs").select("*").eq("job_id", job.id),
+            supabase.from("materials").select("*").eq("job_id", job.id),
+            supabase.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
+            supabase.from("variation_orders").select("*").eq("job_id", job.id),
+            supabase.from("compliance_docs").select("*").eq("job_id", job.id),
+          ]);
+          pendingWidgetRef.current = {
+            type: "job_full",
+            data: {
+              ...job,
+              notes: notes.data || [],
+              photos: photos.data || [],
+              timeLogs: timeLogs.data || [],
+              linkedMaterials: materials.data || [],
+              drawings: drawings.data || [],
+              vos: vos.data || [],
+              docs: docs.data || [],
+            }
+          };
+          return `Here's the full job card for ${job.customer}${job.title ? " — " + job.title : ""}:`;
+        }
+        case "start_rams": {
+          const blankRams = {
+            title: input.job_ref ? `RAMS — ${input.job_ref}` : "",
+            job_ref: input.job_ref || "", site_address: input.site_address || "",
+            client_name: "", start_date: "", end_date: "",
+            prepared_by: brand?.tradingName || brand?.ownerName || "",
+            reviewed_by: "", scope: "",
+            cdm_notifiable: false,
+            selected_hazards: [], custom_hazards: [],
+            selected_method_cats: [], selected_method_steps: [], custom_method_steps: [],
+            coshh_substances: [], custom_coshh: [],
+            first_aider: "", nearest_ae: "", muster_point: "",
+            emergency_procedure: "", welfare_location: "",
+          };
+          setRamsSession({ step: 1, form: blankRams });
+          pendingWidgetRef.current = { type: "rams_step1", data: blankRams };
+          return `Let's build your RAMS right here. I'll take you through it step by step.\n\nStep 1 of 5 — Project Details.\n\nWhat's the title for this RAMS? For example: "Gas boiler replacement — 12 High Street"`;
+        }
+        case "rams_save_step1": {
+          if (!ramsSession) return "No active RAMS session. Say 'start a RAMS' to begin.";
+          const updated = { ...ramsSession.form, ...input };
+          setRamsSession({ step: 2, form: updated });
+          const cats = Object.keys(HAZARD_LIBRARY);
+          pendingWidgetRef.current = { type: "rams_hazard_cats", data: { ...updated, categories: cats } };
+          return `Got it — "${updated.title}" at ${updated.site_address || "the site"}.\n\nStep 2 of 5 — Hazards.\n\nWhich of these categories apply to this job? Tap or tell me which ones:\n\n${cats.map((c, i) => `${i+1}. ${c}`).join("\n")}\n\nYou can say the numbers, the names, or just describe the work and I'll pick the right ones.`;
+        }
+        case "rams_save_step2": {
+          if (!ramsSession) return "No active RAMS session.";
+          // Parse which categories the user chose
+          const allCats = Object.keys(HAZARD_LIBRARY);
+          const input_lower = (input.categories || input.work_types || "").toLowerCase();
+          const chosen = allCats.filter((cat, idx) => {
+            const catLower = cat.toLowerCase();
+            if (input_lower.includes(catLower)) return true;
+            if (input_lower.includes(String(idx + 1))) return true;
+            // Loose keyword matching per category
+            if (catLower.includes("gas") && input_lower.match(/gas|boiler|heating|lpg|combustion/)) return true;
+            if (catLower.includes("electric") && input_lower.match(/electr|wiring|consumer|circuit/)) return true;
+            if (catLower.includes("plumb") && input_lower.match(/plumb|water|pipe|drain|radiator/)) return true;
+            if (catLower.includes("height") && input_lower.match(/height|roof|ladder|scaffold|mewp/)) return true;
+            if (catLower.includes("manual") && input_lower.match(/lift|carry|manual|heavy/)) return true;
+            if (catLower.includes("power tool") && input_lower.match(/tool|drill|grind|saw/)) return true;
+            if (catLower.includes("slip") && input_lower.match(/slip|trip|fall|floor/)) return true;
+            if (catLower.includes("fire") && input_lower.match(/fire|torch|weld|hot work/)) return true;
+            if (catLower.includes("confined") && input_lower.match(/confined|loft|void|underground/)) return true;
+            if (catLower.includes("site") && input_lower.match(/site|outdoor|traffic|public/)) return true;
+            return false;
+          });
+          // Always include Manual Handling and Slips if not already
+          ["Manual Handling", "Slips, Trips & Falls"].forEach(c => { if (!chosen.includes(c)) chosen.push(c); });
+          if (!chosen.length) {
+            return `I couldn't match those to any categories. Here are the options:\n${allCats.map((c,i) => `${i+1}. ${c}`).join("\n")}\n\nWhich numbers or names apply?`;
+          }
+          // Get all hazards for chosen categories
+          const hazardList = chosen.flatMap(cat => (HAZARD_LIBRARY[cat] || []).map(h => ({ ...h, category: cat })));
+          const updated = { ...ramsSession.form, _chosen_cats: chosen, _pending_hazards: hazardList };
+          setRamsSession({ step: 2.5, form: updated });
+          pendingWidgetRef.current = { type: "rams_hazard_review", data: updated };
+          const byCategory = chosen.map(cat => {
+            const hazards = HAZARD_LIBRARY[cat] || [];
+            return `${cat} (${hazards.length}):\n${hazards.map(h => `  · ${h.hazard} — ${h.risk} risk`).join("\n")}`;
+          }).join("\n\n");
+          return `Here are the hazards for your chosen categories — ${hazardList.length} total:\n\n${byCategory}\n\nAre you happy with all of these, or do you want to remove any? Also tell me if there are any additional hazards I should add. Say "confirmed" to accept them all.`;
+        }
+        case "rams_confirm_hazards": {
+          if (!ramsSession) return "No active RAMS session.";
+          const allPending = ramsSession.form._pending_hazards || [];
+          const removals = (input.remove || "").toLowerCase();
+          const additions = (input.add || "");
+          let finalHazards = allPending.filter(h => !removals.includes(h.hazard.toLowerCase().substring(0, 15)));
+          const customHazards = additions ? additions.split("\n").filter(Boolean).map(h => ({ hazard: h, risk: "Medium", control: "Assess on site", ppe: "Appropriate PPE" })) : [];
+          const selectedIds = finalHazards.map(h => h.id).filter(Boolean);
+          const updated = { ...ramsSession.form, selected_hazards: selectedIds, custom_hazards: customHazards, _work_types: ramsSession.form._chosen_cats?.join(", ") };
+          setRamsSession({ step: 3, form: updated });
+          pendingWidgetRef.current = { type: "rams_step3", data: updated };
+          const workTypes = (updated._work_types || "").toLowerCase();
+          const methodSteps = [];
+          Object.entries(METHOD_LIBRARY).forEach(([cat, steps]) => {
+            if (cat === "Site Setup") methodSteps.push(...steps.slice(0, 4));
+            if (workTypes.includes("gas") && cat === "Gas Works") methodSteps.push(...steps);
+            if (workTypes.match(/electric/) && cat === "Electrical Works") methodSteps.push(...steps);
+            if ((workTypes.includes("plumb") || workTypes.includes("water") || workTypes.includes("radiator")) && cat === "Plumbing Works") methodSteps.push(...steps);
+          });
+          if (!methodSteps.length) methodSteps.push(...(METHOD_LIBRARY["Site Setup"] || []));
+          const updatedWithMethod = { ...updated, _draft_method_steps: methodSteps };
+          setRamsSession({ step: 3, form: updatedWithMethod });
+          pendingWidgetRef.current = { type: "rams_step3", data: updatedWithMethod };
+          return `Hazards confirmed — ${selectedIds.length + customHazards.length} in total.\n\nStep 3 of 5 — Method Statement.\n\nHere are the suggested steps:\n\n${methodSteps.map((s,i) => `${i+1}. ${s}`).join("\n")}\n\nSay "confirmed" to use these, or tell me which to remove or any to add.`;
+        }
+        case "rams_save_step3": {
+          if (!ramsSession) return "No active RAMS session.";
+          const draftSteps = ramsSession.form._draft_method_steps || [];
+          const removeNums = (input.remove_numbers || "").split(/[,\s]+/).map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+          const addSteps = input.add ? input.add.split("\n").filter(Boolean) : [];
+          const finalSteps = draftSteps.filter((_, idx) => !removeNums.includes(idx + 1));
+          const updatedS3 = { ...ramsSession.form, selected_method_steps: finalSteps, custom_method_steps: addSteps };
+          setRamsSession({ step: 4, form: updatedS3 });
+          pendingWidgetRef.current = { type: "rams_step4", data: updatedS3 };
+          return `Method statement confirmed — ${finalSteps.length + addSteps.length} steps total.\n\nStep 4 of 5 — COSHH (Hazardous Substances).\n\nWill you be using any hazardous substances? For example: flux, solder, pipe jointing compound, cleaning agents, adhesives, refrigerant.\n\nSay "none" to skip.`;
+        }
+        case "rams_save_step4": {
+          if (!ramsSession) return "No active RAMS session.";
+          const subs = input.substances === "none" ? [] : (input.substances || "").split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+          const updated = { ...ramsSession.form, coshh_substances: subs };
+          setRamsSession({ step: 5, form: updated });
+          pendingWidgetRef.current = { type: "rams_step5", data: updated };
+          return `COSHH noted${subs.length ? ` — ${subs.length} substance${subs.length !== 1 ? "s" : ""}` : " — none"}.\n\nStep 5 of 5 — Welfare & Emergency.\n\nFew quick questions:\n1. Who is the first aider on site and their phone number?\n2. What is the nearest A&E hospital?\n3. Where is the emergency assembly/muster point?`;
+        }
+        case "rams_save_step5": {
+          if (!ramsSession) return "No active RAMS session.";
+          const updated = {
+            ...ramsSession.form,
+            first_aider: input.first_aider || "",
+            nearest_ae: input.nearest_ae || "",
+            muster_point: input.muster_point || "",
+            emergency_procedure: input.emergency_procedure || "In the event of an emergency, stop work immediately, evacuate to the muster point, call 999 if required, and contact the site manager.",
+            welfare_location: input.welfare_location || "",
+          };
+          // Save to Supabase
+          const payload = {
+            title: updated.title, job_ref: updated.job_ref, site_address: updated.site_address,
+            prepared_by: updated.prepared_by, date: updated.start_date || new Date().toISOString().split("T")[0],
+            scope: updated.scope, cdm_notifiable: updated.cdm_notifiable || false,
+            form_data: JSON.stringify(updated),
+          };
+          const { data, error } = await supabase.from("rams_documents").insert({ user_id: user?.id, ...payload, created_at: new Date().toISOString() }).select().single();
+          setRamsSession(null);
+          if (error) return `RAMS built but failed to save: ${error.message}`;
+          pendingWidgetRef.current = { type: "rams_complete", data: { ...updated, id: data?.id } };
+          return `RAMS complete — "${updated.title}" is saved.\n\nAll 5 steps done:\n✓ Project details\n✓ ${updated.selected_hazards.length} hazards identified\n✓ ${(updated.selected_method_steps.length + updated.custom_method_steps.length)} method steps\n✓ COSHH recorded\n✓ Emergency info set\n\nYou can view and export the full PDF from the RAMS tab.`;
+        }
         case "find_invoice": {
           const term = (input.customer || input.id || "").toLowerCase();
           const all = (invoices || []).filter(i => !i.isQuote);
@@ -4248,6 +4545,394 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           const direction = input.adjustment > 0 ? "added" : "removed";
           return `Stock updated: ${item.name} — ${Math.abs(input.adjustment)} ${item.unit || "units"} ${direction}. New quantity: ${newQty} ${item.unit || "units"}.`;
         }
+
+        case "log_expense": {
+          const amount = input.exp_type === "mileage"
+            ? (parseFloat(input.miles || 0) * 0.45)
+            : (parseFloat(input.amount) || 0);
+          const { data, error } = await supabase.from("expenses").insert({
+            user_id: user?.id,
+            exp_type: input.exp_type || "other",
+            description: input.description || "",
+            amount,
+            miles: input.exp_type === "mileage" ? parseFloat(input.miles) : null,
+            exp_date: input.exp_date || new Date().toISOString().slice(0,10),
+          }).select().single();
+          if (error) return `Failed to log expense: ${error.message}`;
+          pendingWidgetRef.current = { type: "expense_entry", data };
+          return `Expense logged: ${input.description || input.exp_type} — £${amount.toFixed(2)}`;
+        }
+        case "list_expenses": {
+          const { data } = await supabase.from("expenses").select("*").eq("user_id", user?.id).order("exp_date", { ascending: false }).limit(20);
+          if (!data?.length) return "No expenses logged yet.";
+          pendingWidgetRef.current = { type: "expense_list", data };
+          return `Here are your recent expenses:`;
+        }
+        case "log_cis_statement": {
+          const gross = parseFloat(input.gross_amount) || 0;
+          const deduction = parseFloat(input.deduction_amount) || 0;
+          const { data, error } = await supabase.from("cis_statements").insert({
+            user_id: user?.id,
+            contractor_name: input.contractor_name || "",
+            tax_month: (input.tax_month || new Date().toISOString().slice(0,7)) + "-01",
+            gross_amount: gross,
+            deduction_amount: deduction,
+            net_amount: gross - deduction,
+            notes: input.notes || "",
+          }).select().single();
+          if (error) return `Failed to log CIS statement: ${error.message}`;
+          pendingWidgetRef.current = { type: "cis_statement", data };
+          return `CIS statement logged — ${input.contractor_name}: gross £${gross.toFixed(2)}, deduction £${deduction.toFixed(2)}, net £${(gross-deduction).toFixed(2)}.`;
+        }
+        case "list_cis_statements": {
+          const { data } = await supabase.from("cis_statements").select("*").eq("user_id", user?.id).order("tax_month", { ascending: false }).limit(12);
+          if (!data?.length) return "No CIS statements logged yet.";
+          pendingWidgetRef.current = { type: "cis_list", data };
+          return `Here are your CIS statements:`;
+        }
+        case "add_subcontractor": {
+          const existing = await supabase.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          if (existing.data?.length) return `${input.name} is already in your subcontractors.`;
+          const { data, error } = await supabase.from("subcontractors").insert({
+            user_id: user?.id,
+            name: input.name, company: input.company || "", utr: input.utr || "",
+            cis_rate: parseInt(input.cis_rate) || 20, email: input.email || "", phone: input.phone || "",
+            created_at: new Date().toISOString(),
+          }).select().single();
+          if (error) return `Failed to add subcontractor: ${error.message}`;
+          pendingWidgetRef.current = { type: "subcontractor_entry", data };
+          return `${data.name} added as a subcontractor — CIS rate ${data.cis_rate}%.`;
+        }
+        case "log_subcontractor_payment": {
+          const { data: subs } = await supabase.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
+          const sub = subs?.[0];
+          if (!sub) return `Subcontractor "${input.name}" not found. Add them first.`;
+          const gross = parseFloat(input.gross) || 0;
+          const rate = (sub.cis_rate || 20) / 100;
+          const deduction = parseFloat((gross * rate).toFixed(2));
+          const net = parseFloat((gross - deduction).toFixed(2));
+          const { data, error } = await supabase.from("subcontractor_payments").insert({
+            user_id: user?.id, subcontractor_id: sub.id,
+            date: input.date || new Date().toISOString().split("T")[0],
+            gross, deduction, net, cis_rate: sub.cis_rate || 20,
+            job_ref: input.job_ref || "", description: input.description || "",
+            invoice_number: input.invoice_number || "",
+            created_at: new Date().toISOString(),
+          }).select().single();
+          if (error) return `Failed to log payment: ${error.message}`;
+          pendingWidgetRef.current = { type: "subcontractor_payment", data: { ...data, subcontractor_name: sub.name } };
+          return `Payment logged for ${sub.name} — gross £${gross.toFixed(2)}, CIS deduction £${deduction.toFixed(2)}, net £${net.toFixed(2)}.`;
+        }
+        case "list_subcontractors": {
+          const { data } = await supabase.from("subcontractors").select("*").eq("user_id", user?.id).order("name");
+          if (!data?.length) return "No subcontractors added yet. Say 'add subcontractor' to add one.";
+          pendingWidgetRef.current = { type: "subcontractor_list", data };
+          return `Here are your subcontractors:`;
+        }
+        case "add_compliance_cert": {
+          const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type").eq("user_id", user?.id).or(`customer.ilike.%${input.customer||""}%,title.ilike.%${input.job_title||""}%`).order("created_at", { ascending: false }).limit(1);
+          if (!jc?.length) return `Couldn't find a job card for "${input.customer || input.job_title}". Check the Jobs tab.`;
+          const { data, error } = await supabase.from("compliance_docs").insert({
+            job_id: jc[0].id, user_id: user?.id,
+            doc_type: input.doc_type || "", doc_number: input.doc_number || "",
+            issued_date: input.issued_date || new Date().toISOString().slice(0,10),
+            expiry_date: input.expiry_date || "", notes: input.notes || "",
+          }).select().single();
+          if (error) return `Failed to add certificate: ${error.message}`;
+          pendingWidgetRef.current = { type: "compliance_cert", data: { ...data, customer: jc[0].customer, job_title: jc[0].title || jc[0].type } };
+          return `${input.doc_type} certificate added to ${jc[0].customer}'s job card.`;
+        }
+        case "add_variation_order": {
+          const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type,value").eq("user_id", user?.id).or(`customer.ilike.%${input.customer||""}%,title.ilike.%${input.job_title||""}%`).order("created_at", { ascending: false }).limit(1);
+          if (!jc?.length) return `Couldn't find a job card for "${input.customer || input.job_title}".`;
+          const amount = parseFloat(input.amount) || 0;
+          const { data, error } = await supabase.from("variation_orders").insert({
+            job_id: jc[0].id, user_id: user?.id,
+            vo_number: input.vo_number || `VO-${Date.now().toString().slice(-4)}`,
+            description: input.description || "", amount, status: "pending",
+          }).select().single();
+          if (error) return `Failed to add variation order: ${error.message}`;
+          pendingWidgetRef.current = { type: "variation_order", data: { ...data, customer: jc[0].customer } };
+          return `Variation order added to ${jc[0].customer}'s job — ${input.description} — £${amount.toFixed(2)}.`;
+        }
+        case "log_daywork": {
+          const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type").eq("user_id", user?.id).or(`customer.ilike.%${input.customer||""}%,title.ilike.%${input.job_title||""}%`).order("created_at", { ascending: false }).limit(1);
+          if (!jc?.length) return `Couldn't find a job card for "${input.customer || input.job_title}".`;
+          const total = (parseFloat(input.hours) || 0) * (parseFloat(input.rate) || 0);
+          const { data, error } = await supabase.from("daywork_sheets").insert({
+            job_id: jc[0].id, user_id: user?.id,
+            sheet_date: input.date || new Date().toISOString().slice(0,10),
+            worker_name: input.worker_name || brand?.ownerName || "",
+            hours: parseFloat(input.hours) || 0,
+            rate: parseFloat(input.rate) || 0,
+            description: input.description || "",
+            contractor_name: input.contractor_name || "",
+          }).select().single();
+          if (error) return `Failed to log daywork: ${error.message}`;
+          pendingWidgetRef.current = { type: "daywork_sheet", data: { ...data, customer: jc[0].customer, total } };
+          return `Daywork logged for ${jc[0].customer} — ${input.hours}hrs @ £${input.rate}/hr = £${total.toFixed(2)}.`;
+        }
+        case "send_review_request": {
+          const cust = (customers||[]).find(c => c.name?.toLowerCase().includes((input.customer||"").toLowerCase()));
+          const email = input.email || cust?.email;
+          if (!email) return `No email found for ${input.customer}. Add their email first or provide it now.`;
+          const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type").eq("user_id", user?.id).ilike("customer", `%${input.customer||""}%`).order("created_at", { ascending: false }).limit(1);
+          const platforms = Object.entries(brand||{}).filter(([k,v]) => ["googleReviewUrl","trustpilotUrl","checkatradeUrl","ratedPeopleUrl","myBuilderUrl"].includes(k) && v).map(([k,v]) => ({ name: k.replace("Url","").replace(/([A-Z])/g," $1").trim(), url: v }));
+          if (!platforms.length) return `No review platform links set up. Add them in Settings → Business Details first.`;
+          const linksHtml = platforms.map(p => `<a href="${p.url}">${p.name}</a>`).join(" | ");
+          const body = `Hi ${input.customer},\n\nThank you for choosing ${brand?.tradingName||"us"} — we really appreciate your business.\n\nIf you're happy with the work, we'd be grateful if you could leave us a review:\n\n${platforms.map(p => p.url).join("\n")}\n\nMany thanks,\n${brand?.tradingName||""}`;
+          try {
+            await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject: `Review request from ${brand?.tradingName||""}`, body: body.replace(/\n/g,"<br>") }) });
+          } catch(e) {}
+          if (jc?.length) {
+            await supabase.from("review_requests").insert({ user_id: user?.id, job_id: jc[0].id, customer: input.customer, email, platforms: platforms.map(p=>p.name).join(","), sent_at: new Date().toISOString(), created_at: new Date().toISOString() });
+          }
+          pendingWidgetRef.current = { type: "review_sent", data: { customer: input.customer, email, platforms } };
+          return `Review request sent to ${input.customer} at ${email} — ${platforms.length} platform${platforms.length!==1?"s":""} included.`;
+        }
+        case "get_report": {
+          const period = input.period || "this_month";
+          const now = new Date();
+          let fromDate, toDate, label;
+          if (period === "this_month") {
+            fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            toDate = now; label = "This Month";
+          } else if (period === "last_month") {
+            fromDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
+            toDate = new Date(now.getFullYear(), now.getMonth(), 0); label = "Last Month";
+          } else if (period === "this_year") {
+            fromDate = new Date(now.getFullYear(), 0, 1);
+            toDate = now; label = "This Year";
+          } else {
+            fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            toDate = now; label = "This Month";
+          }
+          const inPeriod = d => { if (!d) return false; const dt = new Date(d); return dt >= fromDate && dt <= toDate; };
+          const periodInvoices = (invoices||[]).filter(i => !i.isQuote && inPeriod(i.created_at || i.date));
+          const paidInvoices = periodInvoices.filter(i => i.status === "paid");
+          const unpaidInvoices = periodInvoices.filter(i => i.status !== "paid");
+          const totalRevenue = paidInvoices.reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+          const outstanding = unpaidInvoices.reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+          const jobsInPeriod = (jobs||[]).filter(j => inPeriod(j.date_obj || j.dateObj));
+          const matCost = (materials||[]).filter(m => inPeriod(m.created_at)).reduce((s,m) => s + ((m.unitPrice||0)*(m.qty||1)), 0);
+          const reportData = { label, totalRevenue, outstanding, paidCount: paidInvoices.length, unpaidCount: unpaidInvoices.length, jobsCount: jobsInPeriod.length, matCost, grossProfit: totalRevenue - matCost, topCustomers: Object.entries(paidInvoices.reduce((acc,i) => { acc[i.customer]=(acc[i.customer]||0)+(parseFloat(i.amount)||0); return acc; }, {})).sort((a,b)=>b[1]-a[1]).slice(0,5) };
+          pendingWidgetRef.current = { type: "report", data: reportData };
+          return `Here's your ${label.toLowerCase()} report:`;
+        }
+        case "list_purchase_orders": {
+          const { data } = await supabase.from("purchase_orders").select("*").eq("user_id", user?.id).order("created_at", { ascending: false }).limit(20);
+          if (!data?.length) return "No purchase orders found.";
+          pendingWidgetRef.current = { type: "po_list", data };
+          return `Here are your recent purchase orders:`;
+        }
+        case "list_reminders": {
+          const { data } = await supabase.from("reminders").select("*").eq("user_id", user?.id).eq("done", false).order("fire_at", { ascending: true }).limit(20);
+          if (!data?.length) return "No active reminders.";
+          pendingWidgetRef.current = { type: "reminder_list", data };
+          return `Here are your active reminders:`;
+        }
+        case "list_enquiries": {
+          const list = (enquiries||[]).slice(0,15);
+          if (!list.length) return "No enquiries logged.";
+          pendingWidgetRef.current = { type: "enquiry_list", data: list };
+          return `Here are your enquiries:`;
+        }
+        case "list_customers": {
+          const list = (customers||[]).slice(0,20);
+          if (!list.length) return "No customers yet.";
+          pendingWidgetRef.current = { type: "customer_list", data: list };
+          return `Here are your customers:`;
+        }
+
+
+        case "list_mileage": {
+          const { data } = await supabase.from("mileage_logs").select("*").eq("user_id", user?.id).order("date", { ascending: false }).limit(20);
+          if (!data?.length) return "No mileage logs found.";
+          const total = data.reduce((s, t) => s + parseFloat(t.miles || 0), 0);
+          const value = data.reduce((s, t) => s + parseFloat(t.value || 0), 0);
+          pendingWidgetRef.current = { type: "mileage_list", data, total, value };
+          return `Here are your recent mileage logs — ${data.length} trip${data.length !== 1 ? "s" : ""}, ${total.toFixed(1)} miles total, £${value.toFixed(2)} claimable:`;
+        }
+        case "list_stock": {
+          const { data } = await supabase.from("stock_items").select("*").eq("user_id", user?.id).order("name");
+          if (!data?.length) return "No stock items found. Say \"add stock item\" to add one.";
+          pendingWidgetRef.current = { type: "stock_list", data };
+          return `Here are your stock items:`;
+        }
+        case "add_stock_item": {
+          const { data, error } = await supabase.from("stock_items").insert({
+            user_id: user?.id,
+            name: input.name, sku: input.sku || "",
+            quantity: parseFloat(input.quantity) || 0,
+            unit: input.unit || "unit",
+            reorder_level: parseFloat(input.reorder_level) || 0,
+            unit_cost: parseFloat(input.unit_cost) || 0,
+            location: input.location || "",
+            updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+          }).select().single();
+          if (error) return `Failed to add stock item: ${error.message}`;
+          pendingWidgetRef.current = { type: "stock_item_entry", data };
+          return `Stock item added: ${data.name} — ${data.quantity} ${data.unit} in stock.`;
+        }
+        case "delete_stock_item": {
+          const { data: found } = await supabase.from("stock_items").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          if (!found?.length) return `Stock item "${input.name}" not found.`;
+          await supabase.from("stock_items").delete().eq("id", found[0].id);
+          return `Stock item "${found[0].name}" deleted.`;
+        }
+        case "list_rams": {
+          const { data } = await supabase.from("rams_documents").select("id,title,site_address,prepared_by,date,created_at").eq("user_id", user?.id).order("created_at", { ascending: false }).limit(10);
+          if (!data?.length) return "No RAMS documents found. Say \"start a RAMS\" to build one.";
+          pendingWidgetRef.current = { type: "rams_list", data };
+          return `Here are your RAMS documents:`;
+        }
+        case "send_invoice": {
+          const term = (input.customer || input.invoice_id || "").toLowerCase();
+          const all = (invoices || []).filter(i => !i.isQuote);
+          const inv = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || all[0];
+          if (!inv) return `No invoice found for "${input.customer || input.invoice_id}".`;
+          const cust = (customers || []).find(c => c.name?.toLowerCase() === inv.customer?.toLowerCase());
+          const email = input.email || cust?.email || inv.email;
+          if (!email) return `No email address found for ${inv.customer}. Please provide their email.`;
+          const subject = `Invoice ${inv.id} from ${brand?.tradingName || ""}`;
+          const body = `<p>Dear ${inv.customer},</p><p>Please find your invoice ${inv.id} for £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)} attached.</p><p>Payment is due within ${inv.due || "30 days"}.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
+          try {
+            await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
+            pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount } };
+            return `Invoice ${inv.id} sent to ${inv.customer} at ${email}.`;
+          } catch(e) {
+            return `Failed to send invoice: ${e.message}`;
+          }
+        }
+        case "send_quote": {
+          const term = (input.customer || input.quote_id || "").toLowerCase();
+          const all = (invoices || []).filter(i => i.isQuote);
+          const quote = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || all[0];
+          if (!quote) return `No quote found for "${input.customer || input.quote_id}".`;
+          const cust = (customers || []).find(c => c.name?.toLowerCase() === quote.customer?.toLowerCase());
+          const email = input.email || cust?.email || quote.email;
+          if (!email) return `No email address found for ${quote.customer}. Please provide their email.`;
+          const subject = `Quote ${quote.id} from ${brand?.tradingName || ""}`;
+          const body = `<p>Dear ${quote.customer},</p><p>Thank you for your enquiry. Please find your quote ${quote.id} for £${parseFloat(quote.grossAmount || quote.amount || 0).toFixed(2)} below.</p><p>This quote is valid for 30 days. Please don't hesitate to get in touch if you have any questions.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
+          try {
+            await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
+            pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: quote.customer, invoice_id: quote.id, amount: quote.grossAmount || quote.amount, isQuote: true } };
+            return `Quote ${quote.id} sent to ${quote.customer} at ${email}.`;
+          } catch(e) {
+            return `Failed to send quote: ${e.message}`;
+          }
+        }
+        case "chase_invoice": {
+          const term = (input.customer || input.invoice_id || "").toLowerCase();
+          const all = (invoices || []).filter(i => !i.isQuote && i.status !== "paid");
+          const inv = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term));
+          if (!inv) return `No unpaid invoice found for "${input.customer || input.invoice_id}".`;
+          const cust = (customers || []).find(c => c.name?.toLowerCase() === inv.customer?.toLowerCase());
+          const email = input.email || cust?.email || inv.email;
+          if (!email) return `No email address for ${inv.customer}. Provide their email to chase.`;
+          const subject = `Payment reminder — Invoice ${inv.id}`;
+          const body = `<p>Dear ${inv.customer},</p><p>I hope you are well. I'm writing to remind you that invoice ${inv.id} for £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)} is currently outstanding.</p><p>Please arrange payment at your earliest convenience. If you have already sent payment, please disregard this message.</p><p>If you have any queries please don't hesitate to get in touch.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
+          try {
+            await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
+            pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
+            return `Payment chase sent to ${inv.customer} at ${email} for invoice ${inv.id} (£${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)}).`;
+          } catch(e) {
+            return `Failed to send chase: ${e.message}`;
+          }
+        }
+        case "create_invoice_from_job": {
+          const term = (input.customer || input.job_title || "").toLowerCase();
+          const { data: jcList } = await supabase.from("job_cards").select("*").eq("user_id", user?.id).or(`customer.ilike.%${term}%,title.ilike.%${term}%`).order("created_at", { ascending: false }).limit(1);
+          const jc = jcList?.[0];
+          if (!jc) return `Couldn't find a job card for "${input.customer || input.job_title}".`;
+          const { data: timeLogs } = await supabase.from("time_logs").select("*").eq("job_id", jc.id);
+          const { data: mats } = await supabase.from("materials").select("*").eq("job_id", jc.id);
+          const lineItems = [];
+          if (timeLogs?.length) {
+            timeLogs.forEach(t => {
+              const desc = t.labour_type === "day_rate" ? `Labour — ${t.days} days @ £${t.rate}/day` : t.labour_type === "price" ? "Labour (fixed price)" : `Labour — ${t.hours}hrs @ £${t.rate}/hr`;
+              lineItems.push({ description: desc, amount: parseFloat(t.total || (t.hours * t.rate) || 0) });
+            });
+          }
+          if (mats?.length) {
+            mats.forEach(m => lineItems.push({ description: m.item + (m.qty > 1 ? ` x${m.qty}` : ""), amount: parseFloat((m.unitPrice || 0) * (m.qty || 1)) }));
+          }
+          if (!lineItems.length) lineItems.push({ description: jc.title || jc.type || "Work carried out", amount: parseFloat(jc.value || 0) });
+          const total = lineItems.reduce((s, l) => s + l.amount, 0);
+          const invNum = "INV-" + String(((invoices || []).length + 1)).padStart(3, "0");
+          const newInv = { id: invNum, customer: jc.customer, address: jc.address || "", email: "", amount: total, grossAmount: total, status: "draft", lineItems, jobRef: String(jc.id), isQuote: false, vatEnabled: brand?.vatEnabled || false, vatRate: brand?.vatRate || 20, due: "30 days", date: new Date().toLocaleDateString("en-GB") };
+          setInvoices(prev => [newInv, ...(prev || [])]);
+          pendingWidgetRef.current = { type: "invoice", data: newInv };
+          return `Invoice ${invNum} created from ${jc.customer}'s job card — ${lineItems.length} line item${lineItems.length !== 1 ? "s" : ""}, total £${total.toFixed(2)}. Review and send when ready.`;
+        }
+        case "add_stage_payment": {
+          const term = (input.customer || input.job_title || "").toLowerCase();
+          const { data: jcList } = await supabase.from("job_cards").select("id,customer,title,type,value").eq("user_id", user?.id).or(`customer.ilike.%${term}%,title.ilike.%${term}%`).order("created_at", { ascending: false }).limit(1);
+          const jc = jcList?.[0];
+          if (!jc) return `Couldn't find a job card for "${input.customer || input.job_title}".`;
+          const stages = input.stages ? JSON.parse(input.stages) : [
+            { label: "Deposit", type: "pct", value: "30" },
+            { label: "First Fix", type: "pct", value: "40" },
+            { label: "Completion", type: "pct", value: "30" },
+          ];
+          const jobValue = parseFloat(jc.value) || 0;
+          const stagesWithAmounts = stages.map(s => ({
+            ...s,
+            amount: s.type === "pct" ? parseFloat(((jobValue * parseFloat(s.value)) / 100).toFixed(2)) : parseFloat(s.value),
+          }));
+          const { error } = await supabase.from("job_cards").update({ stage_payments: JSON.stringify(stagesWithAmounts) }).eq("id", jc.id);
+          if (error) return `Failed to save stage payments: ${error.message}`;
+          pendingWidgetRef.current = { type: "stage_payments", data: { customer: jc.customer, jobValue, stages: stagesWithAmounts } };
+          return `Stage payments set for ${jc.customer} — ${stagesWithAmounts.length} stages totalling £${stagesWithAmounts.reduce((s,st) => s + st.amount, 0).toFixed(2)}.`;
+        }
+        case "list_inbox_actions": {
+          try {
+            const res = await fetch(`/api/email/actions?userId=${user?.id}&status=pending`);
+            const data = await res.json();
+            const actions = data.actions || [];
+            if (!actions.length) return "No pending inbox actions right now.";
+            pendingWidgetRef.current = { type: "inbox_actions", data: actions };
+            return `You have ${actions.length} pending action${actions.length !== 1 ? "s" : ""} from your inbox:`;
+          } catch(e) {
+            return `Couldn't load inbox actions: ${e.message}`;
+          }
+        }
+        case "approve_inbox_action": {
+          try {
+            const res = await fetch(`/api/email/actions?userId=${user?.id}&status=pending`);
+            const data = await res.json();
+            const actions = data.actions || [];
+            const action = actions.find(a => a.id === input.action_id || (a.email_subject || "").toLowerCase().includes((input.description || "").toLowerCase()));
+            if (!action) return `Couldn't find that action. Say "show inbox actions" to see what's pending.`;
+            await fetch("/api/email/actions/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
+            return `Action approved — "${action.description || action.action_type}" from ${action.email_from || "email"}. Done.`;
+          } catch(e) {
+            return `Failed to approve: ${e.message}`;
+          }
+        }
+        case "reject_inbox_action": {
+          try {
+            await fetch("/api/email/actions/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: input.action_id }) });
+            return `Action dismissed.`;
+          } catch(e) {
+            return `Failed to reject: ${e.message}`;
+          }
+        }
+        case "generate_subcontractor_statement": {
+          const { data: subs } = await supabase.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
+          const sub = subs?.[0];
+          if (!sub) return `Subcontractor "${input.name}" not found.`;
+          const month = input.month || new Date().toISOString().slice(0,7);
+          const { data: payments } = await supabase.from("subcontractor_payments").select("*").eq("user_id", user?.id).eq("subcontractor_id", sub.id).gte("date", month + "-01").lte("date", month + "-31");
+          if (!payments?.length) return `No payments found for ${sub.name} in ${month}.`;
+          const totalGross = payments.reduce((s,p) => s + parseFloat(p.gross||0), 0);
+          const totalDed = payments.reduce((s,p) => s + parseFloat(p.deduction||0), 0);
+          const totalNet = payments.reduce((s,p) => s + parseFloat(p.net||0), 0);
+          pendingWidgetRef.current = { type: "subcontractor_statement", data: { sub, payments, month, totalGross, totalDed, totalNet } };
+          return `Here's the CIS statement for ${sub.name} — ${month}: gross £${totalGross.toFixed(2)}, deduction £${totalDed.toFixed(2)}, net £${totalNet.toFixed(2)}.`;
+        }
+
         default:
           return `Unknown action: ${name}`;
       }
@@ -4279,18 +4964,23 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- Ask follow-up questions naturally. If someone says create an invoice, ask who it is for if you do not know.\n"
   + "- Use £ not $. Keep replies short and punchy.\n"
   + "\nTOOLS YOU CAN USE:\n"
-  + "CREATE: create_job (with date/time), create_job_card (no date needed), create_invoice, create_quote, log_enquiry, set_reminder, create_material, create_customer, create_purchase_order\n"
-  + "FIND/SHOW INLINE: find_invoice, find_quote, find_job_card, list_invoices, list_jobs, list_materials\n"
+  + "CREATE: create_job (scheduled), create_job_card, create_invoice, create_quote, create_invoice_from_job, log_enquiry, set_reminder, create_material, create_customer, create_purchase_order, add_stock_item, log_expense, log_cis_statement, add_subcontractor, log_subcontractor_payment, add_compliance_cert (CP12/EICR/PAT etc), add_variation_order, log_daywork, send_review_request, add_stage_payment\n"
+  + "FIND/SHOW INLINE: find_invoice, find_quote, find_job_card, list_invoices, list_jobs, list_materials, find_material_receipt, list_schedule, get_job_full, list_expenses, list_cis_statements, list_subcontractors, list_purchase_orders, list_reminders, list_enquiries, list_customers, list_mileage, list_stock, list_rams, get_report, list_inbox_actions (show pending email actions with email snippet for review)\n"
   + "UPDATE BRAND: update_brand (use during onboarding or when user wants to update business details)\n"
   + "DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material\n"
-  + "UPDATE: mark_invoice_paid, update_job_status, update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock\n"
+  + "UPDATE: mark_invoice_paid, update_job_status, update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock, delete_stock_item\n"
   + "LOG: log_time, log_mileage, add_job_note\n"
   + "\nRules:\n"
   + "- create_job = scheduled with date+time. create_job_card = job tracking card without a date.\n"
   + "- For invoices/quotes: use line_items array — one object per item with description and amount.\n"
   + "- After tool use: confirm naturally in 1-2 sentences.\n"
   + "- For mileage: HMRC rate is 45p/mile for first 10,000 miles.\n"
-  + "- When user says show me or what are my anything — use a list_ or find_ tool, never tell them to go somewhere.";
+  + "- When user says show me or what are my anything — use a list_ or find_ tool, never tell them to go somewhere.\n""- For schedule/diary/what\'s on today or this week — use list_schedule.\n""- For full job detail including notes, photos, materials — use get_job_full.\n""- For RAMS or method statements — use start_rams, then guide through steps using rams_save_step1 through rams_save_step5.\n"
+  + "- RAMS flow: start_rams → rams_save_step1 → rams_save_step2 (categories) → rams_confirm_hazards (after user reviews) → rams_save_step3 (after user reviews method steps) → rams_save_step4 (COSHH) → rams_save_step5 (emergency/save).\n"
+  + "- After user answers each RAMS question, immediately call the matching rams_save_stepN tool.\n"
+  + "- Current RAMS session active: " + (ramsSession ? "YES - step " + ramsSession.step : "none") + "\n"
+  + "- When ramsSession is active, keep focused on completing it — guide user step by step.\n"
+  + "- EVERY feature of the app is actionable here — jobs, invoices, quotes, materials, labour, mileage, expenses, CIS, subcontractors, reminders, RAMS, stock, purchase orders, compliance certificates, variation orders, daywork, review requests, reports.\n""- For expenses say: log_expense. For CIS say: log_cis_statement. For subcontractor payments say: log_subcontractor_payment.\n""- For certificates say: add_compliance_cert. For extra work say: add_variation_order. For reports say: get_report.\n""- Never tell the user to go to a tab — do everything here and show it inline.\n""- SEND: send_invoice, send_quote, chase_invoice (overdue payment reminder email).\n""- INBOX: list_inbox_actions shows pending email actions WITH the email snippet so user can review before approving. approve_inbox_action / reject_inbox_action to action them.\n""- STOCK: add_stock_item, list_stock, update_stock, delete_stock_item.\n""- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n""- SUBCONTRACTOR STATEMENTS: generate_subcontractor_statement shows CIS statement for a month.\n""- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.";
 
 
   // Auto-trigger onboarding for new users — placed here so isNewUser and send are both defined
@@ -4367,6 +5057,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       const widget = pendingWidgetRef.current;
       pendingWidgetRef.current = null;
       setMessages(prev => [...prev, { role: "assistant", content: finalReply, widget }]);
+      speak(finalReply);
 
     } catch (e) {
       console.error("AI send error:", e);
@@ -4401,6 +5092,25 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     if (outstandingInvoices.length > 0) return `${outstandingInvoices.length} invoice${outstandingInvoices.length !== 1 ? "s" : ""} outstanding`;
     return "All clear — what do you need today?";
   })();
+
+  const homeScanRef = useRef();
+  const homeScanResult = useRef(null);
+
+  const homeScanReceipt = async (file) => {
+    if (!file || !onScanReceipt) return;
+    setMessages(prev => [...prev, { role: "user", content: "Scan this receipt" }]);
+    setLoading(true);
+    try {
+      const result = await onScanReceipt(file);
+      if (result) {
+        pendingWidgetRef.current = { type: "scan_result", data: result };
+        setMessages(prev => [...prev, { role: "assistant", content: `Got it — here's what I found on the receipt from ${result.supplier || "the supplier"}. I've added ${result.items?.length || 1} item${(result.items?.length || 1) !== 1 ? "s" : ""} to your materials. Tap below to review.`, widget: { type: "scan_result", data: result } }]);
+      }
+    } catch (e) {
+      setMessages(prev => [...prev, { role: "assistant", content: "Couldn't read that receipt — try a clearer photo or upload the PDF." }]);
+    }
+    setLoading(false);
+  };
 
   const quickActions = [
     { label: "📋  New job card", msg: "I need to create a new job card" },
@@ -4475,6 +5185,17 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
             </div>
           </div>
 
+          {/* Scan receipt - full width below quick actions */}
+          {onScanReceipt && (
+            <div>
+              <input ref={homeScanRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display: "none" }} onChange={e => { homeScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
+              <button onClick={() => homeScanRef.current?.click()}
+                style={{ width: "100%", padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.amber, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", textAlign: "center", letterSpacing: "0.03em" }}>
+                🧾  Scan Material Invoice / Receipt
+              </button>
+            </div>
+          )}
+
           <div style={{ textAlign: "center", color: C.muted, fontSize: 11, paddingBottom: 4 }}>or type below ↓</div>
         </div>
       )}
@@ -4487,6 +5208,9 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
               <button key={i} onClick={() => send(q)} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, color: C.textDim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>{q}</button>
             ))}
             <button onClick={() => setMessages([])} style={{ padding: "5px 12px", background: "none", border: `1px solid ${C.border}`, borderRadius: 20, color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", marginLeft: "auto" }}>🏠 Home</button>
+            <button onClick={() => { setTtsEnabled(e => !e); if (window.speechSynthesis) window.speechSynthesis.cancel(); }} style={{ padding: "5px 10px", background: ttsEnabled ? C.amber + "22" : "none", border: `1px solid ${ttsEnabled ? C.amber + "66" : C.border}`, borderRadius: 20, color: ttsEnabled ? C.amber : C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", flexShrink: 0 }} title={ttsEnabled ? "Tap to mute" : "Tap to hear responses"}>
+              {ttsEnabled ? "🔊" : "🔇"}
+            </button>
           </div>
 
           {lastAction && (
@@ -4616,6 +5340,575 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                         ))}
                       </div>
                     )}
+                    {m.widget.type === "scan_result" && (() => {
+                      const r = m.widget.data;
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 12, fontWeight: 700 }}>{r.supplier || "Receipt"}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                              {r.date && <span>{r.date} · </span>}
+                              {r.items?.length || 0} item{(r.items?.length || 0) !== 1 ? "s" : ""} · Total £{(r.total || 0).toFixed(2)}
+                            </div>
+                          </div>
+                          {(r.items || []).map((item, li) => (
+                            <div key={li} style={{ padding: "10px 14px", borderBottom: li < (r.items.length - 1) ? `1px solid ${C.border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: 12, color: C.text }}>{item.item}</div>
+                                {item.qty > 1 && <div style={{ fontSize: 11, color: C.muted }}>×{item.qty}</div>}
+                              </div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: C.amber }}>£{((item.unitPriceExVat || item.unitPrice || 0) * (item.qty || 1)).toFixed(2)}</div>
+                            </div>
+                          ))}
+                          {r.receiptImage && (
+                            <div style={{ padding: "10px 14px", borderTop: `1px solid ${C.border}` }}>
+                              <img src={r.receiptImage} alt="Receipt" style={{ width: "100%", borderRadius: 6 }} />
+                            </div>
+                          )}
+                          <div style={{ padding: "10px 14px", background: C.green + "11", borderTop: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 11, color: C.green, fontWeight: 600 }}>✓ Added to your materials</div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {m.widget.type === "material_receipt" && (() => {
+                      const mat = m.widget.data;
+                      const img = mat.resolvedImage;
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700 }}>{mat.item}</div>
+                              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{mat.supplier}{mat.unitPrice > 0 ? ` · £${(mat.unitPrice * mat.qty).toFixed(2)}` : ""}</div>
+                            </div>
+                            <div style={{ fontSize: 10, color: mat.status === "to_order" ? C.red : mat.status === "ordered" ? C.amber : C.green }}>{mat.status?.replace(/_/g, " ")}</div>
+                          </div>
+                          {img ? (
+                            <div>
+                              <img src={img} alt="Receipt" style={{ width: "100%", display: "block", borderRadius: "0 0 10px 10px" }} />
+                            </div>
+                          ) : mat.receiptSource === "email" ? (
+                            <div style={{ padding: "14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>
+                              📧 Invoice received via email — open your Inbox to view the original.
+                            </div>
+                          ) : (
+                            <div style={{ padding: "14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No receipt image available.</div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {m.widget.type === "schedule_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "10px 14px", borderBottom: m.widget.data.length > 0 ? `1px solid ${C.border}` : "none", fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                          Schedule — {m.widget.data.length === 0 ? "Nothing booked" : `${m.widget.data.length} job${m.widget.data.length !== 1 ? "s" : ""}`}
+                        </div>
+                        {m.widget.data.map((job, li) => (
+                          <div key={li} style={{ padding: "12px 14px", borderBottom: li < m.widget.data.length - 1 ? `1px solid ${C.border}` : "none", display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ flexShrink: 0, textAlign: "center", minWidth: 44 }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>{job.dateObj ? new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—"}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>{job.dateObj ? new Date(job.dateObj).toLocaleDateString("en-GB", { weekday: "short", day: "numeric" }) : ""}</div>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{job.customer}</div>
+                              <div style={{ fontSize: 11, color: C.muted }}>{job.type || job.title}{job.address ? " · " + job.address : ""}</div>
+                            </div>
+                            {job.value > 0 && <div style={{ fontSize: 12, fontWeight: 700, color: C.amber, flexShrink: 0 }}>£{job.value}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "job_full" && (() => {
+                      const job = m.widget.data;
+                      const expanded = expandedWidget === m.widget;
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                          {/* Header — always visible */}
+                          <div onClick={() => setExpandedWidget(expanded ? null : m.widget)} style={{ padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }}>
+                            <div>
+                              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Job Card</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginTop: 2 }}>{job.title || job.type || "Job"}</div>
+                              <div style={{ fontSize: 12, color: C.textDim, marginTop: 2 }}>{job.customer}</div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              {job.value > 0 && <div style={{ fontSize: 15, fontWeight: 700, color: C.amber }}>£{parseFloat(job.value).toLocaleString()}</div>}
+                              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{expanded ? "▲ Less" : "▼ Full details"}</div>
+                            </div>
+                          </div>
+                          {/* Expanded detail */}
+                          {expanded && (
+                            <div style={{ borderTop: `1px solid ${C.border}` }}>
+                              {job.address && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}>📍 {job.address}</div>}
+                              {job.scope_of_work && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}><span style={{ color: C.muted, fontSize: 10, display: "block", marginBottom: 4 }}>SCOPE</span>{job.scope_of_work}</div>}
+                              {job.notes && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}><span style={{ color: C.muted, fontSize: 10, display: "block", marginBottom: 4 }}>NOTES</span>{job.notes}</div>}
+                              {job.notes?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>JOB NOTES ({job.notes.length})</div>
+                                {job.notes.map((n,i) => <div key={i} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {n.note || n}</div>)}
+                              </div>}
+                              {job.timeLogs?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>LABOUR ({job.timeLogs.length} entries)</div>
+                                {job.timeLogs.map((t,i) => <div key={i} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {t.labour_type === "day_rate" ? `${t.days} days @ £${t.rate}/day` : `${t.hours}hrs @ £${t.rate}/hr`} — £{(parseFloat(t.total || 0) || (t.hours * t.rate)).toFixed(2)}</div>)}
+                              </div>}
+                              {job.linkedMaterials?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>MATERIALS ({job.linkedMaterials.length})</div>
+                                {job.linkedMaterials.map((m,i) => <div key={i} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {m.item} ×{m.qty} — {m.supplier}</div>)}
+                              </div>}
+                              {job.drawings?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>DRAWINGS ({job.drawings.length})</div>
+                                {job.drawings.map((d,i) => <div key={i} style={{ fontSize: 12, color: C.amber, paddingBottom: 4 }}>📐 {d.file_name}</div>)}
+                              </div>}
+                              {job.vos?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>VARIATION ORDERS ({job.vos.length})</div>
+                                {job.vos.map((v,i) => <div key={i} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {v.description} — £{v.amount}</div>)}
+                              </div>}
+                              {job.docs?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>CERTIFICATES ({job.docs.length})</div>
+                                {job.docs.map((d,i) => <div key={i} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>📄 {d.doc_type}{d.doc_number ? " · " + d.doc_number : ""}</div>)}
+                              </div>}
+                              <div style={{ display: "flex", gap: 8, padding: "10px 14px" }}>
+                                <button onClick={() => setView("Jobs")} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>Open in Jobs tab →</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {m.widget.type === "rams_hazard_cats" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.amber}44`, borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 10 }}>📋 RAMS — Choose hazard categories</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {(m.widget.data.categories || []).map((cat, i) => (
+                            <button key={i} onClick={() => send(`${cat}`)}
+                              style={{ padding: "8px 12px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>Tap categories or just describe the work — I'll match them up.</div>
+                      </div>
+                    )}
+                    {m.widget.type === "rams_hazard_review" && (() => {
+                      const d = m.widget.data;
+                      const bycat = (d._chosen_cats || []).map(cat => ({ cat, hazards: d._pending_hazards?.filter(h => h.category === cat) || [] }));
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.amber}44`, borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "10px 14px", background: C.amber + "18", borderBottom: `1px solid ${C.amber}33` }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: C.amber }}>📋 Hazard Review — {d._pending_hazards?.length || 0} hazards</div>
+                          </div>
+                          {bycat.map(({ cat, hazards }) => (
+                            <div key={cat} style={{ padding: "8px 14px", borderBottom: `1px solid ${C.border}` }}>
+                              <div style={{ fontSize: 10, color: C.amber, fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{cat}</div>
+                              {hazards.map((h, i) => (
+                                <div key={i} style={{ fontSize: 11, color: C.textDim, paddingBottom: 4, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                                  <span style={{ color: h.risk === "Critical" ? C.red : h.risk === "High" ? "#f97316" : C.amber, flexShrink: 0, fontSize: 9, marginTop: 2 }}>●</span>
+                                  <span>{h.hazard} <span style={{ color: C.muted }}>({h.risk})</span></span>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                          <div style={{ padding: "10px 14px", display: "flex", gap: 8 }}>
+                            <button onClick={() => send("confirmed")} style={{ ...S.btn("primary"), flex: 1, justifyContent: "center", fontSize: 12 }}>✓ Confirm all</button>
+                            <button onClick={() => send("remove ")} style={{ ...S.btn("ghost"), fontSize: 12 }}>Remove some</button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {(m.widget.type === "rams_step1" || m.widget.type === "rams_step2" || m.widget.type === "rams_step3" || m.widget.type === "rams_step4" || m.widget.type === "rams_step5") && (() => {
+                      const d = m.widget.data;
+                      const stepNum = parseInt(m.widget.type.replace("rams_step",""));
+                      const stepLabels = ["","Project Details","Hazards","Method Statement","COSHH","Welfare & Emergency"];
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.amber}44`, borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "10px 14px", background: C.amber + "18", borderBottom: `1px solid ${C.amber}33`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: C.amber }}>📋 RAMS — Step {stepNum}/5</div>
+                            <div style={{ fontSize: 10, color: C.muted }}>{stepLabels[stepNum]}</div>
+                          </div>
+                          <div style={{ padding: "10px 14px" }}>
+                            <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+                              {[1,2,3,4,5].map(s => (
+                                <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: s <= stepNum ? C.amber : C.border }} />
+                              ))}
+                            </div>
+                            {d.title && <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{d.title}</div>}
+                            {d.site_address && <div style={{ fontSize: 11, color: C.muted }}>📍 {d.site_address}</div>}
+                            {stepNum >= 2 && d.selected_hazards?.length > 0 && <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>⚠️ {d.selected_hazards.length} hazards selected</div>}
+                            {stepNum >= 3 && d.selected_method_steps?.length > 0 && <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>📝 {d.selected_method_steps.length} method steps</div>}
+                            {stepNum >= 4 && <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>🧪 COSHH: {d.coshh_substances?.length > 0 ? d.coshh_substances.join(", ") : "None"}</div>}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {m.widget.type === "rams_complete" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.green}44`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "12px 14px", background: C.green + "11", borderBottom: `1px solid ${C.green}33` }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>✓ RAMS Complete & Saved</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{m.widget.data.title}</div>
+                        </div>
+                        <div style={{ padding: "10px 14px" }}>
+                          {m.widget.data.site_address && <div style={{ fontSize: 11, color: C.textDim, marginBottom: 4 }}>📍 {m.widget.data.site_address}</div>}
+                          <div style={{ display: "flex", gap: 4, marginTop: 8 }}>
+                            {[1,2,3,4,5].map(s => <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: C.green }} />)}
+                          </div>
+                          <button onClick={() => setView("RAMS")} style={{ ...S.btn("ghost"), marginTop: 10, width: "100%", justifyContent: "center", fontSize: 12 }}>View & Export PDF in RAMS tab →</button>
+                        </div>
+                      </div>
+                    )}
+                    {m.widget.type === "expense_entry" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Expense Logged</div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{m.widget.data.description}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{m.widget.data.exp_type} · {m.widget.data.exp_date}</div>
+                          </div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: C.amber }}>£{parseFloat(m.widget.data.amount||0).toFixed(2)}</div>
+                        </div>
+                      </div>
+                    )}
+                    {m.widget.type === "expense_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Expenses ({m.widget.data.length})</div>
+                        {m.widget.data.slice(0,10).map((e,i) => (
+                          <div key={i} style={{ padding: "10px 14px", borderBottom: i < m.widget.data.length-1 ? `1px solid ${C.border}` : "none", display: "flex", justifyContent: "space-between" }}>
+                            <div><div style={{ fontSize: 12, fontWeight: 600 }}>{e.description}</div><div style={{ fontSize: 11, color: C.muted }}>{e.exp_type} · {e.exp_date}</div></div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{parseFloat(e.amount||0).toFixed(2)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "cis_statement" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>CIS Statement</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{m.widget.data.contractor_name}</div>
+                        {[["Gross",m.widget.data.gross_amount],["Deduction",m.widget.data.deduction_amount],["Net Payable",m.widget.data.net_amount]].map(([l,v],i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "4px 0", borderTop: i>0 ? `1px solid ${C.border}` : "none" }}>
+                            <span style={{ color: C.muted }}>{l}</span>
+                            <span style={{ fontWeight: i===2 ? 700 : 400, color: i===2 ? C.green : C.text }}>£{parseFloat(v||0).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "cis_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>CIS Statements ({m.widget.data.length})</div>
+                        {m.widget.data.map((s,i) => (
+                          <div key={i} style={{ padding: "10px 14px", borderBottom: i < m.widget.data.length-1 ? `1px solid ${C.border}` : "none", display: "flex", justifyContent: "space-between" }}>
+                            <div><div style={{ fontSize: 12, fontWeight: 600 }}>{s.contractor_name}</div><div style={{ fontSize: 11, color: C.muted }}>{s.tax_month?.slice(0,7)}</div></div>
+                            <div style={{ textAlign: "right" }}><div style={{ fontSize: 12, color: C.text }}>£{parseFloat(s.gross_amount||0).toFixed(2)}</div><div style={{ fontSize: 11, color: C.red }}>-£{parseFloat(s.deduction_amount||0).toFixed(2)}</div></div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(m.widget.type === "subcontractor_entry" || m.widget.type === "subcontractor_list") && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                          {m.widget.type === "subcontractor_list" ? `Subcontractors (${m.widget.data.length})` : "Subcontractor Added"}
+                        </div>
+                        {(m.widget.type === "subcontractor_list" ? m.widget.data : [m.widget.data]).map((s,i) => (
+                          <div key={i} style={{ padding: "10px 14px", borderBottom: i < (m.widget.type === "subcontractor_list" ? m.widget.data.length : 1)-1 ? `1px solid ${C.border}` : "none" }}>
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{s.name}{s.company ? ` · ${s.company}` : ""}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>CIS {s.cis_rate}%{s.utr ? ` · UTR: ${s.utr}` : ""}{s.phone ? ` · ${s.phone}` : ""}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "subcontractor_payment" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Subcontractor Payment</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{m.widget.data.subcontractor_name}</div>
+                        {[["Gross",m.widget.data.gross],["CIS Deduction",m.widget.data.deduction],["Net Payable",m.widget.data.net]].map(([l,v],i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "4px 0", borderTop: i > 0 ? `1px solid ${C.border}` : "none" }}>
+                            <span style={{ color: C.muted }}>{l}</span>
+                            <span style={{ fontWeight: i===2 ? 700 : 400, color: i===2 ? C.green : C.text }}>£{parseFloat(v||0).toFixed(2)}</span>
+                          </div>
+                        ))}
+                        {m.widget.data.job_ref && <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>📋 {m.widget.data.job_ref}</div>}
+                      </div>
+                    )}
+                    {m.widget.type === "compliance_cert" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Certificate Added</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>{m.widget.data.doc_type}</div>
+                        <div style={{ fontSize: 12, color: C.textDim, marginTop: 4 }}>{m.widget.data.customer} — {m.widget.data.job_title}</div>
+                        {m.widget.data.doc_number && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Ref: {m.widget.data.doc_number}</div>}
+                        {m.widget.data.issued_date && <div style={{ fontSize: 11, color: C.muted }}>Issued: {m.widget.data.issued_date}{m.widget.data.expiry_date ? ` · Expires: ${m.widget.data.expiry_date}` : ""}</div>}
+                      </div>
+                    )}
+                    {m.widget.type === "variation_order" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Variation Order</div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{m.widget.data.vo_number}</div>
+                            <div style={{ fontSize: 12, color: C.textDim, marginTop: 2 }}>{m.widget.data.description}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{m.widget.data.customer}</div>
+                          </div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: C.amber }}>£{parseFloat(m.widget.data.amount||0).toFixed(2)}</div>
+                        </div>
+                      </div>
+                    )}
+                    {m.widget.type === "daywork_sheet" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Daywork Sheet</div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{m.widget.data.worker_name || "Worker"} — {m.widget.data.customer}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{m.widget.data.hours}hrs @ £{m.widget.data.rate}/hr · {m.widget.data.sheet_date}</div>
+                            {m.widget.data.description && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>{m.widget.data.description}</div>}
+                          </div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: C.amber }}>£{parseFloat(m.widget.data.total||0).toFixed(2)}</div>
+                        </div>
+                      </div>
+                    )}
+                    {m.widget.type === "review_sent" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 6 }}>✓ Review Request Sent</div>
+                        <div style={{ fontSize: 12, color: C.textDim }}>{m.widget.data.customer} — {m.widget.data.email}</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Platforms: {m.widget.data.platforms?.map(p => p.name).join(", ")}</div>
+                      </div>
+                    )}
+                    {m.widget.type === "report" && (() => {
+                      const r = m.widget.data;
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between" }}>
+                            <div style={{ fontSize: 13, fontWeight: 700 }}>📊 {r.label} Report</div>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, background: C.border }}>
+                            {[
+                              { label: "Revenue", value: "£" + r.totalRevenue.toFixed(2), color: C.green },
+                              { label: "Outstanding", value: "£" + r.outstanding.toFixed(2), color: C.amber },
+                              { label: "Gross Profit", value: "£" + (r.grossProfit||0).toFixed(2), color: C.green },
+                              { label: "Material Cost", value: "£" + (r.matCost||0).toFixed(2), color: C.red },
+                            ].map((item,i) => (
+                              <div key={i} style={{ padding: "12px 14px", background: C.surfaceHigh }}>
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>{item.label}</div>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: item.color }}>{item.value}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ padding: "10px 14px", borderTop: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>INVOICES</div>
+                            <div style={{ fontSize: 12, color: C.textDim }}>{r.paidCount} paid · {r.unpaidCount} unpaid · {r.jobsCount} job{r.jobsCount !== 1 ? "s" : ""}</div>
+                          </div>
+                          {r.topCustomers?.length > 0 && (
+                            <div style={{ padding: "10px 14px", borderTop: `1px solid ${C.border}` }}>
+                              <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>TOP CUSTOMERS</div>
+                              {r.topCustomers.map(([name, val], i) => (
+                                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, paddingBottom: 3 }}>
+                                  <span style={{ color: C.textDim }}>{name}</span>
+                                  <span style={{ color: C.amber, fontWeight: 600 }}>£{val.toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}` }}>
+                            <button onClick={() => setView("Reports")} style={{ ...S.btn("ghost"), width: "100%", justifyContent: "center", fontSize: 12 }}>Full report in Reports tab →</button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {m.widget.type === "po_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Purchase Orders ({m.widget.data.length})</div>
+                        {m.widget.data.map((po,i) => (
+                          <div key={i} style={{ padding: "10px 14px", borderBottom: i < m.widget.data.length-1 ? `1px solid ${C.border}` : "none", display: "flex", justifyContent: "space-between" }}>
+                            <div><div style={{ fontSize: 12, fontWeight: 600 }}>{po.po_number} · {po.supplier}</div><div style={{ fontSize: 11, color: C.muted }}>{po.job_ref || "No job ref"}</div></div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: C.amber }}>£{parseFloat(po.total||0).toFixed(2)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "reminder_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Reminders ({m.widget.data.length})</div>
+                        {m.widget.data.map((r,i) => (
+                          <div key={i} style={{ padding: "10px 14px", borderBottom: i < m.widget.data.length-1 ? `1px solid ${C.border}` : "none" }}>
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{r.text}</div>
+                            <div style={{ fontSize: 11, color: C.amber, marginTop: 2 }}>{r.fire_at ? new Date(r.fire_at).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "enquiry_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Enquiries ({m.widget.data.length})</div>
+                        {m.widget.data.map((e,i) => (
+                          <div key={i} style={{ padding: "10px 14px", borderBottom: i < m.widget.data.length-1 ? `1px solid ${C.border}` : "none" }}>
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{e.name}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{e.phone || e.email || ""}{e.service ? ` · ${e.service}` : ""}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "customer_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Customers ({m.widget.data.length})</div>
+                        {m.widget.data.map((c,i) => (
+                          <div key={i} style={{ padding: "10px 14px", borderBottom: i < m.widget.data.length-1 ? `1px solid ${C.border}` : "none" }}>
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{c.name}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{c.phone || ""}{c.email ? (c.phone ? " · " : "") + c.email : ""}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "mileage_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Mileage ({m.widget.data.length})</div>
+                          <div style={{ fontSize: 11, color: C.amber, fontWeight: 600 }}>£{parseFloat(m.widget.value||0).toFixed(2)} claimable</div>
+                        </div>
+                        {m.widget.data.slice(0,8).map((t,i) => (
+                          <div key={i} style={{ padding: "9px 14px", borderBottom: i < Math.min(m.widget.data.length,8)-1 ? `1px solid ${C.border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 600 }}>{t.from_location || "—"} → {t.to_location || "—"}</div>
+                              <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{t.date}{t.purpose ? ` · ${t.purpose}` : ""}</div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600 }}>{parseFloat(t.miles||0).toFixed(1)} mi</div>
+                              <div style={{ fontSize: 11, color: C.amber }}>£{parseFloat(t.value||0).toFixed(2)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(m.widget.type === "stock_list" || m.widget.type === "stock_item_entry") && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                          {m.widget.type === "stock_item_entry" ? "Stock Item Added" : `Stock (${m.widget.data.length})`}
+                        </div>
+                        {(m.widget.type === "stock_item_entry" ? [m.widget.data] : m.widget.data).map((s,i) => (
+                          <div key={i} style={{ padding: "10px 14px", borderBottom: i < (m.widget.type === "stock_list" ? m.widget.data.length : 1)-1 ? `1px solid ${C.border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 600 }}>{s.name}</div>
+                              <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{s.location ? `📍 ${s.location} · ` : ""}{s.sku ? `SKU: ${s.sku} · ` : ""}Reorder at {s.reorder_level || 0}</div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: parseFloat(s.quantity||0) <= parseFloat(s.reorder_level||0) ? C.red : C.green }}>{s.quantity} {s.unit}</div>
+                              {s.unit_cost > 0 && <div style={{ fontSize: 11, color: C.muted }}>£{parseFloat(s.unit_cost||0).toFixed(2)}/{s.unit}</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "rams_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>RAMS Documents ({m.widget.data.length})</div>
+                        {m.widget.data.map((r,i) => (
+                          <div key={i} style={{ padding: "10px 14px", borderBottom: i < m.widget.data.length-1 ? `1px solid ${C.border}` : "none" }}>
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{r.title}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{r.site_address || ""}{r.date ? ` · ${r.date}` : ""}</div>
+                          </div>
+                        ))}
+                        <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}` }}>
+                          <button onClick={() => setView("RAMS")} style={{ ...S.btn("ghost"), width: "100%", justifyContent: "center", fontSize: 12 }}>Open RAMS tab to view / export →</button>
+                        </div>
+                      </div>
+                    )}
+                    {m.widget.type === "email_sent" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 6 }}>
+                          ✓ {m.widget.data.isChase ? "Chase sent" : m.widget.data.isQuote ? "Quote sent" : "Invoice sent"}
+                        </div>
+                        <div style={{ fontSize: 12, color: C.textDim }}>{m.widget.data.customer} · {m.widget.data.to}</div>
+                        {m.widget.data.invoice_id && <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{m.widget.data.invoice_id} · £{parseFloat(m.widget.data.amount||0).toFixed(2)}</div>}
+                      </div>
+                    )}
+                    {m.widget.type === "stage_payments" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}` }}>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Stage Payments — {m.widget.data.customer}</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Job value: £{parseFloat(m.widget.data.jobValue||0).toFixed(2)}</div>
+                        </div>
+                        {(m.widget.data.stages||[]).map((s,i) => (
+                          <div key={i} style={{ padding: "10px 14px", borderBottom: i < m.widget.data.stages.length-1 ? `1px solid ${C.border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 600 }}>{s.label}</div>
+                              <div style={{ fontSize: 11, color: C.muted }}>{s.type === "pct" ? s.value + "%" : "Fixed"}</div>
+                            </div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>£{parseFloat(s.amount||0).toFixed(2)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "inbox_actions" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                          Inbox Actions ({m.widget.data.length} pending)
+                        </div>
+                        {m.widget.data.map((action, i) => {
+                          const d = typeof action.action_data === "string" ? JSON.parse(action.action_data || "{}") : (action.action_data || {});
+                          return (
+                            <div key={i} style={{ borderBottom: i < m.widget.data.length-1 ? `1px solid ${C.border}` : "none" }}>
+                              <div style={{ padding: "12px 14px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 11, color: C.amber, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>
+                                      {(action.action_type || "").replace(/_/g, " ")}
+                                    </div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{action.description || action.email_subject}</div>
+                                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>From: {action.email_from}</div>
+                                  </div>
+                                </div>
+                                {action.email_snippet && (
+                                  <div style={{ fontSize: 11, color: C.textDim, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: "8px 10px", marginBottom: 8, fontStyle: "italic", lineHeight: 1.5 }}>
+                                    "{action.email_snippet?.slice(0, 200)}{action.email_snippet?.length > 200 ? "..." : ""}"
+                                  </div>
+                                )}
+                                {Object.keys(d).length > 0 && (
+                                  <div style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>
+                                    {d.customer && <span style={{ marginRight: 8 }}>👤 {d.customer}</span>}
+                                    {d.amount && <span style={{ marginRight: 8 }}>£{d.amount}</span>}
+                                    {d.supplier && <span style={{ marginRight: 8 }}>🏪 {d.supplier}</span>}
+                                    {d.type && <span>{d.type}</span>}
+                                  </div>
+                                )}
+                                <div style={{ display: "flex", gap: 8 }}>
+                                  <button onClick={() => send("approve inbox action " + action.id)}
+                                    style={{ ...S.btn("primary"), flex: 1, justifyContent: "center", fontSize: 11, padding: "7px 12px" }}>
+                                    ✓ Approve
+                                  </button>
+                                  <button onClick={() => send("reject inbox action " + action.id)}
+                                    style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 11, padding: "7px 12px", color: C.red, borderColor: C.red + "44" }}>
+                                    ✗ Dismiss
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {m.widget.type === "subcontractor_statement" && (() => {
+                      const { sub, payments, month, totalGross, totalDed, totalNet } = m.widget.data;
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 12, fontWeight: 700 }}>CIS Statement — {sub.name}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{month} · CIS {sub.cis_rate}%</div>
+                          </div>
+                          {payments.map((p,i) => (
+                            <div key={i} style={{ padding: "9px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                              <div><div style={{ fontWeight: 600 }}>{p.description || p.job_ref || "Payment"}</div><div style={{ fontSize: 11, color: C.muted }}>{p.date}</div></div>
+                              <div style={{ textAlign: "right" }}>
+                                <div>£{parseFloat(p.gross||0).toFixed(2)}</div>
+                                <div style={{ fontSize: 11, color: C.red }}>-£{parseFloat(p.deduction||0).toFixed(2)}</div>
+                              </div>
+                            </div>
+                          ))}
+                          <div style={{ padding: "12px 14px" }}>
+                            {[["Total Gross", totalGross], ["CIS Deduction", totalDed], ["Net Payable", totalNet]].map(([l,v],i) => (
+                              <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "4px 0", borderTop: i > 0 ? `1px solid ${C.border}` : "none" }}>
+                                <span style={{ color: C.muted }}>{l}</span>
+                                <span style={{ fontWeight: i === 2 ? 700 : 400, color: i === 2 ? C.green : C.text }}>£{parseFloat(v||0).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}` }}>
+                            <button onClick={() => setView("Subcontractors")} style={{ ...S.btn("ghost"), width: "100%", justifyContent: "center", fontSize: 12 }}>Export PDF in Subcontractors tab →</button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -14149,7 +15442,32 @@ export default function App() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
-        {view === "AI Assistant" && <AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => setPdfHtml(buildInvoiceHtml(brand, inv))} />}
+        {view === "AI Assistant" && <AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => setPdfHtml(buildInvoiceHtml(brand, inv))} onScanReceipt={async (file) => {
+          // Shared receipt scanner — same logic as Materials tab
+          if (!file) return null;
+          const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+          const { base64, dataUrl } = await new Promise((res, rej) => { const r = new FileReader(); r.onload = e => { const f = e.target.result; res({ base64: f.split(",")[1], dataUrl: f }); }; r.onerror = rej; r.readAsDataURL(file); });
+          const fileContent = isPdf
+            ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+            : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
+          const resp = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role: "user", content: [fileContent, { type: "text", text: "You are reading a UK supplier receipt. Return ONLY valid JSON: {\"supplier\":\"name\",\"date\":\"YYYY-MM-DD\",\"total\":0,\"vatAmount\":0,\"vatRate\":20,\"pricesIncVat\":false,\"items\":[{\"item\":\"name\",\"qty\":1,\"unitPrice\":0,\"unitPriceExVat\":0}]}" }] }] }) });
+          const data = await resp.json();
+          const text = data.content?.[0]?.text || "";
+          const match = text.match(/\{[\s\S]*\}/);
+          if (!match) throw new Error("Could not parse receipt");
+          const parsed = JSON.parse(match[0]);
+          // Save to materials automatically
+          const receiptId = "rcpt_" + Date.now();
+          try { localStorage.setItem("trade-pa-receipt-" + receiptId, dataUrl); } catch {}
+          const newMats = (parsed.items || []).map(item => {
+            const vatRate = parseInt(parsed.vatRate || 0);
+            const vatEnabled = vatRate > 0;
+            const exVat = item.unitPriceExVat || (parsed.pricesIncVat && vatEnabled ? parseFloat((item.unitPrice / (1 + vatRate / 100)).toFixed(4)) : item.unitPrice) || 0;
+            return { item: item.item, qty: item.qty || 1, unitPrice: parseFloat(exVat.toFixed(2)), supplier: parsed.supplier || "", status: "ordered", vatEnabled, vatRate: vatEnabled ? vatRate : null, dueDate: parsed.date || "", receiptId, receiptImage: dataUrl };
+          });
+          setMaterials(prev => [...(prev || []), ...newMats]);
+          return { ...parsed, receiptId, receiptImage: dataUrl };
+        }} />
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
