@@ -2183,6 +2183,47 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         <CallTrackingSettings user={user} />
       </div>
 
+      {/* Evening Briefing */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>📋 Evening Schedule Briefing</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+          Get a text message each evening with your schedule for the next day — so you're always prepared. Sends even when nothing is booked, so you always know the app is working.
+        </div>
+
+        {/* Toggle */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: C.surfaceHigh, borderRadius: 8, marginBottom: 12, cursor: "pointer" }}
+          onClick={() => setBrand(b => ({ ...b, eveningBriefing: !b.eveningBriefing }))}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Send evening briefing</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+              SMS to {brand.phone || "your phone number"}{!brand.phone && <span style={{ color: C.amber }}> — set your phone number above first</span>}
+            </div>
+          </div>
+          <div style={{ width: 44, height: 24, borderRadius: 12, background: brand.eveningBriefing ? C.amber : C.border, position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+            <div style={{ position: "absolute", top: 2, left: brand.eveningBriefing ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px #0004" }} />
+          </div>
+        </div>
+
+        {/* Time picker — only shown when enabled */}
+        {brand.eveningBriefing && (
+          <div>
+            <label style={S.label}>Send time</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="time"
+                style={{ ...S.input, maxWidth: 140 }}
+                value={brand.eveningBriefingTime || "18:00"}
+                onChange={e => setBrand(b => ({ ...b, eveningBriefingTime: e.target.value }))}
+              />
+              <div style={{ fontSize: 11, color: C.muted }}>UK time · default 6:00 PM</div>
+            </div>
+            <div style={{ marginTop: 12, padding: "10px 14px", background: C.green + "11", border: `1px solid ${C.green}33`, borderRadius: 8, fontSize: 11, color: C.green, lineHeight: 1.6 }}>
+              ✓ Briefing active — you'll receive a text each evening at {brand.eveningBriefingTime || "18:00"} with tomorrow's schedule.
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Team Management */}
       <div style={S.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -3458,20 +3499,32 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user, refreshJobs }) {
-  const [messages, setMessages] = useState([{ role: "assistant", content: `Hi! I'm your Trade PA assistant for ${brand.tradingName || "your business"}.\n\nI can handle everything in the app. Try:\n• "Book in John Smith, boiler service, Friday 10am, £120"\n• "Quote Sarah Chen £450 for new bathroom"\n• "Invoice Kevin Nash £85 for leak repair"\n• "Mark the invoice for Kevin as paid"\n• "Convert Sarah's quote to an invoice"\n• "Confirm the boiler service for John"\n• "Mark copper pipe as ordered"\n• "Delete the enquiry from Dave"\n• "Save Emma Taylor, 07700 900123, emma@email.com"\n\nOr tap 🎙 and speak naturally.` }]);
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user, refreshJobs, onShowPdf }) {
+  const [messages, setMessages] = useState([]);
+  const [hasGreeted, setHasGreeted] = useState(false);
+  const pendingWidgetRef = React.useRef(null);
 
   const quick = [
-    "Mark the invoice for John Smith as paid",
-    "Convert Sarah Chen's quote to an invoice",
-    "Mark copper pipe as ordered",
-    "Confirm the boiler service for Dave",
+    "What's on today?",
+    "Any overdue invoices?",
+    "Log time on a job",
+    "Create a new job card",
   ];
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState(null);
   const bottomRef = useRef(null);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  // Auto-trigger onboarding for new users
+  useEffect(() => {
+    if (isNewUser && messages.length === 0 && !loading) {
+      const timer = setTimeout(() => {
+        send("__onboarding_start__");
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isNewUser]);
 
   const { recording, transcribing, toggle } = useWhisper((text) => {
     if (text) setInput(text);
@@ -3806,6 +3859,53 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         required: ["name", "adjustment"],
       },
     },
+    {
+      name: "find_invoice",
+      description: "Find and display an existing invoice inline. Use when user asks to see, show, or view an invoice for a customer.",
+      input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, id: { type: "string", description: "Invoice ID e.g. INV-042" } } },
+    },
+    {
+      name: "find_quote",
+      description: "Find and display an existing quote inline. Use when user asks to see, show, or view a quote for a customer.",
+      input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, id: { type: "string", description: "Quote ID e.g. QTE-001" } } },
+    },
+    {
+      name: "find_job_card",
+      description: "Find and display an existing job card inline. Use when user asks to see, show, or view a job card for a customer.",
+      input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, title: { type: "string", description: "Job title or type" } } },
+    },
+    {
+      name: "list_invoices",
+      description: "Show a list of invoices inline — use for 'show my invoices', 'any unpaid invoices', 'overdue invoices' etc.",
+      input_schema: { type: "object", properties: { filter: { type: "string", enum: ["all", "unpaid", "overdue", "paid"], description: "Which invoices to show" } } },
+    },
+    {
+      name: "list_jobs",
+      description: "Show a list of job cards inline — use for 'show my jobs', 'what jobs are active', 'what have I got on' etc.",
+      input_schema: { type: "object", properties: { filter: { type: "string", enum: ["all", "active", "completed", "in_progress"], description: "Which jobs to show" } } },
+    },
+    {
+      name: "list_materials",
+      description: "Show a list of materials inline — use for 'show my materials', 'what do I need to order' etc.",
+      input_schema: { type: "object", properties: { filter: { type: "string", enum: ["all", "to_order", "ordered", "collected"], description: "Which materials to show" } } },
+    },
+    {
+      name: "update_brand",
+      description: "Save or update the user's business settings. Use during onboarding to save name, trade, phone, address, VAT status etc.",
+      input_schema: {
+        type: "object",
+        properties: {
+          tradingName: { type: "string", description: "Business/trading name" },
+          ownerName: { type: "string", description: "Owner's first name" },
+          phone: { type: "string", description: "Phone number" },
+          email: { type: "string", description: "Email address" },
+          address: { type: "string", description: "Business address" },
+          tradeType: { type: "string", description: "What trade they do e.g. plumber, electrician, builder" },
+          vatNumber: { type: "string", description: "VAT number if registered" },
+          vatEnabled: { type: "boolean", description: "Whether they are VAT registered" },
+        },
+      },
+    },
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
@@ -3858,6 +3958,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           setInvoices(prev => [inv, ...(prev || [])]);
           syncInvoiceToAccounting(user?.id, inv);
           setLastAction({ type: "invoice", label: `${id} — £${totalAmount} — ${input.customer}`, view: "Invoices" });
+          pendingWidgetRef.current = { type: "invoice", data: inv };
           return `Invoice ${id} created for ${input.customer} — £${totalAmount} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
         }
         case "create_quote": {
@@ -3876,6 +3977,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           };
           setInvoices(prev => [quote, ...(prev || [])]);
           setLastAction({ type: "invoice", label: `${id} — £${totalAmount} — ${input.customer}`, view: "Quotes" });
+          pendingWidgetRef.current = { type: "quote", data: quote };
           return `Quote ${id} created for ${input.customer} — £${totalAmount} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
         }
         case "log_enquiry": {
@@ -3893,7 +3995,7 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
         case "create_material": {
           const mat = { item: input.item, qty: input.qty || 1, supplier: input.supplier || "", job: input.job || "", status: "to_order" };
           setMaterials(prev => [...(prev || []), mat]);
-          setTimeout(() => setView("Materials"), 300);
+          setTimeout(() => {}, 0); // no navigation — shows inline
           setLastAction({ type: "material", label: `${input.item} x${input.qty || 1}`, view: "Materials" });
           return `Material added: ${input.item} x${input.qty || 1}${input.supplier ? ` from ${input.supplier}` : ""}${input.job ? ` for ${input.job}` : ""}.`;
         }
@@ -3995,9 +4097,86 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           const { data: jobCard, error: jcErr } = await supabase.from("job_cards").insert(payload).select().single();
           if (jcErr) return `Failed to create job card: ${jcErr.message}`;
           if (refreshJobs) refreshJobs();
-          setTimeout(() => setView("Jobs"), 300);
           setLastAction({ type: "job_card", label: `${input.title || input.customer}`, view: "Jobs" });
-          return `Job card created for ${input.customer}${input.title ? ` — ${input.title}` : ""}${input.value ? ` (£${input.value})` : ""}. Go to the Jobs tab to see it.`;
+          pendingWidgetRef.current = { type: "job_card", data: { ...payload, id: jobCard?.id } };
+          return `Job card created for ${input.customer}${input.title ? ` — ${input.title}` : ""}${input.value ? ` (£${input.value})` : ""}.`;
+        }
+        case "update_brand": {
+          const updates = {};
+          if (input.tradingName) updates.tradingName = input.tradingName;
+          if (input.ownerName) updates.ownerName = input.ownerName;
+          if (input.phone) updates.phone = input.phone;
+          if (input.email) updates.email = input.email;
+          if (input.address) updates.address = input.address;
+          if (input.tradeType) updates.tradeType = input.tradeType;
+          if (input.vatNumber) updates.vatNumber = input.vatNumber;
+          if (typeof input.vatEnabled === "boolean") updates.vatEnabled = input.vatEnabled;
+          setBrand(b => ({ ...b, ...updates }));
+          return `Business details saved: ${Object.keys(updates).join(", ")}.`;
+        }
+        case "list_invoices": {
+          const filter = input.filter || "all";
+          let list = (invoices || []).filter(i => !i.isQuote);
+          if (filter === "unpaid") list = list.filter(i => i.status !== "paid");
+          if (filter === "overdue") list = list.filter(i => i.status === "overdue");
+          if (filter === "paid") list = list.filter(i => i.status === "paid");
+          if (!list.length) return `No ${filter === "all" ? "" : filter + " "}invoices found.`;
+          pendingWidgetRef.current = { type: "invoice_list", data: list.slice(0, 10) };
+          return `Here are your ${filter === "all" ? "" : filter + " "}invoices:`;
+        }
+        case "list_jobs": {
+          const filter = input.filter || "all";
+          const { data: jobList } = await supabase.from("job_cards").select("*").eq("user_id", user?.id).order("created_at", { ascending: false }).limit(20);
+          let list = jobList || [];
+          if (filter === "active") list = list.filter(j => j.status !== "completed");
+          if (filter === "completed") list = list.filter(j => j.status === "completed");
+          if (filter === "in_progress") list = list.filter(j => j.status === "in_progress");
+          if (!list.length) return `No ${filter === "all" ? "" : filter + " "}jobs found.`;
+          pendingWidgetRef.current = { type: "job_list", data: list.slice(0, 10) };
+          return `Here are your ${filter === "all" ? "" : filter + " "}jobs:`;
+        }
+        case "list_materials": {
+          const filter = input.filter || "all";
+          let list = materials || [];
+          if (filter === "to_order") list = list.filter(m => m.status === "to_order");
+          if (filter === "ordered") list = list.filter(m => m.status === "ordered");
+          if (filter === "collected") list = list.filter(m => m.status === "collected");
+          if (!list.length) return `No ${filter === "all" ? "" : filter + " "}materials found.`;
+          pendingWidgetRef.current = { type: "material_list", data: list.slice(0, 15) };
+          return `Here are your ${filter === "all" ? "" : filter + " "}materials:`;
+        }
+        case "find_invoice": {
+          const term = (input.customer || input.id || "").toLowerCase();
+          const all = (invoices || []).filter(i => !i.isQuote);
+          const match = all.find(i =>
+            (i.id || "").toLowerCase().includes(term) ||
+            (i.customer || "").toLowerCase().includes(term)
+          ) || all[0];
+          if (!match) return `No invoice found for "${input.customer || input.id}".`;
+          pendingWidgetRef.current = { type: "invoice", data: match };
+          return `Here's the invoice for ${match.customer}:`;
+        }
+        case "find_quote": {
+          const term = (input.customer || input.id || "").toLowerCase();
+          const all = (invoices || []).filter(i => i.isQuote);
+          const match = all.find(i =>
+            (i.id || "").toLowerCase().includes(term) ||
+            (i.customer || "").toLowerCase().includes(term)
+          ) || all[0];
+          if (!match) return `No quote found for "${input.customer || input.id}".`;
+          pendingWidgetRef.current = { type: "quote", data: match };
+          return `Here's the quote for ${match.customer}:`;
+        }
+        case "find_job_card": {
+          const term = (input.customer || input.title || "").toLowerCase();
+          const { data: found } = await supabase.from("job_cards")
+            .select("*").eq("user_id", user?.id)
+            .or(`customer.ilike.%${term}%,title.ilike.%${term}%`)
+            .order("created_at", { ascending: false }).limit(1);
+          const match = found?.[0];
+          if (!match) return `No job card found for "${input.customer || input.title}".`;
+          pendingWidgetRef.current = { type: "job_card", data: match };
+          return `Here's the job card for ${match.customer}:`;
         }
         case "assign_material_to_job": {
           const matIdx = (materials || []).findIndex(m => m.item?.toLowerCase().includes(input.item.toLowerCase()));
@@ -4027,7 +4206,6 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           else if (type === "day_rate") { hours = parseFloat(input.days || 0) * 8; total = parseFloat(input.days || 0) * parseFloat(input.rate || 0); }
           else { total = parseFloat(input.total || 0); }
           await supabase.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, log_date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
-          setTimeout(() => setView("Jobs"), 300);
           setLastAction({ type: "job", label: `Time logged — ${input.customer}`, view: "Jobs" });
           const label = type === "hourly" ? `${input.hours}hrs @ £${input.rate}/hr` : type === "day_rate" ? `${input.days} days @ £${input.rate}/day` : `Price work £${input.total}`;
           return `Labour logged for ${input.customer}: ${label} = £${total.toFixed(2)}.`;
@@ -4038,7 +4216,6 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           // Calculate HMRC value (simplified — 45p/mile)
           const value = parseFloat((miles * 0.45).toFixed(2));
           await supabase.from("mileage_logs").insert({ user_id: user?.id, date: input.date || today, from_location: input.from_location || "", to_location: input.to_location || "", miles, purpose: input.purpose || "", rate: 0.45, value, created_at: new Date().toISOString() });
-          setTimeout(() => setView("Mileage"), 300);
           setLastAction({ type: "mileage", label: `${miles} miles logged`, view: "Mileage" });
           return `Mileage logged: ${miles} miles${input.from_location ? ` from ${input.from_location}` : ""}${input.to_location ? ` to ${input.to_location}` : ""} — £${value} claimable.`;
         }
@@ -4047,7 +4224,6 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
           if (!noteJobs?.length) return `Couldn't find a job for "${input.customer}". Check the Jobs tab.`;
           const noteJob = noteJobs[0];
           await supabase.from("job_notes").insert({ job_id: noteJob.id, user_id: user?.id, note: input.note, created_at: new Date().toISOString() });
-          setTimeout(() => setView("Jobs"), 300);
           setLastAction({ type: "job", label: `Note added — ${input.customer}`, view: "Jobs" });
           return `Note added to ${input.customer}'s job: "${input.note.slice(0, 60)}${input.note.length > 60 ? "..." : ""}"`;
         }
@@ -4070,7 +4246,6 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
             }));
             setMaterials(prev => [...(prev || []), ...newMats]);
           }
-          setTimeout(() => setView("Purchase Orders"), 300);
           setLastAction({ type: "po", label: `${poNum} — ${input.supplier}`, view: "Purchase Orders" });
           return `Purchase order ${poNum} created for ${input.supplier}${input.job_ref ? ` (job: ${input.job_ref})` : ""}${total > 0 ? ` — total £${total.toFixed(2)}` : ""}. ${poItems.length} item${poItems.length !== 1 ? "s" : ""} also added to Materials.`;
         }
@@ -4092,43 +4267,51 @@ function AIAssistant({ brand, jobs, setJobs, invoices, setInvoices, enquiries, s
     }
   };
 
-  const SYSTEM = `You are a smart admin assistant for ${brand.tradingName}, a UK sole trader trades business. Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.
+  const isNewUser = !brand.tradingName || brand.tradingName === "" || brand.tradingName === "Your Business";
 
-Current data you can act on:
-- Jobs: ${jobs.length === 0 ? "none" : jobs.map(j => `${j.customer} (${j.type}, ${j.status})`).join(", ")}
-- Invoices: ${invoices.filter(i => !i.isQuote).length === 0 ? "none" : invoices.filter(i => !i.isQuote).map(i => `${i.id} ${i.customer} £${i.amount} (${i.status})`).join(", ")}
-- Quotes: ${invoices.filter(i => i.isQuote).length === 0 ? "none" : invoices.filter(i => i.isQuote).map(i => `${i.id} ${i.customer} £${i.amount} (${i.status})`).join(", ")}
-- Enquiries: ${enquiries.length === 0 ? "none" : enquiries.map(e => e.name).join(", ")}
-- Materials: ${materials.length === 0 ? "none" : materials.map(m => `${m.item} x${m.qty} (${m.status})${m.job ? ` [job: ${m.job}]` : ""}`).join(", ")}
-- Customers: ${customers.length === 0 ? "none" : customers.map(c => `${c.name}${c.phone ? ` (${c.phone})` : ""}${c.email ? ` <${c.email}>` : ""}`).join(", ")}
+  const SYSTEM = `You are Trade PA — a personal assistant for a UK sole trader tradesperson. You speak naturally and conversationally, like a smart human PA would. Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.
 
-You can perform ALL of the following actions — always use a tool, never just describe what you'd do:
+${isNewUser ? `ONBOARDING MODE: This is a new user who hasn't set up their business yet. Your FIRST job is to welcome them warmly and learn about their business through natural conversation. Ask ONE question at a time. Collect: their name, business/trading name, what trade they do, phone number, whether they're VAT registered, and their address. After collecting these, use the update_brand tool to save everything. Be warm and human — like meeting someone for the first time. Example opening: "Hi! I'm Trade PA, your new business assistant. I'm going to make running your business a lot easier. First things first — what's your name?"` : `You're assisting ${brand.tradingName}. Be warm, concise, and proactive — like a PA who knows the business well.`}
 
-CREATE: create_job (scheduled with date/time), create_job_card (job tracking without date), create_invoice, create_quote, log_enquiry, set_reminder, create_material, create_customer, create_purchase_order
+Current business data:
+- Jobs: ${(jobs||[]).length === 0 ? "none" : (jobs||[]).map(j => `${j.customer} (${j.type||j.title}, ${j.status})`).join(", ")}
+- Invoices: ${(invoices||[]).filter(i=>!i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>!i.isQuote).map(i=>`${i.id} ${i.customer} £${i.amount} (${i.status})`).join(", ")}
+- Quotes: ${(invoices||[]).filter(i=>i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>i.isQuote).map(i=>`${i.id} ${i.customer} £${i.amount} (${i.status})`).join(", ")}
+- Materials: ${(materials||[]).length === 0 ? "none" : (materials||[]).map(m=>`${m.item} x${m.qty} (${m.status})`).join(", ")}
+- Customers: ${(customers||[]).length === 0 ? "none" : (customers||[]).map(c=>c.name).join(", ")}
+- Enquiries: ${(enquiries||[]).length === 0 ? "none" : (enquiries||[]).map(e=>e.name).join(", ")}
+
+IMPORTANT — HOW TO RESPOND:
+- NEVER tell the user to "go to the Jobs tab" or "check the Invoices section" or navigate anywhere. Everything is shown HERE.
+- When asked to show/find something, ALWAYS use the appropriate find_ or list_ tool so it appears inline.
+- When you create something (invoice, job, quote), it automatically shows inline — no need to send the user elsewhere.
+- Be conversational: "Done! Here's the invoice I just created for Trevor:" not "Invoice INV-042 created successfully."
+- Ask follow-up questions naturally. If someone says "create an invoice", ask who it's for if you don't know.
+- Use £ not $. Keep replies short and punchy.
+
+TOOLS YOU CAN USE:
+CREATE: create_job (with date/time), create_job_card (no date needed), create_invoice, create_quote, log_enquiry, set_reminder, create_material, create_customer, create_purchase_order
+FIND/SHOW INLINE: find_invoice, find_quote, find_job_card, list_invoices, list_jobs, list_materials
+UPDATE BRAND: update_brand (use during onboarding or when user wants to update business details)
 DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material
 UPDATE: mark_invoice_paid, update_job_status, update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock
-LOG: log_time (hourly/day rate/price work), log_mileage, add_job_note
+LOG: log_time, log_mileage, add_job_note
 
-Key rules:
-- For jobs: if no year given assume ${new Date().getFullYear()}. Calculate actual dates from "Friday", "next Monday" etc.
-- For reminders: calculate minutes_from_now from the time mentioned.
-- For updates/deletes: match by name or ID. If no match, say so clearly.
-- After every tool use: confirm in 1-2 sentences what you did. Use £ not $. Be concise.
-- For invoices/quotes: ALWAYS use the line_items array — one object per item with description and amount.
-- For labour: ask if hourly, day rate, or price work if not clear. Day rate is common for builders/subbies.
-- create_job = calendar/schedule job with specific date+time. create_job_card = job card for tracking profitability without needing a date.
-- When user says "add a job for X" or "create a job for X" without a date, use create_job_card.
-- When a PO is created, items automatically appear in Materials tab too.
-- For materials assigned to jobs: use assign_material_to_job — this links the cost to the job profitability.
-- For mileage: 45p/mile for first 10,000 miles per tax year (HMRC rate).
-- When user mentions travelling to a job, offer to log mileage.`;
+Rules:
+- create_job = scheduled with date+time. create_job_card = job tracking card without a date.
+- For invoices/quotes: use line_items array — one object per item {description, amount}.
+- After tool use: confirm naturally in 1-2 sentences. 
+- For mileage: HMRC rate is 45p/mile for first 10,000 miles.
+- When user says "show me" or "what are my" anything — use a list_ or find_ tool, never tell them to go somewhere.`;
 
 
   const send = async (text) => {
     if (!text.trim() || loading) return;
-    const userMsg = { role: "user", content: text };
-    const updated = [...messages, userMsg];
-    setMessages(updated);
+    const isOnboardingTrigger = text === "__onboarding_start__";
+    const userMsg = { role: "user", content: isOnboardingTrigger ? "Hello" : text };
+    const updated = isOnboardingTrigger ? [userMsg] : [...messages, userMsg];
+    if (!isOnboardingTrigger) setMessages(updated);
+    else setMessages([]);
     setInput("");
     setLoading(true);
     setLastAction(null);
@@ -4183,7 +4366,9 @@ Key rules:
       }
 
       const finalReply = replyText || toolResults.join("\n") || "Done.";
-      setMessages(prev => [...prev, { role: "assistant", content: finalReply }]);
+      const widget = pendingWidgetRef.current;
+      pendingWidgetRef.current = null;
+      setMessages(prev => [...prev, { role: "assistant", content: finalReply, widget }]);
 
     } catch (e) {
       console.error("AI send error:", e);
@@ -4194,62 +4379,281 @@ Key rules:
 
   const micLabel = transcribing ? "⏳ Transcribing..." : recording ? "⏹ Tap to stop" : "🎙 Voice note";
 
-  const actionIcons = { job: "📅", invoice: "💰", enquiry: "📩", reminder: "🔔", material: "🔧" };
+  const actionIcons = { job: "📅", invoice: "💰", enquiry: "📩", reminder: "🔔", material: "🔧", job_card: "📋", mileage: "🚗", po: "📦" };
+
+  // ── Home screen context ───────────────────────────────────────────────────
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const firstName = (brand.tradingName || "").split(" ")[0] || "there";
+  const today = new Date().toDateString();
+  const todayJobs = (jobs || []).filter(j => {
+    const d = j.date || j.scheduled_date || j.created_at;
+    return d && new Date(d).toDateString() === today;
+  });
+  const inProgressJobs = (jobs || []).filter(j => j.status === "in_progress");
+  const safeInvoices = (invoices || []).filter(i => !i.isQuote);
+  const outstandingInvoices = safeInvoices.filter(i => i.status !== "paid");
+  const overdueInvoices = safeInvoices.filter(i => i.status === "overdue");
+  const outstandingTotal = outstandingInvoices.reduce((s, i) => s + (parseFloat(i.grossAmount || i.amount) || 0), 0);
+  const activeJobCount = inProgressJobs.length || todayJobs.length;
+
+  const homeBriefing = (() => {
+    if (overdueInvoices.length > 0) return `${overdueInvoices.length} overdue invoice${overdueInvoices.length !== 1 ? "s" : ""} need attention`;
+    if (activeJobCount > 0) return `${activeJobCount} job${activeJobCount !== 1 ? "s" : ""} active today`;
+    if (outstandingInvoices.length > 0) return `${outstandingInvoices.length} invoice${outstandingInvoices.length !== 1 ? "s" : ""} outstanding`;
+    return "All clear — what do you need today?";
+  })();
+
+  const quickActions = [
+    { label: "📋  New job card", msg: "I need to create a new job card" },
+    { label: "💷  Create invoice", msg: "Create a new invoice" },
+    { label: "⏱  Log labour", msg: "I need to log labour on a job" },
+    { label: "🔧  Add materials", msg: "Add materials to a job" },
+    { label: "🚗  Log mileage", msg: "Log mileage for a trip" },
+    { label: "📊  How am I doing?", msg: "Give me a summary of how the business is doing" },
+  ];
+
+  const isHome = messages.length === 0 && !loading;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 140px)", gap: 12 }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {quick.map((q, i) => (
-          <button key={i} onClick={() => send(q)} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, color: C.textDim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>{q}</button>
-        ))}
-      </div>
 
-      {/* Last action confirmation banner */}
-      {lastAction && (
-        <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
-          <span style={{ fontSize: 16 }}>{actionIcons[lastAction.type]}</span>
-          <span style={{ color: C.green, fontWeight: 600 }}>{lastAction.label}</span>
-          <span style={{ color: C.muted }}>saved successfully</span>
-          <button onClick={() => setView(lastAction.view)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "3px 10px", marginLeft: "auto" }}>View →</button>
-        </div>
-      )}
+      {/* ── HOME SCREEN ─────────────────────────────────────────────────── */}
+      {isHome && (
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 8 }}>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
-        {messages.map((m, i) => (
-          <div key={i} style={S.aiMsg(m.role)}>
-            <div style={S.avatar(m.role)}>{m.role === "user" ? brand.tradingName[0] : "⚡"}</div>
-            <div style={S.aiBubble(m.role)}>{m.content}</div>
+          {/* Greeting */}
+          <div style={{ paddingTop: 8 }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.text, letterSpacing: "-0.02em" }}>
+              {greeting}, {firstName}
+            </div>
+            <div style={{ fontSize: 14, color: C.muted, marginTop: 5 }}>How can I help?</div>
           </div>
-        ))}
-        {loading && (
-          <div style={S.aiMsg("assistant")}>
-            <div style={S.avatar("assistant")}>⚡</div>
-            <div style={{ ...S.aiBubble("assistant"), color: C.muted }}>Working on it...</div>
+
+          {/* Big voice button */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "16px 0 8px" }}>
+            <button
+              onClick={toggle}
+              disabled={transcribing}
+              style={{
+                width: 130, height: 130, borderRadius: "50%",
+                background: recording ? C.red : C.amber,
+                border: "none", cursor: transcribing ? "default" : "pointer",
+                fontSize: 46, display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: recording ? `0 0 0 16px ${C.red}22, 0 0 0 32px ${C.red}11` : `0 0 0 16px ${C.amber}18, 0 0 0 32px ${C.amber}08`,
+                transition: "all 0.25s",
+                flexShrink: 0,
+              }}
+            >
+              {transcribing ? "⏳" : recording ? "⏹" : "🎙"}
+            </button>
+            <div style={{ fontSize: 12, color: recording ? C.red : transcribing ? C.amber : C.muted, fontWeight: recording || transcribing ? 600 : 400 }}>
+              {recording ? "Recording — tap to stop" : transcribing ? "Transcribing..." : "Tap to speak to Trade PA"}
+            </div>
           </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
 
-      {recording && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 6, fontSize: 12, color: C.red }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, animation: "bellPulse 1s ease infinite" }} />
-          Recording — tap Stop when done
+          {recording && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 6, fontSize: 12, color: C.red }}>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, animation: "bellPulse 1s ease infinite" }} />
+              Recording — tap Stop when done
+            </div>
+          )}
+          {transcribing && (
+            <div style={{ padding: "6px 12px", background: C.amber + "18", border: `1px solid ${C.amber}44`, borderRadius: 6, fontSize: 12, color: C.amber }}>
+              ⏳ Transcribing your voice note...
+            </div>
+          )}
+
+          {/* Quick actions grid */}
+          <div>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Quick actions</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {quickActions.map((q, i) => (
+                <button key={i} onClick={() => { send(q.msg); }}
+                  style={{ padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 12, cursor: "pointer", fontFamily: "'DM Mono',monospace", textAlign: "left", lineHeight: 1.4 }}>
+                  {q.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ textAlign: "center", color: C.muted, fontSize: 11, paddingBottom: 4 }}>or type below ↓</div>
         </div>
       )}
-      {transcribing && (
-        <div style={{ padding: "6px 12px", background: C.amber + "18", border: `1px solid ${C.amber}44`, borderRadius: 6, fontSize: 12, color: C.amber }}>
-          ⏳ Transcribing your voice note...
-        </div>
+
+      {/* ── CHAT VIEW ───────────────────────────────────────────────────── */}
+      {!isHome && (
+        <>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {quick.map((q, i) => (
+              <button key={i} onClick={() => send(q)} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, color: C.textDim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>{q}</button>
+            ))}
+            <button onClick={() => setMessages([])} style={{ padding: "5px 12px", background: "none", border: `1px solid ${C.border}`, borderRadius: 20, color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", marginLeft: "auto" }}>🏠 Home</button>
+          </div>
+
+          {lastAction && (
+            <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
+              <span style={{ fontSize: 16 }}>{actionIcons[lastAction.type] || "✅"}</span>
+              <span style={{ color: C.green, fontWeight: 600 }}>{lastAction.label}</span>
+              <span style={{ color: C.muted }}>saved</span>
+              <button onClick={() => setView(lastAction.view)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "3px 10px", marginLeft: "auto" }}>View →</button>
+            </div>
+          )}
+
+          <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
+            {messages.map((m, i) => (
+              <div key={i}>
+                <div style={S.aiMsg(m.role)}>
+                  <div style={S.avatar(m.role)}>{m.role === "user" ? (brand.tradingName?.[0] || "U") : "⚡"}</div>
+                  <div style={S.aiBubble(m.role)}>{m.content}</div>
+                </div>
+                {m.widget && (
+                  <div style={{ paddingLeft: 44, paddingRight: 4, marginBottom: 8 }}>
+                    {(m.widget.type === "invoice" || m.widget.type === "quote") && (() => {
+                      const inv = m.widget.data;
+                      const isQ = inv.isQuote || m.widget.type === "quote";
+                      const total = parseFloat(inv.grossAmount || inv.amount || 0);
+                      const lines = (inv.lineItems || []).length > 0 ? inv.lineItems : (inv.description || "").split("\n").filter(Boolean).map(l => { const [desc, amt] = l.split("|"); return { description: desc, amount: parseFloat(amt) || 0 }; });
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{isQ ? "Quote" : "Invoice"}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginTop: 2 }}>{inv.id}</div>
+                              <div style={{ fontSize: 12, color: C.textDim, marginTop: 2 }}>{inv.customer}</div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 18, fontWeight: 700, color: C.amber }}>£{total.toFixed(2)}</div>
+                              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{inv.due}</div>
+                            </div>
+                          </div>
+                          {lines.length > 0 && (
+                            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                              {lines.map((l, li) => (
+                                <div key={li} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.textDim, paddingBottom: li < lines.length - 1 ? 6 : 0 }}>
+                                  <span>{l.description || l.desc}</span>
+                                  <span>£{(l.amount || 0).toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div style={{ padding: "10px 14px" }}>
+                            <button onClick={() => onShowPdf && onShowPdf(inv)} style={{ width: "100%", padding: "8px", background: C.amber + "22", border: `1px solid ${C.amber}44`, borderRadius: 6, color: C.amber, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+                              📄 View {isQ ? "Quote" : "Invoice"} PDF
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {m.widget.type === "job_card" && (() => {
+                      const job = m.widget.data;
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                            <div>
+                              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Job Card</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginTop: 2 }}>{job.title || job.type || "Job"}</div>
+                              <div style={{ fontSize: 12, color: C.textDim, marginTop: 2 }}>{job.customer}</div>
+                            </div>
+                            {job.value > 0 && <div style={{ fontSize: 16, fontWeight: 700, color: C.amber }}>£{parseFloat(job.value).toFixed(2)}</div>}
+                          </div>
+                          {job.address && <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>📍 {job.address}</div>}
+                          {job.notes && <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginBottom: 8 }}>{job.notes}</div>}
+                          {job.scope_of_work && <div style={{ fontSize: 11, color: C.textDim, background: C.surface, borderRadius: 6, padding: "8px 10px", marginBottom: 8 }}>{job.scope_of_work}</div>}
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "3px 8px", color: C.muted }}>{(job.status || "new").replace(/_/g, " ")}</span>
+                            {job.type && <span style={{ fontSize: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "3px 8px", color: C.muted }}>{job.type}</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {m.widget.type === "invoice_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Invoices ({m.widget.data.length})</div>
+                        {m.widget.data.map((inv, li) => (
+                          <div key={li} onClick={() => onShowPdf && onShowPdf(inv)} style={{ padding: "12px 14px", borderBottom: li < m.widget.data.length - 1 ? `1px solid ${C.border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{inv.id} · {inv.customer}</div>
+                              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{inv.due}</div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: inv.status === "paid" ? C.green : inv.status === "overdue" ? C.red : C.amber }}>£{parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>{inv.status}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "job_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Jobs ({m.widget.data.length})</div>
+                        {m.widget.data.map((job, li) => (
+                          <div key={li} style={{ padding: "12px 14px", borderBottom: li < m.widget.data.length - 1 ? `1px solid ${C.border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{job.title || job.type || "Job"} · {job.customer}</div>
+                              {job.address && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>📍 {job.address}</div>}
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
+                              {job.value > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{parseFloat(job.value).toFixed(0)}</div>}
+                              <div style={{ fontSize: 10, color: C.muted }}>{(job.status || "new").replace(/_/g, " ")}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.widget.type === "material_list" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Materials ({m.widget.data.length})</div>
+                        {m.widget.data.map((mat, li) => (
+                          <div key={li} style={{ padding: "12px 14px", borderBottom: li < m.widget.data.length - 1 ? `1px solid ${C.border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{mat.item}</div>
+                              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{mat.supplier}{mat.job ? ` · ${mat.job}` : ""}</div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
+                              <div style={{ fontSize: 11, color: C.text }}>×{mat.qty}</div>
+                              <div style={{ fontSize: 10, color: mat.status === "to_order" ? C.red : mat.status === "ordered" ? C.amber : C.green }}>{mat.status?.replace(/_/g, " ")}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            {loading && (
+              <div style={S.aiMsg("assistant")}>
+                <div style={S.avatar("assistant")}>⚡</div>
+                <div style={{ ...S.aiBubble("assistant"), color: C.muted }}>Working on it...</div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {recording && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 6, fontSize: 12, color: C.red }}>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, animation: "bellPulse 1s ease infinite" }} />
+              Recording — tap Stop when done
+            </div>
+          )}
+          {transcribing && (
+            <div style={{ padding: "6px 12px", background: C.amber + "18", border: `1px solid ${C.amber}44`, borderRadius: 6, fontSize: 12, color: C.amber }}>
+              ⏳ Transcribing your voice note...
+            </div>
+          )}
+        </>
       )}
 
+      {/* ── INPUT BAR — always visible ──────────────────────────────────── */}
       <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
         <textarea
-          style={{ ...S.input, flex: 1, minHeight: 44, maxHeight: 120, resize: "none" }}
-          placeholder="Type here, or tap 🎙 to speak..."
+          style={{ ...S.input, flex: 1, minHeight: 60, maxHeight: 140, resize: "none", fontSize: 14, padding: "12px 14px" }}
+          placeholder={isHome ? "Ask Trade PA anything..." : "Type here, or tap 🎙 to speak..."}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-          rows={2}
+          rows={3}
         />
         <button
           onClick={toggle}
@@ -12694,7 +13098,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
 }
 
 
-const VIEWS = ["Dashboard", "Schedule", "Enquiries", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "Purchase Orders", "RAMS", "Settings"];
+const VIEWS = ["AI Assistant", "Dashboard", "Schedule", "Enquiries", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "Purchase Orders", "RAMS", "Settings"];
 
 // Helper: convert VAPID public key for push subscription
 function urlBase64ToUint8Array(base64String) {
@@ -12830,7 +13234,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.has('xero') || params.has('qb')) return "Settings";
     if (params.has('email_connected') || params.has('email_error')) return "Inbox";
-    return "Dashboard";
+    return "AI Assistant";
   });
   const [brand, setBrand] = useState(DEFAULT_BRAND);
   const { reminders, add, dismiss, remove } = useReminders(user?.id);
@@ -13688,7 +14092,7 @@ export default function App() {
       <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100, width: "100%" }}>
         {/* Top row — logo and right icons */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", paddingTop: "max(12px, env(safe-area-inset-top, 12px))", height: "calc(48px + env(safe-area-inset-top, 0px))", boxSizing: "border-box" }}>
-          <div style={S.logo}>
+          <div style={{ ...S.logo, cursor: "pointer" }} onClick={() => setView("AI Assistant")}>
             <div style={S.logoIcon}>TP</div>
             TRADE PA
           </div>
@@ -13717,7 +14121,7 @@ export default function App() {
             if (!perms) return true; // no restrictions set yet
             return perms[v] !== false;
           }).map(v => (
-            <button key={v} onClick={() => setView(v)} style={{ ...S.navBtn(view === v), flexShrink: 0 }}>{v}</button>
+            <button key={v} onClick={() => setView(v)} style={{ ...S.navBtn(view === v), flexShrink: 0 }}>{v === "AI Assistant" ? "🏠 Home" : v}</button>
           ))}
         </div>
       </header>
@@ -13747,7 +14151,7 @@ export default function App() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
-        {view === "AI Assistant" && <AIAssistant brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} />}
+        {view === "AI Assistant" && <AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => setPdfHtml(buildInvoiceHtml(brand, inv))} />}
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
