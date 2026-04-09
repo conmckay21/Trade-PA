@@ -3516,16 +3516,6 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const bottomRef = useRef(null);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // Auto-trigger onboarding for new users
-  useEffect(() => {
-    if (isNewUser && messages.length === 0 && !loading) {
-      const timer = setTimeout(() => {
-        send("__onboarding_start__");
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [isNewUser]);
-
   const { recording, transcribing, toggle } = useWhisper((text) => {
     if (text) setInput(text);
   });
@@ -4302,6 +4292,16 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- For mileage: HMRC rate is 45p/mile for first 10,000 miles.\n"
   + "- When user says show me or what are my anything — use a list_ or find_ tool, never tell them to go somewhere.";
 
+
+  // Auto-trigger onboarding for new users — placed here so isNewUser and send are both defined
+  useEffect(() => {
+    if (isNewUser && messages.length === 0 && !loading) {
+      const timer = setTimeout(() => {
+        send("__onboarding_start__");
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const send = async (text) => {
     if (!text.trim() || loading) return;
