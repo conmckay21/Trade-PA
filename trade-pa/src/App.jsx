@@ -4037,7 +4037,21 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     { name: "reject_inbox_action", description: "Reject/dismiss a pending inbox action.", input_schema: { type: "object", properties: { action_id: { type: "string" } } } },
     { name: "generate_subcontractor_statement", description: "Generate a CIS statement for a subcontractor for a given month.", input_schema: { type: "object", properties: { name: { type: "string" }, month: { type: "string", description: "YYYY-MM" } }, required: ["name"] } },
     { name: "update_job_card", description: "Update any field on a job card — title, customer, address, value, status, notes, scope of work, PO number. Use when user asks to change, edit or update a job card.", input_schema: { type: "object", properties: { customer: { type: "string", description: "Current customer name to find the job" }, title: { type: "string", description: "Current job title to find the job" }, new_title: { type: "string" }, new_customer: { type: "string" }, new_address: { type: "string" }, new_value: { type: "string" }, new_status: { type: "string", enum: ["enquiry","quoted","accepted","in_progress","completed","on_hold"] }, new_notes: { type: "string" }, new_scope: { type: "string" }, new_po_number: { type: "string" } } } },
-    { name: "update_invoice", description: "Update an invoice — change customer, amount, due date, status, or add/remove line items. Use when user asks to edit or change an invoice.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_due: { type: "string" }, new_status: { type: "string" }, new_address: { type: "string" }, add_line_item: { type: "string", description: "Add a line item as 'description|amount' e.g. 'Extra labour|150'" }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
+    { name: "update_invoice", description: "Update an invoice — change customer, amount, due date, status, payment method (bacs/card/both), VAT, or add/remove line items. Use when user asks to edit or change an invoice.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_due: { type: "string" }, new_status: { type: "string" }, new_address: { type: "string" }, new_payment_method: { type: "string", enum: ["bacs","card","both"], description: "bacs = bank transfer only, card = Stripe only, both = show both options" }, new_vat_enabled: { type: "string", description: "true or false" }, add_line_item: { type: "string", description: "Add a line item as 'description|amount' e.g. 'Extra labour|150'" }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
+    { name: "list_quotes", description: "Show all quotes. Use when user asks to see their quotes.", input_schema: { type: "object", properties: {} } },
+    { name: "delete_expense", description: "Delete an expense.", input_schema: { type: "object", properties: { description: { type: "string" } }, required: ["description"] } },
+    { name: "delete_purchase_order", description: "Delete a purchase order.", input_schema: { type: "object", properties: { po_number: { type: "string" }, supplier: { type: "string" } } } },
+    { name: "delete_cis_statement", description: "Delete a CIS statement.", input_schema: { type: "object", properties: { contractor_name: { type: "string" } }, required: ["contractor_name"] } },
+    { name: "delete_subcontractor", description: "Delete/remove a subcontractor.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+    { name: "delete_job_card", description: "Delete a job card permanently.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
+    { name: "delete_mileage", description: "Delete the most recent mileage log.", input_schema: { type: "object", properties: {} } },
+    { name: "delete_rams", description: "Delete a RAMS document.", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
+    { name: "request_signature", description: "Open the signature pad for a customer to sign off a completed job. Use when user says 'get signature', 'sign off', 'customer sign-off', 'completion sign-off'.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
+    { name: "sync_to_xero", description: "Upload/sync an invoice to Xero accounting. Use when user says 'send to Xero', 'sync invoice to Xero', 'push to Xero'.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
+    { name: "sync_to_quickbooks", description: "Upload/sync an invoice to QuickBooks. Use when user says 'send to QuickBooks', 'sync to QuickBooks'.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
+    { name: "sync_material_to_xero", description: "Create a bill in Xero for a material purchase. Use when user says 'send material to Xero', 'create Xero bill' for a material.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
+    { name: "sync_material_to_quickbooks", description: "Create a bill in QuickBooks for a material purchase.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
+    { name: "mark_invoice_paid_xero", description: "Mark an invoice as paid in Xero. Use when invoice is already in Xero and user confirms payment received.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
@@ -4504,12 +4518,25 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           const term = (input.customer || input.title || "").toLowerCase();
           const { data: found } = await supabase.from("job_cards")
             .select("*").eq("user_id", user?.id)
-            .or(`customer.ilike.%${term}%,title.ilike.%${term}%`)
+            .or(`customer.ilike.%${term}%,title.ilike.%${term}%,type.ilike.%${term}%`)
             .order("created_at", { ascending: false }).limit(1);
           const match = found?.[0];
           if (!match) return `No job card found for "${input.customer || input.title}".`;
-          pendingWidgetRef.current = { type: "job_card", data: match };
-          return `Here's the job card for ${match.customer}:`;
+          // Always fetch full details — never show a partial card
+          const [jNotes, jPhotos, jTimeLogs, jMats, jDrawings, jVos, jDocs] = await Promise.all([
+            supabase.from("job_notes").select("*").eq("job_id", match.id).order("created_at", { ascending: false }),
+            supabase.from("job_photos").select("id,filename,created_at").eq("job_id", match.id),
+            supabase.from("time_logs").select("*").eq("job_id", match.id),
+            supabase.from("materials").select("*").eq("job_id", match.id),
+            supabase.from("job_drawings").select("id,file_name,created_at").eq("job_id", match.id),
+            supabase.from("variation_orders").select("*").eq("job_id", match.id),
+            supabase.from("compliance_docs").select("*").eq("job_id", match.id),
+          ]);
+          pendingWidgetRef.current = {
+            type: "job_full",
+            data: { ...match, jobNotes: jNotes.data || [], photos: jPhotos.data || [], timeLogs: jTimeLogs.data || [], linkedMaterials: jMats.data || [], drawings: jDrawings.data || [], vos: jVos.data || [], docs: jDocs.data || [] }
+          };
+          return `Here's the job card for ${match.customer}${match.title ? " — " + match.title : ""}:`;
         }
         case "assign_material_to_job": {
           const matIdx = (materials || []).findIndex(m => m.item?.toLowerCase().includes(input.item.toLowerCase()));
@@ -5048,6 +5075,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           if (input.new_due !== undefined) updates.due = input.new_due;
           if (input.new_status !== undefined) updates.status = input.new_status;
           if (input.new_address !== undefined) updates.address = input.new_address;
+          if (input.new_payment_method !== undefined) updates.paymentMethod = input.new_payment_method;
+          if (input.new_vat_enabled !== undefined) updates.vatEnabled = input.new_vat_enabled === true || input.new_vat_enabled === "true";
           if (input.add_line_item !== undefined) {
             const parts = input.add_line_item.split("|");
             const newLine = { description: parts[0].trim(), amount: parseFloat(parts[1]) || 0 };
@@ -5064,6 +5093,145 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           setInvoices(prev => (prev || []).map(i => i.id === inv.id ? updates : i));
           pendingWidgetRef.current = { type: "invoice", data: updates };
           return `Invoice ${inv.id} updated. Here's the updated invoice:`;
+        }
+
+
+        case "list_quotes": {
+          const all = (invoices || []).filter(i => i.isQuote);
+          if (!all.length) return "No quotes found.";
+          pendingWidgetRef.current = { type: "invoice_list", data: all.slice(0, 15) };
+          return `Here are your quotes:`;
+        }
+        case "delete_expense": {
+          const { data: found } = await supabase.from("expenses").select("id,description").eq("user_id", user?.id).ilike("description", `%${input.description || ""}%`).order("exp_date", { ascending: false }).limit(1);
+          if (!found?.length) return `Expense not found.`;
+          await supabase.from("expenses").delete().eq("id", found[0].id);
+          return `Expense "${found[0].description}" deleted.`;
+        }
+        case "delete_purchase_order": {
+          const { data: found } = await supabase.from("purchase_orders").select("id,po_number,supplier").eq("user_id", user?.id).or(`po_number.ilike.%${input.po_number || ""}%,supplier.ilike.%${input.supplier || ""}%`).limit(1);
+          if (!found?.length) return `Purchase order not found.`;
+          await supabase.from("purchase_orders").delete().eq("id", found[0].id);
+          return `Purchase order ${found[0].po_number} (${found[0].supplier}) deleted.`;
+        }
+        case "delete_cis_statement": {
+          const { data: found } = await supabase.from("cis_statements").select("id,contractor_name,tax_month").eq("user_id", user?.id).ilike("contractor_name", `%${input.contractor_name || ""}%`).order("tax_month", { ascending: false }).limit(1);
+          if (!found?.length) return `CIS statement not found.`;
+          await supabase.from("cis_statements").delete().eq("id", found[0].id);
+          return `CIS statement for ${found[0].contractor_name} (${found[0].tax_month?.slice(0,7)}) deleted.`;
+        }
+        case "delete_subcontractor": {
+          const { data: found } = await supabase.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name || ""}%`).limit(1);
+          if (!found?.length) return `Subcontractor not found.`;
+          await supabase.from("subcontractors").delete().eq("id", found[0].id);
+          return `${found[0].name} removed from subcontractors.`;
+        }
+        case "delete_job_card": {
+          const term = (input.customer || input.title || "").toLowerCase();
+          const { data: found } = await supabase.from("job_cards").select("id,customer,title").eq("user_id", user?.id).or(`customer.ilike.%${term}%,title.ilike.%${term}%`).order("created_at", { ascending: false }).limit(1);
+          if (!found?.length) return `Job card not found for "${input.customer || input.title}".`;
+          await supabase.from("job_cards").delete().eq("id", found[0].id);
+          return `Job card for ${found[0].customer}${found[0].title ? " — " + found[0].title : ""} deleted.`;
+        }
+        case "delete_mileage": {
+          const { data: found } = await supabase.from("mileage_logs").select("id,from_location,to_location,date").eq("user_id", user?.id).order("date", { ascending: false }).limit(1);
+          if (!found?.length) return `No mileage logs found.`;
+          await supabase.from("mileage_logs").delete().eq("id", found[0].id);
+          return `Mileage log deleted: ${found[0].from_location || ""} → ${found[0].to_location || ""} on ${found[0].date}.`;
+        }
+        case "delete_rams": {
+          const term = (input.title || "").toLowerCase();
+          const { data: found } = await supabase.from("rams_documents").select("id,title").eq("user_id", user?.id).ilike("title", `%${term}%`).order("created_at", { ascending: false }).limit(1);
+          if (!found?.length) return `RAMS document not found.`;
+          await supabase.from("rams_documents").delete().eq("id", found[0].id);
+          return `RAMS "${found[0].title}" deleted.`;
+        }
+
+
+        case "request_signature": {
+          // Navigate to Jobs tab and open the job — user can tap signature from there
+          const term = (input.customer || input.title || "").toLowerCase();
+          const { data: found } = await supabase.from("job_cards")
+            .select("id,customer,title,type,customer_signature")
+            .eq("user_id", user?.id)
+            .or(`customer.ilike.%${term}%,title.ilike.%${term}%`)
+            .order("created_at", { ascending: false }).limit(1);
+          const job = found?.[0];
+          if (!job) return `Couldn't find a job card for "${input.customer || input.title}".`;
+          if (job.customer_signature) return `${job.customer} has already signed off that job.`;
+          pendingWidgetRef.current = { type: "signature_prompt", data: { customer: job.customer, title: job.title || job.type, jobId: job.id } };
+          return `To capture ${job.customer}'s signature for "${job.title || job.type}", tap the button below. It will open the signature pad directly.`;
+        }
+        case "sync_to_xero": {
+          const term = (input.customer || input.invoice_id || "").toLowerCase();
+          const all = (invoices || []).filter(i => !i.isQuote);
+          const inv = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term));
+          if (!inv) return `No invoice found for "${input.customer || input.invoice_id}".`;
+          try {
+            const res = await fetch("/api/xero/create-invoice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, invoice: inv }) });
+            const data = await res.json();
+            if (data.error) return `Xero sync failed: ${data.error}`;
+            pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "Xero", customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, success: true } };
+            return `Invoice ${inv.id} for ${inv.customer} sent to Xero — £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)}.`;
+          } catch(e) {
+            return `Xero sync failed: ${e.message}. Check Xero is connected in Settings.`;
+          }
+        }
+        case "sync_to_quickbooks": {
+          const term = (input.customer || input.invoice_id || "").toLowerCase();
+          const all = (invoices || []).filter(i => !i.isQuote);
+          const inv = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term));
+          if (!inv) return `No invoice found for "${input.customer || input.invoice_id}".`;
+          try {
+            const res = await fetch("/api/quickbooks/create-invoice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, invoice: inv }) });
+            const data = await res.json();
+            if (data.error) return `QuickBooks sync failed: ${data.error}`;
+            pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "QuickBooks", customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, success: true } };
+            return `Invoice ${inv.id} for ${inv.customer} sent to QuickBooks — £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)}.`;
+          } catch(e) {
+            return `QuickBooks sync failed: ${e.message}. Check QuickBooks is connected in Settings.`;
+          }
+        }
+        case "sync_material_to_xero": {
+          const term = (input.item || input.supplier || "").toLowerCase();
+          const mat = (materials || []).find(m => (m.item || "").toLowerCase().includes(term) || (m.supplier || "").toLowerCase().includes(term));
+          if (!mat) return `No material found matching "${input.item || input.supplier}".`;
+          try {
+            const res = await fetch("/api/xero/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, material: mat }) });
+            const data = await res.json();
+            if (data.error) return `Xero bill failed: ${data.error}`;
+            pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "Xero", customer: mat.supplier || "Supplier", invoice_id: mat.item, amount: (mat.unitPrice || 0) * (mat.qty || 1), success: true, isBill: true } };
+            return `Bill created in Xero for ${mat.item}${mat.supplier ? " from " + mat.supplier : ""} — £${((mat.unitPrice || 0) * (mat.qty || 1)).toFixed(2)}.`;
+          } catch(e) {
+            return `Xero bill failed: ${e.message}`;
+          }
+        }
+        case "sync_material_to_quickbooks": {
+          const term = (input.item || input.supplier || "").toLowerCase();
+          const mat = (materials || []).find(m => (m.item || "").toLowerCase().includes(term) || (m.supplier || "").toLowerCase().includes(term));
+          if (!mat) return `No material found matching "${input.item || input.supplier}".`;
+          try {
+            const res = await fetch("/api/quickbooks/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, material: mat }) });
+            const data = await res.json();
+            if (data.error) return `QuickBooks bill failed: ${data.error}`;
+            pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "QuickBooks", customer: mat.supplier || "Supplier", invoice_id: mat.item, amount: (mat.unitPrice || 0) * (mat.qty || 1), success: true, isBill: true } };
+            return `Bill created in QuickBooks for ${mat.item}${mat.supplier ? " from " + mat.supplier : ""} — £${((mat.unitPrice || 0) * (mat.qty || 1)).toFixed(2)}.`;
+          } catch(e) {
+            return `QuickBooks bill failed: ${e.message}`;
+          }
+        }
+        case "mark_invoice_paid_xero": {
+          const term = (input.customer || input.invoice_id || "").toLowerCase();
+          const all = (invoices || []).filter(i => !i.isQuote);
+          const inv = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term));
+          if (!inv) return `No invoice found for "${input.customer || input.invoice_id}".`;
+          try {
+            await fetch("/api/xero/mark-paid", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, invoiceId: inv.id }) });
+            pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "Xero", customer: inv.customer, invoice_id: inv.id, success: true, markedPaid: true } };
+            return `Invoice ${inv.id} marked as paid in Xero.`;
+          } catch(e) {
+            return `Failed to mark paid in Xero: ${e.message}`;
+          }
         }
 
         default:
@@ -5098,7 +5266,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- Use £ not $. Keep replies short and punchy.\n"
   + "\nTOOLS YOU CAN USE:\n"
   + "CREATE: create_job (scheduled), create_job_card, create_invoice, create_quote, create_invoice_from_job, log_enquiry, set_reminder, create_material, create_customer, create_purchase_order, add_stock_item, log_expense, log_cis_statement, add_subcontractor, log_subcontractor_payment, add_compliance_cert (CP12/EICR/PAT etc), add_variation_order, log_daywork, send_review_request, add_stage_payment\n"
-  + "FIND/SHOW INLINE: find_invoice, find_quote, find_job_card, list_invoices, list_jobs, list_materials, find_material_receipt, list_schedule, get_job_full, list_expenses, list_cis_statements, list_subcontractors, list_purchase_orders, list_reminders, list_enquiries, list_customers, list_mileage, list_stock, list_rams, get_report, list_inbox_actions (show pending email actions with email snippet for review)\n"
+  + "FIND/SHOW INLINE: find_invoice, find_quote, find_job_card (always shows full card), list_invoices, list_jobs, list_materials, find_material_receipt, list_schedule, get_job_full (use this when user asks for detail on a job), list_expenses, list_cis_statements, list_subcontractors, list_purchase_orders, list_reminders, list_enquiries, list_customers, list_mileage, list_stock, list_rams, get_report, list_inbox_actions (show pending email actions with email snippet for review)\n"
   + "UPDATE BRAND: update_brand (use during onboarding or when user wants to update business details)\n"
   + "DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material\n"
   + "UPDATE: mark_invoice_paid, update_job_status, update_job_card (edit any field), update_invoice (edit any field/line item), update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock, delete_stock_item\n"
@@ -5110,7 +5278,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- For mileage: HMRC rate is 45p/mile for first 10,000 miles.\n"
   + "- When user says show me or what are my anything — use a list_ or find_ tool, never tell them to go somewhere.\n"
   + "- For schedule/diary/what\'s on today or this week — use list_schedule.\n"
-  + "- For full job detail including notes, photos, materials — use get_job_full.\n"
+  + "- For ANY job query — show, find, detail, update — always use get_job_full or find_job_card, both return full cards. NEVER return a partial job card.\n"
   + "- For RAMS or method statements — use start_rams, then guide through steps using rams_save_step1 through rams_save_step5.\n"
   + "- RAMS flow: start_rams → rams_save_step1 → rams_save_step2 (categories) → rams_confirm_hazards (after user reviews) → rams_save_step3 (after user reviews method steps) → rams_save_step4 (COSHH) → rams_save_step5 (emergency/save).\n"
   + "- After user answers each RAMS question, immediately call the matching rams_save_stepN tool.\n"
@@ -5120,7 +5288,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- For expenses say: log_expense. For CIS say: log_cis_statement. For subcontractor payments say: log_subcontractor_payment.\n"
   + "- For certificates say: add_compliance_cert. For extra work say: add_variation_order. For reports say: get_report.\n"
   + "- Never tell the user to go to a tab — do everything here and show it inline.\n"
-  + "- SEND: send_invoice, send_quote, chase_invoice (overdue payment reminder email).\n"
+  + "- SEND: send_invoice, send_quote, chase_invoice, sync_to_xero, sync_to_quickbooks (push invoice to accounting), sync_material_to_xero, sync_material_to_quickbooks (create purchase bill), mark_invoice_paid_xero.\n""- SIGNATURE: request_signature navigates to the Jobs tab and opens the signature pad for customer sign-off.\n"
   + "- INBOX: list_inbox_actions shows pending email actions WITH the email snippet so user can review before approving. approve_inbox_action / reject_inbox_action to action them.\n"
   + "- STOCK: add_stock_item, list_stock, update_stock, delete_stock_item.\n"
   + "- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n"
@@ -5568,7 +5736,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                     {m.widget.type === "job_full" && (() => {
                       const job = m.widget.data;
                       const expanded = expandedWidget === i || expandedWidget === null;
-                      const hasDetails = (job.jobNotes?.length > 0) || (job.timeLogs?.length > 0) || (job.linkedMaterials?.length > 0) || (job.drawings?.length > 0) || (job.vos?.length > 0) || (job.docs?.length > 0);
+                      const hasDetails = true; // always show all available data
                       return (
                         <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
                           {/* Header */}
@@ -5588,8 +5756,24 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                           {job.notes && typeof job.notes === "string" && <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}>{job.notes}</div>}
                           {job.scope_of_work && <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}><span style={{ color: C.muted, fontSize: 10, display: "block", marginBottom: 2 }}>SCOPE</span>{job.scope_of_work}</div>}
                           {/* Expanded detail */}
-                          {expanded && hasDetails && (
+                          {expanded && (
                             <div style={{ borderTop: `1px solid ${C.border}` }}>
+                              {/* Card-level fields */}
+                              {job.status && <div style={{ padding: "8px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: 11, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "3px 10px", color: C.textDim }}>{job.status?.replace(/_/g," ")}</span>
+                                {job.type && job.type !== job.title && <span style={{ fontSize: 11, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "3px 10px", color: C.textDim }}>{job.type}</span>}
+                                {job.po_number && <span style={{ fontSize: 11, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "3px 10px", color: C.muted }}>PO: {job.po_number}</span>}
+                              </div>}
+                              {job.scope_of_work && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>Scope of Work</div>
+                                <div style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>{job.scope_of_work}</div>
+                              </div>}
+                              {/* Job notes (string field on card) */}
+                              {job.notes && typeof job.notes === "string" && job.notes.trim() && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>Notes</div>
+                                <div style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>{job.notes}</div>
+                              </div>}
+                              {/* Job notes from notes table */}
                               {job.jobNotes?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>JOB NOTES ({job.jobNotes.length})</div>
                                 {job.jobNotes.map((n,ni) => <div key={ni} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {n.note || n}</div>)}
@@ -6060,6 +6244,40 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                         </div>
                       );
                     })()}
+                    {m.widget.type === "signature_prompt" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.amber}44`, borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.amber, marginBottom: 6 }}>✍ Customer Sign-off</div>
+                        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12 }}>
+                          <div style={{ fontWeight: 600 }}>{m.widget.data.customer}</div>
+                          <div style={{ color: C.muted, marginTop: 2 }}>{m.widget.data.title}</div>
+                        </div>
+                        <button onClick={() => setView("Jobs")} style={{ ...S.btn("primary"), width: "100%", justifyContent: "center" }}>
+                          ✍ Open Signature Pad in Jobs tab →
+                        </button>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 8, textAlign: "center" }}>
+                          Open the job card and tap "Customer Sign-off" to capture the signature
+                        </div>
+                      </div>
+                    )}
+                    {m.widget.type === "accounting_sync" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${m.widget.data.success ? C.green + "44" : C.red + "44"}`, borderRadius: 10, padding: 14 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: m.widget.data.platform === "Xero" ? "#13B5EA22" : "#2CA01C22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
+                            {m.widget.data.platform === "Xero" ? "X" : "QB"}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: m.widget.data.success ? C.green : C.red }}>
+                              {m.widget.data.success ? `✓ Synced to ${m.widget.data.platform}` : `✗ Sync failed`}
+                            </div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                              {m.widget.data.isBill ? "Purchase bill created" : m.widget.data.markedPaid ? "Marked as paid" : "Invoice uploaded"}
+                            </div>
+                          </div>
+                          {m.widget.data.amount > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>£{parseFloat(m.widget.data.amount || 0).toFixed(2)}</div>}
+                        </div>
+                        <div style={{ fontSize: 12, color: C.textDim }}>{m.widget.data.customer}{m.widget.data.invoice_id ? " · " + m.widget.data.invoice_id : ""}</div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
