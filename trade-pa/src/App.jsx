@@ -15865,4 +15865,6 @@ export default function App() {
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} /></ErrorBoundary>}
       </main>
     </div>
-  
+    </div>
+  );
+}
