@@ -4244,7 +4244,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           if (jcErr) return `Failed to create job card: ${jcErr.message}`;
           if (refreshJobs) refreshJobs();
           setLastAction({ type: "job_card", label: `${input.title || input.customer}`, view: "Jobs" });
-          pendingWidgetRef.current = { type: "job_card", data: { ...payload, id: jobCard?.id } };
+          pendingWidgetRef.current = { type: "job_full", data: { ...payload, id: jobCard?.id, jobNotes: [], photos: [], timeLogs: [], linkedMaterials: [], drawings: [], vos: [], docs: [] } };
           return `Job card created for ${input.customer}${input.title ? ` — ${input.title}` : ""}${input.value ? ` (£${input.value})` : ""}.`;
         }
         case "update_brand": {
@@ -5063,12 +5063,13 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         }
         case "update_invoice": {
           const term = (input.customer || input.invoice_id || "").toLowerCase();
+          if (!term) return "Please specify which invoice to update — provide the customer name or invoice ID.";
           const all = (invoices || []).filter(i => !i.isQuote);
           const inv = all.find(i =>
             (i.id || "").toLowerCase().includes(term) ||
             (i.customer || "").toLowerCase().includes(term)
           );
-          if (!inv) return `Couldn't find an invoice for "${input.customer || input.invoice_id}".`;
+          if (!inv) return `Couldn't find an invoice for "${input.customer || input.invoice_id}". Try: list_invoices to see all invoices.`;
           const updates = { ...inv };
           if (input.new_customer !== undefined) updates.customer = input.new_customer;
           if (input.new_amount !== undefined) { updates.amount = parseFloat(input.new_amount); updates.grossAmount = parseFloat(input.new_amount); }
@@ -5557,10 +5558,15 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                               <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{isQ ? "Quote" : "Invoice"}</div>
                               <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginTop: 2 }}>{inv.id}</div>
                               <div style={{ fontSize: 12, color: C.textDim, marginTop: 2 }}>{inv.customer}</div>
+                              <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+                                {inv.paymentMethod === "bacs" ? "🏦 Bank transfer only" : inv.paymentMethod === "card" ? "💳 Card only" : "🏦💳 Bank + Card"}
+                                {inv.vatEnabled ? " · VAT " + (inv.vatRate || 20) + "%" : ""}
+                              </div>
                             </div>
                             <div style={{ textAlign: "right" }}>
                               <div style={{ fontSize: 18, fontWeight: 700, color: C.amber }}>£{total.toFixed(2)}</div>
                               <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{inv.due}</div>
+                              <div style={{ fontSize: 10, color: inv.status === "paid" ? C.green : inv.status === "overdue" ? C.red : C.muted, marginTop: 2 }}>{inv.status}</div>
                             </div>
                           </div>
                           {lines.length > 0 && (
@@ -5803,6 +5809,13 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                                 <button onClick={() => send("Update " + job.customer + "'s job card")} style={{ ...S.btn("primary"), flex: 1, justifyContent: "center", fontSize: 12 }}>✏ Edit this job</button>
                                 <button onClick={() => setView("Jobs")} style={{ ...S.btn("ghost"), fontSize: 12 }}>Open in Jobs tab →</button>
                               </div>
+                            </div>
+                          )}
+                          {/* Action buttons — always visible */}
+                          {!expanded && (
+                            <div style={{ display: "flex", gap: 8, padding: "10px 14px", borderTop: `1px solid ${C.border}` }}>
+                              <button onClick={() => setExpandedWidget(i)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>▼ Full details</button>
+                              <button onClick={() => send("Update " + job.customer + "'s job card")} style={{ ...S.btn("ghost"), fontSize: 12 }}>✏ Edit</button>
                             </div>
                           )}
                         </div>
