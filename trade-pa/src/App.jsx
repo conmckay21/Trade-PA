@@ -4336,22 +4336,25 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
             .or(`customer.ilike.%${term}%,title.ilike.%${term}%,type.ilike.%${term}%`)
             .order("created_at", { ascending: false }).limit(1);
           const job = found?.[0];
-          if (!job) return `No job card found for "${input.customer || input.title}".`;
-          const [notes, photos, timeLogs, materials, drawings, vos, docs] = await Promise.all([
-            supabase.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
-            supabase.from("job_photos").select("id,filename,created_at").eq("job_id", job.id),
-            supabase.from("time_logs").select("*").eq("job_id", job.id),
-            supabase.from("materials").select("*").eq("job_id", job.id),
-            supabase.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
-            supabase.from("variation_orders").select("*").eq("job_id", job.id),
-            supabase.from("compliance_docs").select("*").eq("job_id", job.id),
-          ]);
+          if (!job) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
+          let notes = { data: [] }, timeLogs = { data: [] }, materials = { data: [] };
+          let drawings = { data: [] }, vos = { data: [] }, docs = { data: [] };
+          try {
+            [notes, , timeLogs, materials, drawings, vos, docs] = await Promise.all([
+              supabase.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
+              supabase.from("job_photos").select("id,filename,created_at").eq("job_id", job.id),
+              supabase.from("time_logs").select("*").eq("job_id", job.id),
+              supabase.from("materials").select("*").eq("job_id", job.id),
+              supabase.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
+              supabase.from("variation_orders").select("*").eq("job_id", job.id),
+              supabase.from("compliance_docs").select("*").eq("job_id", job.id),
+            ]);
+          } catch (e) { /* show card anyway if related queries fail */ }
           pendingWidgetRef.current = {
             type: "job_full",
             data: {
               ...job,
               jobNotes: notes.data || [],
-              photos: photos.data || [],
               timeLogs: timeLogs.data || [],
               linkedMaterials: materials.data || [],
               drawings: drawings.data || [],
@@ -4516,27 +4519,50 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         }
         case "find_job_card": {
           const term = (input.customer || input.title || "").toLowerCase();
-          const { data: found } = await supabase.from("job_cards")
+          if (!term) return "Please tell me which job card to find — provide the customer name or job title.";
+          const { data: found, error: findErr } = await supabase.from("job_cards")
             .select("*").eq("user_id", user?.id)
             .or(`customer.ilike.%${term}%,title.ilike.%${term}%,type.ilike.%${term}%`)
             .order("created_at", { ascending: false }).limit(1);
+          if (findErr) return `Error searching job cards: ${findErr.message}`;
           const match = found?.[0];
-          if (!match) return `No job card found for "${input.customer || input.title}".`;
-          // Always fetch full details — never show a partial card
-          const [jNotes, jPhotos, jTimeLogs, jMats, jDrawings, jVos, jDocs] = await Promise.all([
-            supabase.from("job_notes").select("*").eq("job_id", match.id).order("created_at", { ascending: false }),
-            supabase.from("job_photos").select("id,filename,created_at").eq("job_id", match.id),
-            supabase.from("time_logs").select("*").eq("job_id", match.id),
-            supabase.from("materials").select("*").eq("job_id", match.id),
-            supabase.from("job_drawings").select("id,file_name,created_at").eq("job_id", match.id),
-            supabase.from("variation_orders").select("*").eq("job_id", match.id),
-            supabase.from("compliance_docs").select("*").eq("job_id", match.id),
-          ]);
+          if (!match) {
+            // Fallback: try just customer name
+            const { data: fallback } = await supabase.from("job_cards")
+              .select("*").eq("user_id", user?.id)
+              .ilike("customer", `%${term}%`)
+              .order("created_at", { ascending: false }).limit(1);
+            if (!fallback?.length) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
+          }
+          const job = found?.[0] || (await supabase.from("job_cards").select("*").eq("user_id", user?.id).ilike("customer", `%${term}%`).order("created_at", { ascending: false }).limit(1)).data?.[0];
+          if (!job) return `No job card found for "${input.customer || input.title}".`;
+          // Fetch related data — wrapped so a failed sub-query never blocks the card showing
+          let jNotes = { data: [] }, jTimeLogs = { data: [] }, jMats = { data: [] };
+          let jDrawings = { data: [] }, jVos = { data: [] }, jDocs = { data: [] };
+          try {
+            [jNotes, , jTimeLogs, jMats, jDrawings, jVos, jDocs] = await Promise.all([
+              supabase.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
+              supabase.from("job_photos").select("id,filename,created_at").eq("job_id", job.id),
+              supabase.from("time_logs").select("*").eq("job_id", job.id),
+              supabase.from("materials").select("*").eq("job_id", job.id),
+              supabase.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
+              supabase.from("variation_orders").select("*").eq("job_id", job.id),
+              supabase.from("compliance_docs").select("*").eq("job_id", job.id),
+            ]);
+          } catch (e) { /* related data unavailable, show card anyway */ }
           pendingWidgetRef.current = {
             type: "job_full",
-            data: { ...match, jobNotes: jNotes.data || [], photos: jPhotos.data || [], timeLogs: jTimeLogs.data || [], linkedMaterials: jMats.data || [], drawings: jDrawings.data || [], vos: jVos.data || [], docs: jDocs.data || [] }
+            data: {
+              ...job,
+              jobNotes: jNotes.data || [],
+              timeLogs: jTimeLogs.data || [],
+              linkedMaterials: jMats.data || [],
+              drawings: jDrawings.data || [],
+              vos: jVos.data || [],
+              docs: jDocs.data || [],
+            }
           };
-          return `Here's the job card for ${match.customer}${match.title ? " — " + match.title : ""}:`;
+          return `Here's the job card for ${job.customer}${job.title ? " — " + job.title : ""}:`;
         }
         case "assign_material_to_job": {
           const matIdx = (materials || []).findIndex(m => m.item?.toLowerCase().includes(input.item.toLowerCase()));
