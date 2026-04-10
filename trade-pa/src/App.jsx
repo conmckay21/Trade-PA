@@ -3570,6 +3570,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [expandedWidget, setExpandedWidget] = useState(null);
   const [ramsSession, setRamsSession] = useState(null);
   const [sessionData, setSessionData] = useState({});
+  const [supportMode, setSupportMode] = useState(false);
   const ttsEnabledRef = useRef(false);
   const ttsAudioRef = useRef(null);
   const bottomRef = useRef(null);
@@ -4212,6 +4213,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     { name: "delete_job_card", description: "Delete a job card permanently.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
     { name: "delete_mileage", description: "Delete the most recent mileage log.", input_schema: { type: "object", properties: {} } },
     { name: "delete_rams", description: "Delete a RAMS document.", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
+    { name: "escalate_to_support", description: "Use ONLY when you have genuinely tried to resolve the user's issue and cannot. Collects their details and sends an email to the support team.", input_schema: { type: "object", properties: { issue_summary: { type: "string", description: "Clear description of the issue" }, steps_tried: { type: "string", description: "What you already tried" }, user_email: { type: "string", description: "User's email address if known" } }, required: ["issue_summary"] } },
     { name: "request_signature", description: "Open the signature pad for a customer to sign off a completed job. Use when user says 'get signature', 'sign off', 'customer sign-off', 'completion sign-off'.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
     { name: "sync_to_xero", description: "Upload/sync an invoice to Xero accounting. Use when user says 'send to Xero', 'sync invoice to Xero', 'push to Xero'.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
     { name: "sync_to_quickbooks", description: "Upload/sync an invoice to QuickBooks. Use when user says 'send to QuickBooks', 'sync to QuickBooks'.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
@@ -5427,6 +5429,34 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           }
         }
 
+        case "escalate_to_support": {
+          const issueBody = [
+            "TRADE PA SUPPORT ESCALATION",
+            "",
+            "Issue: " + (input.issue_summary || "Not specified"),
+            "Steps tried: " + (input.steps_tried || "None recorded"),
+            "User email: " + (input.user_email || brand?.email || user?.email || "Unknown"),
+            "Business: " + (brand?.tradingName || "Unknown"),
+            "User ID: " + (user?.id || "Unknown"),
+            "Time: " + new Date().toLocaleString("en-GB"),
+          ].join("\n");
+          try {
+            await fetch("/api/email/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId: user?.id,
+                to: "support@tradespa.co.uk",
+                subject: "Support escalation — " + (brand?.tradingName || "User") + " — " + (input.issue_summary || "").slice(0, 60),
+                body: issueBody.replace(/\n/g, "<br>"),
+              }),
+            });
+          } catch(e) { console.warn("Support escalation email failed:", e.message); }
+          pendingWidgetRef.current = { type: "support_escalated", data: { issue: input.issue_summary, email: input.user_email || brand?.email } };
+          setSupportMode(false);
+          return "I have escalated this to the support team — you will hear back within 1 business day. Sorry I could not resolve it myself.";
+        }
+
         default:
           return `Unknown action: ${name}`;
       }
@@ -5487,7 +5517,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- STOCK: add_stock_item, list_stock, update_stock, delete_stock_item.\n"
   + "- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n"
   + "- SUBCONTRACTOR STATEMENTS: generate_subcontractor_statement shows CIS statement for a month.\n"
-  + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.";
+  + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.\n"
+  + (supportMode ? "\nSUPPORT MODE ACTIVE: The user needs help with the app. Your job is to resolve their issue conversationally — walk them through it step by step, explain how features work, and troubleshoot problems. You know every feature of Trade PA in detail. If after 3 genuine attempts you still cannot resolve the issue, use the escalate_to_support tool to collect their details and email the issue to the support team. Be warm, patient and thorough. Never tell them to contact support unless you have tried everything." : "");
 
 
   // Auto-trigger onboarding for new users — placed here so isNewUser and send are both defined
@@ -5628,6 +5659,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     { label: "📊  How am I doing?", msg: "Give me a summary of how the business is doing" },
   ];
 
+  const startSupport = () => {
+    setSupportMode(true);
+    send("I need help with the app");
+  };
+
   const isHome = messages.length === 0 && !loading;
 
   return (
@@ -5746,16 +5782,22 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
             </div>
           </div>
 
-          {/* Scan receipt - full width below quick actions */}
-          {onScanReceipt && (
-            <div>
-              <input ref={homeScanRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display: "none" }} onChange={e => { homeScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
-              <button onClick={() => homeScanRef.current?.click()}
-                style={{ width: "100%", padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.amber, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", textAlign: "center", letterSpacing: "0.03em" }}>
-                🧾  Scan Material Invoice / Receipt
-              </button>
-            </div>
-          )}
+          {/* Scan receipt + Help — full width below quick actions */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {onScanReceipt && (
+              <div>
+                <input ref={homeScanRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display: "none" }} onChange={e => { homeScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
+                <button onClick={() => homeScanRef.current?.click()}
+                  style={{ width: "100%", padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.amber, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", textAlign: "center", letterSpacing: "0.03em" }}>
+                  🧾  Scan Material Invoice / Receipt
+                </button>
+              </div>
+            )}
+            <button onClick={startSupport}
+              style={{ width: "100%", padding: "12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, fontSize: 12, cursor: "pointer", fontFamily: "'DM Mono',monospace", textAlign: "center" }}>
+              ❓  Help & Support
+            </button>
+          </div>
 
           <div style={{ textAlign: "center", color: C.muted, fontSize: 11, paddingBottom: 4 }}>or type below ↓</div>
         </div>
@@ -5768,7 +5810,12 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
             {quick.map((q, i) => (
               <button key={i} onClick={() => send(q)} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, color: C.textDim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>{q}</button>
             ))}
-            <button onClick={() => setMessages([])} style={{ padding: "5px 12px", background: "none", border: `1px solid ${C.border}`, borderRadius: 20, color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", marginLeft: "auto" }}>🏠 Home</button>
+            <button onClick={() => { setMessages([]); setSupportMode(false); }} style={{ padding: "5px 12px", background: "none", border: `1px solid ${C.border}`, borderRadius: 20, color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", marginLeft: "auto" }}>🏠 Home</button>
+            {supportMode && (
+              <div style={{ padding: "4px 10px", background: C.blue + "22", border: `1px solid ${C.blue}44`, borderRadius: 20, color: C.blue, fontSize: 10, fontWeight: 700 }}>
+                SUPPORT
+              </div>
+            )}
             <button onClick={toggleTts} style={{ padding: "5px 10px", background: ttsEnabled ? C.amber + "22" : "none", border: `1px solid ${ttsEnabled ? C.amber + "66" : C.border}`, borderRadius: 20, color: ttsEnabled ? C.amber : C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", flexShrink: 0 }} title={ttsEnabled ? "Tap to mute" : "Tap to hear responses"}>
               {ttsEnabled ? "🔊" : "🔇"}
             </button>
@@ -6517,6 +6564,14 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                         <div style={{ fontSize: 11, color: C.muted, marginTop: 8, textAlign: "center" }}>
                           Open the job card and tap "Customer Sign-off" to capture the signature
                         </div>
+                      </div>
+                    )}
+                    {m.widget.type === "support_escalated" && (
+                      <div style={{ background: C.surfaceHigh, border: `1px solid ${C.blue}44`, borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 6 }}>✓ Escalated to Support</div>
+                        <div style={{ fontSize: 12, color: C.textDim }}>{m.widget.data.issue}</div>
+                        {m.widget.data.email && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Reply to: {m.widget.data.email}</div>}
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Expected response within 1 business day</div>
                       </div>
                     )}
                     {m.widget.type === "accounting_sync" && (
