@@ -3583,12 +3583,30 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
   useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
 
+  const CLOSING_PHRASES = [
+    "that's everything", "thats everything", "that is everything",
+    "that's all", "thats all", "that is all",
+    "all done", "i'm done", "im done", "we're done", "we are done",
+    "nothing else", "no that's all", "no thats all",
+    "no thanks", "no thank you",
+    "goodbye", "good bye", "bye for now",
+    "stop listening", "stop hands free", "exit hands free",
+  ];
+
   const { recording, transcribing, toggle, startRecording, stopRecording } = useWhisper(
     (text) => {
       if (text) {
-        // In hands-free mode, auto-send transcript immediately
         if (handsFreeRef.current) {
-          send(text);
+          const lower = text.toLowerCase().trim();
+          const isClosing = CLOSING_PHRASES.some(p => lower.includes(p));
+          if (isClosing) {
+            // Stop the hands-free loop but keep wake word active so they can trigger again
+            setHandsFree(false);
+            handsFreeRef.current = false;
+            speak("No problem, I'll stop there. Just say Hey Trade PA whenever you need me.");
+          } else {
+            send(text);
+          }
         } else {
           setInput(text);
         }
@@ -5595,7 +5613,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       const widget = pendingWidgetRef.current;
       pendingWidgetRef.current = null;
       setMessages(prev => [...prev, { role: "assistant", content: finalReply, widget }]);
-      speak(finalReply);
+      // In hands-free mode, append the loop prompt so user knows mic will reopen
+      const ttsText = handsFreeRef.current
+        ? finalReply + " … Is that everything?"
+        : finalReply;
+      speak(ttsText);
 
     } catch (e) {
       console.error("AI send error:", e);
