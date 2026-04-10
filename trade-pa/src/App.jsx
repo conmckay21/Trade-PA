@@ -492,20 +492,64 @@ function AuthScreen({ onAuth, initialMode = "login", onBack }) {
   );
 }
 // ─── Whisper Voice Recording Hook ─────────────────────────────────────────────
-function useWhisper(onTranscript) {
+function useWhisper(onTranscript, onSilence) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
+  const silenceTimerRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const silenceCheckRef = useRef(null);
 
-  const startRecording = async () => {
+  const clearSilenceDetection = () => {
+    if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+    if (silenceCheckRef.current) { cancelAnimationFrame(silenceCheckRef.current); silenceCheckRef.current = null; }
+    if (audioContextRef.current) { try { audioContextRef.current.close(); } catch(e) {} audioContextRef.current = null; }
+  };
+
+  const startSilenceDetection = (stream, onSilenceDetected) => {
     try {
-      // Must be called directly from user gesture — no await before getUserMedia
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const analyser = ctx.createAnalyser();
+      const source = ctx.createMediaStreamSource(stream);
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.8;
+      source.connect(analyser);
+      audioContextRef.current = ctx;
+      analyserRef.current = analyser;
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      let silenceStart = null;
+      const SILENCE_THRESHOLD = 10;  // RMS below this = silence
+      const SILENCE_DURATION = 1500; // 1.5s of silence = auto-stop
+      const check = () => {
+        if (!analyserRef.current) return;
+        analyser.getByteFrequencyData(data);
+        const rms = Math.sqrt(data.reduce((s, v) => s + v * v, 0) / data.length);
+        if (rms < SILENCE_THRESHOLD) {
+          if (!silenceStart) silenceStart = Date.now();
+          else if (Date.now() - silenceStart > SILENCE_DURATION) {
+            clearSilenceDetection();
+            onSilenceDetected();
+            return;
+          }
+        } else {
+          silenceStart = null;
+        }
+        silenceCheckRef.current = requestAnimationFrame(check);
+      };
+      // Start checking after 600ms so initial breath doesn't trigger
+      setTimeout(() => { silenceCheckRef.current = requestAnimationFrame(check); }, 600);
+    } catch(e) { console.warn("Silence detection unavailable:", e.message); }
+  };
+
+  const startRecording = async (withSilenceDetect = false) => {
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-
-      // iOS Safari only supports mp4, Chrome/Firefox support webm
       const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       const recorder = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
@@ -515,6 +559,7 @@ function useWhisper(onTranscript) {
       };
 
       recorder.onstop = async () => {
+        clearSilenceDetection();
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(t => t.stop());
           streamRef.current = null;
@@ -523,7 +568,6 @@ function useWhisper(onTranscript) {
         if (blob.size < 500) { setTranscribing(false); return; }
         setTranscribing(true);
         try {
-          // Server-side transcription — key never exposed to browser
           const audioBase64 = await new Promise((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result.split(",")[1]);
@@ -543,6 +587,15 @@ function useWhisper(onTranscript) {
       recorder.start(250);
       mediaRecorderRef.current = recorder;
       setRecording(true);
+
+      if (withSilenceDetect) {
+        startSilenceDetection(stream, () => {
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+            mediaRecorderRef.current.stop();
+          }
+          setRecording(false);
+        });
+      }
     } catch (err) {
       console.error("Mic:", err);
       if (err.name === "NotAllowedError") {
@@ -554,19 +607,19 @@ function useWhisper(onTranscript) {
   };
 
   const stopRecording = () => {
+    clearSilenceDetection();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
     setRecording(false);
   };
 
-  // Tap toggle — tap once to start, tap again to stop and transcribe
-  const toggle = () => {
+  const toggle = (withSilenceDetect = false) => {
     if (recording) stopRecording();
-    else startRecording();
+    else startRecording(withSilenceDetect);
   };
 
-  return { recording, transcribing, toggle };
+  return { recording, transcribing, toggle, startRecording, stopRecording };
 }
 
 const C = {
@@ -3518,23 +3571,23 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [ramsSession, setRamsSession] = useState(null);
   const [sessionData, setSessionData] = useState({});
   const ttsEnabledRef = useRef(false);
-  const ttsAudioRef = useRef(null); // current playing Audio object
+  const ttsAudioRef = useRef(null);
   const bottomRef = useRef(null);
+  const [handsFree, setHandsFree] = useState(false);
+  const handsFreeRef = useRef(false);
+  const wakeWordRef = useRef(null); // Porcupine wake word engine
+  const [wakeWordReady, setWakeWordReady] = useState(false);
+  const [wakeWordListening, setWakeWordListening] = useState(false);
 
-  // Keep ref in sync with state
   useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
+  useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
 
   const speak = async (text) => {
     if (!ttsEnabledRef.current) return;
-    // Stop any currently playing audio
-    if (ttsAudioRef.current) {
-      ttsAudioRef.current.pause();
-      ttsAudioRef.current = null;
-    }
+    if (ttsAudioRef.current) { ttsAudioRef.current.pause(); ttsAudioRef.current = null; }
     const clean = text.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
     if (!clean) return;
     try {
-      // Deepgram Aura TTS — routed through our proxy to keep API key server-side
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3545,10 +3598,34 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       ttsAudioRef.current = audio;
-      audio.onended = () => { URL.revokeObjectURL(url); ttsAudioRef.current = null; };
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        ttsAudioRef.current = null;
+        if (handsFreeRef.current) {
+          const isAndroidDevice = /android/i.test(navigator.userAgent);
+          setTimeout(() => {
+            if (!handsFreeRef.current) return;
+            if (isAndroidDevice) {
+              // Android: restart wake word listener
+              initWakeWord();
+            } else {
+              // iOS: reopen mic directly
+              startRecording(true);
+            }
+          }, 400);
+        }
+      };
       audio.play().catch(() => {});
     } catch (e) {
       console.warn("TTS error:", e.message);
+      // Even if TTS fails, restore hands-free
+      if (handsFreeRef.current) {
+        const isAndroidDevice = /android/i.test(navigator.userAgent);
+        setTimeout(() => {
+          if (!handsFreeRef.current) return;
+          if (isAndroidDevice) initWakeWord(); else startRecording(true);
+        }, 500);
+      }
     }
   };
 
@@ -3556,16 +3633,118 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     const newVal = !ttsEnabledRef.current;
     setTtsEnabled(newVal);
     ttsEnabledRef.current = newVal;
-    if (!newVal && ttsAudioRef.current) {
-      ttsAudioRef.current.pause();
-      ttsAudioRef.current = null;
+    if (!newVal && ttsAudioRef.current) { ttsAudioRef.current.pause(); ttsAudioRef.current = null; }
+  };
+
+  // Detect platform once
+  const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isAndroid = /android/i.test(navigator.userAgent);
+
+  // ── Phase 2: Android — Web Speech API continuous wake word ────────────────
+  // Uses built-in Chrome speech recognition — no account or API key needed.
+  // Listens for "hey trade" or "trade pa" as trigger phrase.
+  const speechRecognitionRef = useRef(null);
+
+  const initWakeWord = () => {
+    if (!isAndroid) return; // iOS handled by hands-free loop only
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { console.warn("SpeechRecognition not available"); return; }
+    const recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-GB";
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map(r => r[0].transcript.toLowerCase())
+        .join(" ");
+      if (
+        (transcript.includes("hey trade") || transcript.includes("trade pa") || transcript.includes("trade pay")) &&
+        !recording && handsFreeRef.current
+      ) {
+        recognition.stop();
+        speechRecognitionRef.current = null;
+        setWakeWordListening(false);
+        startRecording(true);
+      }
+    };
+    recognition.onerror = (e) => {
+      if (e.error !== "aborted") console.warn("Wake word error:", e.error);
+    };
+    recognition.onend = () => {
+      // Restart wake word listening after a brief pause (if still in hands-free mode and not recording)
+      if (handsFreeRef.current && !recording) {
+        setTimeout(() => {
+          if (handsFreeRef.current && !recording && speechRecognitionRef.current === null) {
+            initWakeWord();
+          }
+        }, 1000);
+      }
+    };
+    try {
+      recognition.start();
+      speechRecognitionRef.current = recognition;
+      setWakeWordReady(true);
+      setWakeWordListening(true);
+    } catch(e) {
+      console.warn("Wake word start failed:", e.message);
     }
   };
+
+  const stopWakeWord = () => {
+    if (speechRecognitionRef.current) {
+      try { speechRecognitionRef.current.stop(); } catch(e) {}
+      speechRecognitionRef.current = null;
+    }
+    setWakeWordReady(false);
+    setWakeWordListening(false);
+  };
+
+  // Toggle hands-free mode
+  const toggleHandsFree = () => {
+    const newVal = !handsFreeRef.current;
+    setHandsFree(newVal);
+    handsFreeRef.current = newVal;
+    if (newVal) {
+      if (isAndroid) {
+        // Android: start wake word listener — mic opens when triggered
+        initWakeWord();
+      } else {
+        // iOS: start listening immediately, loop via silence detection + TTS
+        if (!recording && !transcribing) startRecording(true);
+      }
+    } else {
+      stopRecording();
+      stopWakeWord();
+    }
+  };
+
+  // When recording starts on Android (from wake word trigger), stop wake word recognition
+  // to avoid conflict; it restarts after TTS ends via speak()
+  useEffect(() => {
+    if (recording && isAndroid && speechRecognitionRef.current) {
+      try { speechRecognitionRef.current.stop(); } catch(e) {}
+      speechRecognitionRef.current = null;
+      setWakeWordListening(false);
+    }
+  }, [recording]);
+
+  // After TTS ends on Android, reinstate wake word listening
+  // (handled in speak() audio.onended — it calls startRecording(true) for iOS
+  //  and initWakeWord() for Android via the hands-free flag)
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  const { recording, transcribing, toggle } = useWhisper((text) => {
-    if (text) setInput(text);
-  });
+  const { recording, transcribing, toggle, startRecording, stopRecording } = useWhisper(
+    (text) => {
+      if (text) {
+        // In hands-free mode, auto-send transcript immediately
+        if (handsFreeRef.current) {
+          send(text);
+        } else {
+          setInput(text);
+        }
+      }
+    }
+  );
 
   // ── Tool definitions ──────────────────────────────────────────────────────
   const TOOLS = [
@@ -5469,34 +5648,88 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           {/* Big voice button */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "16px 0 8px" }}>
             <button
-              onClick={toggle}
+              onClick={() => handsFree ? (recording ? stopRecording() : startRecording(true)) : toggle(false)}
               disabled={transcribing}
               style={{
                 width: 130, height: 130, borderRadius: "50%",
-                background: recording ? C.red : C.amber,
+                background: recording ? C.red : handsFree ? C.green : C.amber,
                 border: "none", cursor: transcribing ? "default" : "pointer",
                 fontSize: 46, display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: recording ? `0 0 0 16px ${C.red}22, 0 0 0 32px ${C.red}11` : `0 0 0 16px ${C.amber}18, 0 0 0 32px ${C.amber}08`,
+                boxShadow: recording
+                  ? `0 0 0 16px ${C.red}22, 0 0 0 32px ${C.red}11`
+                  : handsFree
+                  ? `0 0 0 16px ${C.green}22, 0 0 0 32px ${C.green}0a`
+                  : `0 0 0 16px ${C.amber}18, 0 0 0 32px ${C.amber}08`,
                 transition: "all 0.25s",
                 flexShrink: 0,
               }}
             >
               {transcribing ? "⏳" : recording ? "⏹" : "🎙"}
             </button>
-            <div style={{ fontSize: 12, color: recording ? C.red : transcribing ? C.amber : C.muted, fontWeight: recording || transcribing ? 600 : 400 }}>
-              {recording ? "Recording — tap to stop" : transcribing ? "Transcribing..." : "Tap to speak to Trade PA"}
+            <div style={{ fontSize: 12, color: recording ? C.green : transcribing ? C.amber : handsFree ? C.green : C.muted, fontWeight: recording || transcribing || handsFree ? 600 : 400, transition: "color 0.2s" }}>
+              {transcribing ? "Thinking..." : recording ? (handsFree ? "Listening..." : "Recording — tap to stop") : handsFree ? "Ready" : "Tap to speak"}
             </div>
           </div>
 
-          {recording && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 6, fontSize: 12, color: C.red }}>
+          {/* Hands-free toggle — platform aware */}
+          {(() => {
+            const isAndroidDevice = /android/i.test(navigator.userAgent);
+            const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            return (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                <button
+                  onClick={toggleHandsFree}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 18px", background: handsFree ? C.green + "22" : C.surfaceHigh, border: `1px solid ${handsFree ? C.green + "66" : C.border}`, borderRadius: 20, color: handsFree ? C.green : C.muted, fontSize: 12, fontWeight: handsFree ? 700 : 400, cursor: "pointer", fontFamily: "'DM Mono',monospace", transition: "all 0.2s" }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: handsFree ? C.green : "#444", animation: handsFree ? "bellPulse 2s ease infinite" : "none" }} />
+                  {handsFree
+                    ? (isAndroidDevice
+                        ? (wakeWordListening ? "🎙 Say "Hey Trade PA"" : "Hands-free on — listening...")
+                        : "Hands-free on — tap mic or speak")
+                    : "Hands-free mode"}
+                </button>
+                {!handsFree && (
+                  <div style={{ fontSize: 10, color: C.muted, textAlign: "center", lineHeight: 1.5 }}>
+                    {isAndroidDevice
+                      ? "Say "Hey Trade PA" to start · auto-sends on silence"
+                      : isIosDevice
+                      ? "One tap to start · auto-sends · auto-listens after response"
+                      : "Silence detection · auto-sends · loops after response"}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {wakeWordListening && !recording && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: C.green + "11", border: `1px solid ${C.green}33`, borderRadius: 8, fontSize: 12, color: C.green }}>
+              <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                {[0,1,2].map(i => (
+                  <div key={i} style={{ width: 3, background: C.green, borderRadius: 2, animation: `bellPulse 1s ${i * 0.15}s ease infinite`, height: `${8 + i * 4}px` }} />
+                ))}
+              </div>
+              Listening for "Hey Trade PA"...
+            </div>
+          )}
+          {recording && handsFree && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: C.green + "11", border: `1px solid ${C.green}33`, borderRadius: 8, fontSize: 12, color: C.green }}>
+              <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                {[0,1,2,3,4].map(i => (
+                  <div key={i} style={{ width: 3, background: C.green, borderRadius: 2, animation: `bellPulse ${0.6 + i * 0.1}s ${i * 0.1}s ease infinite`, height: `${4 + Math.abs(2-i) * 5}px` }} />
+                ))}
+              </div>
+              Listening — will send when you stop speaking
+            </div>
+          )}
+          {recording && !handsFree && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: C.red + "11", border: `1px solid ${C.red}33`, borderRadius: 8, fontSize: 12, color: C.red }}>
               <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, animation: "bellPulse 1s ease infinite" }} />
-              Recording — tap Stop when done
+              Recording — tap to stop
             </div>
           )}
           {transcribing && (
-            <div style={{ padding: "6px 12px", background: C.amber + "18", border: `1px solid ${C.amber}44`, borderRadius: 6, fontSize: 12, color: C.amber }}>
-              ⏳ Transcribing your voice note...
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: C.amber + "11", border: `1px solid ${C.amber}33`, borderRadius: 8, fontSize: 12, color: C.amber }}>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.amber, animation: "bellPulse 0.8s ease infinite" }} />
+              Transcribing...
             </div>
           )}
 
