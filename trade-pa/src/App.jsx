@@ -3583,6 +3583,19 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
   useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
 
+  const { recording, transcribing, toggle, startRecording, stopRecording } = useWhisper(
+    (text) => {
+      if (text) {
+        // In hands-free mode, auto-send transcript immediately
+        if (handsFreeRef.current) {
+          send(text);
+        } else {
+          setInput(text);
+        }
+      }
+    }
+  );
+
   const speak = async (text) => {
     if (!ttsEnabledRef.current) return;
     if (ttsAudioRef.current) { ttsAudioRef.current.pause(); ttsAudioRef.current = null; }
@@ -3733,19 +3746,6 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   // (handled in speak() audio.onended — it calls startRecording(true) for iOS
   //  and initWakeWord() for Android via the hands-free flag)
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
-  const { recording, transcribing, toggle, startRecording, stopRecording } = useWhisper(
-    (text) => {
-      if (text) {
-        // In hands-free mode, auto-send transcript immediately
-        if (handsFreeRef.current) {
-          send(text);
-        } else {
-          setInput(text);
-        }
-      }
-    }
-  );
 
   // ── Tool definitions ──────────────────────────────────────────────────────
   const TOOLS = [
