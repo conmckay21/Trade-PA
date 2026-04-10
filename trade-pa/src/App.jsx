@@ -5683,14 +5683,14 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                   <div style={{ width: 7, height: 7, borderRadius: "50%", background: handsFree ? C.green : "#444", animation: handsFree ? "bellPulse 2s ease infinite" : "none" }} />
                   {handsFree
                     ? (isAndroidDevice
-                        ? (wakeWordListening ? "🎙 Say "Hey Trade PA"" : "Hands-free on — listening...")
+                        ? (wakeWordListening ? "🎙 Say 'Hey Trade PA'" : "Hands-free on — listening...")
                         : "Hands-free on — tap mic or speak")
                     : "Hands-free mode"}
                 </button>
                 {!handsFree && (
                   <div style={{ fontSize: 10, color: C.muted, textAlign: "center", lineHeight: 1.5 }}>
                     {isAndroidDevice
-                      ? "Say "Hey Trade PA" to start · auto-sends on silence"
+                      ? "Say 'Hey Trade PA' to start · auto-sends on silence"
                       : isIosDevice
                       ? "One tap to start · auto-sends · auto-listens after response"
                       : "Silence detection · auto-sends · loops after response"}
@@ -5707,7 +5707,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
                   <div key={i} style={{ width: 3, background: C.green, borderRadius: 2, animation: `bellPulse 1s ${i * 0.15}s ease infinite`, height: `${8 + i * 4}px` }} />
                 ))}
               </div>
-              Listening for "Hey Trade PA"...
+              Listening for 'Hey Trade PA'...
             </div>
           )}
           {recording && handsFree && (
