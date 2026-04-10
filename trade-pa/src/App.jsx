@@ -3603,7 +3603,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         URL.revokeObjectURL(url);
         ttsAudioRef.current = null;
         if (handsFreeRef.current) {
-          const isAndroidDevice = /android/i.test(navigator.userAgent);
+          const isAndroidDevice = navigator.userAgent.toLowerCase().indexOf("android") !== -1;
           setTimeout(() => {
             if (!handsFreeRef.current) return;
             if (isAndroidDevice) {
@@ -3638,8 +3638,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   };
 
   // Detect platform once
-  const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  const isAndroid = /android/i.test(navigator.userAgent);
+  const isIosDevice = (navigator.userAgent.indexOf("iPhone") !== -1 || navigator.userAgent.indexOf("iPad") !== -1 || navigator.userAgent.indexOf("iPod") !== -1) && !window.MSStream;
+  const isAndroid = navigator.userAgent.toLowerCase().indexOf("android") !== -1;
 
   // ── Phase 2: Android — Web Speech API continuous wake word ────────────────
   // Uses built-in Chrome speech recognition — no account or API key needed.
@@ -5709,8 +5709,9 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
 
           {/* Hands-free toggle — platform aware */}
           {(() => {
-            const isAndroidDevice = /android/i.test(navigator.userAgent);
-            const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const ua = navigator.userAgent.toLowerCase();
+            const isAndroidDevice = ua.indexOf("android") !== -1;
+            const isIosDevice = ua.indexOf("iphone") !== -1 || ua.indexOf("ipad") !== -1 || ua.indexOf("ipod") !== -1;
             return (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
                 <button
