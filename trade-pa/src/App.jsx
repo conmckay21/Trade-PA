@@ -3621,7 +3621,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       console.warn("TTS error:", e.message);
       // Even if TTS fails, restore hands-free
       if (handsFreeRef.current) {
-        const isAndroidDevice = /android/i.test(navigator.userAgent);
+        const isAndroidDevice = navigator.userAgent.toLowerCase().indexOf("android") !== -1;
         setTimeout(() => {
           if (!handsFreeRef.current) return;
           if (isAndroidDevice) initWakeWord(); else startRecording(true);
@@ -15326,7 +15326,7 @@ export default function App() {
       viewport.content = viewport.content + ', viewport-fit=cover';
     }
     // Detect iOS and standalone mode
-    const ios = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+    const ua2 = navigator.userAgent.toLowerCase(); const ios = ua2.indexOf("iphone") !== -1 || ua2.indexOf("ipad") !== -1 || ua2.indexOf("ipod") !== -1;
     const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
     setIsIos(ios);
     setIsStandalone(standalone);
@@ -15589,35 +15589,6 @@ export default function App() {
       .catch(() => {}); // silently ignore if table doesn't exist
 
   }, [user?.id]);
-
-  useEffect(() => {
-    if (!user) return;
-    brandSaveCount.current++;
-    if (brandSaveCount.current <= 1) return;
-
-    // Save to localStorage immediately
-    try {
-      localStorage.setItem(`trade-pa-brand-${user.id}`, JSON.stringify(brand));
-    } catch {
-      try {
-        const { logo, gasSafeLogo, ...rest } = brand;
-        localStorage.setItem(`trade-pa-brand-${user.id}`, JSON.stringify(rest));
-      } catch {}
-    }
-
-    // Debounce Supabase save — excludes logos (too large)
-    if (brandSaveTimer.current) clearTimeout(brandSaveTimer.current);
-    brandSaveTimer.current = setTimeout(() => {
-      try {
-        const { logo, gasSafeLogo, _exemptBypass, ...syncData } = brand;
-        supabase.from("user_settings").upsert({
-          user_id: user.id,
-          brand_data: syncData,
-          updated_at: new Date().toISOString(),
-        }).catch(() => {});
-      } catch {}
-    }, 2000);
-  }, [brand, user?.id]);
 
   useEffect(() => {
     if (!user) return;
