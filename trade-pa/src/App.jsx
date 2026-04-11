@@ -3629,35 +3629,74 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   );
 
   // Helper: restart mic after speaking (or if speaking fails)
+  // Speak using Web Speech API (instant, no API key, works offline)
+  // Used as primary TTS engine — reliable fallback from Deepgram
+  const speakWebSpeech = (text, onEnd) => {
+    if (!("speechSynthesis" in window)) { onEnd(); return; }
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    // Prefer a British female voice
+    // Voices may not load immediately — wait if empty
+    let voices = window.speechSynthesis.getVoices();
+    if (!voices.length) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        voices = window.speechSynthesis.getVoices();
+      };
+    }
+    const preferred = voices.find(v => v.name.includes("Kate"))
+      || voices.find(v => v.name.includes("Serena"))
+      || voices.find(v => v.name.includes("Samantha"))
+      || voices.find(v => v.lang === "en-GB" && v.name.toLowerCase().includes("female"))
+      || voices.find(v => v.lang === "en-GB")
+      || voices.find(v => v.lang.startsWith("en"));
+    if (preferred) utt.voice = preferred;
+    utt.lang = "en-GB";
+    utt.rate = 0.95;
+    utt.pitch = 1.0;
+    utt.onend = onEnd;
+    utt.onerror = onEnd;
+    window.speechSynthesis.speak(utt);
+  };
+
   const speak = async (text) => {
     if (!ttsEnabledRef.current) return;
     if (ttsAudioRef.current) { ttsAudioRef.current.pause(); ttsAudioRef.current = null; }
+    window.speechSynthesis?.cancel();
     const clean = text.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
     if (!clean) return;
+
+    const onSpeechEnd = () => {
+      ttsAudioRef.current = null;
+      if (handsFreeRef.current) restartMicAfterSpeak(900);
+    };
+
+    // Try Deepgram first for better voice quality
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: clean }),
       });
-      if (!res.ok) return;
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      ttsAudioRef.current = audio;
-      audio.onended = () => {
-        URL.revokeObjectURL(url);
-        ttsAudioRef.current = null;
-        if (handsFreeRef.current) restartMicAfterSpeak(800);
-      };
-      audio.play().catch(() => {
-        ttsAudioRef.current = null;
-        if (handsFreeRef.current) restartMicAfterSpeak(600);
-      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        ttsAudioRef.current = audio;
+        audio.onended = () => { URL.revokeObjectURL(url); onSpeechEnd(); };
+        audio.play().catch(() => {
+          // Deepgram play blocked — fall back to Web Speech
+          URL.revokeObjectURL(url);
+          ttsAudioRef.current = null;
+          speakWebSpeech(clean, onSpeechEnd);
+        });
+        return;
+      }
     } catch (e) {
-      console.warn("TTS error:", e.message);
-      if (handsFreeRef.current) restartMicAfterSpeak(600);
+      console.warn("Deepgram TTS failed, using Web Speech:", e.message);
     }
+
+    // Deepgram unavailable — use Web Speech API
+    speakWebSpeech(clean, onSpeechEnd);
   };
 
   const toggleTts = () => {
@@ -3750,7 +3789,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   };
 
   // Restart mic after AI finishes speaking (used by hands-free loop)
-  const restartMicAfterSpeak = (delay = 800) => {
+  const restartMicAfterSpeak = (delay = 1200) => {
     setTimeout(() => {
       if (!handsFreeRef.current) return;
       if (isAndroid) initWakeWord(); else startRecording(true);
@@ -5819,9 +5858,10 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         : (spokenSummary || finalReply);
 
       if (handsFreeRef.current) {
-        // Speak reply + loop prompt. If TTS is off, restart mic directly.
-        speak(spokenReply);  // Claude's hands-free response already ends with a natural follow-up
-        if (!ttsEnabledRef.current) restartMicAfterSpeak(600);
+        // In hands-free mode: Claude is instructed to read data and ask what's next.
+        // Append a brief pause marker so TTS doesn't cut off the last word.
+        speak(spokenReply);
+        if (!ttsEnabledRef.current) restartMicAfterSpeak(1500);
       } else {
         speak(spokenReply);
       }
