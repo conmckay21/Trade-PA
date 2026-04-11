@@ -3635,16 +3635,15 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         ttsAudioRef.current = null;
         if (handsFreeRef.current) {
           const isAndroidDevice = navigator.userAgent.toLowerCase().indexOf("android") !== -1;
+          // Natural pause after AI finishes speaking before mic opens
           setTimeout(() => {
             if (!handsFreeRef.current) return;
             if (isAndroidDevice) {
-              // Android: restart wake word listener
               initWakeWord();
             } else {
-              // iOS: reopen mic directly
               startRecording(true);
             }
-          }, 400);
+          }, 800);
         }
       };
       audio.play().catch(() => {});
@@ -5613,11 +5612,30 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       const widget = pendingWidgetRef.current;
       pendingWidgetRef.current = null;
       setMessages(prev => [...prev, { role: "assistant", content: finalReply, widget }]);
-      // In hands-free mode, append the loop prompt so user knows mic will reopen
-      const ttsText = handsFreeRef.current
-        ? finalReply + " … Is that everything?"
-        : finalReply;
-      speak(ttsText);
+
+      if (handsFreeRef.current) {
+        // Append the loop-back question
+        const loopPrompt = "Is that everything, or is there anything else I can help with?";
+        setMessages(prev => [...prev, { role: "assistant", content: loopPrompt }]);
+        if (ttsEnabledRef.current) {
+          // TTS on: speak reply + prompt, mic restarts in audio.onended
+          speak(finalReply + " … " + loopPrompt);
+        } else {
+          // TTS off (e.g. in car): restart mic directly after a short delay
+          speak(finalReply); // no-op if TTS off, but keeps the pattern
+          setTimeout(() => {
+            if (!handsFreeRef.current) return;
+            const ua = navigator.userAgent.toLowerCase();
+            if (ua.indexOf("android") !== -1) {
+              initWakeWord();
+            } else {
+              startRecording(true);
+            }
+          }, 600);
+        }
+      } else {
+        speak(finalReply);
+      }
 
     } catch (e) {
       console.error("AI send error:", e);
