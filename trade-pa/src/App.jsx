@@ -502,6 +502,7 @@ function useWhisper(onTranscript, onSilence) {
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const silenceCheckRef = useRef(null);
+  const sessionIdRef = useRef(0); // incremented each recording — prevents stale onstop
 
   const clearSilenceDetection = () => {
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
@@ -523,9 +524,9 @@ function useWhisper(onTranscript, onSilence) {
       analyserRef.current = analyser;
       const data = new Uint8Array(analyser.frequencyBinCount);
       let silenceStart = null;
-      const SILENCE_THRESHOLD = 10; // RMS below this = silence
-      // Grace period: give user time to start speaking before silence detection begins.
-      // Longer for hands-free (user may need a moment after the PA finishes speaking).
+      // RMS threshold — 25 works for most environments including moderate ambient noise.
+      // Too low (10) means ambient noise prevents silence ever being detected.
+      const SILENCE_THRESHOLD = 25;
       const graceMs = silenceDuration >= 3000 ? 2000 : 1500;
       const check = () => {
         if (!analyserRef.current) return;
@@ -549,39 +550,44 @@ function useWhisper(onTranscript, onSilence) {
 
   const startRecording = async (withSilenceDetect = false, silenceDuration = 2500) => {
     try {
-      // Stop any previous stream's tracks directly — do NOT call recorder.stop() here
-      // because that fires recorder.onstop async which runs clearSilenceDetection()
-      // and kills the new session's silence detector (race condition)
+      // Increment session ID first — any onstop from old recorder will see mismatched ID and bail
+      const mySession = ++sessionIdRef.current;
+
+      // Clean up old stream/recorder — stopping tracks may fire old onstop async,
+      // but session ID mismatch means it will exit immediately without clearing anything
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
         streamRef.current = null;
       }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        // Nullify first so onstop handler ignores it, then abort without firing onstop
         const old = mediaRecorderRef.current;
         mediaRecorderRef.current = null;
-        try { old.stream?.getTracks().forEach(t => t.stop()); } catch(e) {}
+        try { old.stop(); } catch(e) {}
       }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       const recorder = new MediaRecorder(stream, { mimeType });
-      chunksRef.current = [];
+      // Each session has its own chunk array — immune to cross-session contamination
+      const sessionChunks = [];
 
       recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+        if (e.data && e.data.size > 0) sessionChunks.push(e.data);
       };
 
       recorder.onstop = async () => {
+        // If a newer session has started, ignore this onstop entirely
+        if (mySession !== sessionIdRef.current) return;
+
         clearSilenceDetection();
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(t => t.stop());
           streamRef.current = null;
         }
-        const blob = new Blob(chunksRef.current, { type: mimeType });
+        const blob = new Blob(sessionChunks, { type: mimeType });
         if (blob.size < 500) {
           setTranscribing(false);
-          // Nothing was said — notify caller so hands-free can reopen mic
           if (onSilence) onSilence();
           return;
         }
@@ -601,12 +607,10 @@ function useWhisper(onTranscript, onSilence) {
           if (data.text?.trim()) {
             onTranscript(data.text.trim());
           } else {
-            // Empty result (background noise) — keep hands-free loop alive
             if (onSilence) onSilence();
           }
         } catch (e) {
           console.error("Whisper:", e);
-          // Network/API error — keep hands-free loop alive
           if (onSilence) onSilence();
         }
         setTranscribing(false);
@@ -4383,13 +4387,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "log_mileage",
-      description: "Log a mileage trip for HMRC tax purposes. If the user gives two addresses or locations (from and to), use those and omit miles — the app will calculate the driving distance automatically. Only require miles if the user states an exact figure.",
+      description: "Log a mileage trip for HMRC tax purposes. IMPORTANT: if the user gives two addresses/locations, do NOT include miles — leave it out and the app calculates it automatically from the addresses. Only include miles if the user explicitly states a number of miles.",
       input_schema: {
         type: "object",
         properties: {
           from_location: { type: "string", description: "Start address or location" },
           to_location: { type: "string", description: "Destination address or location" },
-          miles: { type: "number", description: "Miles travelled — omit if from_location and to_location are provided and distance should be calculated automatically" },
+          miles: { type: "number", description: "ONLY include this if user explicitly stated a miles figure. Leave out if you have from/to addresses — distance is auto-calculated." },
           purpose: { type: "string", description: "Purpose e.g. site visit, materials collection" },
           date: { type: "string", description: "Date in YYYY-MM-DD format, default today" },
         },
