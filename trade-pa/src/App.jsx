@@ -7376,20 +7376,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
           rows={3}
         />
-        {!isHome && (
-          <button
-            onClick={toggleHandsFree}
-            title={handsFree ? "Hands-free on — tap to stop" : "Tap to go hands-free"}
-            style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${handsFree ? C.green + "88" : C.border}`, background: handsFree ? C.green + "22" : C.surfaceHigh, color: handsFree ? C.green : C.muted, fontSize: 14, cursor: "pointer", flexShrink: 0, lineHeight: 1 }}
-          >{handsFree ? "🎙✓" : "🎙"}</button>
-        )}
-        {isHome && (
-          <button
-            onClick={() => recording ? stopRecording() : startRecording(true)}
-            disabled={transcribing}
-            style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${recording ? C.red : C.border}`, background: recording ? C.red + "22" : C.surfaceHigh, color: recording ? C.red : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-          >{transcribing ? "⏳" : recording ? "⏹ Stop" : "🎙"}</button>
-        )}
+        <button
+          onClick={() => recording ? stopRecording() : startRecording(true)}
+          disabled={transcribing}
+          style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${recording ? C.red : C.border}`, background: recording ? C.red + "22" : C.surfaceHigh, color: recording ? C.red : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+        >{transcribing ? "⏳" : recording ? "⏹ Stop" : "🎙"}</button>
         <button onClick={() => send(input)} style={{ ...S.btn("primary"), padding: "10px 16px" }} disabled={loading || !input.trim()}>Send</button>
       </div>
     </div>
