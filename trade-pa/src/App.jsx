@@ -5570,10 +5570,21 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     setLastAction(null);
 
     try {
-      const apiMessages = updated
+      // Build API messages — deduplicate consecutive same-role messages
+      // (Claude API requires strict user/assistant alternation)
+      const rawMessages = updated
         .filter(m => m.role === "user" || m.role === "assistant")
         .filter(m => typeof m.content === "string")
         .map(m => ({ role: m.role, content: m.content }));
+      const apiMessages = rawMessages.reduce((acc, msg) => {
+        if (acc.length > 0 && acc[acc.length - 1].role === msg.role) {
+          // Merge consecutive same-role messages
+          acc[acc.length - 1] = { ...acc[acc.length - 1], content: acc[acc.length - 1].content + " " + msg.content };
+        } else {
+          acc.push(msg);
+        }
+        return acc;
+      }, []);
 
       const res = await fetch("/api/claude", {
         method: "POST",
@@ -5667,9 +5678,9 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         : finalReply;
 
       if (handsFreeRef.current) {
-        const loopPrompt = "Is that everything, or is there anything else I can help with?";
-        setMessages(prev => [...prev, { role: "assistant", content: loopPrompt }]);
-        speak(spokenReply + " … " + loopPrompt);
+        // Speak the summary + loop prompt — but do NOT add loopPrompt as a separate
+        // assistant message. Two consecutive assistant messages break the Claude API.
+        speak(spokenReply + " … Is that everything, or is there anything else I can help with?");
       } else {
         speak(spokenReply);
       }
@@ -5677,6 +5688,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     } catch (e) {
       console.error("AI send error:", e);
       setMessages(prev => [...prev, { role: "assistant", content: `Connection error: ${e.message}. Check your internet connection and try again.` }]);
+      // Always restart mic in hands-free mode, even on error
+      if (handsFreeRef.current) restartMicAfterSpeak(1000);
     }
     setLoading(false);
   };
