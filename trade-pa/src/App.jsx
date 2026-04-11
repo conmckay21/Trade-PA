@@ -5543,6 +5543,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n"
   + "- SUBCONTRACTOR STATEMENTS: generate_subcontractor_statement shows CIS statement for a month.\n"
   + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.\n"
+  + (handsFree ? "\n\nHANDS-FREE DRIVING MODE IS ACTIVE. The user is driving and speaking to you as a personal assistant in the car. Rules you MUST follow:\n- You are a real personal assistant. Sound like one — natural, warm, efficient.\n- Keep responses SHORT — 2-3 sentences maximum. No long explanations.\n- ALWAYS read out the actual data. Never say \'here is your schedule\' without saying the names, times and dates. Never say \'here are your invoices\' without reading out who owes what.\n- When listing invoices: read each one — name, amount, overdue or not. E.g. \'You have three outstanding invoices. John Smith owes 450 pounds, overdue. Dave Jones owes 620 pounds, due Friday. Lisa Kinsman owes 200 pounds, due next week.\' Then ask what they want to do.\n- When listing schedule: read each one — day, time, person. E.g. \'You have two jobs this week. Tuesday at 10am, Lisa Kinsman in Portsmouth. Thursday at 2pm, Dave Jones in Southampton.\'\n- After completing an action, confirm it briefly and ask what is next. E.g. \'Done, invoice created for John Smith for 450 pounds. Anything else?\' or \'Noted, mileage logged. What else do you need?\'\n- NEVER use markdown, bullet points, asterisks, hyphens as lists, or any formatting. Plain spoken English only.\n- You are having a free-flowing conversation. The user will follow up. Keep it going naturally." : "")
   + (supportMode ? "\nSUPPORT MODE ACTIVE: The user needs help with the app. Your job is to resolve their issue conversationally — walk them through it step by step, explain how features work, and troubleshoot problems. You know every feature of Trade PA in detail. If after 3 genuine attempts you still cannot resolve the issue, use the escalate_to_support tool to collect their details and email the issue to the support team. Be warm, patient and thorough. Never tell them to contact support unless you have tried everything." : "");
 
 
@@ -5636,51 +5637,190 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       const buildSpokenSummary = (w) => {
         if (!w?.data) return "";
         const d = w.data;
+        const fmt = (n) => "£" + parseFloat(n||0).toFixed(2);
         try {
           switch (w.type) {
-            case "schedule_list":
-              if (!d.length) return "You have nothing scheduled this week.";
-              return "Your schedule: " + d.slice(0, 5).map(j => {
+
+            case "schedule_list": {
+              if (!d.length) return "You have nothing booked.";
+              const items = d.slice(0, 8).map(j => {
                 const dt = j.dateObj ? new Date(j.dateObj) : null;
-                const day = dt ? dt.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" }) : j.date || "";
-                const time = dt ? dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "";
-                const when = time && time !== "00:00" ? `${day} at ${time}` : day;
-                return `${j.customer || j.title || "Job"}, ${when}${j.address ? ", " + j.address : ""}`;
-              }).join(". ") + (d.length > 5 ? `. Plus ${d.length - 5} more.` : ".");
+                const day = dt ? dt.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : j.date || "";
+                const time = dt ? dt.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" }) : "";
+                return time && time !== "00:00"
+                  ? `On ${day} at ${time} you have ${j.customer || j.title || "a job"}`
+                  : `On ${day} you have ${j.customer || j.title || "a job"}`;
+              });
+              return "Here is your schedule. " + items.join(". ") + (d.length > 8 ? `. Plus ${d.length - 8} more.` : ".");
+            }
+
+            case "invoice_list": {
+              if (!d.length) return "No invoices found.";
+              const total = d.reduce((s,i) => s + parseFloat(i.grossAmount||i.amount||0), 0);
+              const overdue = d.filter(i => i.status === "overdue");
+              const items = d.slice(0, 6).map(i =>
+                `${i.customer} owes ${fmt(i.grossAmount||i.amount)}, ${i.status === "overdue" ? "overdue" : "outstanding"}`
+              );
+              let summary = `You have ${d.length} outstanding invoice${d.length !== 1 ? "s" : ""} totalling ${fmt(total)}. `;
+              if (overdue.length) summary += `${overdue.length} ${overdue.length === 1 ? "is" : "are"} overdue. `;
+              summary += items.join(". ") + ".";
+              return summary;
+            }
+
             case "invoice":
-            case "quote":
-              return `${d.isQuote ? "Quote" : "Invoice"} for ${d.customer}, ${d.isQuote ? "valid" : "due"} ${d.due}, total £${parseFloat(d.grossAmount || d.amount || 0).toFixed(2)}.`;
-            case "invoice_list":
-              return `You have ${d.length} invoice${d.length !== 1 ? "s" : ""}. ` + d.slice(0, 3).map(i => `${i.customer}, £${parseFloat(i.grossAmount || i.amount || 0).toFixed(2)}, ${i.status}`).join(". ") + (d.length > 3 ? `. And ${d.length - 3} more.` : ".");
-            case "job_card":
-            case "job_full":
-              return `Job card for ${d.customer}${d.address ? " at " + d.address : ""}. Status: ${(d.status || "new").replace(/_/g, " ")}${d.value > 0 ? ". Value £" + parseFloat(d.value).toFixed(2) : ""}.`;
-            case "job_list":
+            case "quote": {
+              const type = d.isQuote ? "Quote" : "Invoice";
+              const amt = fmt(d.grossAmount||d.amount);
+              return `${type} created for ${d.customer}, ${amt}, due ${d.due}.`;
+            }
+
+            case "job_list": {
               if (!d.length) return "No jobs found.";
-              return `Found ${d.length} job${d.length !== 1 ? "s" : ""}. ` + d.slice(0, 3).map(j => `${j.customer || j.title}${j.value > 0 ? ", £" + j.value : ""}`).join(". ") + ".";
-            case "material_list":
+              const items = d.slice(0, 6).map(j =>
+                `${j.customer || j.title}${j.status ? ", " + j.status.replace(/_/g," ") : ""}${j.value > 0 ? ", " + fmt(j.value) : ""}`
+              );
+              return `Found ${d.length} job${d.length !== 1 ? "s" : ""}. ` + items.join(". ") + ".";
+            }
+
+            case "job_card":
+            case "job_full": {
+              const val = d.value > 0 ? `, valued at ${fmt(d.value)}` : "";
+              const status = (d.status||"new").replace(/_/g," ");
+              return `Job card for ${d.customer}${d.address ? " at " + d.address : ""}. Status ${status}${val}.`;
+            }
+
+            case "material_list": {
               if (!d.length) return "No materials found.";
-              return `${d.length} material${d.length !== 1 ? "s" : ""}. ` + d.slice(0, 3).map(m => `${m.item}, quantity ${m.qty}`).join(". ") + ".";
-            case "report":
-              return `Report for ${d.label || "this period"}. Revenue £${(d.totalRevenue || 0).toFixed(2)}, gross profit £${(d.grossProfit || 0).toFixed(2)}.`;
-            case "mileage_list":
-              return `${d.length} mileage trip${d.length !== 1 ? "s" : ""}, total claimable value £${parseFloat(w.value || 0).toFixed(2)}.`;
+              const toOrder = d.filter(m => m.status === "to_order");
+              const items = d.slice(0, 5).map(m => `${m.item}, quantity ${m.qty}${m.supplier ? " from " + m.supplier : ""}`);
+              let s = `${d.length} material${d.length !== 1 ? "s" : ""}. `;
+              if (toOrder.length) s += `${toOrder.length} still to order. `;
+              s += items.join(". ") + ".";
+              return s;
+            }
+
+            case "po_list": {
+              if (!d.length) return "No purchase orders found.";
+              const items = d.slice(0, 5).map(p => `${p.supplier}, ${fmt(p.total)}, ${p.status}`);
+              return `${d.length} purchase order${d.length !== 1 ? "s" : ""}. ` + items.join(". ") + ".";
+            }
+
+            case "mileage_list": {
+              if (!d.length) return "No mileage logged.";
+              const miles = d.reduce((s,t) => s + parseFloat(t.miles||0), 0);
+              return `${d.length} trip${d.length !== 1 ? "s" : ""}, ${miles.toFixed(0)} miles total, claimable value ${fmt(w.value||0)}.`;
+            }
+
+            case "expense_list": {
+              if (!d.length) return "No expenses found.";
+              const total = d.reduce((s,e) => s + parseFloat(e.amount||0), 0);
+              const items = d.slice(0, 4).map(e => `${e.description||e.exp_type}, ${fmt(e.amount)}`);
+              return `${d.length} expense${d.length !== 1 ? "s" : ""} totalling ${fmt(total)}. ` + items.join(". ") + ".";
+            }
+
+            case "customer_list": {
+              if (!d.length) return "No customers found.";
+              return `Found ${d.length} customer${d.length !== 1 ? "s" : ""}. ` + d.slice(0, 5).map(c => c.name).join(", ") + ".";
+            }
+
+            case "enquiry_list": {
+              if (!d.length) return "No enquiries found.";
+              const items = d.slice(0, 5).map(e => `${e.name}${e.msg ? ", " + e.msg.slice(0,40) : ""}${e.source ? " via " + e.source : ""}`);
+              return `${d.length} enquir${d.length !== 1 ? "ies" : "y"}. ` + items.join(". ") + ".";
+            }
+
+            case "reminder_list": {
+              if (!d.length) return "No reminders set.";
+              const items = d.slice(0, 5).map(r => {
+                const when = r.fire_at ? new Date(r.fire_at).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+                return r.text + (when ? " at " + when : "");
+              });
+              return `${d.length} reminder${d.length !== 1 ? "s" : ""}. ` + items.join(". ") + ".";
+            }
+
+            case "stock_list": {
+              if (!d.length) return "No stock items.";
+              const low = d.filter(s => parseFloat(s.quantity||0) <= parseFloat(s.reorder_level||0));
+              let s = `${d.length} stock item${d.length !== 1 ? "s" : ""}. `;
+              if (low.length) s += `${low.length} running low: ` + low.slice(0,3).map(s => s.name).join(", ") + ". ";
+              return s;
+            }
+
+            case "report": {
+              const rev = fmt(d.totalRevenue||0);
+              const profit = fmt(d.grossProfit||0);
+              const out = fmt(d.outstanding||0);
+              return `${d.label || "Report"}: revenue ${rev}, gross profit ${profit}, outstanding ${out}.`;
+            }
+
+            case "cis_list": {
+              if (!d.length) return "No CIS statements.";
+              const total = d.reduce((s,x) => s + parseFloat(x.gross_amount||0), 0);
+              return `${d.length} CIS statement${d.length !== 1 ? "s" : ""}, total gross ${fmt(total)}.`;
+            }
+
+            case "cis_statement":
+              return `CIS from ${d.contractor_name}. Gross ${fmt(d.gross_amount)}, deduction ${fmt(d.deduction_amount)}, net ${fmt(d.net_amount)}.`;
+
+            case "subcontractor_list": {
+              if (!d.length) return "No subcontractors.";
+              return `${d.length} subcontractor${d.length !== 1 ? "s" : ""}. ` + d.slice(0,4).map(s => s.name).join(", ") + ".";
+            }
+
+            case "subcontractor_payment":
+              return `Payment for ${d.subcontractor_name}. Gross ${fmt(d.gross)}, CIS deduction ${fmt(d.deduction)}, net payable ${fmt(d.net)}.`;
+
+            case "rams_list": {
+              if (!d.length) return "No RAMS documents.";
+              return `${d.length} RAMS document${d.length !== 1 ? "s" : ""}. Most recent: ${d[0].title}.`;
+            }
+
             case "rams_complete":
-              return `RAMS document saved for ${d.title}.`;
+              return `RAMS saved for ${d.title}.`;
+
+            case "email_sent":
+              return `${d.isChase ? "Chase email" : d.isQuote ? "Quote" : "Invoice"} sent to ${d.customer}.`;
+
+            case "email_sent":
+              return `Email sent to ${d.customer}.`;
+
+            case "stock_item_entry":
+              return `${d.name} added to stock. Current quantity ${d.quantity} ${d.unit||""}.`;
+
+            case "variation_order":
+              return `Variation order ${d.vo_number||""} for ${d.customer}, ${fmt(d.amount)}.`;
+
+            case "daywork_sheet":
+              return `Daywork sheet for ${d.customer}, ${d.hours} hours at £${d.rate} per hour, total ${fmt(d.total)}.`;
+
+            case "compliance_cert":
+              return `${d.doc_type} certificate issued for ${d.customer}.`;
+
+            case "scan_result":
+              return `Receipt scanned from ${d.supplier||"supplier"}. ${d.items?.length||0} item${(d.items?.length||0)!==1?"s":""}, total ${fmt(d.total)}.`;
+
+            case "stage_payments": {
+              const total = (d.stages||[]).reduce((s,st) => s + parseFloat(st.amount||0), 0);
+              return `Stage payment plan for ${d.customer}. ${(d.stages||[]).length} stages totalling ${fmt(total)}.`;
+            }
+
             default:
               return "";
           }
         } catch { return ""; }
       };
 
+      // In hands-free mode, Claude is instructed to read data aloud in its response.
+      // Use Claude's reply directly. Only fall back to widget summary if reply is very short.
       const spokenSummary = widget ? buildSpokenSummary(widget) : "";
-      const spokenReply = spokenSummary
-        ? (spokenSummary + " " + (replyText ? replyText.split(".")[0] + "." : ""))
-        : finalReply;
+      const replyIsSubstantive = finalReply.length > 60;
+      const spokenReply = replyIsSubstantive
+        ? finalReply
+        : (spokenSummary || finalReply);
 
       if (handsFreeRef.current) {
         // Speak reply + loop prompt. If TTS is off, restart mic directly.
-        speak(spokenReply + " … Is that everything, or is there anything else I can help with?");
+        speak(spokenReply);  // Claude's hands-free response already ends with a natural follow-up
         if (!ttsEnabledRef.current) restartMicAfterSpeak(600);
       } else {
         speak(spokenReply);
@@ -5866,7 +6006,15 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Quick actions</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {quickActions.map((q, i) => (
-                <button key={i} onClick={() => { send(q.msg); }}
+                <button key={i} onClick={() => {
+                  // If hands-free is on, keep the loop going after AI responds
+                  // If hands-free is off, still open mic after response (one-shot)
+                  if (!handsFreeRef.current) {
+                    setHandsFree(true);
+                    handsFreeRef.current = true;
+                  }
+                  send(q.msg);
+                }}
                   style={{ padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 12, cursor: "pointer", fontFamily: "'DM Mono',monospace", textAlign: "left", lineHeight: 1.4 }}>
                   {q.label}
                 </button>
@@ -5900,7 +6048,10 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         <>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {quick.map((q, i) => (
-              <button key={i} onClick={() => send(q)} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, color: C.textDim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>{q}</button>
+              <button key={i} onClick={() => {
+                if (!handsFreeRef.current) { setHandsFree(true); handsFreeRef.current = true; }
+                send(q);
+              }} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, color: C.textDim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>{q}</button>
             ))}
             <button onClick={() => { setMessages([]); setSupportMode(false); }} style={{ padding: "5px 12px", background: "none", border: `1px solid ${C.border}`, borderRadius: 20, color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", marginLeft: "auto" }}>🏠 Home</button>
             {supportMode && (
