@@ -598,8 +598,18 @@ function useWhisper(onTranscript, onSilence) {
             body: JSON.stringify({ audio: audioBase64, mimeType }),
           });
           const data = await res.json();
-          if (data.text) onTranscript(data.text.trim());
-        } catch (e) { console.error("Whisper:", e); }
+          if (data.text?.trim()) {
+            onTranscript(data.text.trim());
+          } else {
+            // Transcription returned nothing (background noise, unclear speech)
+            // Treat same as silence so hands-free loop continues
+            if (onSilence) onSilence();
+          }
+        } catch (e) {
+          console.error("Whisper:", e);
+          // Network error or API failure — restart mic so hands-free loop doesn't die
+          if (onSilence) onSilence();
+        }
         setTranscribing(false);
       };
 
@@ -618,7 +628,14 @@ function useWhisper(onTranscript, onSilence) {
     } catch (err) {
       console.error("Mic:", err);
       if (err.name === "NotAllowedError") {
+        // Mic permission denied — always alert, this needs user action
         alert("Microphone blocked.\n\nOn iPhone: Settings → Safari → Microphone → Allow your site.\n\nThen reload and try again.");
+      } else if (withSilenceDetect) {
+        // In hands-free mode: audio session may be briefly locked after TTS.
+        // Silently retry after 1.5s instead of showing a disruptive alert.
+        setTimeout(() => {
+          if (onSilence) onSilence(); // triggers restartMic via onSilenceRef
+        }, 1500);
       } else {
         alert(`Mic error: ${err.message}`);
       }
@@ -3642,6 +3659,10 @@ Return only JSON, no other text.` },
 function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user, refreshJobs, onShowPdf, onScanReceipt }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
+  // Remember hands-free preference across sessions
+  const [handsFreeDefault] = useState(() => {
+    try { return localStorage.getItem("tradePaHandsFree") === "true"; } catch { return false; }
+  });
   const pendingWidgetRef = React.useRef(null);
   const messagesRef = React.useRef([]);  // always-current messages for stale-closure safety
 
@@ -3669,6 +3690,19 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [wakeWordListening, setWakeWordListening] = useState(false);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // Restore hands-free state from last session
+  useEffect(() => {
+    if (handsFreeDefault && !handsFreeRef.current) {
+      // Small delay so component is fully mounted
+      setTimeout(() => {
+        setHandsFree(true);
+        handsFreeRef.current = true;
+        if (!isAndroid) startRecording(true, 3000);
+        else initWakeWord();
+      }, 1200);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
 
   // ── PA Memory layer ───────────────────────────────────────────────────────
@@ -3779,7 +3813,25 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       }
     } catch(e) { /* silent */ }
   };
-  useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
+  useEffect(() => {
+    handsFreeRef.current = handsFree;
+    try { localStorage.setItem("tradePaHandsFree", handsFree ? "true" : "false"); } catch {}
+  }, [handsFree]);
+
+  // Hands-free watchdog: if hands-free is active but mic is dead (not recording,
+  // not transcribing, not speaking), something died silently — revive it.
+  useEffect(() => {
+    if (!handsFree) return;
+    const watchdog = setInterval(() => {
+      if (!handsFreeRef.current) return;
+      const speaking = !!ttsAudioRef.current;
+      if (!recording && !transcribing && !speaking) {
+        console.warn("Hands-free watchdog: mic dead, restarting");
+        if (isAndroid) initWakeWord(); else startRecording(true, 3000);
+      }
+    }, 8000); // check every 8s
+    return () => clearInterval(watchdog);
+  }, [handsFree, recording, transcribing]);
 
   // ── Error capture system ─────────────────────────────────────────────────
   const logError = async (type, fields = {}) => {
@@ -3836,12 +3888,31 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   // Update refs on every render so they always point to fresh closures
   onTranscriptRef.current = (text) => {
     if (!text) return;
+    const lower = text.toLowerCase().trim();
+
+    // Hands-free activation — works from ANY state (manual or hands-free)
+    const ACTIVATE_PHRASES = [
+      "go hands free", "hands free mode", "hands-free mode",
+      "enable hands free", "turn on hands free", "switch to hands free",
+      "put it on hands free", "put me on hands free", "back on hands free",
+      "go back to hands free", "start hands free", "activate hands free",
+    ];
+    const isActivating = ACTIVATE_PHRASES.some(p => lower.includes(p));
+    if (isActivating && !handsFreeRef.current) {
+      setHandsFree(true);
+      handsFreeRef.current = true;
+      try { localStorage.setItem("tradePaHandsFree", "true"); } catch {}
+      speak("Hands-free is on. Go ahead.");
+      // Mic will restart via speak() onSpeechEnd → restartMicAfterSpeak
+      return;
+    }
+
     if (handsFreeRef.current) {
-      const lower = text.toLowerCase().trim();
       const isClosing = CLOSING_PHRASES.some(p => lower.includes(p));
       if (isClosing) {
         setHandsFree(false);
         handsFreeRef.current = false;
+        try { localStorage.setItem("tradePaHandsFree", "false"); } catch {}
         speak("No problem, I'll stop there. Just say Hey Trade PA whenever you need me.");
       } else {
         send(text);
@@ -4060,8 +4131,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   const restartMicAfterSpeak = (delay = 1200) => {
     setTimeout(() => {
       if (!handsFreeRef.current) return;
-      // 7s silence: user needs time to digest what was said before responding
-      if (isAndroid) initWakeWord(); else startRecording(true, 3000);
+      // If TTS audio is still held (iOS releases audio session asynchronously),
+      // wait another 500ms before opening the mic to avoid getUserMedia collision
+      if (ttsAudioRef.current) {
+        setTimeout(() => {
+          if (!handsFreeRef.current) return;
+          if (isAndroid) initWakeWord(); else startRecording(true, 3000);
+        }, 500);
+      } else {
+        if (isAndroid) initWakeWord(); else startRecording(true, 3000);
+      }
     }, delay);
   };
 
@@ -6532,6 +6611,25 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           )}
 
           <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
+            {/* Hands-free dropped banner — shown if messages exist but hands-free is off */}
+            {messages.length > 0 && !handsFree && (
+              <div style={{ margin: "0 0 12px 0", padding: "10px 14px", background: C.amber + "11", border: `1px solid ${C.amber}33`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ fontSize: 12, color: C.amber, fontWeight: 600 }}>
+                  🎙 Hands-free is off — say "go hands-free" or tap to re-enable
+                </div>
+                <button
+                  onClick={() => {
+                    setHandsFree(true);
+                    handsFreeRef.current = true;
+                    try { localStorage.setItem("tradePaHandsFree", "true"); } catch {}
+                    if (!isAndroid) startRecording(true, 3000); else initWakeWord();
+                  }}
+                  style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px", flexShrink: 0 }}
+                >
+                  Go hands-free
+                </button>
+              </div>
+            )}
             {messages.map((m, i) => (
               <div key={i}>
                 <div style={S.aiMsg(m.role)}>
