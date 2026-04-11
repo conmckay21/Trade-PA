@@ -1584,6 +1584,36 @@ function CertificationsCard({ brand, setBrand }) {
 function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit }) {
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportText, setReportText] = useState(null);
+  const [reportError, setReportError] = useState(null);
+
+  const generateReport = async () => {
+    setReportLoading(true);
+    setReportText(null);
+    setReportError(null);
+    try {
+      const res = await fetch("/api/error-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.id,
+          userEmail: brand?.email || user?.email,
+          sendEmail: !!(brand?.email || user?.email),
+          daysBack: 30,
+        }),
+      });
+      const data = await res.json();
+      if (data.report) {
+        setReportText(data.report);
+      } else {
+        setReportText("No errors logged in the last 30 days. All good! ✓");
+      }
+    } catch(e) {
+      setReportError("Failed to generate report: " + e.message);
+    }
+    setReportLoading(false);
+  };
   const [xeroConnected, setXeroConnected] = useState(false);
   const [qbConnected, setQbConnected] = useState(false);
   const logoRef = useRef();
@@ -2380,6 +2410,44 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
         {userRole !== "owner" && (
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Contact the account owner to change your access permissions.</div>
+        )}
+      </div>
+
+      {/* ── Error Report Section ─────────────────────────────────────────── */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginTop: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: C.muted, marginBottom: 10 }}>SYSTEM HEALTH</div>
+        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12, lineHeight: 1.5 }}>
+          The app silently logs errors, PA mistakes, and voice failures in the background. Generate a report to send to your developer for fixes.
+          {brand?.email && <span style={{ color: C.amber }}> Will also email to {brand.email}.</span>}
+        </div>
+        <button
+          onClick={generateReport}
+          disabled={reportLoading}
+          style={{ ...S.btn("ghost"), width: "100%", justifyContent: "center", opacity: reportLoading ? 0.6 : 1 }}
+        >
+          {reportLoading ? "⏳ Generating..." : "📋 Generate Error Report (Last 30 Days)"}
+        </button>
+        {reportError && <div style={{ marginTop: 10, fontSize: 12, color: C.red }}>{reportError}</div>}
+        {reportText && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>
+                {reportText.startsWith("No errors") ? "✓ No issues found" : "📋 Report ready"}
+              </div>
+              <button
+                onClick={() => { navigator.clipboard.writeText(reportText); }}
+                style={{ ...S.btn("ghost"), fontSize: 10, padding: "4px 10px" }}
+              >Copy</button>
+            </div>
+            <textarea
+              readOnly
+              value={reportText}
+              style={{ ...S.input, fontSize: 11, height: 180, resize: "vertical", fontFamily: "monospace", opacity: 0.8 }}
+            />
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
+              Copy this report and paste it into a Claude session. Say: <span style={{ color: C.amber }}>"Fix these issues in my Trade PA App.jsx"</span>
+            </div>
+          </div>
         )}
       </div>
 
@@ -3602,7 +3670,148 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
+
+  // ── PA Memory layer ───────────────────────────────────────────────────────
+  const [paMemories, setPaMemories] = useState([]);
+  const paMemoriesRef = useRef([]);
+  useEffect(() => { paMemoriesRef.current = paMemories; }, [paMemories]);
+
+  // Load memories from Supabase on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from("pa_memories")
+      .select("id, content, category, times_reinforced")
+      .eq("user_id", user.id)
+      .order("times_reinforced", { ascending: false })
+      .order("last_used", { ascending: false })
+      .limit(40)
+      .then(({ data }) => {
+        if (data?.length) setPaMemories(data);
+      }).catch(() => {});
+  }, [user?.id]);
+
+  // Persist a single memory — reinforces if similar one already exists
+  const persistMemory = async (memContent, category, boost = 1) => {
+    if (!memContent || memContent.length < 10 || !user?.id) return;
+    const existing = paMemoriesRef.current.find(m =>
+      m.content.toLowerCase().includes(memContent.slice(0, 25).toLowerCase())
+    );
+    if (existing) {
+      const n = (existing.times_reinforced || 1) + boost;
+      await supabase.from("pa_memories")
+        .update({ times_reinforced: n, last_used: new Date().toISOString() }).eq("id", existing.id);
+      setPaMemories(prev => prev.map(m => m.id === existing.id ? { ...m, times_reinforced: n } : m));
+    } else {
+      const { data: ins } = await supabase.from("pa_memories").insert({
+        user_id: user.id, content: memContent, category: category || "fact",
+        times_reinforced: boost, created_at: new Date().toISOString(), last_used: new Date().toISOString(),
+      }).select().single();
+      if (ins) setPaMemories(prev => [...prev, ins]);
+    }
+  };
+
+  const lastRequestRef = React.useRef({ text: null, time: 0 });
+
+  // Analyse completed exchange: detect corrections, extract facts, log errors — all silent background
+  const extractAndStoreMemories = async (userText, assistantText) => {
+    if (!user?.id || !userText || !assistantText) return;
+    try {
+      // Repetition detection — same request within 3 minutes = first attempt unsatisfactory
+      const now = Date.now();
+      const norm = userText.toLowerCase().trim().slice(0, 70);
+      if (lastRequestRef.current.text === norm && (now - lastRequestRef.current.time) < 180000) {
+        await logError("repetition", {
+          error_msg: `User repeated: "${userText.slice(0, 100)}"`,
+          user_input: userText.slice(0, 300),
+          pa_response: assistantText.slice(0, 300),
+          context: "Same request made twice — first response did not satisfy",
+        });
+      }
+      lastRequestRef.current = { text: norm, time: now };
+
+      // Get previous PA message for correction detection
+      const msgs = messagesRef.current;
+      const prevAsst = msgs.filter(m => m.role === "assistant").slice(-2, -1)[0]?.content || "";
+      const hasPrev = prevAsst.length > 10;
+
+      const prompt = hasPrev
+        ? `Previous PA response: "${prevAsst.slice(0, 250)}"
+User follow-up: "${userText}"
+New PA response: "${assistantText.slice(0, 250)}"
+
+1. Is the user correcting/rejecting the PREVIOUS response? If yes, one sentence describing the mistake. If no, null.
+2. Up to 2 concrete long-term facts about this business. Skip greetings.
+Return ONLY JSON: {"correction": "description of what PA did wrong" | null, "memories": [{"content": "...", "category": "business_fact|preference|customer_note|pattern"}]}`
+        : `User: "${userText}"
+PA: "${assistantText.slice(0, 250)}"
+Extract up to 2 concrete long-term facts. Skip greetings.
+Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category": "business_fact|preference|customer_note|pattern"}]}`;
+
+      const res = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 350,
+          system: "Analyse tradesperson PA conversations. Return ONLY valid JSON, no markdown.",
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      if (!res.ok) return;
+      const resp = await res.json();
+      const raw = (resp.content || []).map(b => b.text || "").join("").trim();
+      const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+
+      // Correction: high-priority memory + error log
+      if (parsed?.correction && typeof parsed.correction === "string" && parsed.correction.length > 15) {
+        await persistMemory("LESSON: " + parsed.correction, "correction", 3);
+        await logError("correction", {
+          error_msg: parsed.correction,
+          user_input: userText?.slice(0, 300),
+          pa_response: prevAsst?.slice(0, 300),
+          context: "Auto-detected: user corrected PA",
+        });
+      }
+
+      // Regular memories
+      for (const mem of (parsed?.memories || []).slice(0, 2)) {
+        if (mem?.content) await persistMemory(mem.content, mem.category, 1);
+      }
+    } catch(e) { /* silent */ }
+  };
   useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
+
+  // ── Error capture system ─────────────────────────────────────────────────
+  const logError = async (type, fields = {}) => {
+    if (!user?.id) return;
+    try {
+      await supabase.from("pa_error_log").insert({
+        user_id: user.id,
+        error_type: type,
+        occurred_at: new Date().toISOString(),
+        ...fields,
+      });
+    } catch(e) { /* silent */ }
+  };
+
+  // Capture unhandled JS errors globally
+  useEffect(() => {
+    if (!user?.id) return;
+    const onError = (e) => logError("js_error", {
+      error_msg: e.message || "Unknown JS error",
+      context: e.filename ? `${e.filename}:${e.lineno}` : "unknown location",
+    });
+    const onUnhandled = (e) => logError("js_error", {
+      error_msg: String(e.reason?.message || e.reason || "Unhandled promise rejection"),
+      context: "unhandled_promise",
+    });
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onUnhandled);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onUnhandled);
+    };
+  }, [user?.id]);
 
   const CLOSING_PHRASES = [
     "that's everything", "thats everything", "that is everything",
@@ -3714,6 +3923,10 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       safetyTimer = setTimeout(() => {
         if (!speechEnded) {
           console.warn("TTS safety [" + phase + "] — restarting mic");
+          logError("tts_failure", {
+            error_msg: `TTS safety timer fired in phase: ${phase}`,
+            context: `Text length: ${clean.length} chars. Phase: ${phase}`,
+          });
           onSpeechEnd();
         }
       }, ms);
@@ -4340,6 +4553,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     { name: "sync_material_to_xero", description: "Create a bill in Xero for a material purchase. Use when user says 'send material to Xero', 'create Xero bill' for a material.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
     { name: "sync_material_to_quickbooks", description: "Create a bill in QuickBooks for a material purchase.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
     { name: "mark_invoice_paid_xero", description: "Mark an invoice as paid in Xero. Use when invoice is already in Xero and user confirms payment received.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
+    {
+      name: "save_memory",
+      description: "Store a fact, preference or pattern worth remembering about this business for all future conversations. Use when the user tells you their standard rates, preferred suppliers, how they work, or anything they say should be remembered.",
+      input_schema: { type: "object", properties: { content: { type: "string", description: "The fact to remember as a clear statement. E.g. 'Standard call-out rate is £65/hour'" }, category: { type: "string", enum: ["business_fact", "preference", "customer_note", "pattern", "correction"] } }, required: ["content"] },
+    },
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
@@ -5582,6 +5800,35 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           }
         }
 
+        case "save_memory": {
+          const memContent = (input.content || "").trim();
+          if (!memContent) return "Nothing to save — please provide the fact to remember.";
+          const existing = paMemoriesRef.current.find(m =>
+            m.content.toLowerCase().includes(memContent.slice(0, 20).toLowerCase())
+          );
+          if (existing) {
+            await supabase.from("pa_memories")
+              .update({ times_reinforced: (existing.times_reinforced || 1) + 1, last_used: new Date().toISOString() })
+              .eq("id", existing.id);
+            setPaMemories(prev => prev.map(m => m.id === existing.id
+              ? { ...m, times_reinforced: (m.times_reinforced || 1) + 1 }
+              : m
+            ));
+            return `Got it — I already knew that. I'll keep it in mind.`;
+          }
+          const { data: inserted, error } = await supabase.from("pa_memories").insert({
+            user_id: user?.id,
+            content: memContent,
+            category: input.category || "fact",
+            times_reinforced: 1,
+            created_at: new Date().toISOString(),
+            last_used: new Date().toISOString(),
+          }).select().single();
+          if (error) return `Couldn't save that memory: ${error.message}`;
+          if (inserted) setPaMemories(prev => [...prev, inserted]);
+          return `Noted — I'll remember that for every future conversation.`;
+        }
+
         case "escalate_to_support": {
           const issueBody = [
             "TRADE PA SUPPORT ESCALATION",
@@ -5647,6 +5894,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material\n"
   + "UPDATE: mark_invoice_paid, update_job_status, update_job_card (edit any field), update_invoice (edit any field/line item), update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock, delete_stock_item\n"
   + "LOG: log_time, log_mileage, add_job_note\n"
+  + "MEMORY: save_memory (explicitly store something important you should remember about this business)\n"
   + "\nRules:\n"
   + "- create_job = scheduled with date+time. create_job_card = job tracking card without a date.\n"
   + "- For invoices/quotes: use line_items array — one object per item with description and amount.\n- list_invoices filter: unpaid = outstanding/due/awaiting payment. paid = settled/collected. ALWAYS match what the user asked for.\n"
@@ -5672,6 +5920,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- SUBCONTRACTOR STATEMENTS: generate_subcontractor_statement shows CIS statement for a month.\n"
   + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.\n"
   + (handsFree ? "\n\nHANDS-FREE MODE: Your reply is spoken aloud by text-to-speech. Rules:\n- Plain spoken English only. No markdown, bullets, asterisks or formatting.\n- Keep your text reply to 1-2 sentences — a brief spoken intro only.\n- When you use a tool to fetch data, your text reply is the spoken intro. E.g. \'You have four invoices awaiting payment, totalling 32700 pounds. What would you like to do?\'\n- ALWAYS end your reply with a question or prompt so the user knows to respond.\n- When the user questions or corrects data you returned: acknowledge it directly, explain what the system shows (e.g. \'Those invoices show as sent in the system, meaning they have been issued but not yet marked as paid.\'), and offer what you can do — mark as paid, filter differently, etc. Never just repeat the same data without explanation.\n- If the user says something seems wrong, explain the status honestly: sent = issued, awaiting payment. overdue = past due date. paid = marked paid. draft = not yet sent.\n- Be a real PA: if the data surprises them, help them understand it and offer next steps." : "")
+  + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
   + (supportMode ? "\nSUPPORT MODE ACTIVE: The user needs help with the app. Your job is to resolve their issue conversationally — walk them through it step by step, explain how features work, and troubleshoot problems. You know every feature of Trade PA in detail. If after 3 genuine attempts you still cannot resolve the issue, use the escalate_to_support tool to collect their details and email the issue to the support team. Be warm, patient and thorough. Never tell them to contact support unless you have tried everything." : "");
 
 
@@ -6014,6 +6263,13 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       }
 
       setLoading(false); // Clear spinner immediately — mic restart + TTS run async after this
+
+      // Background: extract learnable facts from this exchange (non-blocking, non-critical)
+      const lastUserMsg = updated.filter(m => m.role === "user").slice(-1)[0]?.content || "";
+      if (lastUserMsg && finalReply && !isOnboardingTrigger) {
+        extractAndStoreMemories(lastUserMsg, finalReply);
+      }
+
       if (handsFreeRef.current) {
         speak(spokenReply);
         // When TTS is OFF (user disabled it), speak() returns immediately with no onSpeechEnd.
@@ -6026,6 +6282,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
 
     } catch (e) {
       console.error("AI send error:", e);
+      logError("tool_failure", {
+        error_msg: e.message || "AI send error",
+        context: "Claude API call failed",
+        user_input: text?.slice(0, 300),
+      });
       setMessages(prev => [...prev, { role: "assistant", content: `Connection error: ${e.message}. Check your internet connection and try again.` }]);
       if (handsFreeRef.current) restartMicAfterSpeak(1000);
     }
