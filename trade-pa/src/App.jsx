@@ -3694,21 +3694,40 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     const onSpeechEnd = () => {
       if (speechEnded) return;
       speechEnded = true;
+      clearTimeout(startTimer);
+      clearTimeout(playbackTimer);
       ttsAudioRef.current = null;
       if (handsFreeRef.current) restartMicAfterSpeak(1500);
     };
 
-    // Safety net: if iOS silently blocks ALL audio (both Deepgram + Web Speech),
-    // onSpeechEnd would never fire and the hands-free loop would die permanently.
-    // Estimate ~80ms/char minimum, floor 6s, ceiling 30s — then force onSpeechEnd.
-    const safetyMs = Math.min(Math.max(clean.length * 80, 6000), 30000);
-    const safetyTimer = setTimeout(() => {
+    // TWO-PHASE safety net for hands-free:
+    // Phase 1 — quick-fail timer (2.5s): fires if audio never starts at all (iOS silent block).
+    //   On failure: fall through to Web Speech, then give that 3s to start.
+    // Phase 2 — playback timer: set only once we know audio IS playing.
+    //   Fires if audio starts but onended never comes (e.g. mid-playback network drop).
+    //   Duration = estimated speech time + 3s buffer.
+    let playbackTimer = null;
+    const startTimer = setTimeout(() => {
+      // Audio never started — fire onSpeechEnd to restart the mic loop
       if (!speechEnded) {
-        console.warn("TTS safety timeout fired — restarting mic loop");
+        console.warn("TTS never started (start timeout) — restarting mic");
         onSpeechEnd();
       }
-    }, safetyMs);
-    const wrappedEnd = () => { clearTimeout(safetyTimer); onSpeechEnd(); };
+    }, 2500);
+
+    const wrappedEnd = () => { onSpeechEnd(); };
+
+    const startPlaybackTimer = () => {
+      // Called once we know audio is actually playing
+      clearTimeout(startTimer);
+      const estimatedMs = Math.min(clean.length * 85 + 2000, 25000);
+      playbackTimer = setTimeout(() => {
+        if (!speechEnded) {
+          console.warn("TTS playback timer fired — audio may have stalled");
+          onSpeechEnd();
+        }
+      }, estimatedMs);
+    };
 
     // Try Deepgram first for better voice quality
     try {
@@ -3723,7 +3742,10 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         const audio = new Audio(url);
         ttsAudioRef.current = audio;
         audio.onended = () => { URL.revokeObjectURL(url); wrappedEnd(); };
-        audio.play().catch(() => {
+        audio.play().then(() => {
+          // Audio confirmed playing — switch to playback timer
+          startPlaybackTimer();
+        }).catch(() => {
           // Deepgram play blocked (e.g. iOS autoplay policy) — fall back to Web Speech
           URL.revokeObjectURL(url);
           ttsAudioRef.current = null;
