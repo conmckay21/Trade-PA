@@ -3561,6 +3561,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
+  const messagesRef = React.useRef([]);  // always-current messages for stale-closure safety
 
   const quick = [
     "What's on today?",
@@ -3585,6 +3586,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [wakeWordReady, setWakeWordReady] = useState(false);
   const [wakeWordListening, setWakeWordListening] = useState(false);
 
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
   useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
 
@@ -3598,35 +3600,41 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     "stop listening", "stop hands free", "exit hands free",
   ];
 
+  // Use a ref for the transcript callback so it always uses fresh send()/messages
+  // even when called from stale closures inside async mic/speech flows
+  const onTranscriptRef = React.useRef(null);
+  const onSilenceRef = React.useRef(null);
+
   const { recording, transcribing, toggle, startRecording, stopRecording } = useWhisper(
-    (text) => {
-      if (text) {
-        if (handsFreeRef.current) {
-          const lower = text.toLowerCase().trim();
-          const isClosing = CLOSING_PHRASES.some(p => lower.includes(p));
-          if (isClosing) {
-            // Stop the hands-free loop but keep wake word active so they can trigger again
-            setHandsFree(false);
-            handsFreeRef.current = false;
-            speak("No problem, I'll stop there. Just say Hey Trade PA whenever you need me.");
-          } else {
-            send(text);
-          }
-        } else {
-          setInput(text);
-        }
-      }
-    },
-    // onSilence: called when mic captures nothing (empty recording)
-    // Reopen mic in hands-free so the loop doesn't die on a quiet moment
-    () => {
-      if (handsFreeRef.current && !recording) {
-        setTimeout(() => {
-          if (handsFreeRef.current) startRecording(true);
-        }, 500);
-      }
-    }
+    (text) => onTranscriptRef.current && onTranscriptRef.current(text),
+    () => onSilenceRef.current && onSilenceRef.current()
   );
+
+  // Update refs on every render so they always point to fresh closures
+  onTranscriptRef.current = (text) => {
+    if (!text) return;
+    if (handsFreeRef.current) {
+      const lower = text.toLowerCase().trim();
+      const isClosing = CLOSING_PHRASES.some(p => lower.includes(p));
+      if (isClosing) {
+        setHandsFree(false);
+        handsFreeRef.current = false;
+        speak("No problem, I'll stop there. Just say Hey Trade PA whenever you need me.");
+      } else {
+        send(text);
+      }
+    } else {
+      setInput(text);
+    }
+  };
+
+  onSilenceRef.current = () => {
+    if (handsFreeRef.current && !recording) {
+      setTimeout(() => {
+        if (handsFreeRef.current) startRecording(true);
+      }, 500);
+    }
+  };
 
   // Helper: restart mic after speaking (or if speaking fails)
   // Speak using Web Speech API (instant, no API key, works offline)
@@ -5600,7 +5608,9 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     if (!text.trim() || loading) return;
     const isOnboardingTrigger = text === "__onboarding_start__";
     const userMsg = { role: "user", content: isOnboardingTrigger ? "Hello" : text };
-    const updated = isOnboardingTrigger ? [userMsg] : [...messages, userMsg];
+    // Use messagesRef.current (not messages) to avoid stale closure bug
+    // when send() is called from async mic callbacks after re-renders
+    const updated = isOnboardingTrigger ? [userMsg] : [...messagesRef.current, userMsg];
     if (!isOnboardingTrigger) setMessages(updated);
     else setMessages([]);
     setInput("");
@@ -16420,7 +16430,7 @@ export default function App() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
-        {view === "AI Assistant" && <AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} />}
+        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
