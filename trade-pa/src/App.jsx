@@ -3614,18 +3614,42 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     }
   );
 
+  // Helper: restart mic after speaking (or if speaking fails)
+  const restartMicAfterSpeak = (delay = 800) => {
+    setTimeout(() => {
+      if (!handsFreeRef.current) return;
+      const ua = navigator.userAgent.toLowerCase();
+      if (ua.indexOf("android") !== -1) {
+        initWakeWord();
+      } else {
+        startRecording(true);
+      }
+    }, delay);
+  };
+
   const speak = async (text) => {
-    if (!ttsEnabledRef.current) return;
+    if (!ttsEnabledRef.current) {
+      // TTS off — still need to restart mic in hands-free mode
+      if (handsFreeRef.current) restartMicAfterSpeak(600);
+      return;
+    }
     if (ttsAudioRef.current) { ttsAudioRef.current.pause(); ttsAudioRef.current = null; }
     const clean = text.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
-    if (!clean) return;
+    if (!clean) {
+      if (handsFreeRef.current) restartMicAfterSpeak(600);
+      return;
+    }
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: clean }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        // TTS request failed — restart mic anyway
+        if (handsFreeRef.current) restartMicAfterSpeak(600);
+        return;
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
@@ -3633,30 +3657,16 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       audio.onended = () => {
         URL.revokeObjectURL(url);
         ttsAudioRef.current = null;
-        if (handsFreeRef.current) {
-          const isAndroidDevice = navigator.userAgent.toLowerCase().indexOf("android") !== -1;
-          // Natural pause after AI finishes speaking before mic opens
-          setTimeout(() => {
-            if (!handsFreeRef.current) return;
-            if (isAndroidDevice) {
-              initWakeWord();
-            } else {
-              startRecording(true);
-            }
-          }, 800);
-        }
+        if (handsFreeRef.current) restartMicAfterSpeak(800);
       };
-      audio.play().catch(() => {});
+      // If play() is blocked (car/autoplay policy), fall back to mic restart
+      audio.play().catch(() => {
+        ttsAudioRef.current = null;
+        if (handsFreeRef.current) restartMicAfterSpeak(600);
+      });
     } catch (e) {
       console.warn("TTS error:", e.message);
-      // Even if TTS fails, restore hands-free
-      if (handsFreeRef.current) {
-        const isAndroidDevice = navigator.userAgent.toLowerCase().indexOf("android") !== -1;
-        setTimeout(() => {
-          if (!handsFreeRef.current) return;
-          if (isAndroidDevice) initWakeWord(); else startRecording(true);
-        }, 500);
-      }
+      if (handsFreeRef.current) restartMicAfterSpeak(600);
     }
   };
 
@@ -5613,28 +5623,55 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       pendingWidgetRef.current = null;
       setMessages(prev => [...prev, { role: "assistant", content: finalReply, widget }]);
 
+      // Build a verbal summary of widget data for hands-free readout
+      const buildSpokenSummary = (w) => {
+        if (!w?.data) return "";
+        const d = w.data;
+        try {
+          switch (w.type) {
+            case "schedule_list":
+              if (!d.length) return "You have nothing scheduled this week.";
+              return "Your schedule: " + d.slice(0, 5).map(j => {
+                const when = j.dateObj ? new Date(j.dateObj).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" }) : j.date || "";
+                return `${j.customer || j.title || "Job"} on ${when}${j.address ? " at " + j.address : ""}`;
+              }).join(". ") + (d.length > 5 ? `. Plus ${d.length - 5} more.` : ".");
+            case "invoice":
+            case "quote":
+              return `${d.isQuote ? "Quote" : "Invoice"} for ${d.customer}, ${d.isQuote ? "valid" : "due"} ${d.due}, total £${parseFloat(d.grossAmount || d.amount || 0).toFixed(2)}.`;
+            case "invoice_list":
+              return `You have ${d.length} invoice${d.length !== 1 ? "s" : ""}. ` + d.slice(0, 3).map(i => `${i.customer}, £${parseFloat(i.grossAmount || i.amount || 0).toFixed(2)}, ${i.status}`).join(". ") + (d.length > 3 ? `. And ${d.length - 3} more.` : ".");
+            case "job_card":
+            case "job_full":
+              return `Job card for ${d.customer}${d.address ? " at " + d.address : ""}. Status: ${(d.status || "new").replace(/_/g, " ")}${d.value > 0 ? ". Value £" + parseFloat(d.value).toFixed(2) : ""}.`;
+            case "job_list":
+              if (!d.length) return "No jobs found.";
+              return `Found ${d.length} job${d.length !== 1 ? "s" : ""}. ` + d.slice(0, 3).map(j => `${j.customer || j.title}${j.value > 0 ? ", £" + j.value : ""}`).join(". ") + ".";
+            case "material_list":
+              if (!d.length) return "No materials found.";
+              return `${d.length} material${d.length !== 1 ? "s" : ""}. ` + d.slice(0, 3).map(m => `${m.item}, quantity ${m.qty}`).join(". ") + ".";
+            case "report":
+              return `Report for ${d.label || "this period"}. Revenue £${(d.totalRevenue || 0).toFixed(2)}, gross profit £${(d.grossProfit || 0).toFixed(2)}.`;
+            case "mileage_list":
+              return `${d.length} mileage trip${d.length !== 1 ? "s" : ""}, total claimable value £${parseFloat(w.value || 0).toFixed(2)}.`;
+            case "rams_complete":
+              return `RAMS document saved for ${d.title}.`;
+            default:
+              return "";
+          }
+        } catch { return ""; }
+      };
+
+      const spokenSummary = widget ? buildSpokenSummary(widget) : "";
+      const spokenReply = spokenSummary
+        ? (spokenSummary + " " + (replyText ? replyText.split(".")[0] + "." : ""))
+        : finalReply;
+
       if (handsFreeRef.current) {
-        // Append the loop-back question
         const loopPrompt = "Is that everything, or is there anything else I can help with?";
         setMessages(prev => [...prev, { role: "assistant", content: loopPrompt }]);
-        if (ttsEnabledRef.current) {
-          // TTS on: speak reply + prompt, mic restarts in audio.onended
-          speak(finalReply + " … " + loopPrompt);
-        } else {
-          // TTS off (e.g. in car): restart mic directly after a short delay
-          speak(finalReply); // no-op if TTS off, but keeps the pattern
-          setTimeout(() => {
-            if (!handsFreeRef.current) return;
-            const ua = navigator.userAgent.toLowerCase();
-            if (ua.indexOf("android") !== -1) {
-              initWakeWord();
-            } else {
-              startRecording(true);
-            }
-          }, 600);
-        }
+        speak(spokenReply + " … " + loopPrompt);
       } else {
-        speak(finalReply);
+        speak(spokenReply);
       }
 
     } catch (e) {
