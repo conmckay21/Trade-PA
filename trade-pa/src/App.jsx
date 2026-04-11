@@ -548,6 +548,15 @@ function useWhisper(onTranscript, onSilence) {
 
   const startRecording = async (withSilenceDetect = false) => {
     try {
+      // Stop any previous stream before requesting a new one (prevents iOS mic lockup in loops)
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try { mediaRecorderRef.current.stop(); } catch(e) {}
+        mediaRecorderRef.current = null;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
@@ -3629,10 +3638,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   };
 
   onSilenceRef.current = () => {
-    if (handsFreeRef.current && !recording) {
+    // Use handsFreeRef only — `recording` state is stale in this callback closure
+    if (handsFreeRef.current) {
       setTimeout(() => {
         if (handsFreeRef.current) startRecording(true);
-      }, 500);
+      }, 600);
     }
   };
 
@@ -3643,8 +3653,6 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     if (!("speechSynthesis" in window)) { onEnd(); return; }
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(text);
-    // Prefer a British female voice
-    // Voices may not load immediately — wait if empty
     let voices = window.speechSynthesis.getVoices();
     if (!voices.length) {
       window.speechSynthesis.onvoiceschanged = () => {
@@ -3661,8 +3669,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     utt.lang = "en-GB";
     utt.rate = 0.95;
     utt.pitch = 1.0;
-    utt.onend = onEnd;
-    utt.onerror = onEnd;
+    // Guard: onend and onerror can both fire on iOS — only call onEnd once
+    let ended = false;
+    const safeEnd = () => { if (!ended) { ended = true; onEnd(); } };
+    utt.onend = safeEnd;
+    utt.onerror = safeEnd;
     window.speechSynthesis.speak(utt);
   };
 
@@ -3673,9 +3684,14 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     const clean = text.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
     if (!clean) return;
 
+    // Guard: prevent onSpeechEnd firing more than once (audio.onended + catch race on iOS)
+    let speechEnded = false;
     const onSpeechEnd = () => {
+      if (speechEnded) return;
+      speechEnded = true;
       ttsAudioRef.current = null;
-      if (handsFreeRef.current) restartMicAfterSpeak(900);
+      // 1500ms delay: gives car Bluetooth audio time to fully flush before mic opens
+      if (handsFreeRef.current) restartMicAfterSpeak(1500);
     };
 
     // Try Deepgram first for better voice quality
@@ -3691,8 +3707,9 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         const audio = new Audio(url);
         ttsAudioRef.current = audio;
         audio.onended = () => { URL.revokeObjectURL(url); onSpeechEnd(); };
+        audio.onerror = () => { URL.revokeObjectURL(url); ttsAudioRef.current = null; speakWebSpeech(clean, onSpeechEnd); };
         audio.play().catch(() => {
-          // Deepgram play blocked — fall back to Web Speech
+          // Deepgram play blocked (e.g. iOS autoplay policy) — fall back to Web Speech
           URL.revokeObjectURL(url);
           ttsAudioRef.current = null;
           speakWebSpeech(clean, onSpeechEnd);
@@ -5867,19 +5884,20 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         ? finalReply
         : (spokenSummary || finalReply);
 
+      setLoading(false); // Clear spinner immediately — mic restart + TTS run async after this
       if (handsFreeRef.current) {
-        // In hands-free mode: Claude is instructed to read data and ask what's next.
-        // Append a brief pause marker so TTS doesn't cut off the last word.
         speak(spokenReply);
-        if (!ttsEnabledRef.current) restartMicAfterSpeak(1500);
+        // When TTS is OFF (user disabled it), speak() returns immediately with no onSpeechEnd.
+        // Restart mic directly after short delay so the loop keeps going.
+        if (!ttsEnabledRef.current) restartMicAfterSpeak(800);
       } else {
         speak(spokenReply);
       }
+      return; // skip the setLoading(false) below
 
     } catch (e) {
       console.error("AI send error:", e);
       setMessages(prev => [...prev, { role: "assistant", content: `Connection error: ${e.message}. Check your internet connection and try again.` }]);
-      // Always restart mic in hands-free mode, even on error
       if (handsFreeRef.current) restartMicAfterSpeak(1000);
     }
     setLoading(false);
