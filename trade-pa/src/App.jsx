@@ -526,7 +526,7 @@ function useWhisper(onTranscript, onSilence) {
       const SILENCE_THRESHOLD = 10; // RMS below this = silence
       // Grace period: give user time to start speaking before silence detection begins.
       // Longer for hands-free (user may need a moment after the PA finishes speaking).
-      const graceMs = silenceDuration >= 7000 ? 2500 : 1500;
+      const graceMs = silenceDuration >= 3000 ? 2000 : 1500;
       const check = () => {
         if (!analyserRef.current) return;
         analyser.getByteFrequencyData(data);
@@ -549,14 +549,18 @@ function useWhisper(onTranscript, onSilence) {
 
   const startRecording = async (withSilenceDetect = false, silenceDuration = 2500) => {
     try {
-      // Stop any previous stream before requesting a new one (prevents iOS mic lockup in loops)
+      // Stop any previous stream's tracks directly — do NOT call recorder.stop() here
+      // because that fires recorder.onstop async which runs clearSilenceDetection()
+      // and kills the new session's silence detector (race condition)
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
         streamRef.current = null;
       }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        try { mediaRecorderRef.current.stop(); } catch(e) {}
+        // Nullify first so onstop handler ignores it, then abort without firing onstop
+        const old = mediaRecorderRef.current;
         mediaRecorderRef.current = null;
+        try { old.stream?.getTracks().forEach(t => t.stop()); } catch(e) {}
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -3642,7 +3646,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     // Use handsFreeRef only — `recording` state is stale in this callback closure
     if (handsFreeRef.current) {
       setTimeout(() => {
-        if (handsFreeRef.current) startRecording(true, 7000);
+        if (handsFreeRef.current) startRecording(true, 3000);
       }, 600);
     }
   };
@@ -3685,15 +3689,26 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     const clean = text.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
     if (!clean) return;
 
-    // Guard: prevent onSpeechEnd firing more than once (audio.onended + catch race on iOS)
+    // Guard: prevent onSpeechEnd firing more than once
     let speechEnded = false;
     const onSpeechEnd = () => {
       if (speechEnded) return;
       speechEnded = true;
       ttsAudioRef.current = null;
-      // 1500ms delay: gives car Bluetooth audio time to fully flush before mic opens
       if (handsFreeRef.current) restartMicAfterSpeak(1500);
     };
+
+    // Safety net: if iOS silently blocks ALL audio (both Deepgram + Web Speech),
+    // onSpeechEnd would never fire and the hands-free loop would die permanently.
+    // Estimate ~80ms/char minimum, floor 6s, ceiling 30s — then force onSpeechEnd.
+    const safetyMs = Math.min(Math.max(clean.length * 80, 6000), 30000);
+    const safetyTimer = setTimeout(() => {
+      if (!speechEnded) {
+        console.warn("TTS safety timeout fired — restarting mic loop");
+        onSpeechEnd();
+      }
+    }, safetyMs);
+    const wrappedEnd = () => { clearTimeout(safetyTimer); onSpeechEnd(); };
 
     // Try Deepgram first for better voice quality
     try {
@@ -3707,14 +3722,12 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         ttsAudioRef.current = audio;
-        audio.onended = () => { URL.revokeObjectURL(url); onSpeechEnd(); };
-        // Note: do NOT add audio.onerror here — it fires alongside play().catch() on iOS,
-        // causing speakWebSpeech to be called twice which cancels itself
+        audio.onended = () => { URL.revokeObjectURL(url); wrappedEnd(); };
         audio.play().catch(() => {
           // Deepgram play blocked (e.g. iOS autoplay policy) — fall back to Web Speech
           URL.revokeObjectURL(url);
           ttsAudioRef.current = null;
-          speakWebSpeech(clean, onSpeechEnd);
+          speakWebSpeech(clean, wrappedEnd);
         });
         return;
       }
@@ -3723,7 +3736,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     }
 
     // Deepgram unavailable — use Web Speech API
-    speakWebSpeech(clean, onSpeechEnd);
+    speakWebSpeech(clean, wrappedEnd);
   };
 
   const toggleTts = () => {
@@ -3808,7 +3821,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       } else {
         // iOS: start listening immediately, loop via silence detection + TTS
         // 7s silence on initial start too — user may not speak immediately
-        if (!recording && !transcribing) startRecording(true, 7000);
+        if (!recording && !transcribing) startRecording(true, 3000);
       }
     } else {
       stopRecording();
@@ -3821,7 +3834,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     setTimeout(() => {
       if (!handsFreeRef.current) return;
       // 7s silence: user needs time to digest what was said before responding
-      if (isAndroid) initWakeWord(); else startRecording(true, 7000);
+      if (isAndroid) initWakeWord(); else startRecording(true, 3000);
     }, delay);
   };
 
