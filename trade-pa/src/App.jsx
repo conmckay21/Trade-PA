@@ -3566,12 +3566,12 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState(null);
-  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(true);
   const [expandedWidget, setExpandedWidget] = useState(null);
   const [ramsSession, setRamsSession] = useState(null);
   const [sessionData, setSessionData] = useState({});
   const [supportMode, setSupportMode] = useState(false);
-  const ttsEnabledRef = useRef(false);
+  const ttsEnabledRef = useRef(true);
   const ttsAudioRef = useRef(null);
   const bottomRef = useRef(null);
   const [handsFree, setHandsFree] = useState(false);
@@ -3615,41 +3615,18 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   );
 
   // Helper: restart mic after speaking (or if speaking fails)
-  const restartMicAfterSpeak = (delay = 800) => {
-    setTimeout(() => {
-      if (!handsFreeRef.current) return;
-      const ua = navigator.userAgent.toLowerCase();
-      if (ua.indexOf("android") !== -1) {
-        initWakeWord();
-      } else {
-        startRecording(true);
-      }
-    }, delay);
-  };
-
   const speak = async (text) => {
-    if (!ttsEnabledRef.current) {
-      // TTS off — still need to restart mic in hands-free mode
-      if (handsFreeRef.current) restartMicAfterSpeak(600);
-      return;
-    }
+    if (!ttsEnabledRef.current) return;
     if (ttsAudioRef.current) { ttsAudioRef.current.pause(); ttsAudioRef.current = null; }
     const clean = text.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
-    if (!clean) {
-      if (handsFreeRef.current) restartMicAfterSpeak(600);
-      return;
-    }
+    if (!clean) return;
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: clean }),
       });
-      if (!res.ok) {
-        // TTS request failed — restart mic anyway
-        if (handsFreeRef.current) restartMicAfterSpeak(600);
-        return;
-      }
+      if (!res.ok) return;
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
@@ -3659,7 +3636,6 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         ttsAudioRef.current = null;
         if (handsFreeRef.current) restartMicAfterSpeak(800);
       };
-      // If play() is blocked (car/autoplay policy), fall back to mic restart
       audio.play().catch(() => {
         ttsAudioRef.current = null;
         if (handsFreeRef.current) restartMicAfterSpeak(600);
@@ -3757,6 +3733,14 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       stopRecording();
       stopWakeWord();
     }
+  };
+
+  // Restart mic after AI finishes speaking (used by hands-free loop)
+  const restartMicAfterSpeak = (delay = 800) => {
+    setTimeout(() => {
+      if (!handsFreeRef.current) return;
+      if (isAndroid) initWakeWord(); else startRecording(true);
+    }, delay);
   };
 
   // When recording starts on Android (from wake word trigger), stop wake word recognition
@@ -5678,9 +5662,9 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         : finalReply;
 
       if (handsFreeRef.current) {
-        // Speak the summary + loop prompt — but do NOT add loopPrompt as a separate
-        // assistant message. Two consecutive assistant messages break the Claude API.
+        // Speak reply + loop prompt. If TTS is off, restart mic directly.
         speak(spokenReply + " … Is that everything, or is there anything else I can help with?");
+        if (!ttsEnabledRef.current) restartMicAfterSpeak(600);
       } else {
         speak(spokenReply);
       }
