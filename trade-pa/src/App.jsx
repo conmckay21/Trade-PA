@@ -524,7 +524,7 @@ function useWhisper(onTranscript, onSilence) {
       const data = new Uint8Array(analyser.frequencyBinCount);
       let silenceStart = null;
       const SILENCE_THRESHOLD = 10;  // RMS below this = silence
-      const SILENCE_DURATION = 1500; // 1.5s of silence = auto-stop
+      const SILENCE_DURATION = 2500; // 2.5s of silence = auto-stop
       const check = () => {
         if (!analyserRef.current) return;
         analyser.getByteFrequencyData(data);
@@ -541,8 +541,8 @@ function useWhisper(onTranscript, onSilence) {
         }
         silenceCheckRef.current = requestAnimationFrame(check);
       };
-      // Start checking after 600ms so initial breath doesn't trigger
-      setTimeout(() => { silenceCheckRef.current = requestAnimationFrame(check); }, 600);
+      // Start checking after 1500ms - user needs time to start speaking
+      setTimeout(() => { silenceCheckRef.current = requestAnimationFrame(check); }, 1500);
     } catch(e) { console.warn("Silence detection unavailable:", e.message); }
   };
 
@@ -565,7 +565,12 @@ function useWhisper(onTranscript, onSilence) {
           streamRef.current = null;
         }
         const blob = new Blob(chunksRef.current, { type: mimeType });
-        if (blob.size < 500) { setTranscribing(false); return; }
+        if (blob.size < 500) {
+          setTranscribing(false);
+          // Nothing was said — notify caller so hands-free can reopen mic
+          if (onSilence) onSilence();
+          return;
+        }
         setTranscribing(true);
         try {
           const audioBase64 = await new Promise((resolve) => {
@@ -3611,6 +3616,15 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           setInput(text);
         }
       }
+    },
+    // onSilence: called when mic captures nothing (empty recording)
+    // Reopen mic in hands-free so the loop doesn't die on a quiet moment
+    () => {
+      if (handsFreeRef.current && !recording) {
+        setTimeout(() => {
+          if (handsFreeRef.current) startRecording(true);
+        }, 500);
+      }
     }
   );
 
@@ -5627,8 +5641,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
             case "schedule_list":
               if (!d.length) return "You have nothing scheduled this week.";
               return "Your schedule: " + d.slice(0, 5).map(j => {
-                const when = j.dateObj ? new Date(j.dateObj).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" }) : j.date || "";
-                return `${j.customer || j.title || "Job"} on ${when}${j.address ? " at " + j.address : ""}`;
+                const dt = j.dateObj ? new Date(j.dateObj) : null;
+                const day = dt ? dt.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" }) : j.date || "";
+                const time = dt ? dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "";
+                const when = time && time !== "00:00" ? `${day} at ${time}` : day;
+                return `${j.customer || j.title || "Job"}, ${when}${j.address ? ", " + j.address : ""}`;
               }).join(". ") + (d.length > 5 ? `. Plus ${d.length - 5} more.` : ".");
             case "invoice":
             case "quote":
