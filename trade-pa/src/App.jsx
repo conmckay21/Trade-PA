@@ -3656,13 +3656,17 @@ Return only JSON, no other text.` },
   );
 }
 
+// Hands-free activation phrases — module level so no re-creation on render
+const HANDS_FREE_ACTIVATE_PHRASES = [
+  "go hands free", "hands free mode", "hands-free mode",
+  "enable hands free", "turn on hands free", "switch to hands free",
+  "put it on hands free", "put me on hands free", "back on hands free",
+  "go back to hands free", "start hands free", "activate hands free",
+];
+
 function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user, refreshJobs, onShowPdf, onScanReceipt }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
-  // Remember hands-free preference across sessions
-  const [handsFreeDefault] = useState(() => {
-    try { return localStorage.getItem("tradePaHandsFree") === "true"; } catch { return false; }
-  });
   const pendingWidgetRef = React.useRef(null);
   const messagesRef = React.useRef([]);  // always-current messages for stale-closure safety
 
@@ -3691,18 +3695,6 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // Restore hands-free state from last session
-  useEffect(() => {
-    if (handsFreeDefault && !handsFreeRef.current) {
-      // Small delay so component is fully mounted
-      setTimeout(() => {
-        setHandsFree(true);
-        handsFreeRef.current = true;
-        if (!isAndroid) startRecording(true, 3000);
-        else initWakeWord();
-      }, 1200);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
 
   // ── PA Memory layer ───────────────────────────────────────────────────────
@@ -3818,20 +3810,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     try { localStorage.setItem("tradePaHandsFree", handsFree ? "true" : "false"); } catch {}
   }, [handsFree]);
 
-  // Hands-free watchdog: if hands-free is active but mic is dead (not recording,
-  // not transcribing, not speaking), something died silently — revive it.
-  useEffect(() => {
-    if (!handsFree) return;
-    const watchdog = setInterval(() => {
-      if (!handsFreeRef.current) return;
-      const speaking = !!ttsAudioRef.current;
-      if (!recording && !transcribing && !speaking) {
-        console.warn("Hands-free watchdog: mic dead, restarting");
-        if (isAndroid) initWakeWord(); else startRecording(true, 3000);
-      }
-    }, 8000); // check every 8s
-    return () => clearInterval(watchdog);
-  }, [handsFree, recording, transcribing]);
+
 
   // ── Error capture system ─────────────────────────────────────────────────
   const logError = async (type, fields = {}) => {
@@ -3891,13 +3870,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     const lower = text.toLowerCase().trim();
 
     // Hands-free activation — works from ANY state (manual or hands-free)
-    const ACTIVATE_PHRASES = [
-      "go hands free", "hands free mode", "hands-free mode",
-      "enable hands free", "turn on hands free", "switch to hands free",
-      "put it on hands free", "put me on hands free", "back on hands free",
-      "go back to hands free", "start hands free", "activate hands free",
-    ];
-    const isActivating = ACTIVATE_PHRASES.some(p => lower.includes(p));
+    const isActivating = HANDS_FREE_ACTIVATE_PHRASES.some(p => lower.includes(p));
     if (isActivating && !handsFreeRef.current) {
       setHandsFree(true);
       handsFreeRef.current = true;
@@ -4153,6 +4126,35 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       setWakeWordListening(false);
     }
   }, [recording]);
+
+  // Restore hands-free from last session — placed here so isAndroid & initWakeWord are defined
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("tradePaHandsFree") === "true";
+      if (saved && !handsFreeRef.current) {
+        setTimeout(() => {
+          if (handsFreeRef.current) return; // already active
+          setHandsFree(true);
+          handsFreeRef.current = true;
+          if (!isAndroid) startRecording(true, 3000);
+          else initWakeWord();
+        }, 1500);
+      }
+    } catch(e) {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Hands-free watchdog — placed here so isAndroid & initWakeWord are defined
+  useEffect(() => {
+    if (!handsFree) return;
+    const watchdog = setInterval(() => {
+      if (!handsFreeRef.current) return;
+      if (!recording && !transcribing && !ttsAudioRef.current) {
+        console.warn("Hands-free watchdog: mic dead, restarting");
+        if (isAndroid) initWakeWord(); else startRecording(true, 3000);
+      }
+    }, 8000);
+    return () => clearInterval(watchdog);
+  }, [handsFree, recording, transcribing]);
 
   // After TTS ends on Android, reinstate wake word listening
   // (handled in speak() audio.onended — it calls startRecording(true) for iOS
