@@ -601,13 +601,12 @@ function useWhisper(onTranscript, onSilence) {
           if (data.text?.trim()) {
             onTranscript(data.text.trim());
           } else {
-            // Transcription returned nothing (background noise, unclear speech)
-            // Treat same as silence so hands-free loop continues
+            // Empty result (background noise) — keep hands-free loop alive
             if (onSilence) onSilence();
           }
         } catch (e) {
           console.error("Whisper:", e);
-          // Network error or API failure — restart mic so hands-free loop doesn't die
+          // Network/API error — keep hands-free loop alive
           if (onSilence) onSilence();
         }
         setTranscribing(false);
@@ -628,14 +627,10 @@ function useWhisper(onTranscript, onSilence) {
     } catch (err) {
       console.error("Mic:", err);
       if (err.name === "NotAllowedError") {
-        // Mic permission denied — always alert, this needs user action
         alert("Microphone blocked.\n\nOn iPhone: Settings → Safari → Microphone → Allow your site.\n\nThen reload and try again.");
       } else if (withSilenceDetect) {
-        // In hands-free mode: audio session may be briefly locked after TTS.
-        // Silently retry after 1.5s instead of showing a disruptive alert.
-        setTimeout(() => {
-          if (onSilence) onSilence(); // triggers restartMic via onSilenceRef
-        }, 1500);
+        // In hands-free: audio session briefly locked after TTS — silently retry
+        setTimeout(() => { if (onSilence) onSilence(); }, 1500);
       } else {
         alert(`Mic error: ${err.message}`);
       }
@@ -3656,14 +3651,6 @@ Return only JSON, no other text.` },
   );
 }
 
-// Hands-free activation phrases — module level so no re-creation on render
-const HANDS_FREE_ACTIVATE_PHRASES = [
-  "go hands free", "hands free mode", "hands-free mode",
-  "enable hands free", "turn on hands free", "switch to hands free",
-  "put it on hands free", "put me on hands free", "back on hands free",
-  "go back to hands free", "start hands free", "activate hands free",
-];
-
 function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user, refreshJobs, onShowPdf, onScanReceipt }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
@@ -3694,7 +3681,6 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [wakeWordListening, setWakeWordListening] = useState(false);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
-
   useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
 
   // ── PA Memory layer ───────────────────────────────────────────────────────
@@ -3805,12 +3791,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       }
     } catch(e) { /* silent */ }
   };
-  useEffect(() => {
-    handsFreeRef.current = handsFree;
-    try { localStorage.setItem("tradePaHandsFree", handsFree ? "true" : "false"); } catch {}
-  }, [handsFree]);
-
-
+  useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
 
   // ── Error capture system ─────────────────────────────────────────────────
   const logError = async (type, fields = {}) => {
@@ -3869,14 +3850,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     if (!text) return;
     const lower = text.toLowerCase().trim();
 
-    // Hands-free activation — works from ANY state (manual or hands-free)
-    const isActivating = HANDS_FREE_ACTIVATE_PHRASES.some(p => lower.includes(p));
-    if (isActivating && !handsFreeRef.current) {
+    // Allow voice activation of hands-free from anywhere — even manual mic taps
+    const ACTIVATE = ["go hands free", "hands free mode", "hands-free mode",
+      "enable hands free", "turn on hands free", "back on hands free",
+      "put it on hands free", "start hands free", "go handsfree"];
+    if (!handsFreeRef.current && ACTIVATE.some(p => lower.includes(p))) {
       setHandsFree(true);
       handsFreeRef.current = true;
-      try { localStorage.setItem("tradePaHandsFree", "true"); } catch {}
-      speak("Hands-free is on. Go ahead.");
-      // Mic will restart via speak() onSpeechEnd → restartMicAfterSpeak
+      speak("Hands-free on. Go ahead.");
       return;
     }
 
@@ -3885,7 +3866,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       if (isClosing) {
         setHandsFree(false);
         handsFreeRef.current = false;
-        try { localStorage.setItem("tradePaHandsFree", "false"); } catch {}
         speak("No problem, I'll stop there. Just say Hey Trade PA whenever you need me.");
       } else {
         send(text);
@@ -4104,16 +4084,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   const restartMicAfterSpeak = (delay = 1200) => {
     setTimeout(() => {
       if (!handsFreeRef.current) return;
-      // If TTS audio is still held (iOS releases audio session asynchronously),
-      // wait another 500ms before opening the mic to avoid getUserMedia collision
-      if (ttsAudioRef.current) {
-        setTimeout(() => {
-          if (!handsFreeRef.current) return;
-          if (isAndroid) initWakeWord(); else startRecording(true, 3000);
-        }, 500);
-      } else {
-        if (isAndroid) initWakeWord(); else startRecording(true, 3000);
-      }
+      // 7s silence: user needs time to digest what was said before responding
+      if (isAndroid) initWakeWord(); else startRecording(true, 3000);
     }, delay);
   };
 
@@ -4126,35 +4098,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       setWakeWordListening(false);
     }
   }, [recording]);
-
-  // Restore hands-free from last session — placed here so isAndroid & initWakeWord are defined
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("tradePaHandsFree") === "true";
-      if (saved && !handsFreeRef.current) {
-        setTimeout(() => {
-          if (handsFreeRef.current) return; // already active
-          setHandsFree(true);
-          handsFreeRef.current = true;
-          if (!isAndroid) startRecording(true, 3000);
-          else initWakeWord();
-        }, 1500);
-      }
-    } catch(e) {}
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Hands-free watchdog — placed here so isAndroid & initWakeWord are defined
-  useEffect(() => {
-    if (!handsFree) return;
-    const watchdog = setInterval(() => {
-      if (!handsFreeRef.current) return;
-      if (!recording && !transcribing && !ttsAudioRef.current) {
-        console.warn("Hands-free watchdog: mic dead, restarting");
-        if (isAndroid) initWakeWord(); else startRecording(true, 3000);
-      }
-    }, 8000);
-    return () => clearInterval(watchdog);
-  }, [handsFree, recording, transcribing]);
 
   // After TTS ends on Android, reinstate wake word listening
   // (handled in speak() audio.onended — it calls startRecording(true) for iOS
@@ -4440,17 +4383,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "log_mileage",
-      description: "Log a mileage trip for HMRC tax purposes. Use when user mentions travelling to a job or site visit.",
+      description: "Log a mileage trip for HMRC tax purposes. If the user gives two addresses or locations (from and to), use those and omit miles — the app will calculate the driving distance automatically. Only require miles if the user states an exact figure.",
       input_schema: {
         type: "object",
         properties: {
-          from_location: { type: "string", description: "Start location e.g. Home" },
-          to_location: { type: "string", description: "Destination e.g. customer address" },
-          miles: { type: "number", description: "Miles travelled" },
+          from_location: { type: "string", description: "Start address or location" },
+          to_location: { type: "string", description: "Destination address or location" },
+          miles: { type: "number", description: "Miles travelled — omit if from_location and to_location are provided and distance should be calculated automatically" },
           purpose: { type: "string", description: "Purpose e.g. site visit, materials collection" },
           date: { type: "string", description: "Date in YYYY-MM-DD format, default today" },
         },
-        required: ["miles"],
+        required: ["from_location", "to_location"],
       },
     },
     {
@@ -5212,12 +5155,33 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "log_mileage": {
           const today = new Date().toISOString().split("T")[0];
-          const miles = parseFloat(input.miles || 0);
-          // Calculate HMRC value (simplified — 45p/mile)
+          let miles = input.miles ? parseFloat(input.miles) : null;
+          let distanceNote = "";
+
+          // Auto-calculate driving distance if two addresses given but no miles
+          if (!miles && input.from_location && input.to_location) {
+            try {
+              const distRes = await fetch("/api/distance", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ from: input.from_location, to: input.to_location }),
+              });
+              if (distRes.ok) {
+                const distData = await distRes.json();
+                if (distData.miles) {
+                  miles = distData.miles;
+                  distanceNote = ` (${distData.miles} miles calculated automatically)`;
+                }
+              }
+            } catch(e) { console.warn("Distance calc failed:", e.message); }
+            if (!miles) return `I couldn't calculate the distance between those addresses automatically. How many miles was the trip?`;
+          }
+
+          if (!miles) return "How many miles was the trip?";
           const value = parseFloat((miles * 0.45).toFixed(2));
           await supabase.from("mileage_logs").insert({ user_id: user?.id, date: input.date || today, from_location: input.from_location || "", to_location: input.to_location || "", miles, purpose: input.purpose || "", rate: 0.45, value, created_at: new Date().toISOString() });
           setLastAction({ type: "mileage", label: `${miles} miles logged`, view: "Mileage" });
-          return `Mileage logged: ${miles} miles${input.from_location ? ` from ${input.from_location}` : ""}${input.to_location ? ` to ${input.to_location}` : ""} — £${value} claimable.`;
+          return `Mileage logged: ${miles} miles from ${input.from_location || "start"} to ${input.to_location || "destination"}${distanceNote} — £${value} claimable at the HMRC rate.`;
         }
         case "add_job_note": {
           const { data: noteJobs } = await supabase.from("job_cards").select("id,title,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).limit(5);
@@ -6613,25 +6577,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           )}
 
           <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
-            {/* Hands-free dropped banner — shown if messages exist but hands-free is off */}
-            {messages.length > 0 && !handsFree && (
-              <div style={{ margin: "0 0 12px 0", padding: "10px 14px", background: C.amber + "11", border: `1px solid ${C.amber}33`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <div style={{ fontSize: 12, color: C.amber, fontWeight: 600 }}>
-                  🎙 Hands-free is off — say "go hands-free" or tap to re-enable
-                </div>
-                <button
-                  onClick={() => {
-                    setHandsFree(true);
-                    handsFreeRef.current = true;
-                    try { localStorage.setItem("tradePaHandsFree", "true"); } catch {}
-                    if (!isAndroid) startRecording(true, 3000); else initWakeWord();
-                  }}
-                  style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px", flexShrink: 0 }}
-                >
-                  Go hands-free
-                </button>
-              </div>
-            )}
             {messages.map((m, i) => (
               <div key={i}>
                 <div style={S.aiMsg(m.role)}>
@@ -7431,11 +7376,20 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
           rows={3}
         />
-        <button
-          onClick={() => recording ? stopRecording() : startRecording(true)}
-          disabled={transcribing}
-          style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${recording ? C.red : C.border}`, background: recording ? C.red + "22" : C.surfaceHigh, color: recording ? C.red : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-        >{transcribing ? "⏳" : recording ? "⏹ Stop" : "🎙"}</button>
+        {!isHome && (
+          <button
+            onClick={toggleHandsFree}
+            title={handsFree ? "Hands-free on — tap to stop" : "Tap to go hands-free"}
+            style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${handsFree ? C.green + "88" : C.border}`, background: handsFree ? C.green + "22" : C.surfaceHigh, color: handsFree ? C.green : C.muted, fontSize: 14, cursor: "pointer", flexShrink: 0, lineHeight: 1 }}
+          >{handsFree ? "🎙✓" : "🎙"}</button>
+        )}
+        {isHome && (
+          <button
+            onClick={() => recording ? stopRecording() : startRecording(true)}
+            disabled={transcribing}
+            style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${recording ? C.red : C.border}`, background: recording ? C.red + "22" : C.surfaceHigh, color: recording ? C.red : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+          >{transcribing ? "⏳" : recording ? "⏹ Stop" : "🎙"}</button>
+        )}
         <button onClick={() => send(input)} style={{ ...S.btn("primary"), padding: "10px 16px" }} disabled={loading || !input.trim()}>Send</button>
       </div>
     </div>
