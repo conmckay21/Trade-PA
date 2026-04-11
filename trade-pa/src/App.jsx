@@ -509,7 +509,7 @@ function useWhisper(onTranscript, onSilence) {
     if (audioContextRef.current) { try { audioContextRef.current.close(); } catch(e) {} audioContextRef.current = null; }
   };
 
-  const startSilenceDetection = (stream, onSilenceDetected) => {
+  const startSilenceDetection = (stream, onSilenceDetected, silenceDuration = 2500) => {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
@@ -523,15 +523,17 @@ function useWhisper(onTranscript, onSilence) {
       analyserRef.current = analyser;
       const data = new Uint8Array(analyser.frequencyBinCount);
       let silenceStart = null;
-      const SILENCE_THRESHOLD = 10;  // RMS below this = silence
-      const SILENCE_DURATION = 2500; // 2.5s of silence = auto-stop
+      const SILENCE_THRESHOLD = 10; // RMS below this = silence
+      // Grace period: give user time to start speaking before silence detection begins.
+      // Longer for hands-free (user may need a moment after the PA finishes speaking).
+      const graceMs = silenceDuration >= 7000 ? 2500 : 1500;
       const check = () => {
         if (!analyserRef.current) return;
         analyser.getByteFrequencyData(data);
         const rms = Math.sqrt(data.reduce((s, v) => s + v * v, 0) / data.length);
         if (rms < SILENCE_THRESHOLD) {
           if (!silenceStart) silenceStart = Date.now();
-          else if (Date.now() - silenceStart > SILENCE_DURATION) {
+          else if (Date.now() - silenceStart > silenceDuration) {
             clearSilenceDetection();
             onSilenceDetected();
             return;
@@ -541,12 +543,11 @@ function useWhisper(onTranscript, onSilence) {
         }
         silenceCheckRef.current = requestAnimationFrame(check);
       };
-      // Start checking after 1500ms - user needs time to start speaking
-      setTimeout(() => { silenceCheckRef.current = requestAnimationFrame(check); }, 1500);
+      setTimeout(() => { silenceCheckRef.current = requestAnimationFrame(check); }, graceMs);
     } catch(e) { console.warn("Silence detection unavailable:", e.message); }
   };
 
-  const startRecording = async (withSilenceDetect = false) => {
+  const startRecording = async (withSilenceDetect = false, silenceDuration = 2500) => {
     try {
       // Stop any previous stream before requesting a new one (prevents iOS mic lockup in loops)
       if (streamRef.current) {
@@ -608,7 +609,7 @@ function useWhisper(onTranscript, onSilence) {
             mediaRecorderRef.current.stop();
           }
           setRecording(false);
-        });
+        }, silenceDuration);
       }
     } catch (err) {
       console.error("Mic:", err);
@@ -3641,7 +3642,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     // Use handsFreeRef only — `recording` state is stale in this callback closure
     if (handsFreeRef.current) {
       setTimeout(() => {
-        if (handsFreeRef.current) startRecording(true);
+        if (handsFreeRef.current) startRecording(true, 7000);
       }, 600);
     }
   };
@@ -3707,7 +3708,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         const audio = new Audio(url);
         ttsAudioRef.current = audio;
         audio.onended = () => { URL.revokeObjectURL(url); onSpeechEnd(); };
-        audio.onerror = () => { URL.revokeObjectURL(url); ttsAudioRef.current = null; speakWebSpeech(clean, onSpeechEnd); };
+        // Note: do NOT add audio.onerror here — it fires alongside play().catch() on iOS,
+        // causing speakWebSpeech to be called twice which cancels itself
         audio.play().catch(() => {
           // Deepgram play blocked (e.g. iOS autoplay policy) — fall back to Web Speech
           URL.revokeObjectURL(url);
@@ -3805,7 +3807,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         initWakeWord();
       } else {
         // iOS: start listening immediately, loop via silence detection + TTS
-        if (!recording && !transcribing) startRecording(true);
+        // 7s silence on initial start too — user may not speak immediately
+        if (!recording && !transcribing) startRecording(true, 7000);
       }
     } else {
       stopRecording();
@@ -3817,7 +3820,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const restartMicAfterSpeak = (delay = 1200) => {
     setTimeout(() => {
       if (!handsFreeRef.current) return;
-      if (isAndroid) initWakeWord(); else startRecording(true);
+      // 7s silence: user needs time to digest what was said before responding
+      if (isAndroid) initWakeWord(); else startRecording(true, 7000);
     }, delay);
   };
 
