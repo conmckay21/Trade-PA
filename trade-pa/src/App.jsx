@@ -619,7 +619,7 @@ function useWhisper(onTranscript, onSilence) {
     setRecording(false);
   };
 
-  const toggle = (withSilenceDetect = false) => {
+  const toggle = (withSilenceDetect = true) => {
     if (recording) stopRecording();
     else startRecording(withSilenceDetect);
   };
@@ -5955,7 +5955,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           {/* Big voice button */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "16px 0 8px" }}>
             <button
-              onClick={() => handsFree ? (recording ? stopRecording() : startRecording(true)) : toggle(false)}
+              onClick={() => recording ? stopRecording() : startRecording(true)}
               disabled={transcribing}
               style={{
                 width: 130, height: 130, borderRadius: "50%",
@@ -6914,7 +6914,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           rows={3}
         />
         <button
-          onClick={toggle}
+          onClick={() => recording ? stopRecording() : startRecording(true)}
           disabled={transcribing}
           style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${recording ? C.red : C.border}`, background: recording ? C.red + "22" : C.surfaceHigh, color: recording ? C.red : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
         >{transcribing ? "⏳" : recording ? "⏹ Stop" : "🎙"}</button>
@@ -10003,7 +10003,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                       <label style={{ fontSize: 11, color: IC.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Message</label>
                       <button
-                        onClick={toggle}
+                        onClick={() => recording ? stopRecording() : startRecording(true)}
                         style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, background: recording ? IC.red : IC.amber, color: recording ? "#fff" : "#000" }}>
                         {transcribing ? "⏳ Transcribing..." : recording ? "⏹ Stop" : "🎙 Dictate"}
                       </button>
