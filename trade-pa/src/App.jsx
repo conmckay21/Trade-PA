@@ -4407,8 +4407,20 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           return `Enquiry logged from ${input.name} via ${input.source}.`;
         }
         case "set_reminder": {
-          const reminder = { id: `r${Date.now()}`, text: input.text, time: Date.now() + (input.minutes_from_now * 60000), timeLabel: input.time_label || "", done: false };
+          const fireAt = new Date(Date.now() + (input.minutes_from_now * 60000));
+          const reminder = { id: `r${Date.now()}`, text: input.text, time: fireAt.getTime(), timeLabel: input.time_label || "", done: false };
+          // Write to localStorage for in-app notification bell
           onAddReminder(reminder);
+          // Also write to Supabase so list_reminders can find it
+          try {
+            await supabase.from("reminders").insert({
+              user_id: user?.id,
+              text: input.text,
+              fire_at: fireAt.toISOString(),
+              done: false,
+              created_at: new Date().toISOString(),
+            });
+          } catch(e) { console.warn("Reminder Supabase write:", e.message); }
           setLastAction({ type: "reminder", label: input.text, view: "Reminders" });
           return `Reminder set: "${input.text}" — ${input.time_label || `in ${input.minutes_from_now} minutes`}.`;
         }
@@ -5624,7 +5636,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n"
   + "- SUBCONTRACTOR STATEMENTS: generate_subcontractor_statement shows CIS statement for a month.\n"
   + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.\n"
-  + (handsFree ? "\n\nHANDS-FREE DRIVING MODE IS ACTIVE. The user is driving and speaking to you as a personal assistant in the car. Rules you MUST follow:\n- You are a real personal assistant. Sound like one — natural, warm, efficient.\n- Keep responses SHORT — 2-3 sentences maximum. No long explanations.\n- ALWAYS read out the actual data. Never say \'here is your schedule\' without saying the names, times and dates. Never say \'here are your invoices\' without reading out who owes what.\n- When listing invoices: read each one — name, amount, overdue or not. E.g. \'You have three outstanding invoices. John Smith owes 450 pounds, overdue. Dave Jones owes 620 pounds, due Friday. Lisa Kinsman owes 200 pounds, due next week.\' Then ask what they want to do.\n- When listing schedule: read each one — day, time, person. E.g. \'You have two jobs this week. Tuesday at 10am, Lisa Kinsman in Portsmouth. Thursday at 2pm, Dave Jones in Southampton.\'\n- After completing an action, confirm it briefly and ask what is next. E.g. \'Done, invoice created for John Smith for 450 pounds. Anything else?\' or \'Noted, mileage logged. What else do you need?\'\n- NEVER use markdown, bullet points, asterisks, hyphens as lists, or any formatting. Plain spoken English only.\n- You are having a free-flowing conversation. The user will follow up. Keep it going naturally." : "")
+  + (handsFree ? "\n\nHANDS-FREE MODE: Your reply is spoken aloud by text-to-speech. Rules:\n- Plain spoken English only. No markdown, bullets, asterisks or formatting.\n- Keep your text reply to 1-2 sentences — a brief spoken intro only.\n- When you use a tool to fetch data (invoices, schedule, jobs), the app reads the full list aloud automatically. Your text just needs a brief spoken opener, e.g. \'You have four invoices outstanding, totalling 32700 pounds.\' Then ask what they want to do.\n- NEVER end with just \'Here are your invoices:\' — always follow with a question so they know to respond. E.g. \'What would you like to do?\' or \'Anything else?\'\n- After any action: confirm briefly and prompt. E.g. \"Done, mileage logged. Anything else?\"\n- Be warm, efficient, natural — you are a real PA in the car." : "")
   + (supportMode ? "\nSUPPORT MODE ACTIVE: The user needs help with the app. Your job is to resolve their issue conversationally — walk them through it step by step, explain how features work, and troubleshoot problems. You know every feature of Trade PA in detail. If after 3 genuine attempts you still cannot resolve the issue, use the escalate_to_support tool to collect their details and email the issue to the support team. Be warm, patient and thorough. Never tell them to contact support unless you have tried everything." : "");
 
 
@@ -5802,14 +5814,14 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
             }
 
             case "customer_list": {
-              if (!d.length) return "No customers found.";
-              return `Found ${d.length} customer${d.length !== 1 ? "s" : ""}. ` + d.slice(0, 5).map(c => c.name).join(", ") + ".";
+              if (!d.length) return "No customers on file.";
+              return `You have ${d.length} customer${d.length !== 1 ? "s" : ""}. ` + d.slice(0, 6).map(c => c.name).join(", ") + (d.length > 6 ? ", and more." : ".");
             }
 
             case "enquiry_list": {
-              if (!d.length) return "No enquiries found.";
-              const items = d.slice(0, 5).map(e => `${e.name}${e.msg ? ", " + e.msg.slice(0,40) : ""}${e.source ? " via " + e.source : ""}`);
-              return `${d.length} enquir${d.length !== 1 ? "ies" : "y"}. ` + items.join(". ") + ".";
+              if (!d.length) return "No enquiries.";
+              const items = d.slice(0, 5).map(e => `${e.name}${e.source ? " via " + e.source : ""}${e.status ? ", " + e.status : ""}`);
+              return `You have ${d.length} enquir${d.length !== 1 ? "ies" : "y"}. ` + items.join(". ") + ".";
             }
 
             case "reminder_list": {
@@ -5822,18 +5834,24 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
             }
 
             case "stock_list": {
-              if (!d.length) return "No stock items.";
+              if (!d.length) return "No stock items on file.";
               const low = d.filter(s => parseFloat(s.quantity||0) <= parseFloat(s.reorder_level||0));
-              let s = `${d.length} stock item${d.length !== 1 ? "s" : ""}. `;
-              if (low.length) s += `${low.length} running low: ` + low.slice(0,3).map(s => s.name).join(", ") + ". ";
-              return s;
+              let sv = `You have ${d.length} stock item${d.length !== 1 ? "s" : ""}. `;
+              if (low.length) sv += `${low.length} ${low.length === 1 ? "is" : "are"} running low: ` + low.slice(0,3).map(x => x.name).join(", ") + ". ";
+              else sv += d.slice(0,3).map(x => `${x.name}, ${x.quantity} ${x.unit||"in stock"}`).join(". ") + ".";
+              return sv;
             }
 
             case "report": {
               const rev = fmt(d.totalRevenue||0);
               const profit = fmt(d.grossProfit||0);
               const out = fmt(d.outstanding||0);
-              return `${d.label || "Report"}: revenue ${rev}, gross profit ${profit}, outstanding ${out}.`;
+              const parts = [];
+              if (d.totalRevenue) parts.push("revenue " + rev);
+              if (d.grossProfit) parts.push("gross profit " + profit);
+              if (d.outstanding) parts.push(out + " still outstanding");
+              if (d.totalPaid) parts.push(fmt(d.totalPaid) + " collected");
+              return (d.label ? d.label + ". " : "") + (parts.length ? parts.join(", ") + "." : "Report ready.");
             }
 
             case "cis_list": {
@@ -5842,12 +5860,13 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
               return `${d.length} CIS statement${d.length !== 1 ? "s" : ""}, total gross ${fmt(total)}.`;
             }
 
-            case "cis_statement":
+            case "cis_statement": // fall through to subcontractor_payment
               return `CIS from ${d.contractor_name}. Gross ${fmt(d.gross_amount)}, deduction ${fmt(d.deduction_amount)}, net ${fmt(d.net_amount)}.`;
 
             case "subcontractor_list": {
-              if (!d.length) return "No subcontractors.";
-              return `${d.length} subcontractor${d.length !== 1 ? "s" : ""}. ` + d.slice(0,4).map(s => s.name).join(", ") + ".";
+              if (!d.length) return "No subcontractors on file.";
+              const items = d.slice(0,5).map(s => `${s.name}${s.cis_rate ? " at " + s.cis_rate + "% CIS" : ""}`);
+              return `You have ${d.length} subcontractor${d.length !== 1 ? "s" : ""}. ` + items.join(", ") + ".";
             }
 
             case "subcontractor_payment":
@@ -5887,6 +5906,57 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
               return `Stage payment plan for ${d.customer}. ${(d.stages||[]).length} stages totalling ${fmt(total)}.`;
             }
 
+            case "accounting_sync":
+              return `${d.customer} synced to ${d.platform}. Invoice ${d.invoice_id}, ${d.amount ? "£" + parseFloat(d.amount).toFixed(2) : ""}.`;
+
+            case "expense_entry":
+              return `Expense logged — ${d.description || d.exp_type}, £${parseFloat(d.amount||0).toFixed(2)}.`;
+
+            case "inbox_actions": {
+              if (!d || !d.length) return "No pending inbox actions.";
+              const previews = d.slice(0, 3).map(a => `${a.action_type || "action"} from ${a.from_name || a.from_email || "unknown"}`);
+              return `You have ${d.length} pending inbox action${d.length !== 1 ? "s" : ""}. ${previews.join(", ")}.`;
+            }
+
+            case "material_receipt":
+              return `Receipt found — ${d.supplier || "supplier"}, £${parseFloat(d.amount||d.total||0).toFixed(2)}.`;
+
+            case "rams_step1":
+              return "RAMS started. I need the project title, site address and scope of work. What are they?";
+
+            case "rams_hazard_cats":
+              return `Hazard categories selected for ${d.title||"this project"}. Review the list and confirm when you are happy to continue.`;
+
+            case "rams_hazard_review":
+              return `Hazards identified for ${d.title||"this project"}. Have a look and confirm when you are ready to move on to the method steps.`;
+
+            case "rams_step3":
+              return `Method statement updated for ${d.title||"this project"}. Review the steps and confirm to continue.`;
+
+            case "rams_step4":
+              return `COSHH substances recorded for ${d.title||"this project"}. Confirm to move to the final step.`;
+
+            case "rams_step5":
+              return `Almost done. I need the emergency procedure and any final details for ${d.title||"this project"}.`;
+
+            case "review_sent":
+              return `Review request sent to ${d.customer} at ${d.email}. ${d.platforms?.length ? "Links sent for " + d.platforms.join(" and ") + "." : ""}`;
+
+            case "signature_prompt":
+              return `Signature pad is ready for ${d.customer} on ${d.title||"this job"}. Hand them the phone to sign.`;
+
+            case "subcontractor_entry":
+              return `${d.name} added as a subcontractor at ${d.cis_rate||20}% CIS rate.`;
+
+            case "subcontractor_statement": {
+              const { sub, month, totalGross, totalDed, totalNet } = d;
+              const fmt2 = n => "£" + parseFloat(n||0).toFixed(2);
+              return `CIS statement for ${sub?.name||"subcontractor"} — ${month}. Gross ${fmt2(totalGross)}, deduction ${fmt2(totalDed)}, net paid ${fmt2(totalNet)}.`;
+            }
+
+            case "support_escalated":
+              return `Support ticket raised. Your issue has been sent to the team and they will be in touch at ${d.email||"your email"}.`;
+
             default:
               return "";
           }
@@ -5894,12 +5964,18 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       };
 
       // In hands-free mode, Claude is instructed to read data aloud in its response.
-      // Use Claude's reply directly. Only fall back to widget summary if reply is very short.
       const spokenSummary = widget ? buildSpokenSummary(widget) : "";
-      const replyIsSubstantive = finalReply.length > 60;
-      const spokenReply = replyIsSubstantive
-        ? finalReply
-        : (spokenSummary || finalReply);
+
+      // In hands-free mode: always use the spoken summary when a widget is present.
+      // Claude's text reply often contains markdown or is too short to be useful as audio.
+      // spokenSummary is purpose-built for being read aloud — names, amounts, dates, etc.
+      // Outside hands-free: speak finalReply directly (user can read the widget on screen).
+      let spokenReply;
+      if (handsFreeRef.current) {
+        spokenReply = (widget && spokenSummary) ? spokenSummary : finalReply;
+      } else {
+        spokenReply = finalReply;
+      }
 
       setLoading(false); // Clear spinner immediately — mic restart + TTS run async after this
       if (handsFreeRef.current) {
