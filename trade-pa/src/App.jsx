@@ -3689,47 +3689,40 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     const clean = text.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
     if (!clean) return;
 
-    // Guard: prevent onSpeechEnd firing more than once
     let speechEnded = false;
+    let safetyTimer = null;
+
     const onSpeechEnd = () => {
       if (speechEnded) return;
       speechEnded = true;
-      clearTimeout(startTimer);
-      clearTimeout(playbackTimer);
+      clearTimeout(safetyTimer);
       ttsAudioRef.current = null;
       if (handsFreeRef.current) restartMicAfterSpeak(1500);
     };
 
-    // TWO-PHASE safety net for hands-free:
-    // Phase 1 — quick-fail timer (2.5s): fires if audio never starts at all (iOS silent block).
-    //   On failure: fall through to Web Speech, then give that 3s to start.
-    // Phase 2 — playback timer: set only once we know audio IS playing.
-    //   Fires if audio starts but onended never comes (e.g. mid-playback network drop).
-    //   Duration = estimated speech time + 3s buffer.
-    let playbackTimer = null;
-    const startTimer = setTimeout(() => {
-      // Audio never started — fire onSpeechEnd to restart the mic loop
-      if (!speechEnded) {
-        console.warn("TTS never started (start timeout) — restarting mic");
-        onSpeechEnd();
-      }
-    }, 2500);
+    const wrappedEnd = () => onSpeechEnd();
 
-    const wrappedEnd = () => { onSpeechEnd(); };
-
-    const startPlaybackTimer = () => {
-      // Called once we know audio is actually playing
-      clearTimeout(startTimer);
-      const estimatedMs = Math.min(clean.length * 85 + 2000, 25000);
-      playbackTimer = setTimeout(() => {
+    // setSafety: call this whenever we know what state we're in so the timer is calibrated.
+    //   "fetching"  — waiting for Deepgram network (10s max, long enough for slow connections)
+    //   "playing"   — audio confirmed playing; timer covers estimated speech duration + buffer
+    //   "fallback"  — Web Speech or play() blocked; 4s to detect silent iOS block
+    const setSafety = (phase) => {
+      clearTimeout(safetyTimer);
+      const ms = phase === "fetching" ? 10000
+               : phase === "playing"  ? Math.min(clean.length * 90 + 4000, 28000)
+               :                         4000; // fallback / web speech
+      safetyTimer = setTimeout(() => {
         if (!speechEnded) {
-          console.warn("TTS playback timer fired — audio may have stalled");
+          console.warn("TTS safety [" + phase + "] — restarting mic");
           onSpeechEnd();
         }
-      }, estimatedMs);
+      }, ms);
     };
 
-    // Try Deepgram first for better voice quality
+    // Start in "fetching" phase — gives network time to respond without cutting off early
+    setSafety("fetching");
+
+    // Try Deepgram first for best voice quality
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
@@ -3742,13 +3735,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         const audio = new Audio(url);
         ttsAudioRef.current = audio;
         audio.onended = () => { URL.revokeObjectURL(url); wrappedEnd(); };
-        audio.play().then(() => {
-          // Audio confirmed playing — switch to playback timer
-          startPlaybackTimer();
-        }).catch(() => {
-          // Deepgram play blocked (e.g. iOS autoplay policy) — fall back to Web Speech
+        // Switch to playback-duration timer once we know it's actually playing
+        audio.play().then(() => setSafety("playing")).catch(() => {
           URL.revokeObjectURL(url);
           ttsAudioRef.current = null;
+          setSafety("fallback");
           speakWebSpeech(clean, wrappedEnd);
         });
         return;
@@ -3757,7 +3748,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       console.warn("Deepgram TTS failed, using Web Speech:", e.message);
     }
 
-    // Deepgram unavailable — use Web Speech API
+    // Deepgram unavailable — Web Speech fallback
+    setSafety("fallback");
     speakWebSpeech(clean, wrappedEnd);
   };
 
@@ -4221,8 +4213,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     },
     {
       name: "list_invoices",
-      description: "Show a list of invoices inline — use for 'show my invoices', 'any unpaid invoices', 'overdue invoices' etc.",
-      input_schema: { type: "object", properties: { filter: { type: "string", enum: ["all", "unpaid", "overdue", "paid"], description: "Which invoices to show" } } },
+      description: "Show a list of invoices inline. ALWAYS use filter: 'unpaid' for outstanding/due/unpaid/awaiting payment invoices. Use filter: 'paid' for paid/settled/collected invoices. Use filter: 'overdue' for overdue only. Use filter: 'all' ONLY if explicitly asked for all invoices regardless of status.",
+      input_schema: { type: "object", properties: { filter: { type: "string", enum: ["all", "unpaid", "overdue", "paid"], description: "unpaid = outstanding/awaiting payment. paid = settled/collected. overdue = past due date. all = everything." } } },
     },
     {
       name: "list_jobs",
@@ -4569,14 +4561,29 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           return `Business details saved: ${Object.keys(updates).join(", ")}.`;
         }
         case "list_invoices": {
-          const filter = input.filter || "all";
-          let list = (invoices || []).filter(i => !i.isQuote);
+          const filter = (input.filter || "all").toLowerCase().trim();
+          // Always query Supabase directly — React state can be stale if a previous sync failed
+          const { data: freshRows } = await supabase
+            .from("invoices")
+            .select("id, customer, amount, gross_amount, status, due, is_quote, line_items, created_at")
+            .eq("user_id", user?.id)
+            .order("created_at", { ascending: false })
+            .limit(50);
+          // Map Supabase snake_case → app camelCase
+          const fresh = (freshRows || []).map(r => ({
+            id: r.id, customer: r.customer, amount: parseFloat(r.amount) || 0,
+            grossAmount: parseFloat(r.gross_amount || r.amount) || 0,
+            status: (r.status || "").toLowerCase().trim(),
+            due: r.due || "", isQuote: r.is_quote || false,
+          }));
+          let list = fresh.filter(i => !i.isQuote);
           if (filter === "unpaid") list = list.filter(i => i.status !== "paid");
           if (filter === "overdue") list = list.filter(i => i.status === "overdue");
           if (filter === "paid") list = list.filter(i => i.status === "paid");
-          if (!list.length) return `No ${filter === "all" ? "" : filter + " "}invoices found.`;
+          const filterLabel = filter === "all" ? "" : filter === "unpaid" ? "outstanding " : filter + " ";
+          if (!list.length) return `No ${filterLabel}invoices found.`;
           pendingWidgetRef.current = { type: "invoice_list", data: list.slice(0, 10) };
-          return `Here are your ${filter === "all" ? "" : filter + " "}invoices:`;
+          return `Here are your ${filterLabel}invoices:`;
         }
         case "list_jobs": {
           const filter = input.filter || "all";
@@ -4805,22 +4812,22 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
         }
         case "find_invoice": {
           const term = (input.customer || input.id || "").toLowerCase();
-          const all = (invoices || []).filter(i => !i.isQuote);
-          const match = all.find(i =>
-            (i.id || "").toLowerCase().includes(term) ||
-            (i.customer || "").toLowerCase().includes(term)
-          ) || all[0];
+          const { data: rows } = await supabase.from("invoices")
+            .select("*").eq("user_id", user?.id).eq("is_quote", false)
+            .order("created_at", { ascending: false }).limit(50);
+          const fresh = (rows || []).map(r => ({ ...r, isQuote: r.is_quote, grossAmount: parseFloat(r.gross_amount || r.amount) || 0, amount: parseFloat(r.amount) || 0, status: (r.status || "").toLowerCase().trim(), lineItems: Array.isArray(r.line_items) ? r.line_items : (r.line_items ? JSON.parse(r.line_items) : []) }));
+          const match = fresh.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || fresh[0];
           if (!match) return `No invoice found for "${input.customer || input.id}".`;
           pendingWidgetRef.current = { type: "invoice", data: match };
           return `Here's the invoice for ${match.customer}:`;
         }
         case "find_quote": {
           const term = (input.customer || input.id || "").toLowerCase();
-          const all = (invoices || []).filter(i => i.isQuote);
-          const match = all.find(i =>
-            (i.id || "").toLowerCase().includes(term) ||
-            (i.customer || "").toLowerCase().includes(term)
-          ) || all[0];
+          const { data: rows } = await supabase.from("invoices")
+            .select("*").eq("user_id", user?.id).eq("is_quote", true)
+            .order("created_at", { ascending: false }).limit(50);
+          const fresh = (rows || []).map(r => ({ ...r, isQuote: true, grossAmount: parseFloat(r.gross_amount || r.amount) || 0, amount: parseFloat(r.amount) || 0, status: (r.status || "").toLowerCase().trim(), lineItems: Array.isArray(r.line_items) ? r.line_items : (r.line_items ? JSON.parse(r.line_items) : []) }));
+          const match = fresh.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || fresh[0];
           if (!match) return `No quote found for "${input.customer || input.id}".`;
           pendingWidgetRef.current = { type: "quote", data: match };
           return `Here's the quote for ${match.customer}:`;
@@ -5432,9 +5439,13 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
 
 
         case "list_quotes": {
-          const all = (invoices || []).filter(i => i.isQuote);
-          if (!all.length) return "No quotes found.";
-          pendingWidgetRef.current = { type: "invoice_list", data: all.slice(0, 15) };
+          const { data: rows } = await supabase.from("invoices")
+            .select("id, customer, amount, gross_amount, status, due, is_quote, created_at")
+            .eq("user_id", user?.id).eq("is_quote", true)
+            .order("created_at", { ascending: false }).limit(20);
+          const fresh = (rows || []).map(r => ({ id: r.id, customer: r.customer, amount: parseFloat(r.amount) || 0, grossAmount: parseFloat(r.gross_amount || r.amount) || 0, status: (r.status || "").toLowerCase().trim(), due: r.due || "", isQuote: true }));
+          if (!fresh.length) return "No quotes found.";
+          pendingWidgetRef.current = { type: "invoice_list", data: fresh.slice(0, 15) };
           return `Here are your quotes:`;
         }
         case "delete_expense": {
@@ -5562,8 +5573,10 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
           if (!inv) return `No invoice found for "${input.customer || input.invoice_id}".`;
           try {
             await fetch("/api/xero/mark-paid", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, invoiceId: inv.id }) });
+            // Also update local status so the invoice no longer shows in outstanding lists
+            setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, status: "paid", due: "Paid" } : i));
             pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "Xero", customer: inv.customer, invoice_id: inv.id, success: true, markedPaid: true } };
-            return `Invoice ${inv.id} marked as paid in Xero.`;
+            return `Invoice ${inv.id} for ${inv.customer} marked as paid in Xero and updated locally.`;
           } catch(e) {
             return `Failed to mark paid in Xero: ${e.message}`;
           }
@@ -5636,7 +5649,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "LOG: log_time, log_mileage, add_job_note\n"
   + "\nRules:\n"
   + "- create_job = scheduled with date+time. create_job_card = job tracking card without a date.\n"
-  + "- For invoices/quotes: use line_items array — one object per item with description and amount.\n"
+  + "- For invoices/quotes: use line_items array — one object per item with description and amount.\n- list_invoices filter: unpaid = outstanding/due/awaiting payment. paid = settled/collected. ALWAYS match what the user asked for.\n"
   + "- After tool use: confirm naturally in 1-2 sentences.\n"
   + "- For mileage: HMRC rate is 45p/mile for first 10,000 miles.\n"
   + "- When user says show me or what are my anything — use a list_ or find_ tool, never tell them to go somewhere.\n"
@@ -5658,7 +5671,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   + "- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n"
   + "- SUBCONTRACTOR STATEMENTS: generate_subcontractor_statement shows CIS statement for a month.\n"
   + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.\n"
-  + (handsFree ? "\n\nHANDS-FREE MODE: Your reply is spoken aloud by text-to-speech. Rules:\n- Plain spoken English only. No markdown, bullets, asterisks or formatting.\n- Keep your text reply to 1-2 sentences — a brief spoken intro only.\n- When you use a tool to fetch data (invoices, schedule, jobs), the app reads the full list aloud automatically. Your text just needs a brief spoken opener, e.g. \'You have four invoices outstanding, totalling 32700 pounds.\' Then ask what they want to do.\n- NEVER end with just \'Here are your invoices:\' — always follow with a question so they know to respond. E.g. \'What would you like to do?\' or \'Anything else?\'\n- After any action: confirm briefly and prompt. E.g. \"Done, mileage logged. Anything else?\"\n- Be warm, efficient, natural — you are a real PA in the car." : "")
+  + (handsFree ? "\n\nHANDS-FREE MODE: Your reply is spoken aloud by text-to-speech. Rules:\n- Plain spoken English only. No markdown, bullets, asterisks or formatting.\n- Keep your text reply to 1-2 sentences — a brief spoken intro only.\n- When you use a tool to fetch data, your text reply is the spoken intro. E.g. \'You have four invoices awaiting payment, totalling 32700 pounds. What would you like to do?\'\n- ALWAYS end your reply with a question or prompt so the user knows to respond.\n- When the user questions or corrects data you returned: acknowledge it directly, explain what the system shows (e.g. \'Those invoices show as sent in the system, meaning they have been issued but not yet marked as paid.\'), and offer what you can do — mark as paid, filter differently, etc. Never just repeat the same data without explanation.\n- If the user says something seems wrong, explain the status honestly: sent = issued, awaiting payment. overdue = past due date. paid = marked paid. draft = not yet sent.\n- Be a real PA: if the data surprises them, help them understand it and offer next steps." : "")
   + (supportMode ? "\nSUPPORT MODE ACTIVE: The user needs help with the app. Your job is to resolve their issue conversationally — walk them through it step by step, explain how features work, and troubleshoot problems. You know every feature of Trade PA in detail. If after 3 genuine attempts you still cannot resolve the issue, use the escalate_to_support tool to collect their details and email the issue to the support team. Be warm, patient and thorough. Never tell them to contact support unless you have tried everything." : "");
 
 
@@ -5775,10 +5788,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
               if (!d.length) return "No invoices found.";
               const total = d.reduce((s,i) => s + parseFloat(i.grossAmount||i.amount||0), 0);
               const overdue = d.filter(i => i.status === "overdue");
+              const statusLabel = (s) => s === "overdue" ? "overdue" : s === "draft" ? "draft" : s === "paid" ? "paid" : "awaiting payment";
               const items = d.slice(0, 6).map(i =>
-                `${i.customer} owes ${fmt(i.grossAmount||i.amount)}, ${i.status === "overdue" ? "overdue" : "outstanding"}`
+                `${i.customer}, ${fmt(i.grossAmount||i.amount)}, ${statusLabel(i.status)}`
               );
-              let summary = `You have ${d.length} outstanding invoice${d.length !== 1 ? "s" : ""} totalling ${fmt(total)}. `;
+              let summary = `You have ${d.length} invoice${d.length !== 1 ? "s" : ""} totalling ${fmt(total)}. `;
               if (overdue.length) summary += `${overdue.length} ${overdue.length === 1 ? "is" : "are"} overdue. `;
               summary += items.join(". ") + ".";
               return summary;
@@ -16272,7 +16286,18 @@ export default function App() {
               }
             }
           }
-        } catch (e) { console.error("Invoices sync:", e); }
+        } catch (e) {
+          console.error("Invoices sync:", e);
+          // Retry once after 3s — catches brief network blips on mobile
+          setTimeout(async () => {
+            try {
+              for (const inv of next) {
+                const invRow = { id: inv.id, company_id: companyId, user_id: user.id, customer: inv.customer || "", amount: inv.amount || 0, gross_amount: inv.grossAmount || inv.amount || 0, due: inv.due, status: inv.status, description: inv.description || "", is_quote: inv.isQuote || false, job_ref: inv.jobRef || "", line_items: JSON.stringify(inv.lineItems || []), vat_enabled: inv.vatEnabled || false, vat_rate: inv.vatRate || 20, payment_method: inv.paymentMethod || "both", cis_enabled: inv.cisEnabled || false, cis_rate: inv.cisRate || 20, cis_deduction: inv.cisDeduction || 0, cis_net_payable: inv.cisNetPayable || 0 };
+                await supabase.from("invoices").upsert(invRow);
+              }
+            } catch(e2) { console.error("Invoices sync retry failed:", e2); }
+          }, 3000);
+        }
       })();
       return next;
     });
