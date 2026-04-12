@@ -3655,7 +3655,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, refreshJobs, onShowPdf, onScanReceipt }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -4510,6 +4510,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, title: { type: "string", description: "Job title or type" } } },
     },
     {
+      name: "get_job_profit",
+      description: "Calculate and display a full profit breakdown for a job — revenue, labour costs, material costs, gross profit and margin. Use when user asks 'what's the profit', 'how much am I making', 'show the breakdown', 'what are my costs', 'profit on [job]', 'margin on this job'.",
+      input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, title: { type: "string", description: "Job title if needed" } } },
+    },
+    {
       name: "start_rams",
       description: "Start building a RAMS conversationally. Use when user asks to create RAMS or method statement.",
       input_schema: { type: "object", properties: { job_ref: { type: "string" }, site_address: { type: "string" } } },
@@ -4743,6 +4748,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "create_material": {
           const matPayload = {
             user_id: user?.id,
+            company_id: companyId || null,
             item: input.item, qty: parseInt(input.qty) || 1,
             unit_price: parseFloat(input.unit_price || input.price || 0) || 0,
             supplier: input.supplier || "", job: input.job || "",
@@ -4879,6 +4885,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${matRows.length > 1 ? matRows.length + " entries" : `"${matRows[0].item}"`} marked as ${input.status}.`;
         }
         case "create_job_card": {
+          // Check for existing job card to avoid duplicates
+          const titleMatch = (input.title || input.type || "").toLowerCase();
+          const custMatch = (input.customer || "").toLowerCase();
+          if (custMatch) {
+            const { data: existing } = await supabase.from("job_cards")
+              .select("id,title,customer,status,value")
+              .eq("user_id", user?.id)
+              .ilike("customer", `%${custMatch}%`)
+              .order("created_at", { ascending: false }).limit(5);
+            const match = (existing || []).find(j =>
+              !titleMatch || (j.title || j.type || "").toLowerCase().includes(titleMatch) ||
+              titleMatch.includes((j.title || j.type || "").toLowerCase().slice(0, 8))
+            );
+            if (match) {
+              pendingWidgetRef.current = { type: "job_full", data: { ...match, jobNotes: [], photos: [], timeLogs: [], linkedMaterials: [], drawings: [], vos: [], docs: [] } };
+              return `A job card already exists for ${match.customer} — "${match.title || match.type}" (£${match.value || 0}). Showing it now. Did you want to add to this one instead?`;
+            }
+          }
           const payload = {
             user_id: user?.id,
             title: input.title || input.type || "",
@@ -4888,7 +4912,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             status: input.status || "accepted",
             value: parseFloat(input.value || 0),
             notes: input.notes || "",
-            scope_of_work: input.scope_of_work || "",
+            scope_of_work: input.scope_of_work || input.scope || "",
             annual_service: false,
             updated_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
@@ -5059,6 +5083,61 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             }
           };
           return `Here's the full job card for ${job.customer}${job.title ? " — " + job.title : ""}:`;
+        }
+        case "get_job_profit": {
+          const profitTerm = (input.customer || input.title || "").toLowerCase();
+          const { data: profitJobs } = await supabase.from("job_cards")
+            .select("id,title,type,customer,value,status")
+            .eq("user_id", user?.id)
+            .or(`customer.ilike.%${profitTerm}%,title.ilike.%${profitTerm}%,type.ilike.%${profitTerm}%`)
+            .order("created_at", { ascending: false }).limit(1);
+          const pJob = profitJobs?.[0];
+          if (!pJob) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
+
+          // Fetch all cost data in parallel
+          const [{ data: tLogs }, { data: mats }, { data: vos }, { data: daysheets }, { data: expenses }] = await Promise.all([
+            supabase.from("time_logs").select("total,hours,rate,labour_type,days,description").eq("job_id", pJob.id),
+            supabase.from("materials").select("item,qty,unit_price,status").eq("job_id", pJob.id),
+            supabase.from("variation_orders").select("description,amount,status").eq("job_id", pJob.id),
+            supabase.from("daywork_sheets").select("hours,rate,description").eq("job_id", pJob.id).catch(() => ({ data: [] })),
+            supabase.from("expenses").select("amount,description").eq("job_id", pJob.id).catch(() => ({ data: [] })),
+          ]);
+
+          const jobValue = parseFloat(pJob.value || 0);
+          const voIncome = (vos || []).reduce((s, v) => s + parseFloat(v.amount || 0), 0);
+          const totalRevenue = jobValue + voIncome;
+
+          const labourCost = (tLogs || []).reduce((s, t) => s + parseFloat(t.total || 0), 0);
+          const materialCost = (mats || []).reduce((s, m) => s + (parseFloat(m.unit_price || 0) * (parseFloat(m.qty) || 1)), 0);
+          const dayworkCost = (daysheets || []).reduce((s, d) => s + ((parseFloat(d.hours || 0)) * (parseFloat(d.rate || 0))), 0);
+          const expenseCost = (expenses || []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+          const totalCosts = labourCost + materialCost + dayworkCost + expenseCost;
+
+          const grossProfit = totalRevenue - totalCosts;
+          const margin = totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(1) : 0;
+          const fmt = (n) => "£" + parseFloat(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+          pendingWidgetRef.current = {
+            type: "job_profit",
+            data: {
+              customer: pJob.customer, title: pJob.title || pJob.type,
+              jobValue, voIncome, totalRevenue,
+              labourCost, materialCost, dayworkCost, expenseCost, totalCosts,
+              grossProfit, margin,
+              labourEntries: tLogs || [],
+              materialEntries: mats || [],
+              voEntries: vos || [],
+            }
+          };
+
+          const costBreakdown = [
+            labourCost > 0 ? `labour ${fmt(labourCost)}` : "",
+            materialCost > 0 ? `materials ${fmt(materialCost)}` : "",
+            dayworkCost > 0 ? `daywork ${fmt(dayworkCost)}` : "",
+            expenseCost > 0 ? `expenses ${fmt(expenseCost)}` : "",
+          ].filter(Boolean).join(", ");
+
+          return `Profit breakdown for ${pJob.customer} — ${pJob.title || pJob.type}: Revenue ${fmt(totalRevenue)}, costs ${fmt(totalCosts)}${costBreakdown ? " (" + costBreakdown + ")" : ""}, gross profit ${fmt(grossProfit)} (${margin}% margin).`;
         }
         case "start_rams": {
           const blankRams = {
@@ -5277,10 +5356,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `"${mat.item}" linked to ${job.customer}'s job. It will now show in that job's profit breakdown.`;
         }
         case "log_time": {
-          // Find job by customer name
+          // Find job — Supabase first, then React state fallback (covers freshly created jobs)
           const { data: timeJobs } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).limit(5);
-          if (!timeJobs?.length) return `Couldn't find a job for "${input.customer}". Check the Jobs tab and make sure a job card exists for this customer.`;
-          const timeJob = timeJobs[0];
+          // Also check jobs tab state for recently created job cards not yet in DB
+          const stateJobMatch = !timeJobs?.length ? (jobs || []).find(j => (j.customer || "").toLowerCase().includes(input.customer.toLowerCase())) : null;
+          if (!timeJobs?.length && !stateJobMatch) return `Couldn't find a job for "${input.customer}". Check the Jobs tab and make sure a job card exists for this customer.`;
+          const timeJob = timeJobs?.[0] || stateJobMatch;
           const today = new Date().toISOString().split("T")[0];
           const type = input.labour_type || "hourly";
           let hours = 0, total = 0;
@@ -5324,8 +5405,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (!miles && !input.log_without_miles) return "How many miles was the trip? Or say 'log it without miles' to save the route and fill in the miles later.";
           miles = miles || 0;
           const value = parseFloat((miles * 0.45).toFixed(2));
+          // Check for duplicate entry (same route, same date) to prevent re-logging
+          const tripDate = input.date || today;
+          const { data: existingTrip } = await supabase.from("mileage_logs")
+            .select("id").eq("user_id", user?.id).eq("date", tripDate)
+            .ilike("from_location", `%${(input.from_location || "").slice(0, 15)}%`)
+            .ilike("to_location", `%${(input.to_location || "").slice(0, 15)}%`)
+            .limit(1);
+          if (existingTrip?.length) {
+            return `A trip from ${input.from_location} to ${input.to_location} on ${tripDate} is already logged. Did you want to log a different trip?`;
+          }
           const { error: mileErr } = await supabase.from("mileage_logs").insert({
-            user_id: user?.id, date: input.date || today,
+            user_id: user?.id, date: tripDate,
             from_location: input.from_location || "", to_location: input.to_location || "",
             miles, purpose: input.purpose || "", rate: 0.45, value,
             created_at: new Date().toISOString()
@@ -5649,7 +5740,38 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const email = input.email || custRow2?.[0]?.email || inv.email;
           if (!email) return `No email for ${inv.customer}. Provide their email address.`;
           const subject = `Invoice ${inv.id} from ${brand?.tradingName || ""}`;
-          const body = `<p>Dear ${inv.customer},</p><p>Please find your invoice ${inv.id} for £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)} attached.</p><p>Payment is due within ${inv.due || "30 days"}.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
+          const invAmt = parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2);
+          const invDue = inv.due || "30 days";
+          // Build a properly formatted invoice email with all payment details
+          const bacsBlock = brand?.bankName ? `
+            <div style="background:#f8f8f8;border-radius:6px;padding:14px 16px;margin:16px 0;border:1px solid #eee;">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:8px;">Pay by Bank Transfer (BACS)</div>
+              <div style="font-size:13px;line-height:1.8;">
+                <b>Bank:</b> ${brand.bankName}<br>
+                <b>Account name:</b> ${brand.accountName || ""}<br>
+                <b>Sort code:</b> ${brand.sortCode || ""}<br>
+                <b>Account number:</b> ${brand.accountNumber || ""}<br>
+                <b>Reference:</b> ${inv.id}
+              </div>
+            </div>` : "";
+          const accent = brand?.accentColor || "#f59e0b";
+          const body = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+            <div style="background:${accent};padding:24px 28px;border-radius:8px 8px 0 0;">
+              <h2 style="color:#fff;margin:0;font-size:20px;">${brand?.tradingName || ""}</h2>
+              <div style="color:rgba(255,255,255,0.8);font-size:13px;margin-top:4px;">INVOICE ${inv.id}</div>
+            </div>
+            <div style="padding:24px 28px;background:#fff;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px;">
+              <p style="font-size:15px;">Dear ${inv.customer},</p>
+              <p style="color:#555;">Please find your invoice ${inv.id} for <strong>£${invAmt}</strong> below. Payment is due ${invDue}.</p>
+              <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
+                <div style="font-size:22px;font-weight:700;color:${accent};">£${invAmt}</div>
+                <div style="font-size:12px;color:#888;margin-top:4px;">Due: ${invDue}</div>
+              </div>
+              ${bacsBlock}
+              <p style="color:#555;font-size:13px;">If you have any questions, please don't hesitate to get in touch.</p>
+              <p style="margin-top:20px;">Many thanks,<br><strong>${brand?.tradingName || ""}</strong>${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>
+            </div>
+          </div>`;
           try {
             await sendEmailViaConnectedAccount(user?.id, email, subject, body);
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount } };
@@ -6277,7 +6399,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         ["invoice_list","schedule_list","material_list","job_list","expense_list",
          "mileage_list","cis_list","subcontractor_list","stock_list","reminder_list",
          "customer_list","enquiry_list","po_list","rams_list","report",
-         "invoice","quote","job_card","job_full","email_sent","subcontractor_statement",
+         "invoice","quote","job_card","job_full","job_profit","email_sent","subcontractor_statement",
          "stage_payments","variation_order","daywork_sheet","compliance_cert",
          "signature_prompt","review_sent","subcontractor_payment","cis_statement"].includes(w.type)
       ) || allWidgets[allWidgets.length - 1] || null;
@@ -6511,6 +6633,23 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               const { sub, month, totalGross, totalDed, totalNet } = d;
               const fmt2 = n => "£" + parseFloat(n||0).toFixed(2);
               return `CIS statement for ${sub?.name||"subcontractor"} — ${month}. Gross ${fmt2(totalGross)}, deduction ${fmt2(totalDed)}, net paid ${fmt2(totalNet)}.`;
+            }
+
+            case "job_profit": {
+              const fp = (n) => "£" + parseFloat(n||0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+              const isP = d.grossProfit >= 0;
+              let s = `Profit breakdown for ${d.customer}. `;
+              s += `Revenue ${fp(d.totalRevenue)}. `;
+              if (d.totalCosts > 0) {
+                s += `Total costs ${fp(d.totalCosts)}`;
+                if (d.labourCost > 0) s += ` — labour ${fp(d.labourCost)}`;
+                if (d.materialCost > 0) s += `, materials ${fp(d.materialCost)}`;
+                s += ". ";
+              } else {
+                s += "No costs logged yet. ";
+              }
+              s += `Gross profit ${fp(d.grossProfit)} — that's a ${d.margin}% margin. ${isP ? "Looking good." : "Costs are exceeding revenue — worth reviewing."}`;
+              return s;
             }
 
             case "support_escalated":
@@ -7095,6 +7234,84 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                               <button onClick={() => send("Update " + job.customer + "'s job card")} style={{ ...S.btn("ghost"), fontSize: 12 }}>✏ Edit</button>
                             </div>
                           )}
+                        </div>
+                      );
+                    })()}
+                    {m.widget.type === "job_profit" && (() => {
+                      const d = m.widget.data;
+                      const fmt = (n) => "£" + parseFloat(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                      const pct = (n, t) => t > 0 ? ((n/t)*100).toFixed(0) + "%" : "0%";
+                      const isProfit = d.grossProfit >= 0;
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                          {/* Header */}
+                          <div style={{ padding: "10px 14px", background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>PROFIT BREAKDOWN</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginTop: 2 }}>{d.title}</div>
+                            <div style={{ fontSize: 12, color: C.textDim }}>{d.customer}</div>
+                          </div>
+                          {/* Revenue */}
+                          <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>REVENUE</div>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                              <span style={{ color: C.textDim }}>Job value</span>
+                              <span style={{ color: C.text, fontWeight: 600 }}>{fmt(d.jobValue)}</span>
+                            </div>
+                            {d.voIncome > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 3 }}>
+                              <span style={{ color: C.textDim }}>Variation orders</span>
+                              <span style={{ color: C.text }}>+{fmt(d.voIncome)}</span>
+                            </div>}
+                            {d.voIncome > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.border}` }}>
+                              <span style={{ color: C.textDim, fontWeight: 600 }}>Total revenue</span>
+                              <span style={{ color: C.amber, fontWeight: 700 }}>{fmt(d.totalRevenue)}</span>
+                            </div>}
+                          </div>
+                          {/* Costs */}
+                          <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>COSTS</div>
+                            {d.labourCost > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
+                              <span style={{ color: C.textDim }}>Labour ({d.labourEntries?.length || 0} {(d.labourEntries?.length || 0) === 1 ? "entry" : "entries"})</span>
+                              <span style={{ color: C.text }}>{fmt(d.labourCost)}</span>
+                            </div>}
+                            {d.materialCost > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
+                              <span style={{ color: C.textDim }}>Materials ({d.materialEntries?.length || 0} items)</span>
+                              <span style={{ color: C.text }}>{fmt(d.materialCost)}</span>
+                            </div>}
+                            {d.dayworkCost > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
+                              <span style={{ color: C.textDim }}>Daywork</span>
+                              <span style={{ color: C.text }}>{fmt(d.dayworkCost)}</span>
+                            </div>}
+                            {d.expenseCost > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
+                              <span style={{ color: C.textDim }}>Expenses</span>
+                              <span style={{ color: C.text }}>{fmt(d.expenseCost)}</span>
+                            </div>}
+                            {d.totalCosts === 0 && <div style={{ fontSize: 12, color: C.muted }}>No costs logged yet — add labour, materials or expenses to this job.</div>}
+                            {d.totalCosts > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.border}` }}>
+                              <span style={{ color: C.textDim, fontWeight: 600 }}>Total costs</span>
+                              <span style={{ color: C.text, fontWeight: 700 }}>{fmt(d.totalCosts)}</span>
+                            </div>}
+                          </div>
+                          {/* Gross Profit */}
+                          <div style={{ padding: "12px 14px", background: isProfit ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)", borderBottom: `1px solid ${C.border}` }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>GROSS PROFIT</div>
+                                <div style={{ fontSize: 22, fontWeight: 700, color: isProfit ? "#22c55e" : "#ef4444", marginTop: 2 }}>{fmt(d.grossProfit)}</div>
+                              </div>
+                              <div style={{ textAlign: "right" }}>
+                                <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>MARGIN</div>
+                                <div style={{ fontSize: 22, fontWeight: 700, color: isProfit ? "#22c55e" : "#ef4444", marginTop: 2 }}>{d.margin}%</div>
+                              </div>
+                            </div>
+                            {/* Margin bar */}
+                            <div style={{ background: C.border, borderRadius: 4, height: 6, marginTop: 10, overflow: "hidden" }}>
+                              <div style={{ width: Math.min(100, Math.max(0, parseFloat(d.margin))) + "%", height: "100%", background: isProfit ? "#22c55e" : "#ef4444", borderRadius: 4, transition: "width 0.3s" }} />
+                            </div>
+                          </div>
+                          {/* No costs warning */}
+                          {d.totalCosts === 0 && <div style={{ padding: "8px 14px", fontSize: 11, color: C.muted }}>
+                            💡 Tip: Log your labour and materials to this job to track real profit.
+                          </div>}
                         </div>
                       );
                     })()}
@@ -17132,7 +17349,7 @@ export default function App() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
-        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} /></div>
+        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
