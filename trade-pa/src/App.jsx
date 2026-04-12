@@ -4719,7 +4719,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "create_material": {
           const matPayload = {
-            user_id: user?.id, company_id: companyId || null,
+            user_id: user?.id,
             item: input.item, qty: parseInt(input.qty) || 1,
             unit_price: parseFloat(input.unit_price || input.price || 0) || 0,
             supplier: input.supplier || "", job: input.job || "",
@@ -4772,11 +4772,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const count = input.count || 1;
           // Query Supabase directly — avoids stale closure and race conditions from setMaterials
           const { data: allMats } = await supabase.from("materials")
-            .select("id, item").eq("company_id", companyId || "")
+            .select("id, item").eq("user_id", user?.id)
             .ilike("item", `%${input.item}%`)
             .order("created_at", { ascending: true });
           if (!allMats?.length) {
-            // Try user_id fallback
+            // Try React state as fallback
             const { data: userMats } = await supabase.from("materials")
               .select("id, item").eq("user_id", user?.id)
               .ilike("item", `%${input.item}%`)
@@ -4801,7 +4801,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "mark_invoice_paid": {
           const { data: paidRows } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", false).neq("status", "paid").order("created_at", { ascending: false }).limit(50);
-          const paidAll = paidRows || (invoices || []).filter(i => !i.isQuote && i.status !== "paid");
+          const statePaid = (invoices || []).filter(i => !i.isQuote && i.status !== "paid");
+          const seenPaidIds = new Set((paidRows || []).map(i => i.id));
+          const paidAll = [...(paidRows || []), ...statePaid.filter(i => !seenPaidIds.has(i.id))];
           const match = paidAll.find(i =>
             (input.invoice_id && (i.id || "").toLowerCase() === input.invoice_id.toLowerCase()) ||
             (input.customer && (i.customer || "").toLowerCase().includes(input.customer.toLowerCase()))
@@ -5608,7 +5610,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "send_invoice": {
           const term = (input.customer || input.invoice_id || "").toLowerCase();
           const { data: invRows2 } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", false).order("created_at", { ascending: false }).limit(50);
-          const allInvs = invRows2 || (invoices || []).filter(i => !i.isQuote);
+          const stateInvs2 = (invoices || []).filter(i => !i.isQuote);
+          const seenIds2 = new Set((invRows2 || []).map(i => i.id));
+          const allInvs = [...(invRows2 || []), ...stateInvs2.filter(i => !seenIds2.has(i.id))];
           const inv = allInvs.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || allInvs[0];
           if (!inv) return `No invoice found for "${input.customer || input.invoice_id}".`;
           const { data: custRow2 } = await supabase.from("customers").select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
@@ -5647,12 +5651,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "chase_invoice": {
           const term = (input.customer || input.invoice_id || "").toLowerCase();
-          // Query Supabase directly — React state may be stale
+          // Query Supabase directly, with React state as fallback
+          // (invoices may be indexed by company_id not user_id depending on account setup)
           const { data: invRows } = await supabase.from("invoices")
             .select("id, customer, amount, gross_amount, status, email, is_quote")
             .eq("user_id", user?.id).eq("is_quote", false).neq("status", "paid")
             .order("created_at", { ascending: false }).limit(50);
-          const all = (invRows || []).map(r => ({ ...r, grossAmount: parseFloat(r.gross_amount || r.amount) || 0 }));
+          // Build search pool: Supabase results + React state (deduped by id)
+          const stateInvs = (invoices || []).filter(i => !i.isQuote && i.status !== "paid");
+          const dbInvs = (invRows || []).map(r => ({ ...r, grossAmount: parseFloat(r.gross_amount || r.amount) || 0 }));
+          const seenIds = new Set(dbInvs.map(i => i.id));
+          const all = [...dbInvs, ...stateInvs.filter(i => !seenIds.has(i.id))];
           const inv = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term));
           if (!inv) return `No unpaid invoice found for "${input.customer || input.invoice_id}". Check the Invoices tab — it may already be marked paid.`;
           // Get email: explicit input → customer record → invoice email field
