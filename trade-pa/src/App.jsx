@@ -4413,15 +4413,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "log_mileage",
-      description: "Log a mileage trip for HMRC tax purposes. IMPORTANT: if the user gives two addresses/locations, do NOT include miles — leave it out and the app calculates it automatically from the addresses. Only include miles if the user explicitly states a number of miles.",
+      description: "Log a mileage trip for HMRC tax purposes. IMPORTANT: if the user gives two addresses/locations, do NOT include miles — leave it out and the app calculates it automatically. Only include miles if the user explicitly states a figure. If user wants to 'set it up and add miles later' or 'log it without miles', set log_without_miles: true to save a placeholder entry.",
       input_schema: {
         type: "object",
         properties: {
           from_location: { type: "string", description: "Start address or location" },
           to_location: { type: "string", description: "Destination address or location" },
-          miles: { type: "number", description: "ONLY include this if user explicitly stated a miles figure. Leave out if you have from/to addresses — distance is auto-calculated." },
+          miles: { type: "number", description: "ONLY include if user explicitly stated a miles figure. Leave out if from/to addresses are given — distance is auto-calculated." },
           purpose: { type: "string", description: "Purpose e.g. site visit, materials collection" },
           date: { type: "string", description: "Date in YYYY-MM-DD format, default today" },
+          log_without_miles: { type: "boolean", description: "Set true if user wants to save the trip now and add miles later" },
         },
         required: ["from_location", "to_location"],
       },
@@ -4615,6 +4616,28 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
+  // Email helper — routes to gmail/outlook based on user's connected account
+  const sendEmailViaConnectedAccount = async (userId, to, subject, body) => {
+    // Look up which email provider the user has connected
+    const { data: conns } = await supabase.from("email_connections")
+      .select("provider").eq("user_id", userId).limit(1);
+    const provider = conns?.[0]?.provider;
+    if (!provider) {
+      throw new Error("No email account connected. Go to the Inbox tab to connect Gmail or Outlook first.");
+    }
+    const endpoint = provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, to, subject, body }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.status.toString());
+      throw new Error(`Email send failed (${res.status}): ${errText}`);
+    }
+    return true;
+  };
+
   const executeTool = async (name, input) => {
     try {
       switch (name) {
@@ -4728,10 +4751,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           };
           const { data: newMat, error: matErr } = await supabase.from("materials").insert(matPayload).select().single();
           if (matErr) return `Failed to add material: ${matErr.message}`;
-          // Update React state directly — bypasses DELETE+INSERT race condition
-          setMaterialsRaw(prev => [...(prev || []), {
-            ...matPayload, id: newMat?.id,
-            unitPrice: matPayload.unit_price,
+          // Append to React state using setMaterials prop (always available, no companyId needed for appends)
+          // The wrapper only triggers DELETE+INSERT sync when companyId exists in App scope
+          setMaterials(prev => [...(prev || []), {
+            id: newMat?.id, item: matPayload.item, qty: matPayload.qty,
+            unitPrice: matPayload.unit_price, supplier: matPayload.supplier,
+            job: matPayload.job, job_id: matPayload.job_id, status: matPayload.status,
           }]);
           setLastAction({ type: "material", label: `${input.item} x${matPayload.qty}`, view: "Materials" });
           return `Material added: ${input.item} x${matPayload.qty}${input.supplier ? ` from ${input.supplier}` : ""}${input.job ? ` for ${input.job}` : ""}.`;
@@ -5274,7 +5299,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           let distanceNote = "";
 
           // Auto-calculate driving distance if two addresses given but no miles
-          if (!miles && input.from_location && input.to_location) {
+          if (!miles && input.from_location && input.to_location && !input.log_without_miles) {
             try {
               const distRes = await fetch("/api/distance", {
                 method: "POST",
@@ -5291,11 +5316,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             } catch(e) { console.warn("Distance calc failed:", e.message); }
             if (!miles) {
               // Distance API failed — ask user but remember the addresses
-              return `I couldn't calculate the distance between "${input.from_location}" and "${input.to_location}" automatically. How many miles was the trip? I'll log it with the full route details once you confirm.`;
+              return `I couldn't calculate the distance between "${input.from_location}" and "${input.to_location}" automatically. How many miles was the trip? Or say "log it without miles" and you can update it later.`;
             }
           }
 
-          if (!miles) return "How many miles was the trip?";
+          // Allow logging as placeholder with 0 miles if user wants to add miles later
+          if (!miles && !input.log_without_miles) return "How many miles was the trip? Or say 'log it without miles' to save the route and fill in the miles later.";
+          miles = miles || 0;
           const value = parseFloat((miles * 0.45).toFixed(2));
           const { error: mileErr } = await supabase.from("mileage_logs").insert({
             user_id: user?.id, date: input.date || today,
@@ -5305,7 +5332,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           });
           if (mileErr) return `Mileage couldn't be saved: ${mileErr.message}. Please check the Mileage tab manually.`;
           setLastAction({ type: "mileage", label: `${miles} miles logged`, view: "Mileage" });
-          return `Mileage logged: ${miles} miles from ${input.from_location || "start"} to ${input.to_location || "destination"}${distanceNote} — £${value} claimable at the HMRC rate.`;
+          const milesMsg = miles === 0
+            ? `Trip saved: ${input.from_location || "start"} → ${input.to_location || "destination"}. Miles set to 0 — update it later by saying "update mileage for [route] to X miles".`
+            : `Mileage logged: ${miles} miles from ${input.from_location || "start"} to ${input.to_location || "destination"}${distanceNote} — £${value} claimable at the HMRC rate.`;
+          return milesMsg;
         }
         case "add_job_note": {
           const { data: noteJobs } = await supabase.from("job_cards").select("id,title,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).limit(5);
@@ -5485,7 +5515,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const linksHtml = platforms.map(p => `<a href="${p.url}">${p.name}</a>`).join(" | ");
           const body = `Hi ${input.customer},\n\nThank you for choosing ${brand?.tradingName||"us"} — we really appreciate your business.\n\nIf you're happy with the work, we'd be grateful if you could leave us a review:\n\n${platforms.map(p => p.url).join("\n")}\n\nMany thanks,\n${brand?.tradingName||""}`;
           try {
-            await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject: `Review request from ${brand?.tradingName||""}`, body: body.replace(/\n/g,"<br>") }) });
+            await sendEmailViaConnectedAccount(user?.id, email, `Review request from ${brand?.tradingName||""}`, body.replace(/\n/g,"<br>")).catch(() => {});
           } catch(e) {}
           if (jc?.length) {
             await supabase.from("review_requests").insert({ user_id: user?.id, job_id: jc[0].id, customer: input.customer, email, platforms: platforms.map(p=>p.name).join(","), sent_at: new Date().toISOString(), created_at: new Date().toISOString() });
@@ -5621,8 +5651,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const subject = `Invoice ${inv.id} from ${brand?.tradingName || ""}`;
           const body = `<p>Dear ${inv.customer},</p><p>Please find your invoice ${inv.id} for £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)} attached.</p><p>Payment is due within ${inv.due || "30 days"}.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
-            const sendInvRes = await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
-            if (!sendInvRes.ok) return `Invoice email failed (${sendInvRes.status}). Check your email integration in Settings.`;
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body);
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount } };
             return `Invoice ${inv.id} sent to ${inv.customer} at ${email}.`;
           } catch(e) {
@@ -5641,8 +5670,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const subject = `Quote ${quote.id} from ${brand?.tradingName || ""}`;
           const body = `<p>Dear ${quote.customer},</p><p>Thank you for your enquiry. Please find your quote ${quote.id} for £${parseFloat(quote.grossAmount || quote.amount || 0).toFixed(2)} below.</p><p>This quote is valid for 30 days. Please don't hesitate to get in touch if you have any questions.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
-            const sendQRes = await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
-            if (!sendQRes.ok) return `Quote email failed (${sendQRes.status}). Check your email integration in Settings.`;
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body);
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: quote.customer, invoice_id: quote.id, amount: quote.grossAmount || quote.amount, isQuote: true } };
             return `Quote ${quote.id} sent to ${quote.customer} at ${email}.`;
           } catch(e) {
@@ -5672,15 +5700,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const subject = `Payment reminder — Invoice ${inv.id}`;
           const body = `<p>Dear ${inv.customer},</p><p>I hope you are well. I'm writing to remind you that invoice ${inv.id} for £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)} is currently outstanding.</p><p>Please arrange payment at your earliest convenience. If you have already sent payment, please disregard this message.</p><p>If you have any queries please don't hesitate to get in touch.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
-            const chaseRes = await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
-            if (!chaseRes.ok) {
-              const errText = await chaseRes.text().catch(() => chaseRes.status);
-              return `Chase email failed (${chaseRes.status}): ${errText}. Check your email integration in Settings.`;
-            }
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body);
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
             return `Payment chase sent to ${inv.customer} at ${email} for invoice ${inv.id} (£${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)}).`;
           } catch(e) {
-            return `Failed to send chase: ${e.message}. Check your internet connection.`;
+            return `Chase email failed: ${e.message}`;
           }
         }
         case "create_invoice_from_job": {
@@ -6230,9 +6254,23 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
       }
 
-      // Combine Claude text + all tool result strings — never discard tool results
+      // Combine Claude text + tool results — but avoid duplicating if Claude's text
+      // already says the same thing as the tool result (common with list_ tools)
       const toolResultText = toolResults.join(" ").trim();
-      const finalReply = [replyText.trim(), toolResultText].filter(Boolean).join(" ").trim() || "Done.";
+      let finalReply;
+      if (replyText.trim() && toolResultText) {
+        // Check if tool result is already contained in Claude's text (case-insensitive)
+        const replyLower = replyText.trim().toLowerCase();
+        const toolLower = toolResultText.toLowerCase();
+        // If Claude's text starts with or contains the tool result text, use Claude's only
+        // If tool result starts with Claude's text, use tool result only
+        // Otherwise combine both
+        const firstToolWords = toolLower.split(" ").slice(0, 6).join(" ");
+        const isDuplicate = replyLower.includes(firstToolWords) || toolLower.includes(replyLower.split(" ").slice(0, 6).join(" "));
+        finalReply = isDuplicate ? replyText.trim() : [replyText.trim(), toolResultText].join(" ").trim();
+      } else {
+        finalReply = (replyText.trim() || toolResultText || "Done.").trim();
+      }
 
       // For widget display: prefer the last list/data widget; fall back to last action widget
       const displayWidget = allWidgets.slice().reverse().find(w =>
