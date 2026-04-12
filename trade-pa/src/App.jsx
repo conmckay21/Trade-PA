@@ -524,9 +524,9 @@ function useWhisper(onTranscript, onSilence) {
       analyserRef.current = analyser;
       const data = new Uint8Array(analyser.frequencyBinCount);
       let silenceStart = null;
-      // RMS threshold — 25 works for most environments including moderate ambient noise.
-      // Too low (10) means ambient noise prevents silence ever being detected.
-      const SILENCE_THRESHOLD = 25;
+      // RMS threshold — 50 handles real-world ambient noise (dog, TV, traffic, kitchen).
+      // Lower values cause ambient noise to be mistaken for speech, preventing silence detection.
+      const SILENCE_THRESHOLD = 50;
       const graceMs = silenceDuration >= 3000 ? 2000 : 1500;
       const check = () => {
         if (!analyserRef.current) return;
@@ -3677,6 +3677,24 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [supportMode, setSupportMode] = useState(false);
   const ttsEnabledRef = useRef(true);
   const ttsAudioRef = useRef(null);
+  const audioUnlockedRef = useRef(false);
+
+  // iOS requires audio to be played from a synchronous user gesture.
+  // After a fetch() await, the gesture context expires.
+  // Solution: on every user tap (Send, mic), immediately play a silent buffer
+  // to "unlock" the audio session. Subsequent async .play() calls then succeed.
+  const unlockAudio = () => {
+    if (audioUnlockedRef.current) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx.resume().then(() => { audioUnlockedRef.current = true; });
+    } catch(e) {}
+  };
   const bottomRef = useRef(null);
   const [handsFree, setHandsFree] = useState(false);
   const handsFreeRef = useRef(false);
@@ -4066,6 +4084,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
   // Toggle hands-free mode
   const toggleHandsFree = () => {
+    unlockAudio(); // unlock audio session at gesture time so TTS works after async operations
     const newVal = !handsFreeRef.current;
     setHandsFree(newVal);
     handsFreeRef.current = newVal;
@@ -4279,11 +4298,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "delete_material",
-      description: "Delete a material from the materials list. Use when the user says to remove or delete a material.",
+      description: "Delete material(s) from the list. When user says delete duplicates or 'delete 3 of the blocks', use count to delete that many. Use count: 999 to delete ALL matching entries. Default count: 1.",
       input_schema: {
         type: "object",
         properties: {
           item: { type: "string", description: "Material item name to match" },
+          count: { type: "number", description: "How many to delete. Use 999 to delete ALL matching. Default 1." },
         },
         required: ["item"],
       },
@@ -4723,11 +4743,23 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Customer ${match.name} deleted.`;
         }
         case "delete_material": {
-          const match = (materials || []).find(m => m.item.toLowerCase().includes(input.item.toLowerCase()));
-          if (!match) return `Couldn't find a material matching "${input.item}". Check the Materials tab.`;
-          setMaterials(prev => (prev || []).filter(m => m !== match));
-          setLastAction({ type: "material", label: `Deleted: ${match.item}`, view: "Materials" });
-          return `Material "${match.item}" deleted.`;
+          const term = input.item.toLowerCase();
+          const count = input.count || 1; // how many to delete (default 1, use 999 for "all")
+          const matching = (materials || []).filter(m => m.item.toLowerCase().includes(term));
+          if (!matching.length) return `Couldn't find a material matching "${input.item}".`;
+          const toDelete = count >= 999 ? matching : matching.slice(0, count);
+          const toDeleteSet = new Set(toDelete.map((_, i) => matching.indexOf(toDelete[i])));
+          let removed = 0;
+          setMaterials(prev => {
+            const indices = [];
+            (prev || []).forEach((m, i) => { if (m.item.toLowerCase().includes(term)) indices.push(i); });
+            const toRemove = new Set(indices.slice(0, count >= 999 ? indices.length : count));
+            removed = toRemove.size;
+            return (prev || []).filter((_, i) => !toRemove.has(i));
+          });
+          setLastAction({ type: "material", label: `Deleted: ${input.item}`, view: "Materials" });
+          const n = count >= 999 ? matching.length : Math.min(count, matching.length);
+          return `Deleted ${n} "${matching[0].item}" entr${n !== 1 ? "ies" : "y"}.`;
         }
         case "mark_invoice_paid": {
           const match = (invoices || []).find(i =>
@@ -4765,11 +4797,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Quote ${match.id} converted to invoice ${newId} for ${match.customer} — £${match.amount}.`;
         }
         case "update_material_status": {
-          const match = (materials || []).find(m => m.item.toLowerCase().includes(input.item.toLowerCase()));
-          if (!match) return `Couldn't find a material matching "${input.item}". Check the Materials tab.`;
-          setMaterials(prev => (prev || []).map(m => m === match ? { ...m, status: input.status } : m));
-          setLastAction({ type: "material", label: `${input.status}: ${match.item}`, view: "Materials" });
-          return `Material "${match.item}" marked as ${input.status}.`;
+          const term = input.item.toLowerCase();
+          const matching = (materials || []).filter(m => m.item.toLowerCase().includes(term));
+          if (!matching.length) return `Couldn't find a material matching "${input.item}".`;
+          // Update ALL matching entries — if there are duplicates they all get updated
+          setMaterials(prev => (prev || []).map(m =>
+            m.item.toLowerCase().includes(term) ? { ...m, status: input.status } : m
+          ));
+          setLastAction({ type: "material", label: `${input.status}: ${matching[0].item}`, view: "Materials" });
+          return `${matching.length > 1 ? matching.length + " entries" : `"${matching[0].item}"`} marked as ${input.status}.`;
         }
         case "create_job_card": {
           const payload = {
@@ -4876,18 +4912,35 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const nextWeekEnd = new Date(nextWeekStart); nextWeekEnd.setDate(nextWeekStart.getDate() + 6); nextWeekEnd.setHours(23,59,59,999);
           const start = filter === "today" ? todayStart : filter === "next_week" ? nextWeekStart : weekStart;
           const end   = filter === "today" ? todayEnd   : filter === "next_week" ? nextWeekEnd   : weekEnd;
-          const all = (jobs || []).filter(j => {
-            if (!j.dateObj) return false;
-            const d = new Date(j.dateObj);
+
+          // Query Supabase directly so jobs created earlier in this same conversation are included
+          // (React state in closure can be stale if create_job was called moments ago)
+          let freshJobs = jobs || [];
+          try {
+            const { data: dbJobs } = await supabase.from("jobs")
+              .select("*").eq("user_id", user?.id)
+              .gte("date_obj", start.toISOString())
+              .lte("date_obj", end.toISOString())
+              .order("date_obj", { ascending: true });
+            if (dbJobs?.length) {
+              freshJobs = dbJobs.map(j => ({ ...j, dateObj: j.date_obj }));
+            }
+          } catch(e) {
+            // Fall back to React state if DB query fails
+          }
+
+          const all = freshJobs.filter(j => {
+            if (!j.dateObj && !j.date_obj) return false;
+            const d = new Date(j.dateObj || j.date_obj);
             return d >= start && d <= end;
-          }).sort((a,b) => new Date(a.dateObj) - new Date(b.dateObj));
+          }).sort((a,b) => new Date(a.dateObj || a.date_obj) - new Date(b.dateObj || b.date_obj));
+
+          const label = filter === "today" ? "today" : filter === "next_week" ? "next week" : "this week";
           if (!all.length) {
-            const label = filter === "today" ? "today" : filter === "next_week" ? "next week" : "this week";
             pendingWidgetRef.current = { type: "schedule_list", data: [], filter };
             return `Nothing booked ${label}.`;
           }
           pendingWidgetRef.current = { type: "schedule_list", data: all, filter };
-          const label = filter === "today" ? "today" : filter === "next_week" ? "next week" : "this week";
           return `Here's your schedule for ${label} — ${all.length} job${all.length !== 1 ? "s" : ""}:`;
         }
         case "get_job_full": {
@@ -5940,7 +5993,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "CREATE: create_job (scheduled), create_job_card, create_invoice, create_quote, create_invoice_from_job, log_enquiry, set_reminder, create_material, create_customer, create_purchase_order, add_stock_item, log_expense, log_cis_statement, add_subcontractor, log_subcontractor_payment, add_compliance_cert (CP12/EICR/PAT etc), add_variation_order, log_daywork, send_review_request, add_stage_payment\n"
   + "FIND/SHOW INLINE: find_invoice, find_quote, find_job_card (always shows full card), list_invoices, list_jobs, list_materials, find_material_receipt, list_schedule, get_job_full (use this when user asks for detail on a job), list_expenses, list_cis_statements, list_subcontractors, list_purchase_orders, list_reminders, list_enquiries, list_customers, list_mileage, list_stock, list_rams, get_report, list_inbox_actions (show pending email actions with email snippet for review)\n"
   + "UPDATE BRAND: update_brand (use during onboarding or when user wants to update business details)\n"
-  + "DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material\n"
+  + "DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material (use count param to delete multiple — count:3 deletes 3, count:999 deletes all matching)\n"
+  + "- update_material_status updates ALL items with that name — one call updates all duplicates at once.\n"
   + "UPDATE: mark_invoice_paid, update_job_status, update_job_card (edit any field), update_invoice (edit any field/line item), update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock, delete_stock_item\n"
   + "LOG: log_time, log_mileage, add_job_note\n"
   + "MEMORY: save_memory (explicitly store something important you should remember about this business)\n"
@@ -7381,11 +7435,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           rows={3}
         />
         <button
-          onClick={() => recording ? stopRecording() : startRecording(true)}
+          onClick={() => { unlockAudio(); recording ? stopRecording() : startRecording(true); }}
           disabled={transcribing}
           style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${recording ? C.red : C.border}`, background: recording ? C.red + "22" : C.surfaceHigh, color: recording ? C.red : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
         >{transcribing ? "⏳" : recording ? "⏹ Stop" : "🎙"}</button>
-        <button onClick={() => send(input)} style={{ ...S.btn("primary"), padding: "10px 16px" }} disabled={loading || !input.trim()}>Send</button>
+        <button onClick={() => { unlockAudio(); send(input); }} style={{ ...S.btn("primary"), padding: "10px 16px" }} disabled={loading || !input.trim()}>Send</button>
       </div>
     </div>
   );
