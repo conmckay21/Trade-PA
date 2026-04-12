@@ -5094,14 +5094,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const pJob = profitJobs?.[0];
           if (!pJob) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
 
-          // Fetch all cost data in parallel
-          const [{ data: tLogs }, { data: mats }, { data: vos }, { data: daysheets }, { data: expenses }] = await Promise.all([
+          // Fetch core cost data
+          const [{ data: tLogs }, { data: mats }, { data: vos }] = await Promise.all([
             supabase.from("time_logs").select("total,hours,rate,labour_type,days,description").eq("job_id", pJob.id),
             supabase.from("materials").select("item,qty,unit_price,status").eq("job_id", pJob.id),
             supabase.from("variation_orders").select("description,amount,status").eq("job_id", pJob.id),
-            supabase.from("daywork_sheets").select("hours,rate,description").eq("job_id", pJob.id).catch(() => ({ data: [] })),
-            supabase.from("expenses").select("amount,description").eq("job_id", pJob.id).catch(() => ({ data: [] })),
           ]);
+          // Optional tables — wrapped individually to avoid crashing if table doesn't exist
+          let daysheets = [], dayExpenses = [];
+          try { const r = await supabase.from("daywork_sheets").select("hours,rate,description").eq("job_id", pJob.id); daysheets = r.data || []; } catch(e) {}
+          try { const r = await supabase.from("expenses").select("amount,description").eq("job_id", pJob.id); dayExpenses = r.data || []; } catch(e) {}
 
           const jobValue = parseFloat(pJob.value || 0);
           const voIncome = (vos || []).reduce((s, v) => s + parseFloat(v.amount || 0), 0);
@@ -5109,8 +5111,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
           const labourCost = (tLogs || []).reduce((s, t) => s + parseFloat(t.total || 0), 0);
           const materialCost = (mats || []).reduce((s, m) => s + (parseFloat(m.unit_price || 0) * (parseFloat(m.qty) || 1)), 0);
-          const dayworkCost = (daysheets || []).reduce((s, d) => s + ((parseFloat(d.hours || 0)) * (parseFloat(d.rate || 0))), 0);
-          const expenseCost = (expenses || []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+          const dayworkCost = daysheets.reduce((s, d) => s + ((parseFloat(d.hours || 0)) * (parseFloat(d.rate || 0))), 0);
+          const expenseCost = dayExpenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
           const totalCosts = labourCost + materialCost + dayworkCost + expenseCost;
 
           const grossProfit = totalRevenue - totalCosts;
@@ -6260,6 +6262,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- EVERY feature of the app is actionable here — jobs, invoices, quotes, materials, labour, mileage, expenses, CIS, subcontractors, reminders, RAMS, stock, purchase orders, compliance certificates, variation orders, daywork, review requests, reports.\n"
   + "- For expenses say: log_expense. For CIS say: log_cis_statement. For subcontractor payments say: log_subcontractor_payment.\n"
   + "- For certificates say: add_compliance_cert. For extra work say: add_variation_order. For reports say: get_report.\n"
+  + "- PROFIT/MARGIN: get_job_profit — use when user asks 'what's the profit', 'where do I stand', 'how much am I making', 'show the breakdown', 'margin on this job'. NEVER use create_material for profit questions.\n"
   + "\nVOICE TRIGGER GUIDE — listen for these phrases:\n"
   + "- CIS: 'log CIS from [name], gross £X, deduction £Y' → log_cis_statement\n"
   + "- SUB ADD: 'add [name] as a subcontractor, UTR X, 20% CIS' → add_subcontractor (cis_rate: 20=registered, 30=unregistered, 0=gross status)\n"
@@ -6381,15 +6384,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       const toolResultText = toolResults.join(" ").trim();
       let finalReply;
       if (replyText.trim() && toolResultText) {
-        // Check if tool result is already contained in Claude's text (case-insensitive)
+        // Only suppress tool result if it's genuinely identical to Claude's text
+        // Use a strict check: first 8 words of tool result already in reply text
         const replyLower = replyText.trim().toLowerCase();
         const toolLower = toolResultText.toLowerCase();
-        // If Claude's text starts with or contains the tool result text, use Claude's only
-        // If tool result starts with Claude's text, use tool result only
-        // Otherwise combine both
-        const firstToolWords = toolLower.split(" ").slice(0, 6).join(" ");
-        const isDuplicate = replyLower.includes(firstToolWords) || toolLower.includes(replyLower.split(" ").slice(0, 6).join(" "));
-        finalReply = isDuplicate ? replyText.trim() : [replyText.trim(), toolResultText].join(" ").trim();
+        const firstToolWords = toolLower.split(" ").slice(0, 8).join(" ");
+        const strictDuplicate = firstToolWords.length > 15 && replyLower.includes(firstToolWords);
+        finalReply = strictDuplicate ? replyText.trim() : [replyText.trim(), toolResultText].join(" ").trim();
       } else {
         finalReply = (replyText.trim() || toolResultText || "Done.").trim();
       }
