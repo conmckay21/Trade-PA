@@ -3678,21 +3678,23 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const ttsEnabledRef = useRef(true);
   const ttsAudioRef = useRef(null);
   const audioUnlockedRef = useRef(false);
+  // Single persistent Audio element — iOS unlocks per-element, not globally.
+  // Reusing one element means unlocking it once keeps it unlocked forever.
+  const persistentAudioRef = useRef(typeof Audio !== "undefined" ? new Audio() : null);
 
-  // iOS requires audio to be played from a synchronous user gesture.
-  // After a fetch() await, the gesture context expires.
-  // Solution: on every user tap (Send, mic), immediately play a silent buffer
-  // to "unlock" the audio session. Subsequent async .play() calls then succeed.
   const unlockAudio = () => {
     if (audioUnlockedRef.current) return;
+    const el = persistentAudioRef.current;
+    if (!el) return;
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const buf = ctx.createBuffer(1, 1, 22050);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.connect(ctx.destination);
-      src.start(0);
-      ctx.resume().then(() => { audioUnlockedRef.current = true; });
+      // Silent WAV — play on the SAME element speak() will reuse for TTS.
+      el.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=";
+      el.volume = 0.001;
+      el.play().then(() => {
+        audioUnlockedRef.current = true;
+        el.pause();
+        el.src = "";
+      }).catch(() => {});
     } catch(e) {}
   };
   const bottomRef = useRef(null);
@@ -3991,9 +3993,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        ttsAudioRef.current = audio;
+        // Reuse the persistent element that was pre-unlocked on user tap — new Audio() fails on iOS
+        const audio = persistentAudioRef.current || new Audio();
         audio.onended = () => { URL.revokeObjectURL(url); wrappedEnd(); };
+        audio.onerror = () => { URL.revokeObjectURL(url); setSafety("fallback"); speakWebSpeech(clean, wrappedEnd); };
+        audio.src = url;
+        ttsAudioRef.current = audio;
         // Switch to playback-duration timer once we know it's actually playing
         audio.play().then(() => setSafety("playing")).catch(() => {
           URL.revokeObjectURL(url);
@@ -4762,11 +4767,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Deleted ${n} "${matching[0].item}" entr${n !== 1 ? "ies" : "y"}.`;
         }
         case "mark_invoice_paid": {
-          const match = (invoices || []).find(i =>
-            !i.isQuote && (
-              (input.invoice_id && i.id.toLowerCase() === input.invoice_id.toLowerCase()) ||
-              (input.customer && i.customer.toLowerCase().includes(input.customer.toLowerCase()) && i.status !== "paid")
-            )
+          const { data: paidRows } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", false).neq("status", "paid").order("created_at", { ascending: false }).limit(50);
+          const paidAll = paidRows || (invoices || []).filter(i => !i.isQuote && i.status !== "paid");
+          const match = paidAll.find(i =>
+            (input.invoice_id && (i.id || "").toLowerCase() === input.invoice_id.toLowerCase()) ||
+            (input.customer && (i.customer || "").toLowerCase().includes(input.customer.toLowerCase()))
           );
           if (!match) return `Couldn't find an unpaid invoice matching that. Check the Invoices tab.`;
           setInvoices(prev => (prev || []).map(i => i.id === match.id ? { ...i, status: "paid", due: "Paid" } : i));
@@ -5205,7 +5210,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (type === "hourly") { hours = parseFloat(input.hours || 0); total = hours * parseFloat(input.rate || 0); }
           else if (type === "day_rate") { hours = parseFloat(input.days || 0) * 8; total = parseFloat(input.days || 0) * parseFloat(input.rate || 0); }
           else { total = parseFloat(input.total || 0); }
-          await supabase.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, log_date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
+          const { error: timeErr } = await supabase.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, log_date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
+          if (timeErr) return `Labour log failed: ${timeErr.message}`;
           setLastAction({ type: "job", label: `Time logged — ${input.customer}`, view: "Jobs" });
           const label = type === "hourly" ? `${input.hours}hrs @ £${input.rate}/hr` : type === "day_rate" ? `${input.days} days @ £${input.rate}/day` : `Price work £${input.total}`;
           return `Labour logged for ${input.customer}: ${label} = £${total.toFixed(2)}.`;
@@ -5236,7 +5242,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
           if (!miles) return "How many miles was the trip?";
           const value = parseFloat((miles * 0.45).toFixed(2));
-          await supabase.from("mileage_logs").insert({ user_id: user?.id, date: input.date || today, from_location: input.from_location || "", to_location: input.to_location || "", miles, purpose: input.purpose || "", rate: 0.45, value, created_at: new Date().toISOString() });
+          const { error: mileErr } = await supabase.from("mileage_logs").insert({
+            user_id: user?.id, date: input.date || today,
+            from_location: input.from_location || "", to_location: input.to_location || "",
+            miles, purpose: input.purpose || "", rate: 0.45, value,
+            created_at: new Date().toISOString()
+          });
+          if (mileErr) return `Mileage couldn't be saved: ${mileErr.message}. Please check the Mileage tab manually.`;
           setLastAction({ type: "mileage", label: `${miles} miles logged`, view: "Mileage" });
           return `Mileage logged: ${miles} miles from ${input.from_location || "start"} to ${input.to_location || "destination"}${distanceNote} — £${value} claimable at the HMRC rate.`;
         }
@@ -5540,12 +5552,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "send_invoice": {
           const term = (input.customer || input.invoice_id || "").toLowerCase();
-          const all = (invoices || []).filter(i => !i.isQuote);
-          const inv = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || all[0];
+          const { data: invRows2 } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", false).order("created_at", { ascending: false }).limit(50);
+          const allInvs = invRows2 || (invoices || []).filter(i => !i.isQuote);
+          const inv = allInvs.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || allInvs[0];
           if (!inv) return `No invoice found for "${input.customer || input.invoice_id}".`;
-          const cust = (customers || []).find(c => c.name?.toLowerCase() === inv.customer?.toLowerCase());
-          const email = input.email || cust?.email || inv.email;
-          if (!email) return `No email address found for ${inv.customer}. Please provide their email.`;
+          const { data: custRow2 } = await supabase.from("customers").select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
+          const email = input.email || custRow2?.[0]?.email || inv.email;
+          if (!email) return `No email for ${inv.customer}. Provide their email address.`;
           const subject = `Invoice ${inv.id} from ${brand?.tradingName || ""}`;
           const body = `<p>Dear ${inv.customer},</p><p>Please find your invoice ${inv.id} for £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)} attached.</p><p>Payment is due within ${inv.due || "30 days"}.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
@@ -5558,12 +5571,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "send_quote": {
           const term = (input.customer || input.quote_id || "").toLowerCase();
-          const all = (invoices || []).filter(i => i.isQuote);
-          const quote = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || all[0];
+          const { data: qRows } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", true).order("created_at", { ascending: false }).limit(50);
+          const allQ = qRows || (invoices || []).filter(i => i.isQuote);
+          const quote = allQ.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || allQ[0];
           if (!quote) return `No quote found for "${input.customer || input.quote_id}".`;
-          const cust = (customers || []).find(c => c.name?.toLowerCase() === quote.customer?.toLowerCase());
-          const email = input.email || cust?.email || quote.email;
-          if (!email) return `No email address found for ${quote.customer}. Please provide their email.`;
+          const { data: custRowQ } = await supabase.from("customers").select("email").eq("user_id", user?.id).ilike("name", `%${quote.customer}%`).limit(1);
+          const email = input.email || custRowQ?.[0]?.email || quote.email;
+          if (!email) return `No email for ${quote.customer}. Provide their email address.`;
           const subject = `Quote ${quote.id} from ${brand?.tradingName || ""}`;
           const body = `<p>Dear ${quote.customer},</p><p>Thank you for your enquiry. Please find your quote ${quote.id} for £${parseFloat(quote.grossAmount || quote.amount || 0).toFixed(2)} below.</p><p>This quote is valid for 30 days. Please don't hesitate to get in touch if you have any questions.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
@@ -5576,12 +5590,19 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "chase_invoice": {
           const term = (input.customer || input.invoice_id || "").toLowerCase();
-          const all = (invoices || []).filter(i => !i.isQuote && i.status !== "paid");
+          // Query Supabase directly — React state may be stale
+          const { data: invRows } = await supabase.from("invoices")
+            .select("id, customer, amount, gross_amount, status, email, is_quote")
+            .eq("user_id", user?.id).eq("is_quote", false).neq("status", "paid")
+            .order("created_at", { ascending: false }).limit(50);
+          const all = (invRows || []).map(r => ({ ...r, grossAmount: parseFloat(r.gross_amount || r.amount) || 0 }));
           const inv = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term));
-          if (!inv) return `No unpaid invoice found for "${input.customer || input.invoice_id}".`;
-          const cust = (customers || []).find(c => c.name?.toLowerCase() === inv.customer?.toLowerCase());
-          const email = input.email || cust?.email || inv.email;
-          if (!email) return `No email address for ${inv.customer}. Provide their email to chase.`;
+          if (!inv) return `No unpaid invoice found for "${input.customer || input.invoice_id}". Check the Invoices tab — it may already be marked paid.`;
+          // Get email: explicit input → customer record → invoice email field
+          const { data: custRows } = await supabase.from("customers")
+            .select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
+          const email = input.email || custRows?.[0]?.email || inv.email;
+          if (!email) return `No email on file for ${inv.customer}. Say their email address and I'll send the chase.`;
           const subject = `Payment reminder — Invoice ${inv.id}`;
           const body = `<p>Dear ${inv.customer},</p><p>I hope you are well. I'm writing to remind you that invoice ${inv.id} for £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)} is currently outstanding.</p><p>Please arrange payment at your earliest convenience. If you have already sent payment, please disregard this message.</p><p>If you have any queries please don't hesitate to get in touch.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
