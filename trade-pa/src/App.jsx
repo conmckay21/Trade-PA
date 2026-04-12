@@ -3710,6 +3710,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   // ── PA Memory layer ───────────────────────────────────────────────────────
   const [paMemories, setPaMemories] = useState([]);
   const paMemoriesRef = useRef([]);
+  const sessionActionsRef = useRef([]); // tracks successful action tool calls this session
   useEffect(() => { paMemoriesRef.current = paMemories; }, [paMemories]);
 
   // Load memories from Supabase on mount
@@ -4383,23 +4384,25 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "assign_material_to_job",
-      description: "Link a material to a job card so it shows in job profitability. Use when user says 'assign [material] to [job/customer]' or 'add [material] to [customer] job'.",
+      description: "Link a material to a job card. ALWAYS include job_title if mentioned — critical for repeat customers with multiple jobs.",
       input_schema: {
         type: "object",
         properties: {
           item: { type: "string", description: "Material item name to match" },
           customer: { type: "string", description: "Customer name of the job to link to" },
+          job_title: { type: "string", description: "Job title or type — always include if known to target the right job" },
         },
         required: ["item", "customer"],
       },
     },
     {
       name: "log_time",
-      description: "Log labour time against a job. Handles hourly rate, day rate, or price work. Use when user says 'log X hours at £Y/hr for [customer]' or 'log X days at £Y/day' or 'log price work of £X'.",
+      description: "Log labour time against a job. Handles hourly rate, day rate, or price work. ALWAYS include job_title when the user mentions the job name or type — this prevents logging to the wrong job when a customer has multiple jobs.",
       input_schema: {
         type: "object",
         properties: {
           customer: { type: "string", description: "Customer name to find the job" },
+          job_title: { type: "string", description: "Job title or type to identify which job — ALWAYS include this if mentioned or known. Prevents logging to wrong job for repeat customers." },
           labour_type: { type: "string", enum: ["hourly", "day_rate", "price_work"], description: "Type of labour" },
           hours: { type: "number", description: "Number of hours (hourly only)" },
           days: { type: "number", description: "Number of days (day_rate only)" },
@@ -4429,11 +4432,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "add_job_note",
-      description: "Add a note to an existing job card. Use when user says 'add note to [customer] job' or 'note for [job]'.",
+      description: "Add a note to an existing job card. ALWAYS include job_title if mentioned — critical for repeat customers with multiple jobs.",
       input_schema: {
         type: "object",
         properties: {
           customer: { type: "string", description: "Customer name to find the job" },
+          job_title: { type: "string", description: "Job title or type — always include if known to target the right job" },
           note: { type: "string", description: "The note text to add" },
         },
         required: ["customer", "note"],
@@ -4671,6 +4675,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             status: input.status || "confirmed",
             value: input.value || 0,
           };
+          // Dedup: same customer + type + same date+time = duplicate scheduled job
+          const dupJob = (jobs || []).find(j =>
+            (j.customer || "").toLowerCase() === input.customer.toLowerCase() &&
+            (j.type || "").toLowerCase() === (input.type || "").toLowerCase() &&
+            j.dateObj && Math.abs(new Date(j.dateObj) - dateObj) < 60000 // within 1 min
+          );
+          if (dupJob) return ""; // Silent dedup
           setJobs(prev => [...(prev || []), job]);
           setLastAction({ type: "job", label: `${input.type} — ${input.customer}`, view: "Schedule" });
           return `Job created: ${input.type} for ${input.customer} on ${dateObj.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} at ${input.time}.`;
@@ -4715,6 +4726,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Quote ${id} created for ${input.customer} — £${totalAmount} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
         }
         case "log_enquiry": {
+          // Dedup: same name + same source today
+          const dupEnq = (enquiries || []).find(e =>
+            (e.name || "").toLowerCase() === input.name.toLowerCase() &&
+            (e.source || "").toLowerCase() === (input.source || "").toLowerCase()
+          );
+          if (dupEnq) return ""; // Silent dedup
           const enq = { name: input.name, source: input.source, msg: input.message, time: "Just now", urgent: input.urgent || false };
           setEnquiries(prev => [enq, ...(prev || [])]);
           setLastAction({ type: "enquiry", label: `${input.name} via ${input.source}`, view: "Dashboard" });
@@ -4755,6 +4772,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             job_id: input.job_id || null, status: "to_order",
             created_at: new Date().toISOString(),
           };
+          // Dedup: block only if same item AND same job already exists today
+          // Different job = legitimate separate entry (e.g. Blocks for Lisa AND Blocks for Glenn)
+          const recentMats = (materials || []).filter(m => {
+            const sameItem = m.item?.toLowerCase() === input.item.toLowerCase();
+            const sameJob = (m.job || "").toLowerCase() === (input.job || "").toLowerCase() &&
+                            (m.job_id || null) === (matPayload.job_id || null);
+            const today = matPayload.created_at.slice(0, 10);
+            const sameDay = !m.created_at || m.created_at.slice(0, 10) === today;
+            return sameItem && sameJob && sameDay;
+          });
+          if (recentMats.length >= 1 && !input.force) return ""; // Silent dedup — same item+job already added today
           const { data: newMat, error: matErr } = await supabase.from("materials").insert(matPayload).select().single();
           if (matErr) return `Failed to add material: ${matErr.message}`;
           // Append to React state using setMaterials prop (always available, no companyId needed for appends)
@@ -4900,7 +4928,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             );
             if (match) {
               pendingWidgetRef.current = { type: "job_full", data: { ...match, jobNotes: [], photos: [], timeLogs: [], linkedMaterials: [], drawings: [], vos: [], docs: [] } };
-              return `A job card already exists for ${match.customer} — "${match.title || match.type}" (£${match.value || 0}). Showing it now. Did you want to add to this one instead?`;
+              return `Job card already exists for ${match.customer} — "${match.title || match.type}". Showing it now.`;
             }
           }
           const payload = {
@@ -5053,10 +5081,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const term = (input.customer || input.title || "").toLowerCase();
           const { data: found } = await supabase.from("job_cards")
             .select("*").eq("user_id", user?.id)
-            .or(`customer.ilike.%${term}%,title.ilike.%${term}%,type.ilike.%${term}%`)
-            .order("created_at", { ascending: false }).limit(1);
-          const job = found?.[0];
-          if (!job) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
+            .ilike("customer", `%${term || ""}%`)
+            .order("created_at", { ascending: false }).limit(10);
+          if (!found?.length) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
+          let job;
+          if (input.title && found.length > 1) {
+            const tl = input.title.toLowerCase();
+            job = found.find(j => (j.title || j.type || "").toLowerCase().includes(tl)) || found[0];
+          } else if (!input.title && found.length > 1) {
+            const jobList = found.map(j => `"${j.title || j.type || "Job"}" (${j.status || "active"})`).join(", ");
+            return `${found[0].customer} has ${found.length} job cards: ${jobList}. Which one would you like to open?`;
+          } else { job = found[0]; }
           let notes = { data: [] }, timeLogs = { data: [] }, materials = { data: [] };
           let drawings = { data: [] }, vos = { data: [] }, docs = { data: [] };
           try {
@@ -5089,10 +5124,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { data: profitJobs } = await supabase.from("job_cards")
             .select("id,title,type,customer,value,status")
             .eq("user_id", user?.id)
-            .or(`customer.ilike.%${profitTerm}%,title.ilike.%${profitTerm}%,type.ilike.%${profitTerm}%`)
-            .order("created_at", { ascending: false }).limit(1);
-          const pJob = profitJobs?.[0];
-          if (!pJob) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
+            .ilike("customer", `%${profitTerm || ""}%`)
+            .order("created_at", { ascending: false }).limit(10);
+          if (!profitJobs?.length) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
+          let pJob;
+          if (input.title && profitJobs.length > 1) {
+            const tl = input.title.toLowerCase();
+            pJob = profitJobs.find(j => (j.title || j.type || "").toLowerCase().includes(tl)) || profitJobs[0];
+          } else if (!input.title && profitJobs.length > 1) {
+            const jobList = profitJobs.map(j => `"${j.title || j.type || "Job"}" (£${j.value || 0})`).join(", ");
+            return `${profitJobs[0].customer} has ${profitJobs.length} job cards: ${jobList}. Which job's profit would you like to see?`;
+          } else { pJob = profitJobs[0]; }
 
           // Fetch core cost data
           const [{ data: tLogs }, { data: mats }, { data: vos }] = await Promise.all([
@@ -5345,9 +5387,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const matIdx = (materials || []).findIndex(m => m.item?.toLowerCase().includes(input.item.toLowerCase()));
           if (matIdx < 0) return `Couldn't find material "${input.item}". Check the Materials tab.`;
           const mat = (materials || [])[matIdx];
-          const { data: jobMatches } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).limit(5);
-          if (!jobMatches?.length) return `Couldn't find a job for "${input.customer}". Check the Jobs tab.`;
-          const job = jobMatches[0];
+          const { data: jobMatches } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).order("created_at", { ascending: false }).limit(10);
+          if (!jobMatches?.length) return `No job card found for "${input.customer}". Check the Jobs tab.`;
+          let job;
+          if (input.job_title) {
+            const tl = input.job_title.toLowerCase();
+            job = jobMatches.find(j => (j.title || j.type || "").toLowerCase().includes(tl)) || jobMatches[0];
+          } else if (jobMatches.length > 1) {
+            const jobList = jobMatches.map(j => `"${j.title || j.type || "Job"}"`).join(", ");
+            return `${input.customer} has ${jobMatches.length} jobs: ${jobList}. Which job should I assign this material to?`;
+          } else { job = jobMatches[0]; }
           // Update in state by index (not by reference which can fail)
           setMaterials(prev => (prev || []).map((m, i) => i === matIdx ? { ...m, job_id: job.id, job: job.title || job.type || input.customer } : m));
           // Also persist to Supabase if material has an ID
@@ -5358,25 +5407,40 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `"${mat.item}" linked to ${job.customer}'s job. It will now show in that job's profit breakdown.`;
         }
         case "log_time": {
-          // Find job — Supabase first, then React state fallback (covers freshly created jobs)
-          const { data: timeJobs } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).limit(5);
-          // Also check jobs tab state for recently created job cards not yet in DB
-          const stateJobMatch = !timeJobs?.length ? (jobs || []).find(j => (j.customer || "").toLowerCase().includes(input.customer.toLowerCase())) : null;
-          if (!timeJobs?.length && !stateJobMatch) return `Couldn't find a job for "${input.customer}". Check the Jobs tab and make sure a job card exists for this customer.`;
-          const timeJob = timeJobs?.[0] || stateJobMatch;
+          // Find job cards for this customer
+          const { data: timeJobs } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).order("created_at", { ascending: false }).limit(10);
+          if (!timeJobs?.length) return `No job card found for "${input.customer}". Create a job card first, then log time to it.`;
+          
+          let timeJob;
+          if (input.job_title) {
+            // Match by job title if provided
+            const titleLower = input.job_title.toLowerCase();
+            timeJob = timeJobs.find(j =>
+              (j.title || j.type || "").toLowerCase().includes(titleLower) ||
+              titleLower.includes((j.title || j.type || "").toLowerCase().slice(0, 6))
+            ) || timeJobs[0];
+          } else if (timeJobs.length > 1) {
+            // Multiple jobs, no title specified — ask which one
+            const jobList = timeJobs.map(j => `"${j.title || j.type || "Job"}" (${j.status || "active"})`).join(", ");
+            return `${input.customer} has ${timeJobs.length} job cards: ${jobList}. Which job should I log this labour to?`;
+          } else {
+            timeJob = timeJobs[0];
+          }
           const today = new Date().toISOString().split("T")[0];
           const type = input.labour_type || "hourly";
           let hours = 0, total = 0;
           if (type === "hourly") { hours = parseFloat(input.hours || 0); total = hours * parseFloat(input.rate || 0); }
           else if (type === "day_rate") { hours = parseFloat(input.days || 0) * 8; total = parseFloat(input.days || 0) * parseFloat(input.rate || 0); }
           else { total = parseFloat(input.total || 0); }
-          // Dedup: block if same total already logged on same job today
+          // Dedup: block only if same job + same date + same total + same labour_type
+          // Different labour type or different job = legitimate new entry
           if (total > 0) {
             const { data: existingLog } = await supabase.from("time_logs")
               .select("id").eq("job_id", timeJob.id).eq("user_id", user?.id)
-              .eq("log_date", input.date || today).eq("total", total).limit(1);
+              .eq("log_date", input.date || today).eq("total", total)
+              .eq("labour_type", type).limit(1);
             if (existingLog?.length) {
-              return `Labour of £${total.toFixed(2)} is already logged for ${input.customer} today — skipping to avoid a duplicate.`;
+              return ""; // Silent dedup
             }
           }
           const { error: timeErr } = await supabase.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, log_date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
@@ -5424,7 +5488,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             .ilike("to_location", `%${(input.to_location || "").slice(0, 15)}%`)
             .limit(1);
           if (existingTrip?.length) {
-            return `That trip is already saved — skipping to avoid a duplicate.`;
+            return ""; // Silent dedup — no output, no context for Claude to re-address
           }
           const { error: mileErr } = await supabase.from("mileage_logs").insert({
             user_id: user?.id, date: tripDate,
@@ -5440,9 +5504,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return milesMsg;
         }
         case "add_job_note": {
-          const { data: noteJobs } = await supabase.from("job_cards").select("id,title,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).limit(5);
-          if (!noteJobs?.length) return `Couldn't find a job for "${input.customer}". Check the Jobs tab.`;
-          const noteJob = noteJobs[0];
+          const { data: noteJobs } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).order("created_at", { ascending: false }).limit(10);
+          if (!noteJobs?.length) return `No job card found for "${input.customer}". Check the Jobs tab.`;
+          let noteJob;
+          if (input.job_title) {
+            const tl = input.job_title.toLowerCase();
+            noteJob = noteJobs.find(j => (j.title || j.type || "").toLowerCase().includes(tl)) || noteJobs[0];
+          } else if (noteJobs.length > 1) {
+            const jobList = noteJobs.map(j => `"${j.title || j.type || "Job"}"`).join(", ");
+            return `${input.customer} has ${noteJobs.length} jobs: ${jobList}. Which one should I add this note to?`;
+          } else { noteJob = noteJobs[0]; }
           await supabase.from("job_notes").insert({ job_id: noteJob.id, user_id: user?.id, note: input.note, created_at: new Date().toISOString() });
           setLastAction({ type: "job", label: `Note added — ${input.customer}`, view: "Jobs" });
           return `Note added to ${input.customer}'s job: "${input.note.slice(0, 60)}${input.note.length > 60 ? "..." : ""}"`;
@@ -5485,6 +5556,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const amount = input.exp_type === "mileage"
             ? (parseFloat(input.miles || 0) * 0.45)
             : (parseFloat(input.amount) || 0);
+          // Dedup: same description + amount + date = duplicate
+          const expDate = input.exp_date || new Date().toISOString().slice(0,10);
+          const { data: existingExp } = await supabase.from("expenses")
+            .select("id").eq("user_id", user?.id).eq("exp_date", expDate)
+            .ilike("description", input.description || "").eq("amount", amount).limit(1);
+          if (existingExp?.length) return ""; // Silent dedup
           const { data, error } = await supabase.from("expenses").insert({
             user_id: user?.id,
             exp_type: input.exp_type || "other",
@@ -5506,6 +5583,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "log_cis_statement": {
           const gross = parseFloat(input.gross_amount) || 0;
           const deduction = parseFloat(input.deduction_amount) || 0;
+          const taxMonth = (input.tax_month || new Date().toISOString().slice(0,7)) + "-01";
+          // Dedup: same contractor + same month = duplicate
+          const { data: existingCis } = await supabase.from("cis_statements")
+            .select("id").eq("user_id", user?.id)
+            .eq("contractor_name", input.contractor_name || "")
+            .eq("tax_month", taxMonth).limit(1);
+          if (existingCis?.length) return ""; // Silent dedup
           const { data, error } = await supabase.from("cis_statements").insert({
             user_id: user?.id,
             contractor_name: input.contractor_name || "",
@@ -5546,9 +5630,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const rate = (sub.cis_rate || 20) / 100;
           const deduction = parseFloat((gross * rate).toFixed(2));
           const net = parseFloat((gross - deduction).toFixed(2));
+          const payDate = input.date || new Date().toISOString().split("T")[0];
+          // Dedup: same sub + same gross + same date = duplicate payment
+          const { data: existingSub } = await supabase.from("subcontractor_payments")
+            .select("id").eq("user_id", user?.id).eq("subcontractor_id", sub.id)
+            .eq("date", payDate).eq("gross", gross).limit(1);
+          if (existingSub?.length) return ""; // Silent dedup
           const { data, error } = await supabase.from("subcontractor_payments").insert({
             user_id: user?.id, subcontractor_id: sub.id,
-            date: input.date || new Date().toISOString().split("T")[0],
+            date: payDate,
             gross, deduction, net, cis_rate: sub.cis_rate || 20,
             job_ref: input.job_ref || "", description: input.description || "",
             invoice_number: input.invoice_number || "",
@@ -5581,6 +5671,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type,value").eq("user_id", user?.id).or(`customer.ilike.%${input.customer||""}%,title.ilike.%${input.job_title||""}%`).order("created_at", { ascending: false }).limit(1);
           if (!jc?.length) return `Couldn't find a job card for "${input.customer || input.job_title}".`;
           const amount = parseFloat(input.amount) || 0;
+          // Dedup: same job + same description + same amount = duplicate
+          const { data: existingVo } = await supabase.from("variation_orders")
+            .select("id").eq("job_id", jc[0].id).eq("user_id", user?.id)
+            .ilike("description", input.description || "").eq("amount", amount).limit(1);
+          if (existingVo?.length) return ""; // Silent dedup
           const { data, error } = await supabase.from("variation_orders").insert({
             job_id: jc[0].id, user_id: user?.id,
             vo_number: input.vo_number || `VO-${Date.now().toString().slice(-4)}`,
@@ -5594,6 +5689,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type").eq("user_id", user?.id).or(`customer.ilike.%${input.customer||""}%,title.ilike.%${input.job_title||""}%`).order("created_at", { ascending: false }).limit(1);
           if (!jc?.length) return `Couldn't find a job card for "${input.customer || input.job_title}".`;
           const total = (parseFloat(input.hours) || 0) * (parseFloat(input.rate) || 0);
+          const sheetDate = input.date || new Date().toISOString().slice(0,10);
+          // Dedup: same job + same date + same total = duplicate
+          const { data: existingDw } = await supabase.from("daywork_sheets")
+            .select("id").eq("job_id", jc[0].id).eq("user_id", user?.id)
+            .eq("sheet_date", sheetDate).eq("hours", parseFloat(input.hours) || 0).limit(1);
+          if (existingDw?.length) return ""; // Silent dedup
           const { data, error } = await supabase.from("daywork_sheets").insert({
             job_id: jc[0].id, user_id: user?.id,
             sheet_date: input.date || new Date().toISOString().slice(0,10),
@@ -5712,6 +5813,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Here are your stock items:`;
         }
         case "add_stock_item": {
+          // Check if item already exists - if so, update quantity rather than duplicate
+          const { data: existingStock } = await supabase.from("stock_items")
+            .select("id,name,quantity").eq("user_id", user?.id).ilike("name", input.name).limit(1);
+          if (existingStock?.length) {
+            const newQty = (parseFloat(existingStock[0].quantity) || 0) + (parseFloat(input.quantity) || 0);
+            await supabase.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", existingStock[0].id);
+            return `${input.name} already in stock — quantity updated to ${newQty} ${input.unit || "units"}.`;
+          }
           const { data, error } = await supabase.from("stock_items").insert({
             user_id: user?.id,
             name: input.name, sku: input.sku || "",
@@ -6246,6 +6355,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- Be conversational: Done! Here is the invoice I just created for Trevor: — not Invoice INV-042 created successfully.\n"
   + "- ACT IMMEDIATELY — do not ask confirmation questions before using tools. If you have enough info, just do it. Only ask if something critical is genuinely missing (e.g. no customer name at all).\n"
   + "- NEVER repeat a question you have already asked in the same conversation. If the user has moved on, drop it.\n"
+  + "- Do not repeat the SAME action with the SAME data. If mileage from A to B on today's date is already in the session log, do not log it again. But DO log a different route (C to D) — that is a new trip.\n"
+  + "- When actioning a new request, only call tools needed for THAT request. Do not bundle in previous unrelated actions from earlier in the conversation.\n"
   + "- Ask follow-up questions naturally. If someone says create an invoice, ask who it is for if you do not know.\n"
   + "- Use £ not $. Keep replies short and punchy.\n"
   + "\nTOOLS YOU CAN USE:\n"
@@ -6259,6 +6370,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "MEMORY: save_memory (explicitly store something important you should remember about this business)\n"
   + "\nRules:\n"
   + "- create_job = scheduled with date+time. create_job_card = job tracking card without a date.\n"
+  + "- REPEAT CUSTOMERS: When a customer has multiple jobs, ALWAYS include job_title in tool calls (log_time, add_job_note, assign_material_to_job, get_job_profit, get_job_full, add_variation_order, log_daywork, add_compliance_cert). If the user says 'the extension' or 'the boiler service' — use that as job_title. Never guess — if ambiguous, list their jobs and ask which one.\n"
   + "- For invoices/quotes: use line_items array — one object per item with description and amount.\n- list_invoices filter: unpaid = outstanding/due/awaiting payment. paid = settled/collected. ALWAYS match what the user asked for.\n"
   + "- After tool use: confirm naturally in 1-2 sentences.\n"
   + "- For mileage: HMRC rate is 45p/mile for first 10,000 miles.\n"
@@ -6298,6 +6410,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.\n"
   + (handsFree ? "\n\nHANDS-FREE MODE: Your reply is spoken aloud by text-to-speech. Rules:\n- Plain spoken English only. No markdown, bullets, asterisks or formatting.\n- Keep your text reply to 1-2 sentences — a brief spoken intro only.\n- When you use a tool to fetch data, your text reply is the spoken intro. E.g. \'You have four invoices awaiting payment, totalling 32700 pounds. What would you like to do?\'\n- ALWAYS end your reply with a question or prompt so the user knows to respond.\n- When the user questions or corrects data you returned: acknowledge it directly, explain what the system shows (e.g. \'Those invoices show as sent in the system, meaning they have been issued but not yet marked as paid.\'), and offer what you can do — mark as paid, filter differently, etc. Never just repeat the same data without explanation.\n- If the user says something seems wrong, explain the status honestly: sent = issued, awaiting payment. overdue = past due date. paid = marked paid. draft = not yet sent.\n- Be a real PA: if the data surprises them, help them understand it and offer next steps." : "")
   + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
+  + (sessionActionsRef.current.length ? "\n\nACTIONS ALREADY COMPLETED THIS SESSION (do NOT repeat these):\n" + sessionActionsRef.current.map(a => "- " + a).join("\n") + "\n" : "")
   + (supportMode ? "\nSUPPORT MODE ACTIVE: The user needs help with the app. Your job is to resolve their issue conversationally — walk them through it step by step, explain how features work, and troubleshoot problems. You know every feature of Trade PA in detail. If after 3 genuine attempts you still cannot resolve the issue, use the escalate_to_support tool to collect their details and email the issue to the support team. Be warm, patient and thorough. Never tell them to contact support unless you have tried everything." : "");
 
 
@@ -6383,6 +6496,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           pendingWidgetRef.current = null; // clear before each tool so we can detect if it sets one
           const result = await executeTool(block.name, block.input);
           if (result) toolResults.push(result);
+          // Track completed actions so system prompt can tell Claude what's been done
+          const ACTION_TOOLS = ["log_mileage","log_time","create_material","create_job_card","create_job",
+            "create_invoice","create_customer","log_expense","log_cis_statement","add_subcontractor",
+            "log_subcontractor_payment","add_compliance_cert","add_variation_order","log_daywork","add_stage_payment"];
+          if (result && ACTION_TOOLS.includes(block.name)) {
+            sessionActionsRef.current = [...sessionActionsRef.current.slice(-9), `${block.name}(${JSON.stringify(block.input).slice(0,60)})`];
+          }
           if (pendingWidgetRef.current) {
             allWidgets.push(pendingWidgetRef.current);
             pendingWidgetRef.current = null;
