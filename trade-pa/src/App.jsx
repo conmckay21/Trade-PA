@@ -3655,7 +3655,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, onAddReminder, setView, user, refreshJobs, onShowPdf, onScanReceipt }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, refreshJobs, onShowPdf, onScanReceipt }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -3693,7 +3693,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       el.play().then(() => {
         audioUnlockedRef.current = true;
         el.pause();
-        el.src = "";
+        // Do NOT reset el.src — iOS unlocks per-element, clearing src resets that state
       }).catch(() => {});
     } catch(e) {}
   };
@@ -4215,15 +4215,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "set_reminder",
-      description: "Set a reminder. Use when the user asks to be reminded about something at a specific time.",
+      description: "Set a reminder. Use when the user asks to be reminded about something. Prefer iso_time when the user gives a specific time/date (e.g. '9am tomorrow', 'Monday at 10'). Use minutes_from_now only for relative times ('in 30 minutes', 'in 2 hours').",
       input_schema: {
         type: "object",
         properties: {
           text: { type: "string", description: "What to remind them about" },
-          minutes_from_now: { type: "number", description: "How many minutes from now to fire the reminder" },
-          time_label: { type: "string", description: "Human readable time e.g. 3:00 PM today" },
+          iso_time: { type: "string", description: "ISO 8601 datetime for when to fire e.g. 2025-01-20T09:00:00. Use for specific times/dates." },
+          minutes_from_now: { type: "number", description: "Minutes from now — use ONLY for purely relative times like 'in 30 minutes'" },
+          time_label: { type: "string", description: "Human readable label e.g. 'Monday 9am', 'tomorrow at 3pm'" },
         },
-        required: ["text", "minutes_from_now"],
+        required: ["text"],
       },
     },
     {
@@ -4597,7 +4598,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "delete_cis_statement", description: "Delete a CIS statement.", input_schema: { type: "object", properties: { contractor_name: { type: "string" } }, required: ["contractor_name"] } },
     { name: "delete_subcontractor", description: "Delete/remove a subcontractor.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
     { name: "delete_job_card", description: "Delete a job card permanently.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
-    { name: "delete_mileage", description: "Delete the most recent mileage log.", input_schema: { type: "object", properties: {} } },
+    { name: "delete_mileage", description: "Delete a mileage log. By default deletes the most recent one. If user specifies a date or location, use those to target the right entry.", input_schema: { type: "object", properties: { date: { type: "string", description: "Date of trip to delete YYYY-MM-DD" }, from_location: { type: "string", description: "Start location to match" }, to_location: { type: "string", description: "Destination to match" } } } },
     { name: "delete_rams", description: "Delete a RAMS document.", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
     { name: "escalate_to_support", description: "Use ONLY when you have genuinely tried to resolve the user's issue and cannot. Collects their details and sends an email to the support team.", input_schema: { type: "object", properties: { issue_summary: { type: "string", description: "Clear description of the issue" }, steps_tried: { type: "string", description: "What you already tried" }, user_email: { type: "string", description: "User's email address if known" } }, required: ["issue_summary"] } },
     { name: "request_signature", description: "Open the signature pad for a customer to sign off a completed job. Use when user says 'get signature', 'sign off', 'customer sign-off', 'completion sign-off'.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
@@ -4692,11 +4693,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Enquiry logged from ${input.name} via ${input.source}.`;
         }
         case "set_reminder": {
-          const fireAt = new Date(Date.now() + (input.minutes_from_now * 60000));
-          const reminder = { id: `r${Date.now()}`, text: input.text, time: fireAt.getTime(), timeLabel: input.time_label || "", done: false };
-          // Write to localStorage for in-app notification bell
+          let fireAt;
+          if (input.iso_time) {
+            fireAt = new Date(input.iso_time);
+          } else if (input.minutes_from_now) {
+            fireAt = new Date(Date.now() + (input.minutes_from_now * 60000));
+          } else {
+            return "When would you like me to remind you? e.g. 'at 9am tomorrow' or 'in 2 hours'.";
+          }
+          if (isNaN(fireAt.getTime())) return "I couldn't understand that time. Try saying something like '9am tomorrow' or 'in 30 minutes'.";
+          const reminder = { id: `r${Date.now()}`, text: input.text, time: fireAt.getTime(), timeLabel: input.time_label || fireAt.toLocaleString("en-GB"), done: false };
           onAddReminder(reminder);
-          // Also write to Supabase so list_reminders can find it
           try {
             await supabase.from("reminders").insert({
               user_id: user?.id,
@@ -4707,14 +4714,27 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             });
           } catch(e) { console.warn("Reminder Supabase write:", e.message); }
           setLastAction({ type: "reminder", label: input.text, view: "Reminders" });
-          return `Reminder set: "${input.text}" — ${input.time_label || `in ${input.minutes_from_now} minutes`}.`;
+          const label = input.time_label || fireAt.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+          return `Reminder set: "${input.text}" — ${label}.`;
         }
         case "create_material": {
-          const mat = { item: input.item, qty: input.qty || 1, supplier: input.supplier || "", job: input.job || "", status: "to_order" };
-          setMaterials(prev => [...(prev || []), mat]);
-          setTimeout(() => {}, 0); // no navigation — shows inline
-          setLastAction({ type: "material", label: `${input.item} x${input.qty || 1}`, view: "Materials" });
-          return `Material added: ${input.item} x${input.qty || 1}${input.supplier ? ` from ${input.supplier}` : ""}${input.job ? ` for ${input.job}` : ""}.`;
+          const matPayload = {
+            user_id: user?.id, company_id: companyId || null,
+            item: input.item, qty: parseInt(input.qty) || 1,
+            unit_price: parseFloat(input.unit_price || input.price || 0) || 0,
+            supplier: input.supplier || "", job: input.job || "",
+            job_id: input.job_id || null, status: "to_order",
+            created_at: new Date().toISOString(),
+          };
+          const { data: newMat, error: matErr } = await supabase.from("materials").insert(matPayload).select().single();
+          if (matErr) return `Failed to add material: ${matErr.message}`;
+          // Update React state directly — bypasses DELETE+INSERT race condition
+          setMaterialsRaw(prev => [...(prev || []), {
+            ...matPayload, id: newMat?.id,
+            unitPrice: matPayload.unit_price,
+          }]);
+          setLastAction({ type: "material", label: `${input.item} x${matPayload.qty}`, view: "Materials" });
+          return `Material added: ${input.item} x${matPayload.qty}${input.supplier ? ` from ${input.supplier}` : ""}${input.job ? ` for ${input.job}` : ""}.`;
         }
         case "delete_job": {
           const match = (jobs || []).find(j => j.customer.toLowerCase().includes(input.customer.toLowerCase()) && (!input.job_type || j.type.toLowerCase().includes(input.job_type.toLowerCase())));
@@ -4749,22 +4769,35 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "delete_material": {
           const term = input.item.toLowerCase();
-          const count = input.count || 1; // how many to delete (default 1, use 999 for "all")
-          const matching = (materials || []).filter(m => m.item.toLowerCase().includes(term));
-          if (!matching.length) return `Couldn't find a material matching "${input.item}".`;
-          const toDelete = count >= 999 ? matching : matching.slice(0, count);
-          const toDeleteSet = new Set(toDelete.map((_, i) => matching.indexOf(toDelete[i])));
-          let removed = 0;
-          setMaterials(prev => {
-            const indices = [];
-            (prev || []).forEach((m, i) => { if (m.item.toLowerCase().includes(term)) indices.push(i); });
-            const toRemove = new Set(indices.slice(0, count >= 999 ? indices.length : count));
-            removed = toRemove.size;
-            return (prev || []).filter((_, i) => !toRemove.has(i));
-          });
+          const count = input.count || 1;
+          // Query Supabase directly — avoids stale closure and race conditions from setMaterials
+          const { data: allMats } = await supabase.from("materials")
+            .select("id, item").eq("company_id", companyId || "")
+            .ilike("item", `%${input.item}%`)
+            .order("created_at", { ascending: true });
+          if (!allMats?.length) {
+            // Try user_id fallback
+            const { data: userMats } = await supabase.from("materials")
+              .select("id, item").eq("user_id", user?.id)
+              .ilike("item", `%${input.item}%`)
+              .order("created_at", { ascending: true });
+            if (!userMats?.length) return `Couldn't find any material matching "${input.item}".`;
+            const toDelete = count >= 999 ? userMats : userMats.slice(0, count);
+            await Promise.all(toDelete.map(m => supabase.from("materials").delete().eq("id", m.id)));
+            // Sync React state
+            const deletedIds = new Set(toDelete.map(m => m.id));
+            setMaterials(prev => (prev || []).filter(m => !deletedIds.has(m.id)));
+            setLastAction({ type: "material", label: `Deleted: ${input.item}`, view: "Materials" });
+            return `Deleted ${toDelete.length} "${toDelete[0].item}" entr${toDelete.length !== 1 ? "ies" : "y"}.`;
+          }
+          const toDelete = count >= 999 ? allMats : allMats.slice(0, count);
+          const { error: delErr } = await supabase.from("materials").delete().in("id", toDelete.map(m => m.id));
+          if (delErr) return `Failed to delete: ${delErr.message}`;
+          // Sync React state without triggering the full DELETE+INSERT wrapper
+          const deletedIds = new Set(toDelete.map(m => m.id));
+          setMaterialsRaw(prev => (prev || []).filter(m => !deletedIds.has(m.id)));
           setLastAction({ type: "material", label: `Deleted: ${input.item}`, view: "Materials" });
-          const n = count >= 999 ? matching.length : Math.min(count, matching.length);
-          return `Deleted ${n} "${matching[0].item}" entr${n !== 1 ? "ies" : "y"}.`;
+          return `Deleted ${toDelete.length} "${toDelete[0].item}" entr${toDelete.length !== 1 ? "ies" : "y"}.`;
         }
         case "mark_invoice_paid": {
           const { data: paidRows } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", false).neq("status", "paid").order("created_at", { ascending: false }).limit(50);
@@ -4803,14 +4836,20 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "update_material_status": {
           const term = input.item.toLowerCase();
-          const matching = (materials || []).filter(m => m.item.toLowerCase().includes(term));
-          if (!matching.length) return `Couldn't find a material matching "${input.item}".`;
-          // Update ALL matching entries — if there are duplicates they all get updated
-          setMaterials(prev => (prev || []).map(m =>
+          // Query Supabase directly to avoid stale closure
+          const { data: matRows } = await supabase.from("materials").select("id, item")
+            .eq("user_id", user?.id).ilike("item", `%${input.item}%`);
+          if (!matRows?.length) return `Couldn't find a material matching "${input.item}".`;
+          const { error: updateErr } = await supabase.from("materials")
+            .update({ status: input.status })
+            .in("id", matRows.map(m => m.id));
+          if (updateErr) return `Failed to update status: ${updateErr.message}`;
+          // Sync React state directly without triggering DELETE+INSERT wrapper
+          setMaterialsRaw(prev => (prev || []).map(m =>
             m.item.toLowerCase().includes(term) ? { ...m, status: input.status } : m
           ));
-          setLastAction({ type: "material", label: `${input.status}: ${matching[0].item}`, view: "Materials" });
-          return `${matching.length > 1 ? matching.length + " entries" : `"${matching[0].item}"`} marked as ${input.status}.`;
+          setLastAction({ type: "material", label: `${input.status}: ${matRows[0].item}`, view: "Materials" });
+          return `${matRows.length > 1 ? matRows.length + " entries" : `"${matRows[0].item}"`} marked as ${input.status}.`;
         }
         case "create_job_card": {
           const payload = {
@@ -4885,13 +4924,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "list_materials": {
           const filter = input.filter || "all";
-          let list = materials || [];
-          if (filter === "to_order") list = list.filter(m => m.status === "to_order");
-          if (filter === "ordered") list = list.filter(m => m.status === "ordered");
-          if (filter === "collected") list = list.filter(m => m.status === "collected");
+          // Query Supabase directly — React state may be stale after recent delete/update operations
+          let query = supabase.from("materials").select("*").eq("user_id", user?.id).order("created_at", { ascending: true });
+          if (filter === "to_order") query = query.eq("status", "to_order");
+          if (filter === "ordered") query = query.eq("status", "ordered");
+          if (filter === "collected") query = query.eq("status", "collected");
+          const { data: freshMats } = await query.limit(50);
+          const list = freshMats || materials || [];
           if (!list.length) return `No ${filter === "all" ? "" : filter + " "}materials found.`;
-          pendingWidgetRef.current = { type: "material_list", data: list.slice(0, 15) };
-          return `Here are your ${filter === "all" ? "" : filter + " "}materials:`;
+          const mapped = list.map(m => ({
+            item: m.item || m.name || "",
+            qty: m.qty || 1,
+            supplier: m.supplier || "",
+            job: m.job || "",
+            status: m.status || "to_order",
+            unitPrice: m.unit_price || m.unitPrice || 0,
+          }));
+          pendingWidgetRef.current = { type: "material_list", data: mapped.slice(0, 20) };
+          return `Here are your ${filter === "all" ? "" : filter + " "}materials (${mapped.length} total):`;
         }
         case "find_material_receipt": {
           const term = (input.item || input.supplier || "").toLowerCase();
@@ -5237,7 +5287,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 }
               }
             } catch(e) { console.warn("Distance calc failed:", e.message); }
-            if (!miles) return `I couldn't calculate the distance between those addresses automatically. How many miles was the trip?`;
+            if (!miles) {
+              // Distance API failed — ask user but remember the addresses
+              return `I couldn't calculate the distance between "${input.from_location}" and "${input.to_location}" automatically. How many miles was the trip? I'll log it with the full route details once you confirm.`;
+            }
           }
 
           if (!miles) return "How many miles was the trip?";
@@ -5264,7 +5317,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const poItems = (input.items || []).map(i => ({ description: i.description, qty: i.qty || 1, unit_price: i.unit_price || 0, unit: "unit", total: (i.qty || 1) * (i.unit_price || 0) }));
           const total = poItems.reduce((s, i) => s + i.total, 0);
           const poNum = `PO-${Date.now().toString().slice(-4)}`;
-          const { data: po } = await supabase.from("purchase_orders").insert({ user_id: user?.id, po_number: poNum, supplier: input.supplier, job_ref: input.job_ref || "", status: "sent", total, created_at: new Date().toISOString() }).select().single();
+          const { data: po, error: poErr } = await supabase.from("purchase_orders").insert({ user_id: user?.id, po_number: poNum, supplier: input.supplier, job_ref: input.job_ref || "", status: "sent", total, created_at: new Date().toISOString() }).select().single();
+          if (poErr) return `Failed to create purchase order: ${poErr.message}`;
           if (po && poItems.length > 0) await supabase.from("purchase_order_items").insert(poItems.map(i => ({ ...i, po_id: po.id })));
           // Auto-create materials from PO items so they appear in Materials tab
           if (poItems.length > 0) {
@@ -5287,7 +5341,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (!stockItems?.length) return `Couldn't find stock item "${input.name}". Check the Stock tab.`;
           const item = stockItems[0];
           const newQty = Math.max(0, parseFloat(item.quantity || 0) + parseFloat(input.adjustment));
-          await supabase.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", item.id);
+          const { error: stockErr } = await supabase.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", item.id);
+          if (stockErr) return `Failed to update stock: ${stockErr.message}`;
           const direction = input.adjustment > 0 ? "added" : "removed";
           return `Stock updated: ${item.name} — ${Math.abs(input.adjustment)} ${item.unit || "units"} ${direction}. New quantity: ${newQty} ${item.unit || "units"}.`;
         }
@@ -5419,8 +5474,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Daywork logged for ${jc[0].customer} — ${input.hours}hrs @ £${input.rate}/hr = £${total.toFixed(2)}.`;
         }
         case "send_review_request": {
-          const cust = (customers||[]).find(c => c.name?.toLowerCase().includes((input.customer||"").toLowerCase()));
-          const email = input.email || cust?.email;
+          const { data: custSearch } = await supabase.from("customers").select("email,name").eq("user_id", user?.id).ilike("name", `%${input.customer||""}%`).limit(1);
+          const email = input.email || custSearch?.[0]?.email;
           if (!email) return `No email found for ${input.customer}. Add their email first or provide it now.`;
           const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type").eq("user_id", user?.id).ilike("customer", `%${input.customer||""}%`).order("created_at", { ascending: false }).limit(1);
           const platforms = Object.entries(brand||{}).filter(([k,v]) => ["googleReviewUrl","trustpilotUrl","checkatradeUrl","ratedPeopleUrl","myBuilderUrl"].includes(k) && v).map(([k,v]) => ({ name: k.replace("Url","").replace(/([A-Z])/g," $1").trim(), url: v }));
@@ -5562,7 +5617,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const subject = `Invoice ${inv.id} from ${brand?.tradingName || ""}`;
           const body = `<p>Dear ${inv.customer},</p><p>Please find your invoice ${inv.id} for £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)} attached.</p><p>Payment is due within ${inv.due || "30 days"}.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
-            await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
+            const sendInvRes = await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
+            if (!sendInvRes.ok) return `Invoice email failed (${sendInvRes.status}). Check your email integration in Settings.`;
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount } };
             return `Invoice ${inv.id} sent to ${inv.customer} at ${email}.`;
           } catch(e) {
@@ -5581,7 +5637,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const subject = `Quote ${quote.id} from ${brand?.tradingName || ""}`;
           const body = `<p>Dear ${quote.customer},</p><p>Thank you for your enquiry. Please find your quote ${quote.id} for £${parseFloat(quote.grossAmount || quote.amount || 0).toFixed(2)} below.</p><p>This quote is valid for 30 days. Please don't hesitate to get in touch if you have any questions.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
-            await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
+            const sendQRes = await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
+            if (!sendQRes.ok) return `Quote email failed (${sendQRes.status}). Check your email integration in Settings.`;
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: quote.customer, invoice_id: quote.id, amount: quote.grossAmount || quote.amount, isQuote: true } };
             return `Quote ${quote.id} sent to ${quote.customer} at ${email}.`;
           } catch(e) {
@@ -5606,11 +5663,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const subject = `Payment reminder — Invoice ${inv.id}`;
           const body = `<p>Dear ${inv.customer},</p><p>I hope you are well. I'm writing to remind you that invoice ${inv.id} for £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)} is currently outstanding.</p><p>Please arrange payment at your earliest convenience. If you have already sent payment, please disregard this message.</p><p>If you have any queries please don't hesitate to get in touch.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
-            await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
+            const chaseRes = await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, to: email, subject, body }) });
+            if (!chaseRes.ok) {
+              const errText = await chaseRes.text().catch(() => chaseRes.status);
+              return `Chase email failed (${chaseRes.status}): ${errText}. Check your email integration in Settings.`;
+            }
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
             return `Payment chase sent to ${inv.customer} at ${email} for invoice ${inv.id} (£${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)}).`;
           } catch(e) {
-            return `Failed to send chase: ${e.message}`;
+            return `Failed to send chase: ${e.message}. Check your internet connection.`;
           }
         }
         case "create_invoice_from_job": {
@@ -5746,8 +5807,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "update_invoice": {
           const term = (input.customer || input.invoice_id || "").toLowerCase();
           if (!term) return "Please specify which invoice to update — provide the customer name or invoice ID.";
-          const all = (invoices || []).filter(i => !i.isQuote);
-          const inv = all.find(i =>
+          // Query Supabase directly to avoid stale closure
+          const { data: invSearchRows } = await supabase.from("invoices")
+            .select("*").eq("user_id", user?.id).eq("is_quote", false)
+            .order("created_at", { ascending: false }).limit(50);
+          const searchPool = invSearchRows || (invoices || []).filter(i => !i.isQuote);
+          const inv = searchPool.find(i =>
             (i.id || "").toLowerCase().includes(term) ||
             (i.customer || "").toLowerCase().includes(term)
           );
@@ -5821,10 +5886,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Job card for ${found[0].customer}${found[0].title ? " — " + found[0].title : ""} deleted.`;
         }
         case "delete_mileage": {
-          const { data: found } = await supabase.from("mileage_logs").select("id,from_location,to_location,date").eq("user_id", user?.id).order("date", { ascending: false }).limit(1);
-          if (!found?.length) return `No mileage logs found.`;
-          await supabase.from("mileage_logs").delete().eq("id", found[0].id);
-          return `Mileage log deleted: ${found[0].from_location || ""} → ${found[0].to_location || ""} on ${found[0].date}.`;
+          let query = supabase.from("mileage_logs").select("id,from_location,to_location,date,miles").eq("user_id", user?.id);
+          if (input.date) query = query.eq("date", input.date);
+          if (input.from_location) query = query.ilike("from_location", `%${input.from_location}%`);
+          if (input.to_location) query = query.ilike("to_location", `%${input.to_location}%`);
+          const { data: found } = await query.order("date", { ascending: false }).limit(1);
+          if (!found?.length) return `No mileage log found matching that description.`;
+          const { error: delMileErr } = await supabase.from("mileage_logs").delete().eq("id", found[0].id);
+          if (delMileErr) return `Failed to delete mileage log: ${delMileErr.message}`;
+          return `Mileage log deleted: ${found[0].from_location || ""} → ${found[0].to_location || ""} on ${found[0].date} (${found[0].miles} miles).`;
         }
         case "delete_rams": {
           const term = (input.title || "").toLowerCase();
@@ -6035,6 +6105,20 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- EVERY feature of the app is actionable here — jobs, invoices, quotes, materials, labour, mileage, expenses, CIS, subcontractors, reminders, RAMS, stock, purchase orders, compliance certificates, variation orders, daywork, review requests, reports.\n"
   + "- For expenses say: log_expense. For CIS say: log_cis_statement. For subcontractor payments say: log_subcontractor_payment.\n"
   + "- For certificates say: add_compliance_cert. For extra work say: add_variation_order. For reports say: get_report.\n"
+  + "\nVOICE TRIGGER GUIDE — listen for these phrases:\n"
+  + "- CIS: 'log CIS from [name], gross £X, deduction £Y' → log_cis_statement\n"
+  + "- SUB ADD: 'add [name] as a subcontractor, UTR X, 20% CIS' → add_subcontractor (cis_rate: 20=registered, 30=unregistered, 0=gross status)\n"
+  + "- SUB PAY: 'pay [name] £X gross for [job]' → log_subcontractor_payment (auto-calculates CIS from stored rate)\n"
+  + "- SUB STATEMENT: 'CIS statement for [name] for [month]' → generate_subcontractor_statement\n"
+  + "- DAYWORK: 'log daywork for [customer], X hours at £Y/hr' → log_daywork\n"
+  + "- VARIATION: 'add a variation for [customer], [description], £X' → add_variation_order\n"
+  + "- STAGE PAYMENTS: 'set up stage payments for [customer]' → add_stage_payment (defaults to 30/40/30 if no stages given)\n"
+  + "- COMPLIANCE: 'add CP12/EICR/PAT to [customer] job, cert number X, expires Y' → add_compliance_cert\n"
+  + "- STOCK IN: 'received 20 [item]' or 'add 10 to stock' → update_stock (positive)\n"
+  + "- STOCK OUT: 'used 5 [item]' or 'took 3 from stock' → update_stock (negative)\n"
+  + "- REMINDER: 'remind me to [X] at 9am tomorrow' → set_reminder with iso_time for specific times, minutes_from_now only for 'in X minutes'\n"
+  + "- SIGNATURE: 'get sign-off from [customer]' → request_signature\n"
+  + "- REVIEW: 'send review request to [customer]' → send_review_request\n"
   + "- Never tell the user to go to a tab — do everything here and show it inline.\n"
   + "- SEND: send_invoice, send_quote, chase_invoice, sync_to_xero, sync_to_quickbooks (push invoice to accounting), sync_material_to_xero, sync_material_to_quickbooks (create purchase bill), mark_invoice_paid_xero.\n"
   + "- SIGNATURE: request_signature navigates to the Jobs tab and opens the signature pad for customer sign-off.\n"
@@ -6121,18 +6205,37 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
       let replyText = "";
       const toolResults = [];
+      const allWidgets = []; // collect every widget set during multi-tool execution
 
       for (const block of data.content) {
         if (block.type === "text") {
           replyText += block.text;
         } else if (block.type === "tool_use") {
+          pendingWidgetRef.current = null; // clear before each tool so we can detect if it sets one
           const result = await executeTool(block.name, block.input);
-          toolResults.push(result);
+          if (result) toolResults.push(result);
+          if (pendingWidgetRef.current) {
+            allWidgets.push(pendingWidgetRef.current);
+            pendingWidgetRef.current = null;
+          }
         }
       }
 
-      const finalReply = replyText || toolResults.join("\n") || "Done.";
-      const widget = pendingWidgetRef.current;
+      // Combine Claude text + all tool result strings — never discard tool results
+      const toolResultText = toolResults.join(" ").trim();
+      const finalReply = [replyText.trim(), toolResultText].filter(Boolean).join(" ").trim() || "Done.";
+
+      // For widget display: prefer the last list/data widget; fall back to last action widget
+      const displayWidget = allWidgets.slice().reverse().find(w =>
+        ["invoice_list","schedule_list","material_list","job_list","expense_list",
+         "mileage_list","cis_list","subcontractor_list","stock_list","reminder_list",
+         "customer_list","enquiry_list","po_list","rams_list","report",
+         "invoice","quote","job_card","job_full","email_sent","subcontractor_statement",
+         "stage_payments","variation_order","daywork_sheet","compliance_cert",
+         "signature_prompt","review_sent","subcontractor_payment","cis_statement"].includes(w.type)
+      ) || allWidgets[allWidgets.length - 1] || null;
+
+      const widget = displayWidget;
       pendingWidgetRef.current = null;
       setMessages(prev => [...prev, { role: "assistant", content: finalReply, widget }]);
 
@@ -6375,13 +6478,22 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       // In hands-free mode, Claude is instructed to read data aloud in its response.
       const spokenSummary = widget ? buildSpokenSummary(widget) : "";
 
-      // In hands-free mode: always use the spoken summary when a widget is present.
-      // Claude's text reply often contains markdown or is too short to be useful as audio.
-      // spokenSummary is purpose-built for being read aloud — names, amounts, dates, etc.
-      // Outside hands-free: speak finalReply directly (user can read the widget on screen).
+      // In hands-free mode: build a full spoken summary covering ALL tools that ran
+      // For multi-tool responses, concatenate spoken summaries of each widget + tool results
       let spokenReply;
       if (handsFreeRef.current) {
-        spokenReply = (widget && spokenSummary) ? spokenSummary : finalReply;
+        if (allWidgets.length > 1) {
+          // Multiple tools ran — speak each widget summary + any tool result text
+          const widgetSummaries = allWidgets
+            .map(w => buildSpokenSummary(w))
+            .filter(Boolean);
+          const combined = [...widgetSummaries].filter(Boolean);
+          // Add tool result text only if not already covered by widget summaries
+          if (!combined.length) combined.push(finalReply);
+          spokenReply = combined.join(" ").trim();
+        } else {
+          spokenReply = (widget && spokenSummary) ? spokenSummary : finalReply;
+        }
       } else {
         spokenReply = finalReply;
       }
@@ -16973,7 +17085,7 @@ export default function App() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
-        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} /></div>
+        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
