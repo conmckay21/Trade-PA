@@ -4413,7 +4413,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "log_mileage",
-      description: "Log a mileage trip for HMRC tax purposes. IMPORTANT: if the user gives two addresses/locations, do NOT include miles — leave it out and the app calculates it automatically. Only include miles if the user explicitly states a figure. If user wants to 'set it up and add miles later' or 'log it without miles', set log_without_miles: true to save a placeholder entry.",
+      description: "Log a mileage trip for HMRC tax purposes. IMPORTANT: Just log it — do NOT ask the user to confirm addresses, do NOT ask for the purpose if not given (default to 'business'), do NOT ask clarifying questions unless information is genuinely missing. If the user gives two addresses, call the tool immediately. Only include miles if user states a number. Use log_without_miles: true if they say 'log it without miles' or 'add miles later'.",
       input_schema: {
         type: "object",
         properties: {
@@ -5370,6 +5370,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (type === "hourly") { hours = parseFloat(input.hours || 0); total = hours * parseFloat(input.rate || 0); }
           else if (type === "day_rate") { hours = parseFloat(input.days || 0) * 8; total = parseFloat(input.days || 0) * parseFloat(input.rate || 0); }
           else { total = parseFloat(input.total || 0); }
+          // Dedup: block if same total already logged on same job today
+          if (total > 0) {
+            const { data: existingLog } = await supabase.from("time_logs")
+              .select("id").eq("job_id", timeJob.id).eq("user_id", user?.id)
+              .eq("log_date", input.date || today).eq("total", total).limit(1);
+            if (existingLog?.length) {
+              return `Labour of £${total.toFixed(2)} is already logged for ${input.customer} today — skipping to avoid a duplicate.`;
+            }
+          }
           const { error: timeErr } = await supabase.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, log_date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
           if (timeErr) return `Labour log failed: ${timeErr.message}`;
           setLastAction({ type: "job", label: `Time logged — ${input.customer}`, view: "Jobs" });
@@ -5415,7 +5424,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             .ilike("to_location", `%${(input.to_location || "").slice(0, 15)}%`)
             .limit(1);
           if (existingTrip?.length) {
-            return `A trip from ${input.from_location} to ${input.to_location} on ${tripDate} is already logged. Did you want to log a different trip?`;
+            return `That trip is already saved — skipping to avoid a duplicate.`;
           }
           const { error: mileErr } = await supabase.from("mileage_logs").insert({
             user_id: user?.id, date: tripDate,
@@ -6235,6 +6244,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- When asked to show/find something, ALWAYS use the appropriate find_ or list_ tool so it appears inline.\n"
   + "- When you create something (invoice, job, quote), it automatically shows inline — no need to send the user elsewhere.\n"
   + "- Be conversational: Done! Here is the invoice I just created for Trevor: — not Invoice INV-042 created successfully.\n"
+  + "- ACT IMMEDIATELY — do not ask confirmation questions before using tools. If you have enough info, just do it. Only ask if something critical is genuinely missing (e.g. no customer name at all).\n"
+  + "- NEVER repeat a question you have already asked in the same conversation. If the user has moved on, drop it.\n"
   + "- Ask follow-up questions naturally. If someone says create an invoice, ask who it is for if you do not know.\n"
   + "- Use £ not $. Keep replies short and punchy.\n"
   + "\nTOOLS YOU CAN USE:\n"
