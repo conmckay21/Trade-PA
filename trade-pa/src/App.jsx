@@ -772,7 +772,7 @@ function buildRef(brand, inv) {
 }
 
 // ─── PDF Generator ────────────────────────────────────────────────────────────
-function downloadInvoicePDF(brand, inv) {
+function buildInvoiceHTML(brand, inv) {
   try {
   const accent = brand.accentColor || "#f59e0b";
   const ref = buildRef(brand, inv);
@@ -1039,7 +1039,14 @@ function downloadInvoicePDF(brand, inv) {
   </div>
 </div>
 </body>
-</html>`;
+</html>`;;
+  return html;
+  } catch(e) { return "<p>Error generating invoice</p>"; }
+}
+
+function downloadInvoicePDF(brand, inv) {
+  try {
+  const html = buildInvoiceHTML(brand, inv);
 
   // iOS PWA mode (navigator.standalone) skips window.open entirely
   const isIOSPWA = window.navigator.standalone === true;
@@ -4230,16 +4237,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "create_material",
-      description: "Add a material or item to the materials list to order or track.",
+      description: "Add a material or item to the materials list to order or track. Always include unit_price if the user mentions a cost or price.",
       input_schema: {
         type: "object",
         properties: {
           item: { type: "string", description: "Material or item name" },
           qty: { type: "number", description: "Quantity needed" },
+          unit_price: { type: "number", description: "Cost per unit in £ — always include if user states a price or cost" },
           supplier: { type: "string", description: "Preferred supplier" },
           job: { type: "string", description: "Which job this is for" },
+          job_title: { type: "string", description: "Job title to help identify the right job for repeat customers" },
         },
-        required: ["item", "qty"],
+        required: ["item"],
       },
     },
     {
@@ -4625,26 +4634,35 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
-  // Email helper — routes to gmail/outlook based on user's connected account
-  const sendEmailViaConnectedAccount = async (userId, to, subject, body) => {
-    // Look up which email provider the user has connected
-    const { data: conns } = await supabase.from("email_connections")
-      .select("provider").eq("user_id", userId).limit(1);
-    const provider = conns?.[0]?.provider;
-    if (!provider) {
-      throw new Error("No email account connected. Go to the Inbox tab to connect Gmail or Outlook first.");
-    }
-    const endpoint = provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-    const res = await fetch(endpoint, {
+  // Email helper — routes to the send-invoice-email endpoint which handles PDF attachment
+  const sendEmailViaConnectedAccount = async (userId, to, subject, body, pdfHtml = null, filename = "document.pdf") => {
+    // Use the unified endpoint that generates PDF and sends via Gmail/Outlook
+    const res = await fetch("/api/send-invoice-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, to, subject, body }),
+      body: JSON.stringify({ userId, to, subject, body, pdfHtml, filename }),
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => res.status.toString());
+      // If new endpoint not deployed yet, fall back to basic send
+      if (res.status === 404) {
+        const { data: conns } = await supabase.from("email_connections")
+          .select("provider").eq("user_id", userId).limit(1);
+        const provider = conns?.[0]?.provider;
+        if (!provider) throw new Error("No email account connected. Go to the Inbox tab to connect Gmail or Outlook first.");
+        const endpoint = provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+        const fallbackRes = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, to, subject, body }),
+        });
+        if (!fallbackRes.ok) throw new Error(`Email send failed (${fallbackRes.status})`);
+        return { hasAttachment: false };
+      }
       throw new Error(`Email send failed (${res.status}): ${errText}`);
     }
-    return true;
+    const result = await res.json().catch(() => ({}));
+    return result;
   };
 
   const executeTool = async (name, input) => {
@@ -5893,9 +5911,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           </div>`;
           try {
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body);
+            const invPdfHtml = buildInvoiceHTML(brand, {
+              ...inv, id: inv.id, customer: inv.customer,
+              amount: inv.amount, grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
+              due: inv.due, lineItems: inv.line_items || inv.lineItems || [],
+              isQuote: false, vatEnabled: inv.vat_enabled || inv.vatEnabled,
+              paymentMethod: inv.payment_method || inv.paymentMethod || "both",
+            });
+            const sendInvResult = await sendEmailViaConnectedAccount(user?.id, email, subject, body, invPdfHtml, `Invoice-${inv.id}.pdf`);
+            const attachNote = sendInvResult?.hasAttachment ? " (PDF attached)" : "";
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount } };
-            return `Invoice ${inv.id} sent to ${inv.customer} at ${email}.`;
+            return `Invoice ${inv.id} sent to ${inv.customer} at ${email}${attachNote}.`;
           } catch(e) {
             return `Failed to send invoice: ${e.message}`;
           }
@@ -5912,9 +5938,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const subject = `Quote ${quote.id} from ${brand?.tradingName || ""}`;
           const body = `<p>Dear ${quote.customer},</p><p>Thank you for your enquiry. Please find your quote ${quote.id} for £${parseFloat(quote.grossAmount || quote.amount || 0).toFixed(2)} below.</p><p>This quote is valid for 30 days. Please don't hesitate to get in touch if you have any questions.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body);
+            const quotePdfHtml = buildInvoiceHTML(brand, {
+              ...quote, id: quote.id, customer: quote.customer,
+              amount: quote.amount, grossAmount: quote.gross_amount || quote.grossAmount || quote.amount,
+              due: quote.due, lineItems: quote.line_items || quote.lineItems || [],
+              isQuote: true, vatEnabled: quote.vat_enabled || quote.vatEnabled,
+              paymentMethod: quote.payment_method || quote.paymentMethod || "both",
+            });
+            const sendQResult = await sendEmailViaConnectedAccount(user?.id, email, subject, body, quotePdfHtml, `Quote-${quote.id}.pdf`);
+            const qAttachNote = sendQResult?.hasAttachment ? " (PDF attached)" : "";
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: quote.customer, invoice_id: quote.id, amount: quote.grossAmount || quote.amount, isQuote: true } };
-            return `Quote ${quote.id} sent to ${quote.customer} at ${email}.`;
+            return `Quote ${quote.id} sent to ${quote.customer} at ${email}${qAttachNote}.`;
           } catch(e) {
             return `Failed to send quote: ${e.message}`;
           }
@@ -5939,12 +5973,50 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             .select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
           const email = input.email || custRows?.[0]?.email || inv.email;
           if (!email) return `No email on file for ${inv.customer}. Say their email address and I'll send the chase.`;
-          const subject = `Payment reminder — Invoice ${inv.id}`;
-          const body = `<p>Dear ${inv.customer},</p><p>I hope you are well. I'm writing to remind you that invoice ${inv.id} for £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)} is currently outstanding.</p><p>Please arrange payment at your earliest convenience. If you have already sent payment, please disregard this message.</p><p>If you have any queries please don't hesitate to get in touch.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
+          const subject = `Payment reminder - Invoice ${inv.id}`;
+          const chaseAmt = parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2);
+          const accent = brand?.accentColor || "#f59e0b";
+          const chaseBacs = brand?.bankName ? `
+            <div style="background:#f8f8f8;border-radius:6px;padding:14px 16px;margin:16px 0;border:1px solid #eee;">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:8px;">Payment details</div>
+              <div style="font-size:13px;line-height:1.8;">
+                <b>Bank:</b> ${brand.bankName}<br>
+                <b>Account name:</b> ${brand.accountName || ""}<br>
+                <b>Sort code:</b> ${brand.sortCode || ""}<br>
+                <b>Account number:</b> ${brand.accountNumber || ""}<br>
+                <b>Reference:</b> ${inv.id}
+              </div>
+            </div>` : "";
+          const body = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+            <div style="background:${accent};padding:24px 28px;border-radius:8px 8px 0 0;">
+              <h2 style="color:#fff;margin:0;font-size:20px;">${brand?.tradingName || ""}</h2>
+              <div style="color:rgba(255,255,255,0.8);font-size:13px;margin-top:4px;">PAYMENT REMINDER</div>
+            </div>
+            <div style="padding:24px 28px;background:#fff;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px;">
+              <p style="font-size:15px;">Dear ${inv.customer},</p>
+              <p style="color:#555;">I hope you are well. This is a friendly reminder that the following invoice remains outstanding:</p>
+              <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
+                <div style="font-size:13px;color:#666;margin-bottom:4px;">Invoice ${inv.id}</div>
+                <div style="font-size:22px;font-weight:700;color:${accent};">GBP${chaseAmt}</div>
+                <div style="font-size:12px;color:#888;margin-top:4px;">Currently outstanding</div>
+              </div>
+              ${chaseBacs}
+              <p style="color:#555;font-size:13px;">If payment has already been sent, please disregard this message. If you have any queries, please don't hesitate to get in touch.</p>
+              <p style="margin-top:20px;color:#555;">Many thanks,<br><strong>${brand?.tradingName || ""}</strong>${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>
+            </div>
+          </div>`;
           try {
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body);
+            const chasePdfHtml = buildInvoiceHTML(brand, {
+              ...inv, id: inv.id, customer: inv.customer,
+              amount: inv.amount, grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
+              due: inv.due, lineItems: inv.line_items || inv.lineItems || [],
+              isQuote: false, vatEnabled: inv.vat_enabled || inv.vatEnabled,
+              paymentMethod: inv.payment_method || inv.paymentMethod || "both",
+            });
+            const chaseResult = await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfHtml, `Invoice-${inv.id}.pdf`);
+            const chaseAttachNote = chaseResult?.hasAttachment ? " (PDF attached)" : "";
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
-            return `Payment chase sent to ${inv.customer} at ${email} for invoice ${inv.id} (£${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)}).`;
+            return `Payment chase sent to ${inv.customer} at ${email} for invoice ${inv.id} (£${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)})${chaseAttachNote}.`;
           } catch(e) {
             return `Chase email failed: ${e.message}`;
           }
@@ -9748,7 +9820,7 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending) {
 
   const isQuote = doc.isQuote;
   const docType = isQuote ? "Quote" : "Invoice";
-  const subject = `${docType} ${doc.id} from ${brand.tradingName} — £${doc.amount}`;
+  const subject = `${docType} ${doc.id} from ${brand.tradingName} - GBP${doc.amount}`;
   const body = `<p>Dear ${doc.customer},</p>
 <p>Please find your ${docType.toLowerCase()} ${doc.id} for £${doc.amount} attached below.</p>
 ${!isQuote && brand.bankName ? `<p><strong>Payment details:</strong><br>
@@ -9761,15 +9833,30 @@ ${isQuote ? `<p>This quote is valid for 30 days. Please get in touch to proceed 
 
   if (setSending) setSending(doc.id);
   try {
-    const endpoint = provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-    const res = await fetch(endpoint, {
+    // Generate PDF from the same invoice HTML template
+    const pdfHtml = buildInvoiceHTML(brand, doc);
+    const filename = `${docType}-${doc.id}.pdf`;
+    const res = await fetch("/api/send-invoice-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, to: toEmail, subject, body }),
+      body: JSON.stringify({ userId, to: toEmail, subject, body, pdfHtml, filename }),
     });
+    if (!res.ok) {
+      // Fallback to basic send if new endpoint not deployed
+      if (res.status === 404) {
+        const endpoint = provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+        const fallback = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, to: toEmail, subject, body }) });
+        const fr = await fallback.json();
+        if (fr.error) throw new Error(fr.error);
+        alert(`✓ ${docType} sent to ${toEmail}`);
+        return true;
+      }
+      throw new Error(`Send failed (${res.status})`);
+    }
     const result = await res.json();
     if (result.error) throw new Error(result.error);
-    alert(`✓ ${docType} sent to ${toEmail}`);
+    const attachNote = result.hasAttachment ? " with PDF" : "";
+    alert(`✓ ${docType} sent to ${toEmail}${attachNote}`);
     return true;
   } catch (err) {
     alert(`Failed to send: ${err.message}`);
