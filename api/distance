@@ -1,79 +1,79 @@
 // api/distance.js
-// Calculates driving distance in miles between two addresses.
-// Uses OpenStreetMap Nominatim for geocoding (free, no key required)
-// and OSRM for routing (free, open source routing engine).
+// Calculates driving distance in miles between two UK addresses.
+// Includes postcode normalisation for voice-transcribed addresses.
+
+const PHONETIC = {
+  'alpha':'A','bravo':'B','charlie':'C','delta':'D','echo':'E','foxtrot':'F',
+  'golf':'G','hotel':'H','india':'I','juliet':'J','kilo':'K','lima':'L',
+  'mike':'M','november':'N','oscar':'O','papa':'P','quebec':'Q','romeo':'R',
+  'sierra':'S','tango':'T','uniform':'U','victor':'V','whiskey':'W',
+  'yankee':'Y','zulu':'Z','sugar':'S','x-ray':'X',
+};
+
+function normaliseAddress(raw) {
+  if (!raw) return raw;
+  let s = raw.trim();
+  // Replace phonetic alphabet words with letters
+  for (const [word, letter] of Object.entries(PHONETIC)) {
+    s = s.replace(new RegExp(`\\b${word}\\b`, 'gi'), letter);
+  }
+  // Fix spaced-out postcodes: "P 063 S G" → "PO63 SG"
+  s = s.replace(/\b([A-Z]{1,2})\s+0?(\d{1,2}[A-Z]?)\s+(\d[A-Z]{2})\b/gi, '$1$2 $3');
+  return s.trim();
+}
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { from, to } = req.body;
-  if (!from || !to) return res.status(400).json({ error: "from and to addresses required" });
+  const { from, to } = req.body || {};
+  if (!from || !to) return res.status(400).json({ error: 'from and to addresses required' });
+
+  const geocode = async (raw) => {
+    const address = normaliseAddress(raw);
+    // Try 1: full normalised address
+    // Try 2: just the postcode (if extractable)
+    const UK_PC = /\b([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})\b/i;
+    const attempts = [address];
+    const pc = address.match(UK_PC);
+    if (pc) attempts.push(pc[1].toUpperCase());
+
+    for (const q of attempts) {
+      try {
+        const r = await fetch(
+          'https://nominatim.openstreetmap.org/search?' +
+          new URLSearchParams({ q, format:'json', limit:'1', countrycodes:'gb', addressdetails:'0' }),
+          { headers: { 'User-Agent':'TradePa/1.0 (tradespa.co.uk)', 'Accept':'application/json' } }
+        );
+        if (!r.ok) continue;
+        const data = await r.json();
+        if (data?.length) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name };
+      } catch {}
+      await new Promise(r => setTimeout(r, 150));
+    }
+    throw new Error(`Could not locate: "${raw}" (tried: "${address}"). Try a full postcode or full street name.`);
+  };
 
   try {
-    // Geocode both addresses using Nominatim (OpenStreetMap)
-    // UK-biased, free, no API key needed
-    const geocode = async (address) => {
-      const url = `https://nominatim.openstreetmap.org/search?` +
-        new URLSearchParams({
-          q: address,
-          format: "json",
-          limit: "1",
-          countrycodes: "gb",      // bias to UK
-          addressdetails: "0",
-        });
-      const r = await fetch(url, {
-        headers: {
-          // Nominatim requires a descriptive User-Agent
-          "User-Agent": "TradePa/1.0 (tradespa.co.uk)",
-          "Accept": "application/json",
-        },
-      });
-      if (!r.ok) throw new Error(`Geocoding failed: ${r.status}`);
-      const data = await r.json();
-      if (!data.length) throw new Error(`Address not found: "${address}"`);
-      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name };
-    };
-
-    // Geocode both — slight delay between requests to respect Nominatim rate limit
     const fromGeo = await geocode(from);
     await new Promise(r => setTimeout(r, 200));
     const toGeo = await geocode(to);
 
-    // Get driving route from OSRM (public instance, free)
-    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/` +
-      `${fromGeo.lon},${fromGeo.lat};${toGeo.lon},${toGeo.lat}` +
-      `?overview=false&steps=false`;
-
-    const routeRes = await fetch(osrmUrl, {
-      headers: { "User-Agent": "TradePa/1.0 (tradespa.co.uk)" },
-    });
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${fromGeo.lon},${fromGeo.lat};${toGeo.lon},${toGeo.lat}?overview=false&steps=false`;
+    const routeRes = await fetch(osrmUrl, { headers: { 'User-Agent': 'TradePa/1.0' } });
     if (!routeRes.ok) throw new Error(`Routing failed: ${routeRes.status}`);
     const routeData = await routeRes.json();
+    if (routeData.code !== 'Ok' || !routeData.routes?.length) throw new Error('No route found');
 
-    if (routeData.code !== "Ok" || !routeData.routes?.length) {
-      throw new Error("No route found between those addresses");
-    }
-
-    const distanceMetres = routeData.routes[0].distance;
-    const durationSeconds = routeData.routes[0].duration;
-
-    // Convert to miles (1 metre = 0.000621371 miles), round to 1 decimal
-    const miles = Math.round(distanceMetres * 0.000621371 * 10) / 10;
-    const minutes = Math.round(durationSeconds / 60);
-
-    // HMRC mileage rate (45p/mile for first 10,000 miles)
-    const hmrcValue = parseFloat((miles * 0.45).toFixed(2));
+    const miles = Math.round(routeData.routes[0].distance * 0.000621371 * 10) / 10;
+    const minutes = Math.round(routeData.routes[0].duration / 60);
 
     return res.json({
-      miles,
-      minutes,
-      hmrcValue,
-      from: fromGeo.display.split(",").slice(0, 2).join(",").trim(),
-      to: toGeo.display.split(",").slice(0, 2).join(",").trim(),
+      miles, minutes,
+      hmrcValue: parseFloat((miles * 0.45).toFixed(2)),
+      from: fromGeo.display.split(',').slice(0, 2).join(',').trim(),
+      to:   toGeo.display.split(',').slice(0, 2).join(',').trim(),
     });
-
   } catch (e) {
-    console.error("Distance calc error:", e.message);
     return res.status(422).json({ error: e.message });
   }
 }
