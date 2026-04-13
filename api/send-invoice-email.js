@@ -1,19 +1,12 @@
 // api/send-invoice-email.js
-// Generates invoice/quote PDF and sends via Gmail or Outlook with attachment.
-// Called by the AI assistant when sending invoices/quotes/chasers.
+// Sends invoice/quote/chase emails via Gmail or Outlook.
+// Attempts to attach a real PDF using chromium-min (lightweight, ~7MB vs 70MB).
+// Gracefully falls back to HTML-only email if PDF generation fails.
 //
-// Expected body:
-// {
-//   userId: string,
-//   to: string,
-//   subject: string,
-//   body: string (HTML email body),
-//   pdfHtml: string (HTML to render as PDF attachment),
-//   filename: string (e.g. "Invoice-INV-246.pdf"),
-// }
-//
-// Required env vars (already used by gmail/outlook send endpoints):
-//   SUPABASE_URL, SUPABASE_SERVICE_KEY
+// Required npm packages (add to package.json if not already there):
+//   @sparticuz/chromium-min  (NOT @sparticuz/chromium — too large for Vercel)
+//   puppeteer-core
+//   @supabase/supabase-js
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -22,38 +15,51 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
-// Inline PDF generation using Puppeteer + @sparticuz/chromium
 async function generatePDF(html) {
   try {
-    // These packages must be in package.json — if missing, skip PDF gracefully
-    const chromium = await import("@sparticuz/chromium").then(m => m.default).catch(() => null);
-    const puppeteer = await import("puppeteer-core").then(m => m.default).catch(() => null);
+    const chromium = await import("@sparticuz/chromium-min")
+      .then(m => m.default)
+      .catch(() => null);
+    const puppeteer = await import("puppeteer-core")
+      .then(m => m.default)
+      .catch(() => null);
+
     if (!chromium || !puppeteer) {
-      console.warn("PDF packages not installed — sending email without attachment");
+      console.warn("PDF packages missing — sending without attachment");
       return null;
     }
+
     const browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
+      executablePath: await chromium.executablePath(
+        // chromium-min requires a remote URL or local path for the binary
+        // Falls back to local path if env not set
+        process.env.CHROMIUM_EXECUTABLE_PATH ||
+        "https://github.com/Sparticuz/chromium/releases/download/v121.0.0/chromium-v121.0.0-pack.tar"
+      ),
       headless: chromium.headless,
     });
+
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    // Strip the app navigation bar from the invoice before rendering
+    const cleanHtml = html
+      .replace(/<div class="back-bar"[\s\S]*?<\/div>/i, "")
+      .replace(/<div class="no-print"[\s\S]*?<\/div>/i, "");
+    await page.setContent(cleanHtml, { waitUntil: "networkidle0", timeout: 8000 });
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
       margin: { top: "0", right: "0", bottom: "0", left: "0" },
     });
     await browser.close();
-    return pdfBuffer.toString("base64");
+    return Buffer.from(pdfBuffer).toString("base64");
   } catch (e) {
-    console.error("PDF gen failed:", e.message);
+    console.error("PDF generation failed:", e.message);
     return null;
   }
 }
 
-// Build RFC 2822 MIME message with HTML body + PDF attachment
 function buildMimeMessage({ to, subject, htmlBody, pdfBase64, filename }) {
   const boundary = "TradePAboundary" + Date.now();
   const encodedSubject = `=?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`;
@@ -78,7 +84,6 @@ function buildMimeMessage({ to, subject, htmlBody, pdfBase64, filename }) {
       "Content-Transfer-Encoding: base64",
       `Content-Disposition: attachment; filename="${filename}"`,
       "",
-      // Split base64 into 76-char lines (RFC 2045)
       pdfBase64.match(/.{1,76}/g).join("\n"),
       `--${boundary}--`,
     ]);
@@ -97,7 +102,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "userId, to, and subject are required" });
   }
 
-  // Look up connected email provider
   const { data: conns } = await supabase
     .from("email_connections")
     .select("provider, access_token, refresh_token, email")
@@ -110,10 +114,13 @@ export default async function handler(req, res) {
 
   const { provider, access_token } = conns[0];
 
-  // Generate PDF if HTML provided
+  // Attempt PDF generation — null if packages missing or generation fails
   let pdfBase64 = null;
   if (pdfHtml) {
     pdfBase64 = await generatePDF(pdfHtml);
+    if (!pdfBase64) {
+      console.log("PDF unavailable — sending HTML-only email");
+    }
   }
 
   try {
@@ -131,14 +138,12 @@ export default async function handler(req, res) {
       });
 
       if (!gmailRes.ok) {
-        const err = await gmailRes.json();
+        const err = await gmailRes.json().catch(() => ({}));
         throw new Error(err.error?.message || `Gmail API error ${gmailRes.status}`);
       }
-
       return res.json({ success: true, provider: "gmail", hasAttachment: !!pdfBase64 });
 
     } else if (provider === "outlook") {
-      // Microsoft Graph API - supports attachments natively
       const attachments = pdfBase64 ? [{
         "@odata.type": "#microsoft.graph.fileAttachment",
         name: filename,
@@ -166,7 +171,6 @@ export default async function handler(req, res) {
         const err = await graphRes.json().catch(() => ({}));
         throw new Error(err.error?.message || `Outlook API error ${graphRes.status}`);
       }
-
       return res.json({ success: true, provider: "outlook", hasAttachment: !!pdfBase64 });
 
     } else {
