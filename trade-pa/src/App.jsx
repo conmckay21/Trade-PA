@@ -15189,6 +15189,20 @@ function SubcontractorsTab({ user, brand }) {
       active: true, created_at: new Date().toISOString(),
     }).select().single();
     if (!error && data) {
+      // If subcontractor type, also add to legacy subcontractors table for CIS payment lookups
+      if (workerForm.type === "subcontractor") {
+        const { data: existingSub } = await supabase.from("subcontractors")
+          .select("id").eq("user_id", user.id).ilike("name", workerForm.name).limit(1);
+        if (!existingSub?.length) {
+          const { data: newSub } = await supabase.from("subcontractors").insert({
+            user_id: user.id, name: workerForm.name, company: "",
+            utr: workerForm.utr || "", cis_rate: parseInt(workerForm.cis_rate) || 20,
+            email: workerForm.email || "", phone: workerForm.phone || "",
+            created_at: new Date().toISOString(),
+          }).select().single();
+          if (newSub) setSubs(s => [...s, newSub]);
+        }
+      }
       setWorkers(w => [...w, data]);
       setView("list");
       setWorkerForm({ name: "", type: "subcontractor", role: "", email: "", phone: "", day_rate: "", hourly_rate: "", utr: "", cis_rate: 20, ni_number: "" });
@@ -15295,9 +15309,8 @@ function SubcontractorsTab({ user, brand }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontSize: 18, fontWeight: 700 }}>Subcontractors</div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setView("add_worker")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Worker</button>
+            <button onClick={() => setView("add_worker")} style={S.btn("primary")}>+ Add Worker / Sub</button>
             <button onClick={() => setView("add_payment")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Payment</button>
-            <button onClick={() => setView("add_sub")} style={S.btn("primary")}>+ Add</button>
           </div>
         </div>
         {/* Row 2: scan buttons */}
@@ -15671,7 +15684,10 @@ function SubcontractorsTab({ user, brand }) {
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 60, zIndex: 1000 }} onClick={() => setView("list")}>
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 20, maxHeight: "80vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Worker</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>Add Worker / Subcontractor</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Subcontractors also appear in the CIS payment section</div>
+              </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={workerForm} setForm={setWorkerForm} fieldDescriptions="name (full name), type (subcontractor or employed), role (trade or job title), day_rate (daily rate in pounds), hourly_rate (hourly rate), utr (UTR number), email, phone" />
                 <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>×</button>
@@ -18031,21 +18047,9 @@ export default function App() {
   };
 
   const setMaterials = (updater) => {
-    setMaterialsRaw(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if (!companyId) return next;
-      (async () => {
-        try {
-          await supabase.from("materials").delete().eq("company_id", companyId);
-          if (next.length > 0) {
-            await supabase.from("materials").insert(
-              next.map(m => ({ company_id: companyId, user_id: user.id, item: m.item, qty: m.qty || 1, unit_price: m.unitPrice || 0, supplier: m.supplier || "", job: m.job || "", job_id: m.job_id || null, status: m.status || "to_order", receipt_id: m.receiptId || "", receipt_source: m.receiptSource || "", receipt_filename: m.receiptFilename || "", receipt_image: m.receiptImage || "" }))
-            );
-          }
-        } catch (e) { console.error("Materials sync:", e); }
-      })();
-      return next;
-    });
+    // Use setMaterialsRaw directly — individual tools handle their own Supabase writes
+    // The old delete+reinsert pattern was causing duplicates to re-appear after cleanup
+    setMaterialsRaw(updater);
   };
 
   const setCustomers = (updater) => {
