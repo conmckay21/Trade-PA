@@ -25,9 +25,13 @@ const supabase = createClient(
 // Inline PDF generation using Puppeteer + @sparticuz/chromium
 async function generatePDF(html) {
   try {
-    const chromium = await import("@sparticuz/chromium").then(m => m.default);
-    const puppeteer = await import("puppeteer-core").then(m => m.default);
-
+    // These packages must be in package.json — if missing, skip PDF gracefully
+    const chromium = await import("@sparticuz/chromium").then(m => m.default).catch(() => null);
+    const puppeteer = await import("puppeteer-core").then(m => m.default).catch(() => null);
+    if (!chromium || !puppeteer) {
+      console.warn("PDF packages not installed — sending email without attachment");
+      return null;
+    }
     const browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
