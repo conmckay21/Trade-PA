@@ -4622,7 +4622,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "log_cis_statement", description: "Log a CIS deduction statement from a contractor.", input_schema: { type: "object", properties: { contractor_name: { type: "string" }, gross_amount: { type: "string" }, deduction_amount: { type: "string" }, tax_month: { type: "string" }, notes: { type: "string" } }, required: ["contractor_name","gross_amount","deduction_amount"] } },
     { name: "list_cis_statements", description: "Show CIS deduction statements.", input_schema: { type: "object", properties: {} } },
     { name: "add_subcontractor", description: "Add a new subcontractor. Always include address if mentioned.", input_schema: { type: "object", properties: { name: { type: "string" }, company: { type: "string" }, utr: { type: "string" }, cis_rate: { type: "string", description: "20 registered, 30 unregistered, 0 gross" }, email: { type: "string" }, phone: { type: "string" }, address: { type: "string", description: "Business or home address" } }, required: ["name"] } },
-    { name: "log_subcontractor_payment", description: "Log a payment to a subcontractor. For price work, split into labour and materials — CIS only applies to labour. For day/hourly rate, CIS applies to the full amount.", input_schema: { type: "object", properties: { name: { type: "string", description: "Subcontractor name" }, payment_type: { type: "string", enum: ["price_work","day_rate","hourly"], description: "How they are paid" }, labour_amount: { type: "number", description: "Labour portion in £ (price_work) — CIS applies to this" }, materials_amount: { type: "number", description: "Materials portion in £ (price_work) — no CIS" }, gross: { type: "number", description: "Total gross if not splitting labour/materials" }, days: { type: "number", description: "Days worked (day_rate only)" }, hours: { type: "number", description: "Hours worked (hourly only)" }, rate: { type: "number", description: "Day or hourly rate in £" }, date: { type: "string" }, job_ref: { type: "string" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name"] } },
+    { name: "log_subcontractor_payment", description: "Log a payment to a subcontractor and optionally link it to a job card. Include customer and job_title to attach the cost to the right job — this makes it appear in the job profit breakdown.", input_schema: { type: "object", properties: { name: { type: "string", description: "Subcontractor name" }, customer: { type: "string", description: "Customer name to link this cost to a job card" }, job_title: { type: "string", description: "Job title to identify which job card to link to" }, payment_type: { type: "string", enum: ["price_work","day_rate","hourly"], description: "How they are paid" }, labour_amount: { type: "number", description: "Labour portion in £ (price_work) — CIS applies to this" }, materials_amount: { type: "number", description: "Materials portion in £ (price_work) — no CIS" }, gross: { type: "number", description: "Total gross if not splitting labour/materials" }, days: { type: "number", description: "Days worked (day_rate only)" }, hours: { type: "number", description: "Hours worked (hourly only)" }, rate: { type: "number", description: "Day or hourly rate in £" }, date: { type: "string" }, job_ref: { type: "string" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name"] } },
     { name: "list_subcontractors", description: "Show all subcontractors.", input_schema: { type: "object", properties: {} } },
     { name: "add_compliance_cert", description: "Add a compliance certificate to a job card — CP12, EICR, PAT, EIC, Pressure Test, Part P etc.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, doc_type: { type: "string" }, doc_number: { type: "string" }, issued_date: { type: "string" }, expiry_date: { type: "string" }, notes: { type: "string" } }, required: ["doc_type"] } },
     { name: "add_variation_order", description: "Add a variation order (extra work / change to scope) to a job card.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, description: { type: "string" }, amount: { type: "string" }, vo_number: { type: "string" } }, required: ["description","amount"] } },
@@ -4679,12 +4679,67 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
   // ── Execute tool calls ────────────────────────────────────────────────────
   // Email helper — routes to the send-invoice-email endpoint which handles PDF attachment
-  const sendEmailViaConnectedAccount = async (userId, to, subject, body, pdfHtml = null, filename = "document.pdf") => {
+  // ── Client-side PDF generation ──────────────────────────────────────────────
+  // Loads html2canvas + jsPDF from CDN once, renders invoice HTML in an
+  // off-screen div, and returns a base64 PDF string. Zero server-side deps.
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+
+  const generateInvoicePDFBase64 = async (brand, inv) => {
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    const html = buildInvoiceHTML(brand, {
+      ...inv,
+      grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
+      lineItems: inv.line_items || inv.lineItems || [],
+      vatEnabled: inv.vat_enabled || inv.vatEnabled,
+      paymentMethod: inv.payment_method || inv.paymentMethod || "both",
+    });
+    // Render in off-screen container at A4 width
+    const container = document.createElement("div");
+    container.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;min-height:1123px;background:#fff;z-index:-1;";
+    container.innerHTML = html;
+    // Strip app chrome before rendering
+    container.querySelectorAll(".back-bar,.no-print").forEach(el => el.remove());
+    document.body.appendChild(container);
+    try {
+      // Wait for any images (logos) to load
+      await Promise.all([...container.querySelectorAll("img")].map(img =>
+        img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
+      ));
+      const canvas = await window.html2canvas(container, {
+        scale: 2, useCORS: true, allowTaint: true,
+        windowWidth: 794, logging: false, backgroundColor: "#ffffff",
+      });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4", compress: true });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+      const imgH = (canvas.height * pdfW) / canvas.width;
+      const imgData = canvas.toDataURL("image/jpeg", 0.92);
+      let y = 0;
+      while (y < imgH) {
+        pdf.addImage(imgData, "JPEG", 0, -y, pdfW, imgH);
+        y += pdfH;
+        if (y < imgH) pdf.addPage();
+      }
+      return pdf.output("datauristring").split(",")[1]; // base64 only
+    } finally {
+      document.body.removeChild(container);
+    }
+  };
+  // ────────────────────────────────────────────────────────────────────────────
+
+  const sendEmailViaConnectedAccount = async (userId, to, subject, body, pdfHtml = null, filename = "document.pdf", pdfBase64 = null) => {
     // Use the unified endpoint that generates PDF and sends via Gmail/Outlook
     const res = await fetch("/api/send-invoice-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, to, subject, body, pdfHtml, filename }),
+      body: JSON.stringify({ userId, to, subject, body, pdfHtml, pdfBase64, filename }),
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => res.status.toString());
@@ -5250,9 +5305,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             supabase.from("variation_orders").select("description,amount,status").eq("job_id", pJob.id),
           ]);
           // Optional tables — wrapped individually to avoid crashing if table doesn't exist
-          let daysheets = [], dayExpenses = [];
+          let daysheets = [], dayExpenses = [], subPayments = [];
           try { const r = await supabase.from("daywork_sheets").select("hours,rate,description").eq("job_id", pJob.id); daysheets = r.data || []; } catch(e) {}
           try { const r = await supabase.from("expenses").select("amount,description").eq("job_id", pJob.id); dayExpenses = r.data || []; } catch(e) {}
+          try { const r = await supabase.from("subcontractor_payments").select("gross,net,subcontractor_id").eq("job_id", pJob.id).eq("user_id", user?.id); subPayments = r.data || []; } catch(e) {}
 
           const jobValue = parseFloat(pJob.value || 0);
           const voIncome = (vos || []).reduce((s, v) => s + parseFloat(v.amount || 0), 0);
@@ -5262,7 +5318,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const materialCost = (mats || []).reduce((s, m) => s + (parseFloat(m.unit_price || 0) * (parseFloat(m.qty) || 1)), 0);
           const dayworkCost = daysheets.reduce((s, d) => s + ((parseFloat(d.hours || 0)) * (parseFloat(d.rate || 0))), 0);
           const expenseCost = dayExpenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
-          const totalCosts = labourCost + materialCost + dayworkCost + expenseCost;
+          const subcontractorCost = subPayments.reduce((s, p) => s + parseFloat(p.gross || 0), 0);
+          const totalCosts = labourCost + materialCost + dayworkCost + expenseCost + subcontractorCost;
 
           const grossProfit = totalRevenue - totalCosts;
           const margin = totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(1) : 0;
@@ -5273,11 +5330,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             data: {
               customer: pJob.customer, title: pJob.title || pJob.type,
               jobValue, voIncome, totalRevenue,
-              labourCost, materialCost, dayworkCost, expenseCost, totalCosts,
+              labourCost, materialCost, dayworkCost, expenseCost, subcontractorCost, totalCosts,
               grossProfit, margin,
               labourEntries: tLogs || [],
               materialEntries: mats || [],
               voEntries: vos || [],
+              subPaymentCount: subPayments.length,
             }
           };
 
@@ -5699,7 +5757,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "log_subcontractor_payment": {
           const { data: subs } = await supabase.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
           const sub = subs?.[0];
-          if (!sub) return `Subcontractor "${input.name}" not found. Add them first.`;
+          if (!sub) {
+            // Not in subcontractors — check workers table too
+            const { data: wCheck } = await supabase.from("workers")
+              .select("id,name").eq("user_id", user?.id)
+              .ilike("name", `%${(input.name||"")}%`).limit(1);
+            if (wCheck?.length) return `${wCheck[0].name} is in your workers list, not subcontractors. Use "log worker time" to record their hours.`;
+            return `Subcontractor "${input.name}" not found. Add them with "add a subcontractor" first.`;
+          }
           // Calculate gross based on payment type
           const payType = input.payment_type || "price_work";
           let gross = parseFloat(input.gross) || 0;
@@ -5720,6 +5785,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             .select("id").eq("user_id", user?.id).eq("subcontractor_id", sub.id)
             .eq("date", payDate).eq("gross", gross).limit(1);
           if (existingSub?.length) return ""; // Silent dedup
+          // Resolve job_id if customer/job provided — links cost to job profit breakdown
+          let subJobId = null;
+          let subJobRef = input.job_ref || "";
+          if (input.customer || input.job_title) {
+            const { job: subJob } = await findJob(input.customer || "", input.job_title || "");
+            if (subJob) {
+              subJobId = subJob.id;
+              subJobRef = subJobRef || `${subJob.customer} — ${subJob.title || subJob.type || ""}`.trim();
+            }
+          }
           const { data, error } = await supabase.from("subcontractor_payments").insert({
             user_id: user?.id, subcontractor_id: sub.id,
             date: payDate,
@@ -5730,7 +5805,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             rate: parseFloat(input.rate) || null,
             labour_amount: execLabour || null,
             materials_amount: execMats || null,
-            job_ref: input.job_ref || "", description: input.description || "",
+            job_id: subJobId,
+            job_ref: subJobRef, description: input.description || "",
             invoice_number: input.invoice_number || "",
             created_at: new Date().toISOString(),
           }).select().single();
@@ -5990,14 +6066,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           </div>`;
           try {
-            const invPdfHtml = buildInvoiceHTML(brand, {
-              ...inv, id: inv.id, customer: inv.customer,
-              amount: inv.amount, grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
-              due: inv.due, lineItems: inv.line_items || inv.lineItems || [],
-              isQuote: false, vatEnabled: inv.vat_enabled || inv.vatEnabled,
-              paymentMethod: inv.payment_method || inv.paymentMethod || "both",
-            });
-            const sendInvResult = await sendEmailViaConnectedAccount(user?.id, email, subject, body, invPdfHtml, `Invoice-${inv.id}.pdf`);
+            // Generate PDF in browser before sending — reliable, no server-side Chromium needed
+            let invPdfBase64 = null;
+            try { invPdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { console.warn("PDF gen:", pe); }
+            const sendInvResult = await sendEmailViaConnectedAccount(user?.id, email, subject, body, null, `Invoice-${inv.id}.pdf`, invPdfBase64);
             const attachNote = sendInvResult?.hasAttachment ? " (PDF attached)" : "";
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount } };
             return `Invoice ${inv.id} sent to ${inv.customer} at ${email}${attachNote}.`;
@@ -6085,14 +6157,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           </div>`;
           try {
-            const chasePdfHtml = buildInvoiceHTML(brand, {
-              ...inv,
-              grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
-              lineItems: inv.line_items || inv.lineItems || [],
-              vatEnabled: inv.vat_enabled || inv.vatEnabled,
-              paymentMethod: inv.payment_method || inv.paymentMethod || "both",
-            });
-            const chaseResult = await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfHtml, `Invoice-${inv.id}.pdf`);
+            // Generate PDF in browser before sending
+            let chasePdfBase64 = null;
+            try { chasePdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { console.warn("PDF gen:", pe); }
+            const chaseResult = await sendEmailViaConnectedAccount(user?.id, email, subject, body, null, `Invoice-${inv.id}.pdf`, chasePdfBase64);
             const chaseAttachNote = chaseResult?.hasAttachment ? " (PDF attached)" : "";
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
             return `Payment chase sent to ${inv.customer} at ${email} for invoice ${inv.id} (£${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)})${chaseAttachNote}.`;
@@ -6353,11 +6421,46 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${worker.name} assigned to ${assignJob.customer} — ${assignJob.title || assignJob.type}${input.rate ? ` at £${input.rate}/${input.rate_type === "hourly" ? "hr" : "day"}` : ""}.`;
         }
         case "log_worker_time": {
-          // Find worker
+          // Find worker — check workers table first, then subcontractors
           const { data: wtMatches } = await supabase.from("workers")
             .select("id,name,day_rate,hourly_rate").eq("user_id", user?.id)
             .ilike("name", `%${input.worker_name}%`).limit(1);
-          if (!wtMatches?.length) return `Worker "${input.worker_name}" not found. Add them first.`;
+          if (!wtMatches?.length) {
+            // Not in workers — check subcontractors table
+            const { data: subCheck } = await supabase.from("subcontractors")
+              .select("id,name,cis_rate").eq("user_id", user?.id)
+              .ilike("name", `%${input.worker_name}%`).limit(1);
+            if (subCheck?.length) {
+              // Found as subcontractor — log via subcontractor_payments instead
+              const sub = subCheck[0];
+              const spType = input.rate_type || (input.days ? "day_rate" : input.total ? "price_work" : "hourly");
+              let spGross = parseFloat(input.total || 0);
+              if (spType === "day_rate" && input.days) spGross = parseFloat(input.days) * parseFloat(input.rate || 0);
+              if (spType === "hourly" && input.hours) spGross = parseFloat(input.hours) * parseFloat(input.rate || 0);
+              if (!spGross) return `How much is ${sub.name} being paid? Give me an amount, days × rate, or hours × rate.`;
+              const spDate = input.date || new Date().toISOString().slice(0,10);
+              const spDeduction = parseFloat(((spGross * (sub.cis_rate || 0)) / 100).toFixed(2));
+              const spNet = parseFloat((spGross - spDeduction).toFixed(2));
+              let spJobId = null, spJobRef = "";
+              if (input.customer || input.job_title) {
+                const { job: spJob } = await findJob(input.customer || "", input.job_title || "");
+                if (spJob) { spJobId = spJob.id; spJobRef = `${spJob.customer} — ${spJob.title || spJob.type || ""}`.trim(); }
+              }
+              const { error: spErr } = await supabase.from("subcontractor_payments").insert({
+                user_id: user?.id, subcontractor_id: sub.id,
+                date: spDate, gross: spGross, deduction: spDeduction, net: spNet,
+                cis_rate: sub.cis_rate || 0, payment_type: spType,
+                days: parseFloat(input.days) || null, hours: parseFloat(input.hours) || null,
+                rate: parseFloat(input.rate) || null,
+                job_id: spJobId, job_ref: spJobRef,
+                description: input.description || "",
+                created_at: new Date().toISOString(),
+              });
+              if (spErr) return `Failed to log payment: ${spErr.message}`;
+              return `Labour logged for ${sub.name} (subcontractor): £${spGross.toFixed(2)}${spJobRef ? ` → ${spJobRef}` : ""}.`;
+            }
+            return `"${input.worker_name}" not found. Add them with "add a worker" or "add a subcontractor" first.`;
+          }
           const wtWorker = wtMatches[0];
           // Find job
           const { job: wtJob, error: wtErr } = await findJob(input.customer, input.job_title, "log time to");
@@ -6674,7 +6777,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- STOCK: add_stock_item, list_stock, update_stock, delete_stock_item.\n"
   + "- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n"
   + "- SUBCONTRACTOR STATEMENTS: generate_subcontractor_statement shows CIS statement for a month.\n"
-  + "- WORKERS: add_worker (name, type=subcontractor/employed, role, day_rate, hourly_rate, utr, cis_rate). list_workers. assign_worker_to_job (put worker on a job). log_worker_time (hours/days for a named worker — NOT yourself). add_worker_document (CSCS/Gas Safe/insurance/licence — always capture expiry_date). list_expiring_documents (check what certs are expiring soon — proactively flag within 30 days).\n"
+  + "- WORKERS (workers table — PAYE or self-employed on your team): add_worker, log_worker_time, assign_worker_to_job, add_worker_document. log_worker_time searches the workers table first, then subcontractors — so it works for both.\n"
+  + "- SUBCONTRACTORS (subcontractors table — CIS, UTR, own business): add_subcontractor, log_subcontractor_payment (include customer+job_title to link to a job). IMPORTANT: if someone is set up as a subcontractor (has CIS rate), ALWAYS use log_subcontractor_payment — never log_time. If you try log_worker_time and they are found as a subcontractor, the system will handle it automatically.\n"
   + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.\n"
   + (handsFree ? "\n\nHANDS-FREE MODE: Your reply is spoken aloud by text-to-speech. Rules:\n- Plain spoken English only. No markdown, bullets, asterisks or formatting.\n- Keep your text reply to 1-2 sentences — a brief spoken intro only.\n- When you use a tool to fetch data, your text reply is the spoken intro. E.g. \'You have four invoices awaiting payment, totalling 32700 pounds. What would you like to do?\'\n- ALWAYS end your reply with a question or prompt so the user knows to respond.\n- When the user questions or corrects data you returned: acknowledge it directly, explain what the system shows (e.g. \'Those invoices show as sent in the system, meaning they have been issued but not yet marked as paid.\'), and offer what you can do — mark as paid, filter differently, etc. Never just repeat the same data without explanation.\n- If the user says something seems wrong, explain the status honestly: sent = issued, awaiting payment. overdue = past due date. paid = marked paid. draft = not yet sent.\n- Be a real PA: if the data surprises them, help them understand it and offer next steps." : "")
   + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
@@ -7046,6 +7150,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 s += `Total costs ${fp(d.totalCosts)}`;
                 if (d.labourCost > 0) s += ` — labour ${fp(d.labourCost)}`;
                 if (d.materialCost > 0) s += `, materials ${fp(d.materialCost)}`;
+                if (d.subcontractorCost > 0) s += `, subcontractors ${fp(d.subcontractorCost)}`;
                 s += ". ";
               } else {
                 s += "No costs logged yet. ";
@@ -7725,6 +7830,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                             {d.expenseCost > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
                               <span style={{ color: C.textDim }}>Expenses</span>
                               <span style={{ color: C.text }}>{fmt(d.expenseCost)}</span>
+                            </div>}
+                            {d.subcontractorCost > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
+                              <span style={{ color: C.textDim }}>Subcontractors ({d.subPaymentCount || 1} payment{(d.subPaymentCount || 1) !== 1 ? "s" : ""})</span>
+                              <span style={{ color: C.text }}>{fmt(d.subcontractorCost)}</span>
                             </div>}
                             {d.totalCosts === 0 && <div style={{ fontSize: 12, color: C.muted }}>No costs logged yet — add labour, materials or expenses to this job.</div>}
                             {d.totalCosts > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.border}` }}>
