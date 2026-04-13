@@ -3681,6 +3681,19 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [expandedWidget, setExpandedWidget] = useState(null);
   const [ramsSession, setRamsSession] = useState(null);
   const [sessionData, setSessionData] = useState({});
+  const [expiryAlerts, setExpiryAlerts] = useState([]);
+
+  // Check for expiring worker documents on load
+  React.useEffect(() => {
+    if (!user?.id) return;
+    const cutoff = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    supabase.from("worker_documents")
+      .select("*, workers(name)").eq("user_id", user.id)
+      .lte("expiry_date", cutoff).gte("expiry_date", today)
+      .order("expiry_date", { ascending: true }).limit(5)
+      .then(({ data }) => { if (data?.length) setExpiryAlerts(data); });
+  }, [user?.id]);
   const [supportMode, setSupportMode] = useState(false);
   const ttsEnabledRef = useRef(true);
   const ttsAudioRef = useRef(null);
@@ -4608,8 +4621,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "list_expenses", description: "Show recent expenses.", input_schema: { type: "object", properties: {} } },
     { name: "log_cis_statement", description: "Log a CIS deduction statement from a contractor.", input_schema: { type: "object", properties: { contractor_name: { type: "string" }, gross_amount: { type: "string" }, deduction_amount: { type: "string" }, tax_month: { type: "string" }, notes: { type: "string" } }, required: ["contractor_name","gross_amount","deduction_amount"] } },
     { name: "list_cis_statements", description: "Show CIS deduction statements.", input_schema: { type: "object", properties: {} } },
-    { name: "add_subcontractor", description: "Add a new subcontractor.", input_schema: { type: "object", properties: { name: { type: "string" }, company: { type: "string" }, utr: { type: "string" }, cis_rate: { type: "string", description: "20 registered, 30 unregistered, 0 gross" }, email: { type: "string" }, phone: { type: "string" } }, required: ["name"] } },
-    { name: "log_subcontractor_payment", description: "Log a payment to a subcontractor.", input_schema: { type: "object", properties: { name: { type: "string" }, gross: { type: "string" }, date: { type: "string" }, job_ref: { type: "string" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name","gross"] } },
+    { name: "add_subcontractor", description: "Add a new subcontractor. Always include address if mentioned.", input_schema: { type: "object", properties: { name: { type: "string" }, company: { type: "string" }, utr: { type: "string" }, cis_rate: { type: "string", description: "20 registered, 30 unregistered, 0 gross" }, email: { type: "string" }, phone: { type: "string" }, address: { type: "string", description: "Business or home address" } }, required: ["name"] } },
+    { name: "log_subcontractor_payment", description: "Log a payment to a subcontractor. For price work, split into labour and materials — CIS only applies to labour. For day/hourly rate, CIS applies to the full amount.", input_schema: { type: "object", properties: { name: { type: "string", description: "Subcontractor name" }, payment_type: { type: "string", enum: ["price_work","day_rate","hourly"], description: "How they are paid" }, labour_amount: { type: "number", description: "Labour portion in £ (price_work) — CIS applies to this" }, materials_amount: { type: "number", description: "Materials portion in £ (price_work) — no CIS" }, gross: { type: "number", description: "Total gross if not splitting labour/materials" }, days: { type: "number", description: "Days worked (day_rate only)" }, hours: { type: "number", description: "Hours worked (hourly only)" }, rate: { type: "number", description: "Day or hourly rate in £" }, date: { type: "string" }, job_ref: { type: "string" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name"] } },
     { name: "list_subcontractors", description: "Show all subcontractors.", input_schema: { type: "object", properties: {} } },
     { name: "add_compliance_cert", description: "Add a compliance certificate to a job card — CP12, EICR, PAT, EIC, Pressure Test, Part P etc.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, doc_type: { type: "string" }, doc_number: { type: "string" }, issued_date: { type: "string" }, expiry_date: { type: "string" }, notes: { type: "string" } }, required: ["doc_type"] } },
     { name: "add_variation_order", description: "Add a variation order (extra work / change to scope) to a job card.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, description: { type: "string" }, amount: { type: "string" }, vo_number: { type: "string" } }, required: ["description","amount"] } },
@@ -4640,6 +4653,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "delete_expense", description: "Delete an expense.", input_schema: { type: "object", properties: { description: { type: "string" } }, required: ["description"] } },
     { name: "delete_purchase_order", description: "Delete a purchase order.", input_schema: { type: "object", properties: { po_number: { type: "string" }, supplier: { type: "string" } } } },
     { name: "delete_cis_statement", description: "Delete a CIS statement.", input_schema: { type: "object", properties: { contractor_name: { type: "string" } }, required: ["contractor_name"] } },
+    { name: "add_worker", description: "Add a worker profile — subcontracted or employed. Use when user says 'add a worker', 'add [name] as a labourer/electrician/sub'. Always include type (subcontractor or employed) if mentioned.", input_schema: { type: "object", properties: { name: { type: "string" }, type: { type: "string", enum: ["subcontractor","employed"], description: "subcontractor = self-employed/CIS, employed = PAYE staff" }, role: { type: "string", description: "Their trade or role e.g. electrician, labourer, plasterer" }, email: { type: "string" }, phone: { type: "string" }, day_rate: { type: "number" }, hourly_rate: { type: "number" }, utr: { type: "string", description: "UTR number for subcontractors" }, cis_rate: { type: "number", description: "CIS deduction rate — 20 (registered), 30 (unregistered), 0 (gross)" }, ni_number: { type: "string", description: "NI number for employed staff" } }, required: ["name"] } },
+    { name: "list_workers", description: "Show all workers. Use when user asks 'show my workers', 'who do I have on my books', 'list my staff'.", input_schema: { type: "object", properties: { type: { type: "string", enum: ["all","subcontractor","employed"] } } } },
+    { name: "assign_worker_to_job", description: "Assign a worker to a job card. Use when user says 'put [name] on the [job]', 'assign [worker] to [customer]'.", input_schema: { type: "object", properties: { worker_name: { type: "string" }, customer: { type: "string" }, job_title: { type: "string" }, role: { type: "string" }, rate: { type: "number" }, rate_type: { type: "string", enum: ["day_rate","hourly","price_work"] }, start_date: { type: "string" } }, required: ["worker_name"] } },
+    { name: "log_worker_time", description: "Log hours or days worked by a worker (not yourself) on a job. Use when user says '[name] worked X days/hours on [job]'.", input_schema: { type: "object", properties: { worker_name: { type: "string" }, customer: { type: "string" }, job_title: { type: "string" }, hours: { type: "number" }, days: { type: "number" }, rate: { type: "number" }, rate_type: { type: "string", enum: ["hourly","day_rate","price_work"] }, total: { type: "number" }, date: { type: "string" }, description: { type: "string" } }, required: ["worker_name"] } },
+    { name: "add_worker_document", description: "Add a certificate, insurance or licence to a worker. Use when user says 'add [name]'s CSCS card', 'log insurance for [worker]', 'add Gas Safe number'. Always include expiry_date if mentioned.", input_schema: { type: "object", properties: { worker_name: { type: "string" }, doc_type: { type: "string", description: "cscs, gas_safe, public_liability, employers_liability, driving_licence, right_to_work, other" }, doc_number: { type: "string" }, issued_date: { type: "string" }, expiry_date: { type: "string", description: "YYYY-MM-DD — always include if mentioned" }, notes: { type: "string" } }, required: ["worker_name","doc_type"] } },
+    { name: "list_expiring_documents", description: "Show worker certs and documents expiring soon. Use when user asks 'what's expiring', 'any certs due', 'check documents'.", input_schema: { type: "object", properties: { days: { type: "number", description: "Days ahead to check — default 60" } } } },
     { name: "delete_subcontractor", description: "Delete/remove a subcontractor.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
     { name: "delete_job_card", description: "Delete a job card permanently.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
     { name: "delete_mileage", description: "Delete a mileage log. By default deletes the most recent one. If user specifies a date or location, use those to target the right entry.", input_schema: { type: "object", properties: { date: { type: "string", description: "Date of trip to delete YYYY-MM-DD" }, from_location: { type: "string", description: "Start location to match" }, to_location: { type: "string", description: "Destination to match" } } } },
@@ -5680,6 +5699,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             user_id: user?.id,
             name: input.name, company: input.company || "", utr: input.utr || "",
             cis_rate: parseInt(input.cis_rate) || 20, email: input.email || "", phone: input.phone || "",
+            address: input.address || "",
             created_at: new Date().toISOString(),
           }).select().single();
           if (error) return `Failed to add subcontractor: ${error.message}`;
@@ -5690,9 +5710,19 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { data: subs } = await supabase.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
           const sub = subs?.[0];
           if (!sub) return `Subcontractor "${input.name}" not found. Add them first.`;
-          const gross = parseFloat(input.gross) || 0;
+          // Calculate gross based on payment type
+          const payType = input.payment_type || "price_work";
+          let gross = parseFloat(input.gross) || 0;
+          let execLabour = parseFloat(input.labour_amount) || 0;
+          let execMats = parseFloat(input.materials_amount) || 0;
+          if (payType === "day_rate" && input.days && input.rate) gross = parseFloat(input.days) * parseFloat(input.rate);
+          if (payType === "hourly" && input.hours && input.rate) gross = parseFloat(input.hours) * parseFloat(input.rate);
+          if (payType === "price_work" && (execLabour || execMats)) gross = execLabour + execMats;
+          if (!gross) return `Please provide the amount — gross, labour amount, days × rate, or hours × rate.`;
+          // CIS only on labour for price work; full gross for day/hourly
+          const cisBaseAmount = (payType === "price_work" && execLabour > 0) ? execLabour : gross;
           const rate = (sub.cis_rate || 20) / 100;
-          const deduction = parseFloat((gross * rate).toFixed(2));
+          const deduction = parseFloat((cisBaseAmount * rate).toFixed(2));
           const net = parseFloat((gross - deduction).toFixed(2));
           const payDate = input.date || new Date().toISOString().split("T")[0];
           // Dedup: same sub + same gross + same date = duplicate payment
@@ -5704,13 +5734,23 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             user_id: user?.id, subcontractor_id: sub.id,
             date: payDate,
             gross, deduction, net, cis_rate: sub.cis_rate || 20,
+            payment_type: payType,
+            days: parseFloat(input.days) || null,
+            hours: parseFloat(input.hours) || null,
+            rate: parseFloat(input.rate) || null,
+            labour_amount: execLabour || null,
+            materials_amount: execMats || null,
             job_ref: input.job_ref || "", description: input.description || "",
             invoice_number: input.invoice_number || "",
             created_at: new Date().toISOString(),
           }).select().single();
           if (error) return `Failed to log payment: ${error.message}`;
           pendingWidgetRef.current = { type: "subcontractor_payment", data: { ...data, subcontractor_name: sub.name } };
-          return `Payment logged for ${sub.name} — gross £${gross.toFixed(2)}, CIS deduction £${deduction.toFixed(2)}, net £${net.toFixed(2)}.`;
+          let payDesc = "";
+          if (payType === "day_rate") payDesc = `${input.days} days @ £${input.rate}/day = `;
+          else if (payType === "hourly") payDesc = `${input.hours}hrs @ £${input.rate}/hr = `;
+          else if (execLabour || execMats) payDesc = `labour £${execLabour.toFixed(2)}, materials £${execMats.toFixed(2)} = `;
+          return `Payment logged for ${sub.name} — ${payDesc}gross £${gross.toFixed(2)}, CIS deduction £${deduction.toFixed(2)} (on ${payType === "price_work" && execLabour > 0 ? "labour only" : "full amount"}), net to pay £${net.toFixed(2)}.`;
         }
         case "list_subcontractors": {
           const { data } = await supabase.from("subcontractors").select("*").eq("user_id", user?.id).order("name");
@@ -6268,6 +6308,122 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           await supabase.from("cis_statements").delete().eq("id", found[0].id);
           return `CIS statement for ${found[0].contractor_name} (${found[0].tax_month?.slice(0,7)}) deleted.`;
         }
+        case "add_worker": {
+          const { data: newWorker, error: wErr } = await supabase.from("workers").insert({
+            user_id: user?.id,
+            name: input.name, type: input.type || "subcontractor",
+            role: input.role || "", email: input.email || "", phone: input.phone || "",
+            day_rate: parseFloat(input.day_rate || 0) || null,
+            hourly_rate: parseFloat(input.hourly_rate || 0) || null,
+            utr: input.utr || "", cis_rate: parseInt(input.cis_rate || 20),
+            ni_number: input.ni_number || "", active: true,
+            created_at: new Date().toISOString(),
+          }).select().single();
+          if (wErr) return `Failed to add worker: ${wErr.message}`;
+          const workerType = input.type === "employed" ? "employed staff member" : "subcontractor";
+          return `Worker added: ${input.name}${input.role ? ` (${input.role})` : ""} as a ${workerType}${input.day_rate ? ` — day rate £${input.day_rate}` : ""}${input.hourly_rate ? ` — hourly rate £${input.hourly_rate}` : ""}.`;
+        }
+        case "list_workers": {
+          const { data: workerList } = await supabase.from("workers")
+            .select("*").eq("user_id", user?.id).eq("active", true).order("name");
+          const filtered = (workerList || []).filter(w =>
+            !input.type || input.type === "all" || w.type === input.type
+          );
+          if (!filtered.length) return `No workers found. Add workers by saying "add a worker".`;
+          const workerData = filtered.map(w => ({
+            name: w.name, type: w.type, role: w.role || "",
+            day_rate: w.day_rate, hourly_rate: w.hourly_rate,
+            email: w.email, phone: w.phone, utr: w.utr, cis_rate: w.cis_rate,
+          }));
+          pendingWidgetRef.current = { type: "worker_list", data: workerData };
+          return `Here are your ${filtered.length} worker${filtered.length !== 1 ? "s" : ""}:`;
+        }
+        case "assign_worker_to_job": {
+          // Find worker
+          const { data: wMatches } = await supabase.from("workers")
+            .select("id,name,role,day_rate,hourly_rate").eq("user_id", user?.id)
+            .ilike("name", `%${input.worker_name}%`).limit(1);
+          if (!wMatches?.length) return `Worker "${input.worker_name}" not found. Add them first with "add a worker".`;
+          const worker = wMatches[0];
+          // Find job
+          const { job: assignJob, error: assignErr } = await findJob(input.customer, input.job_title, "assign this worker to");
+          if (assignErr) return assignErr;
+          // Check not already assigned
+          const { data: existing } = await supabase.from("job_workers")
+            .select("id").eq("user_id", user?.id).eq("job_id", assignJob.id).eq("worker_id", worker.id).limit(1);
+          if (existing?.length) return `${worker.name} is already assigned to ${assignJob.customer} — ${assignJob.title || assignJob.type}.`;
+          const { error: jwErr } = await supabase.from("job_workers").insert({
+            user_id: user?.id, job_id: assignJob.id, worker_id: worker.id,
+            role: input.role || worker.role || "", rate: input.rate || worker.day_rate || null,
+            rate_type: input.rate_type || "day_rate",
+            start_date: input.start_date || new Date().toISOString().slice(0,10),
+            created_at: new Date().toISOString(),
+          });
+          if (jwErr) return `Failed to assign worker: ${jwErr.message}`;
+          return `${worker.name} assigned to ${assignJob.customer} — ${assignJob.title || assignJob.type}${input.rate ? ` at £${input.rate}/${input.rate_type === "hourly" ? "hr" : "day"}` : ""}.`;
+        }
+        case "log_worker_time": {
+          // Find worker
+          const { data: wtMatches } = await supabase.from("workers")
+            .select("id,name,day_rate,hourly_rate").eq("user_id", user?.id)
+            .ilike("name", `%${input.worker_name}%`).limit(1);
+          if (!wtMatches?.length) return `Worker "${input.worker_name}" not found. Add them first.`;
+          const wtWorker = wtMatches[0];
+          // Find job
+          const { job: wtJob, error: wtErr } = await findJob(input.customer, input.job_title, "log time to");
+          if (wtErr) return wtErr;
+          const wtType = input.rate_type || (input.days ? "day_rate" : "hourly");
+          let wtHours = 0, wtTotal = 0;
+          if (wtType === "hourly") { wtHours = parseFloat(input.hours || 0); wtTotal = wtHours * parseFloat(input.rate || wtWorker.hourly_rate || 0); }
+          else if (wtType === "day_rate") { wtHours = parseFloat(input.days || 0) * 8; wtTotal = parseFloat(input.days || 0) * parseFloat(input.rate || wtWorker.day_rate || 0); }
+          else { wtTotal = parseFloat(input.total || 0); }
+          const today = new Date().toISOString().slice(0,10);
+          const { error: wtLogErr } = await supabase.from("time_logs").insert({
+            job_id: wtJob.id, user_id: user?.id,
+            log_date: input.date || today, labour_type: wtType,
+            hours: wtHours, days: input.days || null,
+            rate: input.rate || 0, total: wtTotal,
+            description: input.description || `${wtWorker.name} — ${wtType}`,
+            worker: wtWorker.name,
+          });
+          if (wtLogErr) return `Failed to log time: ${wtLogErr.message}`;
+          const wtLabel = wtType === "hourly" ? `${input.hours}hrs @ £${input.rate}/hr` : wtType === "day_rate" ? `${input.days} days @ £${input.rate}/day` : `Price work £${input.total}`;
+          return `Time logged for ${wtWorker.name} on ${wtJob.customer} — ${wtJob.title || wtJob.type}: ${wtLabel} = £${wtTotal.toFixed(2)}.`;
+        }
+        case "add_worker_document": {
+          const { data: wdMatches } = await supabase.from("workers")
+            .select("id,name").eq("user_id", user?.id).ilike("name", `%${input.worker_name}%`).limit(1);
+          if (!wdMatches?.length) return `Worker "${input.worker_name}" not found. Add them first.`;
+          const wdWorker = wdMatches[0];
+          const { error: wdErr } = await supabase.from("worker_documents").insert({
+            user_id: user?.id, worker_id: wdWorker.id,
+            doc_type: input.doc_type, doc_number: input.doc_number || "",
+            issued_date: input.issued_date || null, expiry_date: input.expiry_date || null,
+            notes: input.notes || "", created_at: new Date().toISOString(),
+          });
+          if (wdErr) return `Failed to save document: ${wdErr.message}`;
+          const expiryNote = input.expiry_date ? ` — expires ${new Date(input.expiry_date).toLocaleDateString("en-GB")}` : "";
+          return `${input.doc_type.replace(/_/g," ").toUpperCase()} added for ${wdWorker.name}${input.doc_number ? ` (${input.doc_number})` : ""}${expiryNote}.`;
+        }
+        case "list_expiring_documents": {
+          const days = parseInt(input.days || 60);
+          const cutoff = new Date(Date.now() + days * 86400000).toISOString().slice(0,10);
+          const today = new Date().toISOString().slice(0,10);
+          const { data: expiring } = await supabase.from("worker_documents")
+            .select("*, workers(name)").eq("user_id", user?.id)
+            .lte("expiry_date", cutoff).gte("expiry_date", today)
+            .order("expiry_date", { ascending: true });
+          const { data: expired } = await supabase.from("worker_documents")
+            .select("*, workers(name)").eq("user_id", user?.id)
+            .lt("expiry_date", today).order("expiry_date", { ascending: false }).limit(5);
+          const docs = [...(expired || []).map(d => ({...d, status: "expired"})),
+                       ...(expiring || []).map(d => ({...d, status: "expiring"}))];
+          if (!docs.length) return `No documents expiring in the next ${days} days. All up to date.`;
+          pendingWidgetRef.current = { type: "expiring_docs", data: docs };
+          const expiredCount = (expired || []).length;
+          const expiringCount = (expiring || []).length;
+          return `${expiredCount ? expiredCount + " expired, " : ""}${expiringCount} expiring in the next ${days} days.`;
+        }
         case "delete_subcontractor": {
           const { data: found } = await supabase.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name || ""}%`).limit(1);
           if (!found?.length) return `Subcontractor not found.`;
@@ -6528,6 +6684,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- STOCK: add_stock_item, list_stock, update_stock, delete_stock_item.\n"
   + "- STAGE PAYMENTS: add_stage_payment sets milestones on a job.\n"
   + "- SUBCONTRACTOR STATEMENTS: generate_subcontractor_statement shows CIS statement for a month.\n"
+  + "- WORKERS: add_worker (name, type=subcontractor/employed, role, day_rate, hourly_rate, utr, cis_rate). list_workers. assign_worker_to_job (put worker on a job). log_worker_time (hours/days for a named worker — NOT yourself). add_worker_document (CSCS/Gas Safe/insurance/licence — always capture expiry_date). list_expiring_documents (check what certs are expiring soon — proactively flag within 30 days).\n"
   + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.\n"
   + (handsFree ? "\n\nHANDS-FREE MODE: Your reply is spoken aloud by text-to-speech. Rules:\n- Plain spoken English only. No markdown, bullets, asterisks or formatting.\n- Keep your text reply to 1-2 sentences — a brief spoken intro only.\n- When you use a tool to fetch data, your text reply is the spoken intro. E.g. \'You have four invoices awaiting payment, totalling 32700 pounds. What would you like to do?\'\n- ALWAYS end your reply with a question or prompt so the user knows to respond.\n- When the user questions or corrects data you returned: acknowledge it directly, explain what the system shows (e.g. \'Those invoices show as sent in the system, meaning they have been issued but not yet marked as paid.\'), and offer what you can do — mark as paid, filter differently, etc. Never just repeat the same data without explanation.\n- If the user says something seems wrong, explain the status honestly: sent = issued, awaiting payment. overdue = past due date. paid = marked paid. draft = not yet sent.\n- Be a real PA: if the data surprises them, help them understand it and offer next steps." : "")
   + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
@@ -6621,7 +6778,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const ACTION_TOOLS = ["log_mileage","log_time","create_material","create_job_card","create_job",
             "create_invoice","create_customer","log_expense","log_cis_statement","add_subcontractor",
             "log_subcontractor_payment","add_compliance_cert","add_variation_order","log_daywork","add_stage_payment",
-            "update_material_status","update_material","delete_material","add_job_note","assign_material_to_job"];
+            "update_material_status","update_material","delete_material","add_job_note","assign_material_to_job",
+            "add_worker","assign_worker_to_job","log_worker_time","add_worker_document"];
           if (result && ACTION_TOOLS.includes(block.name)) {
             sessionActionsRef.current = [...sessionActionsRef.current.slice(-9), `${block.name}(${JSON.stringify(block.input).slice(0,60)})`];
           }
@@ -6653,7 +6811,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         ["invoice_list","schedule_list","material_list","job_list","expense_list",
          "mileage_list","cis_list","subcontractor_list","stock_list","reminder_list",
          "customer_list","enquiry_list","po_list","rams_list","report",
-         "invoice","quote","job_card","job_full","job_profit","email_sent","subcontractor_statement",
+         "invoice","quote","job_card","job_full","job_profit","email_sent","worker_list","expiring_docs","subcontractor_statement",
          "stage_payments","variation_order","daywork_sheet","compliance_cert",
          "signature_prompt","review_sent","subcontractor_payment","cis_statement"].includes(w.type)
       ) || allWidgets[allWidgets.length - 1] || null;
@@ -6906,6 +7064,20 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               return s;
             }
 
+            case "worker_list": {
+              if (!d?.length) return "No workers found.";
+              const subs = d.filter(w => w.type === "subcontractor").length;
+              const emp = d.filter(w => w.type === "employed").length;
+              return `You have ${d.length} worker${d.length !== 1 ? "s" : ""} on your books. ${subs > 0 ? subs + " subcontractor" + (subs !== 1 ? "s" : "") : ""}${emp > 0 ? (subs > 0 ? " and " : "") + emp + " employed" : ""}.`;
+            }
+            case "expiring_docs": {
+              const expired = (d || []).filter(x => x.status === "expired");
+              const expiring = (d || []).filter(x => x.status === "expiring");
+              let s = "";
+              if (expired.length) s += `${expired.length} document${expired.length !== 1 ? "s have" : " has"} already expired. `;
+              if (expiring.length) s += `${expiring.length} document${expiring.length !== 1 ? "s are" : " is"} expiring soon. `;
+              return s.trim() || "All documents are up to date.";
+            }
             case "support_escalated":
               return `Support ticket raised. Your issue has been sent to the team and they will be in touch at ${d.email||"your email"}.`;
 
@@ -6998,6 +7170,44 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
   const homeScanRef = useRef();
   const homeScanResult = useRef(null);
+  const homeSubScanRef = useRef();
+
+  const homeSubScanReceipt = async (file) => {
+    if (!file) return;
+    setMessages(prev => [...prev, { role: "user", content: "Scan this subcontractor invoice" }]);
+    setLoading(true);
+    try {
+      const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+      const { base64, dataUrl } = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => { const f = e.target.result; res({ base64: f.split(",")[1], dataUrl: f }); };
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      const fileContent = isPdf
+        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+        : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
+      const resp = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1500,
+          messages: [{ role: "user", content: [fileContent, { type: "text", text: "You are reading a UK subcontractor invoice. Extract and return ONLY valid JSON: { subcontractor_name, invoice_number, date (YYYY-MM-DD), labour_amount (ex-VAT), material_items (array of {desc, amount} ex-VAT), materials_total, gross_total, vat_rate, vat_amount, description }" }] }],
+        }),
+      });
+      const data = await resp.json();
+      const raw = data.content?.[0]?.text || "";
+      const start = raw.indexOf("{"); const end = raw.lastIndexOf("}");
+      if (start === -1 || end === -1) throw new Error("Could not read invoice");
+      const parsed = JSON.parse(raw.slice(start, end + 1));
+      pendingWidgetRef.current = { type: "sub_invoice_scan", data: { ...parsed, imageData: dataUrl } };
+      setMessages(prev => [...prev, { role: "assistant", content: `Subcontractor invoice scanned. ${parsed.subcontractor_name ? parsed.subcontractor_name + " · " : ""}${parsed.invoice_number ? parsed.invoice_number + " · " : ""}Gross £${(parsed.gross_total || 0).toFixed(2)}. Go to the Subcontractors tab to review and save the payment.` }]);
+    } catch (e) {
+      setMessages(prev => [...prev, { role: "assistant", content: "Couldn't read that invoice — try a clearer photo or PDF." }]);
+    }
+    setLoading(false);
+  };
 
   const homeScanReceipt = async (file) => {
     if (!file || !onScanReceipt) return;
@@ -7135,40 +7345,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           )}
 
-          {/* Quick actions grid */}
-          <div>
-            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Quick actions</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {quickActions.map((q, i) => (
-                <button key={i} onClick={() => {
-                  // If hands-free is on, keep the loop going after AI responds
-                  // If hands-free is off, still open mic after response (one-shot)
-                  if (!handsFreeRef.current) {
-                    setHandsFree(true);
-                    handsFreeRef.current = true;
-                  }
-                  send(q.msg);
-                }}
-                  style={{ padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 12, cursor: "pointer", fontFamily: "'DM Mono',monospace", textAlign: "left", lineHeight: 1.4 }}>
-                  {q.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Scan receipt + Help — full width below quick actions */}
+          {/* Scan buttons + Help */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <input ref={homeSubScanRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display: "none" }} onChange={e => { homeSubScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
+            <button onClick={() => homeSubScanRef.current?.click()}
+              style={{ width: "100%", padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 13, cursor: "pointer", textAlign: "left" }}>
+              📄  Scan / Upload Subcontractor Invoice
+            </button>
             {onScanReceipt && (
               <div>
                 <input ref={homeScanRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display: "none" }} onChange={e => { homeScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
                 <button onClick={() => homeScanRef.current?.click()}
-                  style={{ width: "100%", padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.amber, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", textAlign: "center", letterSpacing: "0.03em" }}>
+                  style={{ width: "100%", padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 13, cursor: "pointer", textAlign: "left" }}>
                   🧾  Scan Material Invoice / Receipt
                 </button>
               </div>
             )}
             <button onClick={startSupport}
-              style={{ width: "100%", padding: "12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, fontSize: 12, cursor: "pointer", fontFamily: "'DM Mono',monospace", textAlign: "center" }}>
+              style={{ width: "100%", padding: "12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, fontSize: 13, cursor: "pointer", textAlign: "left" }}>
               ❓  Help & Support
             </button>
           </div>
@@ -7180,20 +7374,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       {/* ── CHAT VIEW ───────────────────────────────────────────────────── */}
       {!isHome && (
         <>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {quick.map((q, i) => (
-              <button key={i} onClick={() => {
-                if (!handsFreeRef.current) { setHandsFree(true); handsFreeRef.current = true; }
-                send(q);
-              }} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, color: C.textDim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>{q}</button>
-            ))}
-            <button onClick={() => { setMessages([]); setSupportMode(false); }} style={{ padding: "5px 12px", background: "none", border: `1px solid ${C.border}`, borderRadius: 20, color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", marginLeft: "auto" }}>🏠 Home</button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button onClick={() => { setMessages([]); setSupportMode(false); }} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, fontSize: 11, color: C.muted, cursor: "pointer" }}>🏠 Home</button>
             {supportMode && (
-              <div style={{ padding: "4px 10px", background: C.blue + "22", border: `1px solid ${C.blue}44`, borderRadius: 20, color: C.blue, fontSize: 10, fontWeight: 700 }}>
-                SUPPORT
-              </div>
+              <div style={{ padding: "4px 10px", background: C.blue + "22", border: `1px solid ${C.blue}44`, borderRadius: 20, fontSize: 11, color: C.blue, fontWeight: 600 }}>SUPPORT</div>
             )}
-            <button onClick={toggleTts} style={{ padding: "5px 10px", background: ttsEnabled ? C.amber + "22" : "none", border: `1px solid ${ttsEnabled ? C.amber + "66" : C.border}`, borderRadius: 20, color: ttsEnabled ? C.amber : C.muted, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", flexShrink: 0 }} title={ttsEnabled ? "Tap to mute" : "Tap to hear responses"}>
+            <button onClick={toggleTts} style={{ padding: "5px 10px", background: ttsEnabled ? C.amber + "22" : C.surfaceHigh, border: `1px solid ${ttsEnabled ? C.amber + "44" : C.border}`, borderRadius: 20, fontSize: 13, cursor: "pointer" }}>
               {ttsEnabled ? "🔊" : "🔇"}
             </button>
           </div>
@@ -7204,6 +7390,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               <span style={{ color: C.green, fontWeight: 600 }}>{lastAction.label}</span>
               <span style={{ color: C.muted }}>saved</span>
               <button onClick={() => setView(lastAction.view)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "3px 10px", marginLeft: "auto" }}>View →</button>
+            </div>
+          )}
+
+          {expiryAlerts.length > 0 && (
+            <div style={{ background: C.amber + "18", border: `1px solid ${C.amber}44`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+              onClick={() => send("Check my expiring documents")}>
+              <span style={{ fontSize: 15 }}>⚠️</span>
+              <span style={{ color: C.amber, fontWeight: 600, fontSize: 12 }}>
+                {expiryAlerts.length} worker cert{expiryAlerts.length !== 1 ? "s" : ""} expiring within 30 days
+              </span>
+              <span style={{ color: C.muted, fontSize: 11, marginLeft: "auto" }}>Tap to review →</span>
             </div>
           )}
 
@@ -7566,6 +7763,67 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                           {d.totalCosts === 0 && <div style={{ padding: "8px 14px", fontSize: 11, color: C.muted }}>
                             💡 Tip: Log your labour and materials to this job to track real profit.
                           </div>}
+                        </div>
+                      );
+                    })()}
+                    {m.widget.type === "worker_list" && (() => {
+                      const workers = m.widget.data || [];
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "10px 14px", background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>WORKERS ({workers.length})</div>
+                          </div>
+                          {workers.map((w, i) => (
+                            <div key={i} style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{w.name}</div>
+                                <div style={{ fontSize: 11, color: C.muted }}>
+                                  {w.role && `${w.role} · `}
+                                  <span style={{ color: w.type === "employed" ? C.green : C.amber }}>{w.type === "employed" ? "Employed" : "Subcontractor"}</span>
+                                </div>
+                              </div>
+                              <div style={{ textAlign: "right", fontSize: 11, color: C.muted }}>
+                                {w.day_rate > 0 && <div>£{w.day_rate}/day</div>}
+                                {w.hourly_rate > 0 && <div>£{w.hourly_rate}/hr</div>}
+                                {w.utr && <div style={{ color: C.muted }}>UTR: {w.utr}</div>}
+                              </div>
+                            </div>
+                          ))}
+                          <div style={{ padding: "10px 14px" }}>
+                            <button onClick={() => send("Add a worker")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Add worker</button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {m.widget.type === "expiring_docs" && (() => {
+                      const docs = m.widget.data || [];
+                      const expired = docs.filter(d => d.status === "expired");
+                      const expiring = docs.filter(d => d.status === "expiring");
+                      return (
+                        <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "10px 14px", background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                              DOCUMENTS {expired.length > 0 && <span style={{ color: "#ef4444" }}>— {expired.length} EXPIRED</span>}
+                            </div>
+                          </div>
+                          {docs.map((d, i) => {
+                            const isExpired = d.status === "expired";
+                            const daysLeft = Math.ceil((new Date(d.expiry_date) - new Date()) / 86400000);
+                            return (
+                              <div key={i} style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{d.workers?.name || "Unknown"}</div>
+                                  <div style={{ fontSize: 11, color: C.muted }}>{(d.doc_type || "").replace(/_/g," ").toUpperCase()}{d.doc_number ? ` · ${d.doc_number}` : ""}</div>
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: isExpired ? "#ef4444" : daysLeft <= 14 ? C.amber : C.text }}>
+                                    {isExpired ? "EXPIRED" : `${daysLeft}d left`}
+                                  </div>
+                                  <div style={{ fontSize: 10, color: C.muted }}>{new Date(d.expiry_date).toLocaleDateString("en-GB")}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       );
                     })()}
@@ -14826,23 +15084,92 @@ function MileageTab({ user }) {
 function SubcontractorsTab({ user, brand }) {
   const [subs, setSubs] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [workers, setWorkers] = useState([]);
+  const [workerDocs, setWorkerDocs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState("list"); // list | add_sub | add_payment | statement
+  const [view, setView] = useState("list"); // list | add_sub | add_payment | add_worker | add_doc
   const [selected, setSelected] = useState(null);
-  const [subForm, setSubForm] = useState({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "" });
-  const [payForm, setPayForm] = useState({ subcontractor_id: "", date: new Date().toISOString().split("T")[0], gross: "", job_ref: "", description: "", invoice_number: "" });
+  const [workerForm, setWorkerForm] = useState({ name: "", type: "subcontractor", role: "", email: "", phone: "", address: "", day_rate: "", hourly_rate: "", utr: "", cis_rate: 20, ni_number: "" });
+  const [docForm, setDocForm] = useState({ worker_id: "", doc_type: "cscs", doc_number: "", issued_date: "", expiry_date: "", notes: "" });
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const [subScanResult, setSubScanResult] = useState(null);
+  const [subScanImage, setSubScanImage] = useState(null);
+  const subScanFileRef = React.useRef(null);
+  const subScanUploadRef = React.useRef(null);
+
+  const handleSubInvoiceScan = async (file) => {
+    if (!file) return;
+    setScanError("");
+    setScanning(true);
+    try {
+      const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+      const { base64, dataUrl } = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => { const f = e.target.result; res({ base64: f.split(",")[1], dataUrl: f }); };
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      const fileContent = isPdf
+        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+        : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
+      const resp = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1500,
+          messages: [{ role: "user", content: [fileContent, { type: "text", text: "You are reading a UK subcontractor invoice. Extract and return ONLY valid JSON with these keys: subcontractor_name, invoice_number, date (YYYY-MM-DD), labour_amount (number, ex-VAT), material_items (array of {desc, amount} ex-VAT), materials_total (number, sum of material_items), gross_total (number, labour + materials ex-VAT), vat_rate (0, 5, or 20), vat_amount (number), description (brief summary of work). If labour and materials are not split out separately, put full amount in labour_amount and leave material_items empty." }] }],
+        }),
+      });
+      const data = await resp.json();
+      const raw = (data.content?.[0]?.text) || "";
+      const start = raw.indexOf("{");
+      const end = raw.lastIndexOf("}");
+      if (start === -1 || end === -1) throw new Error("Could not read invoice — try a clearer photo");
+      const parsed = JSON.parse(raw.slice(start, end + 1));
+      setSubScanResult(parsed);
+      setSubScanImage(dataUrl);
+      // Pre-fill the payment form
+      const matchingSub = subs.find(s => s.name.toLowerCase().includes((parsed.subcontractor_name || "").toLowerCase().slice(0, 6)));
+      setPayForm(f => ({
+        ...f,
+        subcontractor_id: matchingSub?.id || f.subcontractor_id,
+        date: parsed.date || f.date,
+        invoice_number: parsed.invoice_number || f.invoice_number,
+        payment_type: "price_work",
+        labour_amount: parsed.labour_amount ? String(parsed.labour_amount) : f.labour_amount,
+        material_items: parsed.material_items?.length ? parsed.material_items.map(m => ({ desc: m.desc, amount: String(m.amount) })) : [{ desc: "", amount: "" }],
+        description: parsed.description || f.description,
+      }));
+      setView("add_payment");
+    } catch (e) {
+      setScanError("Could not read invoice: " + e.message);
+    }
+    setScanning(false);
+  };
+  const [subForm, setSubForm] = useState({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "", address: "" });
+  const [jobs, setJobs] = useState([]);
+  useEffect(() => {
+    if (user?.id) supabase.from("job_cards").select("id,title,type,customer,address").eq("user_id", user.id).eq("status","in_progress").order("created_at",{ascending:false}).limit(30).then(({data})=>setJobs(data||[]));
+  }, [user?.id]);
+  const [payForm, setPayForm] = useState({ subcontractor_id: "", job_id: "", date: new Date().toISOString().split("T")[0], payment_type: "price_work", days: "", hours: "", rate: "", gross: "", labour_amount: "", material_items: [{ desc: "", amount: "" }], job_ref: "", description: "", invoice_number: "" });
   const [filterSub, setFilterSub] = useState("all");
 
   useEffect(() => { if (user?.id) load(); }, [user?.id]);
 
   const load = async () => {
     setLoading(true);
-    const [{ data: s }, { data: p }] = await Promise.all([
+    const [{ data: s }, { data: p }, { data: w }, { data: wd }] = await Promise.all([
       supabase.from("subcontractors").select("*").eq("user_id", user.id).order("name"),
       supabase.from("subcontractor_payments").select("*").eq("user_id", user.id).order("date", { ascending: false }),
+      supabase.from("workers").select("*").eq("user_id", user.id).eq("active", true).order("name"),
+      supabase.from("worker_documents").select("*, workers(name)").eq("user_id", user.id).order("expiry_date", { ascending: true }),
     ]);
     setSubs(s || []);
     setPayments(p || []);
+    setWorkers(w || []);
+    setWorkerDocs(wd || []);
     setLoading(false);
   };
 
@@ -14852,22 +15179,75 @@ function SubcontractorsTab({ user, brand }) {
     if (!error && data) { setSubs(p => [...p, data]); setView("list"); setSubForm({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "" }); }
   };
 
+  const saveWorker = async () => {
+    if (!workerForm.name) return;
+    const { data, error } = await supabase.from("workers").insert({
+      user_id: user.id, ...workerForm,
+      day_rate: parseFloat(workerForm.day_rate) || null,
+      hourly_rate: parseFloat(workerForm.hourly_rate) || null,
+      cis_rate: parseInt(workerForm.cis_rate) || 20,
+      active: true, created_at: new Date().toISOString(),
+    }).select().single();
+    if (!error && data) {
+      setWorkers(w => [...w, data]);
+      setView("list");
+      setWorkerForm({ name: "", type: "subcontractor", role: "", email: "", phone: "", day_rate: "", hourly_rate: "", utr: "", cis_rate: 20, ni_number: "" });
+    }
+  };
+
+  const saveWorkerDoc = async () => {
+    if (!docForm.worker_id || !docForm.doc_type) return;
+    const { data, error } = await supabase.from("worker_documents").insert({
+      user_id: user.id, ...docForm, created_at: new Date().toISOString(),
+    }).select("*, workers(name)").single();
+    if (!error && data) {
+      setWorkerDocs(d => [...d, data]);
+      setView("list");
+      setDocForm({ worker_id: "", doc_type: "cscs", doc_number: "", issued_date: "", expiry_date: "", notes: "" });
+    }
+  };
+
   const savePayment = async () => {
-    if (!payForm.subcontractor_id || !payForm.gross) return;
+    if (!payForm.subcontractor_id) return;
     const sub = subs.find(s => s.id === payForm.subcontractor_id);
-    const gross = parseFloat(payForm.gross);
-    const rate = (sub?.cis_rate || 20) / 100;
-    const deduction = parseFloat((gross * rate).toFixed(2));
+    // Calculate gross from payment type
+    let gross = parseFloat(payForm.gross) || 0;
+    let labourAmount = 0, materialsAmount = 0;
+    if (payForm.payment_type === "day_rate" && payForm.days && payForm.rate) {
+      gross = parseFloat(payForm.days) * parseFloat(payForm.rate);
+    } else if (payForm.payment_type === "hourly" && payForm.hours && payForm.rate) {
+      gross = parseFloat(payForm.hours) * parseFloat(payForm.rate);
+    } else if (payForm.payment_type === "price_work") {
+      // Labour + materials split
+      labourAmount = parseFloat(payForm.labour_amount) || 0;
+      materialsAmount = (payForm.material_items || []).reduce((s, m) => s + (parseFloat(m.amount) || 0), 0);
+      if (labourAmount || materialsAmount) {
+        gross = labourAmount + materialsAmount;
+      }
+    }
+    if (!gross) return;
+    const cisRate = (sub?.cis_rate || 20) / 100;
+    // CIS applies to labour only — not materials
+    const cisBase = (payForm.payment_type === "price_work" && labourAmount > 0) ? labourAmount : gross;
+    const deduction = parseFloat((cisBase * cisRate).toFixed(2));
     const net = parseFloat((gross - deduction).toFixed(2));
     const { data, error } = await supabase.from("subcontractor_payments").insert({
       user_id: user.id, subcontractor_id: payForm.subcontractor_id,
+      job_id: payForm.job_id || null,
       date: payForm.date, gross, deduction, net,
       cis_rate: sub?.cis_rate || 20,
+      payment_type: payForm.payment_type || "price_work",
+      days: parseFloat(payForm.days) || null,
+      hours: parseFloat(payForm.hours) || null,
+      rate: parseFloat(payForm.rate) || null,
+      labour_amount: labourAmount || null,
+      materials_amount: materialsAmount || null,
+      material_items: materialsAmount > 0 ? JSON.stringify(payForm.material_items.filter(m => m.amount)) : null,
       job_ref: payForm.job_ref, description: payForm.description,
       invoice_number: payForm.invoice_number,
       created_at: new Date().toISOString(),
     }).select().single();
-    if (!error && data) { setPayments(p => [data, ...p]); setView("list"); setPayForm({ subcontractor_id: "", date: new Date().toISOString().split("T")[0], gross: "", job_ref: "", description: "", invoice_number: "" }); }
+    if (!error && data) { setPayments(p => [data, ...p]); setView("list"); setSubScanResult(null); setSubScanImage(null); setPayForm({ subcontractor_id: "", job_id: "", date: new Date().toISOString().split("T")[0], payment_type: "price_work", days: "", hours: "", rate: "", gross: "", labour_amount: "", material_items: [{ desc: "", amount: "" }], job_ref: "", description: "", invoice_number: "" }); }
   };
 
   const generateStatement = (sub, month) => {
@@ -14913,6 +15293,11 @@ function SubcontractorsTab({ user, brand }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 18, fontWeight: 700 }}>Subcontractors</div>
         <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => subScanFileRef.current?.click()} style={{ ...S.btn("ghost"), fontSize: 12, color: C.amber }}>📷 Scan Invoice</button>
+          <button onClick={() => subScanUploadRef.current?.click()} style={{ ...S.btn("ghost"), fontSize: 12, color: C.amber }}>📎 Upload Invoice</button>
+          <input ref={subScanFileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleSubInvoiceScan(f); e.target.value = ""; }} />
+          <input ref={subScanUploadRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleSubInvoiceScan(f); e.target.value = ""; }} />
+          <button onClick={() => setView("add_worker")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Worker</button>
           <button onClick={() => setView("add_payment")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Payment</button>
           <button onClick={() => setView("add_sub")} style={S.btn("primary")}>+ Subcontractor</button>
         </div>
@@ -14932,6 +15317,96 @@ function SubcontractorsTab({ user, brand }) {
           </div>
         ))}
       </div>
+
+      {/* Scanning spinner */}
+      {scanning && (
+        <div style={{ background: C.amber + "18", border: `1px solid ${C.amber}44`, borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 16, height: 16, border: `2px solid ${C.amber}`, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+          <span style={{ color: C.amber, fontSize: 13 }}>Reading invoice...</span>
+        </div>
+      )}
+
+      {scanError && (
+        <div style={{ background: "#ef444418", border: "1px solid #ef444444", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#ef4444", display: "flex", justifyContent: "space-between" }}>
+          {scanError}
+          <button onClick={() => setScanError("")} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}>×</button>
+        </div>
+      )}
+
+      {/* Scanned invoice review banner */}
+      {subScanResult && !scanning && (
+        <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.green }}>✓ Invoice scanned — payment form pre-filled</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{subScanResult.subcontractor_name || "Unknown"} · {subScanResult.invoice_number || "No invoice number"} · £{(subScanResult.gross_total || 0).toFixed(2)}</div>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => setView("add_payment")} style={{ ...S.btn("primary"), fontSize: 11 }}>Review & Save</button>
+            <button onClick={() => { setSubScanResult(null); setSubScanImage(null); }} style={{ ...S.btn("ghost"), fontSize: 11 }}>×</button>
+          </div>
+        </div>
+      )}
+
+      {/* Workers Section */}
+      {workers.length > 0 && (
+        <div style={{ ...S.card }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Workers</div>
+            <button onClick={() => setView("add_worker")} style={{ ...S.btn("ghost"), fontSize: 11 }}>+ Add</button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {workers.map(w => {
+              const wDocs = workerDocs.filter(d => d.worker_id === w.id);
+              const today = new Date().toISOString().slice(0,10);
+              const expiredDocs = wDocs.filter(d => d.expiry_date && d.expiry_date < today);
+              const soonDocs = wDocs.filter(d => d.expiry_date && d.expiry_date >= today && d.expiry_date <= new Date(Date.now()+30*86400000).toISOString().slice(0,10));
+              return (
+                <div key={w.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 12px", border: `1px solid ${C.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{w.name}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                        {w.role && `${w.role} · `}
+                        <span style={{ color: w.type === "employed" ? C.green : C.amber }}>{w.type === "employed" ? "Employed" : "Subcontractor"}</span>
+                        {w.utr && ` · UTR: ${w.utr}`}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right", fontSize: 11, color: C.muted }}>
+                      {w.day_rate > 0 && <div>£{w.day_rate}/day</div>}
+                      {w.hourly_rate > 0 && <div>£{w.hourly_rate}/hr</div>}
+                    </div>
+                  </div>
+                  {/* Cert alerts */}
+                  {(expiredDocs.length > 0 || soonDocs.length > 0) && (
+                    <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {expiredDocs.map(d => <span key={d.id} style={{ fontSize: 10, background: "#ef444422", color: "#ef4444", borderRadius: 4, padding: "2px 6px" }}>⚠ {d.doc_type.replace(/_/g," ").toUpperCase()} expired</span>)}
+                      {soonDocs.map(d => <span key={d.id} style={{ fontSize: 10, background: C.amber+"22", color: C.amber, borderRadius: 4, padding: "2px 6px" }}>⏰ {d.doc_type.replace(/_/g," ").toUpperCase()} expiring</span>)}
+                    </div>
+                  )}
+                  {/* Docs list */}
+                  {wDocs.length > 0 && (
+                    <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {wDocs.map(d => (
+                        <span key={d.id} style={{ fontSize: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4, padding: "2px 6px", color: C.textDim }}>
+                          {d.doc_type.replace(/_/g," ").toUpperCase()}{d.expiry_date ? ` · ${new Date(d.expiry_date).toLocaleDateString("en-GB")}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <button onClick={() => { setDocForm(f => ({...f, worker_id: w.id})); setView("add_doc"); }} style={{ ...S.btn("ghost"), fontSize: 10, marginTop: 6, padding: "3px 8px" }}>+ Add cert/doc</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {workers.length === 0 && !loading && (
+        <div onClick={() => setView("add_worker")} style={{ background: C.surfaceHigh, border: `2px dashed ${C.border}`, borderRadius: 10, padding: 20, textAlign: "center", cursor: "pointer" }}>
+          <div style={{ fontSize: 13, color: C.muted }}>No workers yet</div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Tap to add a worker or subcontractor</div>
+        </div>
+      )}
 
       {/* Subcontractor cards */}
       {subs.length > 0 && (
@@ -15011,7 +15486,7 @@ function SubcontractorsTab({ user, brand }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Subcontractor</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <VoiceFillButton form={subForm} setForm={setSubForm} fieldDescriptions="name (full name), company (company name), utr (10-digit UTR number), cis_rate (20 for registered, 30 for unregistered, 0 for gross), email, phone" />
+                <VoiceFillButton form={subForm} setForm={setSubForm} fieldDescriptions="name (full name), company (company name), utr (10-digit UTR number), cis_rate (20 for registered, 30 for unregistered, 0 for gross), email, phone, address (business or home address)" />
                 <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
               </div>
             </div>
@@ -15033,6 +15508,7 @@ function SubcontractorsTab({ user, brand }) {
                 <div><label style={S.label}>Email</label><input style={S.input} type="email" value={subForm.email} onChange={e => setSubForm(f => ({ ...f, email: e.target.value }))} placeholder="email@example.com" /></div>
                 <div><label style={S.label}>Phone</label><input style={S.input} value={subForm.phone} onChange={e => setSubForm(f => ({ ...f, phone: e.target.value }))} placeholder="07xxx xxxxxx" /></div>
               </div>
+              <div><label style={S.label}>Address</label><input style={S.input} value={subForm.address} onChange={e => setSubForm(f => ({ ...f, address: e.target.value }))} placeholder="Business or home address" /></div>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
               <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={saveSub} disabled={!subForm.name}>Save</button>
@@ -15047,13 +15523,22 @@ function SubcontractorsTab({ user, brand }) {
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setView("list")}>
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Log Payment</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>Log Payment{subScanResult ? " — Invoice Scanned ✓" : ""}</div>
+                {subScanResult && <div style={{ fontSize: 11, color: C.green, marginTop: 2 }}>Data pre-filled from invoice scan — review and confirm</div>}
+              </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={payForm} setForm={setPayForm} fieldDescriptions="date (YYYY-MM-DD), gross (gross amount in pounds), invoice_number (their invoice ref), job_ref (job reference), description (work description)" />
                 <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {/* Scanned invoice thumbnail */}
+              {subScanImage && (
+                <div style={{ marginBottom: 4 }}>
+                  <img src={subScanImage} alt="Scanned invoice" style={{ width: "100%", maxHeight: 120, objectFit: "contain", borderRadius: 6, border: `1px solid ${C.border}` }} />
+                </div>
+              )}
               <div>
                 <label style={S.label}>Subcontractor</label>
                 <select style={S.input} value={payForm.subcontractor_id} onChange={e => setPayForm(f => ({ ...f, subcontractor_id: e.target.value }))}>
@@ -15065,24 +15550,107 @@ function SubcontractorsTab({ user, brand }) {
                 <div><label style={S.label}>Date</label><input style={S.input} type="date" value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value }))} /></div>
                 <div><label style={S.label}>Invoice Number</label><input style={S.input} value={payForm.invoice_number} onChange={e => setPayForm(f => ({ ...f, invoice_number: e.target.value }))} placeholder="Their invoice ref" /></div>
               </div>
+              {/* Payment Type Selector */}
               <div>
-                <label style={S.label}>Gross Amount (£)</label>
-                <input style={S.input} type="number" step="0.01" value={payForm.gross} onChange={e => setPayForm(f => ({ ...f, gross: e.target.value }))} placeholder="0.00" />
+                <label style={S.label}>Payment Type</label>
+                <select style={S.input} value={payForm.payment_type} onChange={e => setPayForm(f => ({ ...f, payment_type: e.target.value, days: "", hours: "", rate: "", gross: "" }))}>
+                  <option value="price_work">Price Work (fixed amount)</option>
+                  <option value="day_rate">Day Rate</option>
+                  <option value="hourly">Hourly</option>
+                </select>
               </div>
-              {payForm.gross && payForm.subcontractor_id && (() => {
+              {payForm.payment_type === "day_rate" && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Number of Days</label><input style={S.input} type="number" step="0.5" value={payForm.days} onChange={e => setPayForm(f => ({ ...f, days: e.target.value }))} placeholder="e.g. 5" /></div>
+                  <div><label style={S.label}>Day Rate (£)</label><input style={S.input} type="number" step="0.01" value={payForm.rate} onChange={e => setPayForm(f => ({ ...f, rate: e.target.value }))} placeholder="e.g. 200" /></div>
+                </div>
+              )}
+              {payForm.payment_type === "hourly" && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Hours</label><input style={S.input} type="number" step="0.5" value={payForm.hours} onChange={e => setPayForm(f => ({ ...f, hours: e.target.value }))} placeholder="e.g. 40" /></div>
+                  <div><label style={S.label}>Hourly Rate (£)</label><input style={S.input} type="number" step="0.01" value={payForm.rate} onChange={e => setPayForm(f => ({ ...f, rate: e.target.value }))} placeholder="e.g. 25" /></div>
+                </div>
+              )}
+              {payForm.payment_type === "price_work" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {/* Labour */}
+                  <div><label style={S.label}>Labour (£)</label><input style={S.input} type="number" step="0.01" value={payForm.labour_amount} onChange={e => setPayForm(f => ({ ...f, labour_amount: e.target.value }))} placeholder="e.g. 1500.00" /></div>
+                  {/* Materials */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <label style={S.label}>Materials <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
+                      <button onClick={() => setPayForm(f => ({ ...f, material_items: [...(f.material_items || []), { desc: "", amount: "" }] }))} style={{ ...S.btn("ghost"), fontSize: 11, padding: "2px 8px" }}>+ Add</button>
+                    </div>
+                    {(payForm.material_items || []).map((item, idx) => (
+                      <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
+                        <input style={{ ...S.input, flex: 1 }} placeholder="e.g. Boiler unit" value={item.desc} onChange={e => setPayForm(f => ({ ...f, material_items: f.material_items.map((m,i) => i===idx ? {...m, desc: e.target.value} : m) }))} />
+                        <input style={{ ...S.input, width: 90, flexShrink: 0 }} type="number" placeholder="£" value={item.amount} onChange={e => setPayForm(f => ({ ...f, material_items: f.material_items.map((m,i) => i===idx ? {...m, amount: e.target.value} : m) }))} />
+                        {(payForm.material_items || []).length > 1 && <button onClick={() => setPayForm(f => ({ ...f, material_items: f.material_items.filter((_,i) => i!==idx) }))} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer", fontSize: 16 }}>×</button>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* CIS breakdown - live calculation */}
+              {(() => {
                 const sub = subs.find(s => s.id === payForm.subcontractor_id);
-                const gross = parseFloat(payForm.gross || 0);
-                const rate = (sub?.cis_rate || 20) / 100;
-                const ded = parseFloat((gross * rate).toFixed(2));
-                const net = gross - ded;
+                if (!sub) return null;
+                let calcLabour = 0, calcMats = 0, calcGross = 0;
+                if (payForm.payment_type === "day_rate" && payForm.days && payForm.rate) {
+                  calcGross = parseFloat(payForm.days) * parseFloat(payForm.rate);
+                  calcLabour = calcGross;
+                } else if (payForm.payment_type === "hourly" && payForm.hours && payForm.rate) {
+                  calcGross = parseFloat(payForm.hours) * parseFloat(payForm.rate);
+                  calcLabour = calcGross;
+                } else if (payForm.payment_type === "price_work") {
+                  calcLabour = parseFloat(payForm.labour_amount) || 0;
+                  calcMats = (payForm.material_items || []).reduce((s, m) => s + (parseFloat(m.amount) || 0), 0);
+                  calcGross = calcLabour + calcMats;
+                }
+                if (!calcGross) return null;
+                const cisRate = (sub.cis_rate || 20) / 100;
+                const cisBase = calcLabour > 0 ? calcLabour : calcGross;
+                const ded = parseFloat((cisBase * cisRate).toFixed(2));
+                const net = calcGross - ded;
                 return (
-                  <div style={{ background: C.amber + "11", border: `1px solid ${C.amber}33`, borderRadius: 8, padding: "10px 12px", fontSize: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.muted }}>CIS deduction ({sub?.cis_rate || 20}%)</span><span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>£{ded.toFixed(2)}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}><span style={{ color: C.muted }}>Net payment to subcontractor</span><span style={{ color: C.green, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>£{net.toFixed(2)}</span></div>
+                  <div style={{ background: C.amber + "11", border: `1px solid ${C.amber}33`, borderRadius: 8, padding: "10px 12px" }}>
+                    {calcMats > 0 && (
+                      <>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                          <span style={{ color: C.muted }}>Labour (CIS applies)</span>
+                          <span style={{ fontFamily: "'DM Mono',monospace" }}>£{calcLabour.toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6, paddingBottom: 6, borderBottom: `1px solid ${C.amber}22` }}>
+                          <span style={{ color: C.muted }}>Materials (no CIS)</span>
+                          <span style={{ fontFamily: "'DM Mono',monospace" }}>£{calcMats.toFixed(2)}</span>
+                        </div>
+                      </>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                      <span style={{ color: C.muted }}>Gross total</span>
+                      <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 600 }}>£{calcGross.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginTop: 4 }}>
+                      <span style={{ color: C.muted }}>CIS {sub.cis_rate || 20}%{calcMats > 0 ? " (on labour only)" : ""}</span>
+                      <span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>-£{ded.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.amber}33` }}>
+                      <span>Net to pay</span>
+                      <span style={{ color: C.green, fontFamily: "'DM Mono',monospace" }}>£{net.toFixed(2)}</span>
+                    </div>
+                    {payForm.payment_type === "day_rate" && payForm.days && <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{payForm.days} days × £{payForm.rate}/day</div>}
+                    {payForm.payment_type === "hourly" && payForm.hours && <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{payForm.hours} hrs × £{payForm.rate}/hr</div>}
                   </div>
                 );
               })()}
-              <div><label style={S.label}>Job Reference</label><input style={S.input} value={payForm.job_ref} onChange={e => setPayForm(f => ({ ...f, job_ref: e.target.value }))} placeholder="e.g. Kitchen extension" /></div>
+              <div>
+                <label style={S.label}>Link to Job Card</label>
+                <select style={S.input} value={payForm.job_id} onChange={e => setPayForm(f => ({ ...f, job_id: e.target.value }))}>
+                  <option value="">No job linked</option>
+                  {jobs.map(j => <option key={j.id} value={j.id}>{j.customer} — {j.title || j.type}{j.address ? ` · ${j.address.split(",")[0]}` : ""}</option>)}
+                </select>
+              </div>
+              <div><label style={S.label}>Invoice Reference</label><input style={S.input} value={payForm.job_ref} onChange={e => setPayForm(f => ({ ...f, job_ref: e.target.value }))} placeholder="e.g. Kitchen extension" /></div>
               <div><label style={S.label}>Description</label><input style={S.input} value={payForm.description} onChange={e => setPayForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. First fix electrical" /></div>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
@@ -15092,6 +15660,111 @@ function SubcontractorsTab({ user, brand }) {
           </div>
         </div>
       )}
+      {/* Add Worker Modal */}
+      {view === "add_worker" && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 60, zIndex: 1000 }} onClick={() => setView("list")}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 20, maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Worker</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <VoiceFillButton form={workerForm} setForm={setWorkerForm} fieldDescriptions="name (full name), type (subcontractor or employed), role (trade or job title), day_rate (daily rate in pounds), hourly_rate (hourly rate), utr (UTR number), email, phone" />
+                <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>×</button>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div><label style={S.label}>Name</label><input style={S.input} value={workerForm.name} onChange={e => setWorkerForm(f => ({...f, name: e.target.value}))} placeholder="Full name" /></div>
+              <div style={S.grid2}>
+                <div>
+                  <label style={S.label}>Type</label>
+                  <select style={S.input} value={workerForm.type} onChange={e => setWorkerForm(f => ({...f, type: e.target.value}))}>
+                    <option value="subcontractor">Subcontractor (CIS)</option>
+                    <option value="employed">Employed (PAYE)</option>
+                  </select>
+                </div>
+                <div><label style={S.label}>Role / Trade</label><input style={S.input} value={workerForm.role} onChange={e => setWorkerForm(f => ({...f, role: e.target.value}))} placeholder="e.g. Electrician" /></div>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Day Rate (£)</label><input style={S.input} type="number" value={workerForm.day_rate} onChange={e => setWorkerForm(f => ({...f, day_rate: e.target.value}))} placeholder="0.00" /></div>
+                <div><label style={S.label}>Hourly Rate (£)</label><input style={S.input} type="number" value={workerForm.hourly_rate} onChange={e => setWorkerForm(f => ({...f, hourly_rate: e.target.value}))} placeholder="0.00" /></div>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Email</label><input style={S.input} type="email" value={workerForm.email} onChange={e => setWorkerForm(f => ({...f, email: e.target.value}))} /></div>
+                <div><label style={S.label}>Phone</label><input style={S.input} value={workerForm.phone} onChange={e => setWorkerForm(f => ({...f, phone: e.target.value}))} /></div>
+              </div>
+              <div><label style={S.label}>Address</label><input style={S.input} value={workerForm.address || ""} onChange={e => setWorkerForm(f => ({...f, address: e.target.value}))} placeholder="Business or home address" /></div>
+              {workerForm.type === "subcontractor" && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>UTR Number</label><input style={S.input} value={workerForm.utr} onChange={e => setWorkerForm(f => ({...f, utr: e.target.value}))} /></div>
+                  <div>
+                    <label style={S.label}>CIS Rate</label>
+                    <select style={S.input} value={workerForm.cis_rate} onChange={e => setWorkerForm(f => ({...f, cis_rate: e.target.value}))}>
+                      <option value={20}>20% — Registered</option>
+                      <option value={30}>30% — Unregistered</option>
+                      <option value={0}>0% — Gross</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              {workerForm.type === "employed" && (
+                <div><label style={S.label}>NI Number</label><input style={S.input} value={workerForm.ni_number} onChange={e => setWorkerForm(f => ({...f, ni_number: e.target.value}))} placeholder="e.g. AB123456C" /></div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={saveWorker} disabled={!workerForm.name}>Save Worker</button>
+              <button style={S.btn("ghost")} onClick={() => setView("list")}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Document Modal */}
+      {view === "add_doc" && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 60, zIndex: 1000 }} onClick={() => setView("list")}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Certificate / Document</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <VoiceFillButton form={docForm} setForm={setDocForm} fieldDescriptions="doc_type (cscs, gas_safe, public_liability, employers_liability, driving_licence, right_to_work, other), doc_number, issued_date (YYYY-MM-DD), expiry_date (YYYY-MM-DD), notes" />
+                <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>×</button>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={S.label}>Worker</label>
+                <select style={S.input} value={docForm.worker_id} onChange={e => setDocForm(f => ({...f, worker_id: e.target.value}))}>
+                  <option value="">Select worker...</option>
+                  {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+              <div style={S.grid2}>
+                <div>
+                  <label style={S.label}>Document Type</label>
+                  <select style={S.input} value={docForm.doc_type} onChange={e => setDocForm(f => ({...f, doc_type: e.target.value}))}>
+                    <option value="cscs">CSCS Card</option>
+                    <option value="gas_safe">Gas Safe</option>
+                    <option value="public_liability">Public Liability Insurance</option>
+                    <option value="employers_liability">Employers Liability Insurance</option>
+                    <option value="driving_licence">Driving Licence</option>
+                    <option value="right_to_work">Right to Work</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div><label style={S.label}>Reference / Number</label><input style={S.input} value={docForm.doc_number} onChange={e => setDocForm(f => ({...f, doc_number: e.target.value}))} placeholder="Card or cert number" /></div>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Issue Date</label><input style={S.input} type="date" value={docForm.issued_date} onChange={e => setDocForm(f => ({...f, issued_date: e.target.value}))} /></div>
+                <div><label style={S.label}>Expiry Date</label><input style={S.input} type="date" value={docForm.expiry_date} onChange={e => setDocForm(f => ({...f, expiry_date: e.target.value}))} /></div>
+              </div>
+              <div><label style={S.label}>Notes</label><input style={S.input} value={docForm.notes} onChange={e => setDocForm(f => ({...f, notes: e.target.value}))} placeholder="Optional" /></div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={saveWorkerDoc} disabled={!docForm.worker_id || !docForm.doc_type}>Save Document</button>
+              <button style={S.btn("ghost")} onClick={() => setView("list")}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
