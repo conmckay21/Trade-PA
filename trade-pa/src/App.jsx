@@ -3947,8 +3947,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     window.speechSynthesis.speak(utt);
   };
 
+  const lastSpokenRef = React.useRef({ text: "", time: 0 });
+
   const speak = async (text) => {
     if (!ttsEnabledRef.current) return;
+    // Dedup: don't repeat the same text if spoken within the last 3 seconds
+    const now = Date.now();
+    if (text === lastSpokenRef.current.text && now - lastSpokenRef.current.time < 3000) return;
+    lastSpokenRef.current = { text, time: now };
     if (ttsAudioRef.current) { ttsAudioRef.current.pause(); ttsAudioRef.current = null; }
     window.speechSynthesis?.cancel();
     const clean = text.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
@@ -4313,13 +4319,29 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       },
     },
     {
+      name: "update_material",
+      description: "Update an existing material — change unit price, quantity, or supplier. Use when user says 'update the price on blocks', 'fix the unit price', 'change quantity'. Always include job if known.",
+      input_schema: {
+        type: "object",
+        properties: {
+          item: { type: "string", description: "Material name to find" },
+          job: { type: "string", description: "Job name to narrow to the right entry" },
+          unit_price: { type: "number", description: "New unit price in £" },
+          qty: { type: "number", description: "New quantity" },
+          supplier: { type: "string", description: "New supplier name" },
+        },
+        required: ["item"],
+      },
+    },
+    {
       name: "delete_material",
       description: "Delete material(s) from the list. When user says delete duplicates or 'delete 3 of the blocks', use count to delete that many. Use count: 999 to delete ALL matching entries. Default count: 1.",
       input_schema: {
         type: "object",
         properties: {
           item: { type: "string", description: "Material item name to match" },
-          count: { type: "number", description: "How many to delete. Use 999 to delete ALL matching. Default 1." },
+          job: { type: "string", description: "Job name — always include if known to avoid deleting from wrong job" },
+          count: { type: "number", description: "How many to delete — default is 1. Only set higher if user explicitly asks to delete multiple. NEVER use 999 matching. Default 1." },
         },
         required: ["item"],
       },
@@ -4790,17 +4812,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             job_id: input.job_id || null, status: "to_order",
             created_at: new Date().toISOString(),
           };
-          // Dedup: block only if same item AND same job already exists today
-          // Different job = legitimate separate entry (e.g. Blocks for Lisa AND Blocks for Glenn)
-          const recentMats = (materials || []).filter(m => {
-            const sameItem = m.item?.toLowerCase() === input.item.toLowerCase();
-            const sameJob = (m.job || "").toLowerCase() === (input.job || "").toLowerCase() &&
-                            (m.job_id || null) === (matPayload.job_id || null);
-            const today = matPayload.created_at.slice(0, 10);
-            const sameDay = !m.created_at || m.created_at.slice(0, 10) === today;
-            return sameItem && sameJob && sameDay;
-          });
-          if (recentMats.length >= 1 && !input.force) return ""; // Silent dedup — same item+job already added today
+          // Dedup: only block if same item was added in the LAST 60 SECONDS (catches double-fire)
+          // Tradespeople buy same material multiple times for same job — don't block by job+day
+          const sixtySecsAgo = new Date(Date.now() - 60000).toISOString();
+          const veryRecentMats = (materials || []).filter(m =>
+            m.item?.toLowerCase() === input.item.toLowerCase() &&
+            m.created_at && m.created_at > sixtySecsAgo
+          );
+          if (veryRecentMats.length >= 1 && !input.force) return ""; // Silent dedup — just created in last 60s
           const { data: newMat, error: matErr } = await supabase.from("materials").insert(matPayload).select().single();
           if (matErr) return `Failed to add material: ${matErr.message}`;
           // Append to React state using setMaterials prop (always available, no companyId needed for appends)
@@ -4844,30 +4863,41 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Customers" });
           return `Customer ${match.name} deleted.`;
         }
+        case "update_material": {
+          // Find the material - filter by job if given to target the right entry
+          let updateQuery = supabase.from("materials")
+            .select("id, item, job, unit_price, qty, supplier").eq("user_id", user?.id)
+            .ilike("item", `%${input.item}%`).order("created_at", { ascending: false });
+          if (input.job) updateQuery = updateQuery.ilike("job", `%${input.job}%`);
+          const { data: foundMats } = await updateQuery;
+          if (!foundMats?.length) return `Couldn't find "${input.item}"${input.job ? ` on ${input.job}` : ""}. Check the Materials tab.`;
+          const mat = foundMats[0];
+          const updates = {};
+          if (input.unit_price !== undefined) updates.unit_price = parseFloat(input.unit_price);
+          if (input.qty !== undefined) updates.qty = parseInt(input.qty);
+          if (input.supplier !== undefined) updates.supplier = input.supplier;
+          if (!Object.keys(updates).length) return "Nothing to update — provide unit_price, qty, or supplier.";
+          const { error: updErr } = await supabase.from("materials").update(updates).eq("id", mat.id);
+          if (updErr) return `Failed to update: ${updErr.message}`;
+          // Sync React state
+          setMaterialsRaw(prev => (prev || []).map(m => m.id === mat.id ? { ...m, unitPrice: updates.unit_price ?? m.unitPrice, qty: updates.qty ?? m.qty, supplier: updates.supplier ?? m.supplier } : m));
+          const changeDesc = Object.entries(updates).map(([k,v]) => `${k.replace("_"," ")} → ${k === "unit_price" ? "£" : ""}${v}`).join(", ");
+          return `Updated ${mat.item}${mat.job ? ` (${mat.job})` : ""}: ${changeDesc}.`;
+        }
         case "delete_material": {
-          const term = input.item.toLowerCase();
           const count = input.count || 1;
-          // Query Supabase directly — avoids stale closure and race conditions from setMaterials
-          const { data: allMats } = await supabase.from("materials")
-            .select("id, item").eq("user_id", user?.id)
+          // Build query — always filter by job if provided to avoid deleting across all jobs
+          let matQuery = supabase.from("materials")
+            .select("id, item, job").eq("user_id", user?.id)
             .ilike("item", `%${input.item}%`)
-            .order("created_at", { ascending: true });
-          if (!allMats?.length) {
-            // Try React state as fallback
-            const { data: userMats } = await supabase.from("materials")
-              .select("id, item").eq("user_id", user?.id)
-              .ilike("item", `%${input.item}%`)
-              .order("created_at", { ascending: true });
-            if (!userMats?.length) return `Couldn't find any material matching "${input.item}".`;
-            const toDelete = count >= 999 ? userMats : userMats.slice(0, count);
-            await Promise.all(toDelete.map(m => supabase.from("materials").delete().eq("id", m.id)));
-            // Sync React state
-            const deletedIds = new Set(toDelete.map(m => m.id));
-            setMaterials(prev => (prev || []).filter(m => !deletedIds.has(m.id)));
-            setLastAction({ type: "material", label: `Deleted: ${input.item}`, view: "Materials" });
-            return `Deleted ${toDelete.length} "${toDelete[0].item}" entr${toDelete.length !== 1 ? "ies" : "y"}.`;
+            .order("created_at", { ascending: false });
+          if (input.job || input.job_title) {
+            matQuery = matQuery.ilike("job", `%${input.job || input.job_title}%`);
           }
-          const toDelete = count >= 999 ? allMats : allMats.slice(0, count);
+          const { data: allMats } = await matQuery;
+          if (!allMats?.length) return `Couldn't find "${input.item}"${input.job ? ` on ${input.job}` : ""}. Check the Materials tab.`;
+          // SAFETY: never delete more than count (default 1)
+          const toDelete = allMats.slice(0, count);
           const { error: delErr } = await supabase.from("materials").delete().in("id", toDelete.map(m => m.id));
           if (delErr) return `Failed to delete: ${delErr.message}`;
           // Sync React state without triggering the full DELETE+INSERT wrapper
