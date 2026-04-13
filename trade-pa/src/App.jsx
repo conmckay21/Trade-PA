@@ -5690,7 +5690,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             user_id: user?.id,
             name: input.name, company: input.company || "", utr: input.utr || "",
             cis_rate: parseInt(input.cis_rate) || 20, email: input.email || "", phone: input.phone || "",
-            address: input.address || "",
             created_at: new Date().toISOString(),
           }).select().single();
           if (error) return `Failed to add subcontractor: ${error.message}`;
@@ -6087,10 +6086,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           </div>`;
           try {
             const chasePdfHtml = buildInvoiceHTML(brand, {
-              ...inv, id: inv.id, customer: inv.customer,
-              amount: inv.amount, grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
-              due: inv.due, lineItems: inv.line_items || inv.lineItems || [],
-              isQuote: false, vatEnabled: inv.vat_enabled || inv.vatEnabled,
+              ...inv,
+              grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
+              lineItems: inv.line_items || inv.lineItems || [],
+              vatEnabled: inv.vat_enabled || inv.vatEnabled,
               paymentMethod: inv.payment_method || inv.paymentMethod || "both",
             });
             const chaseResult = await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfHtml, `Invoice-${inv.id}.pdf`);
