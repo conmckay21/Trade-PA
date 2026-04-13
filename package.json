@@ -5,6 +5,8 @@
     "stripe": "^14.0.0",
     "twilio": "^4.0.0",
     "web-push": "^3.6.0",
-    "@vercel/functions": "^1.0.0"
+    "@vercel/functions": "^1.0.0",
+    "@sparticuz/chromium": "^123.0.0",
+    "puppeteer-core": "^22.0.0"
   }
 }
