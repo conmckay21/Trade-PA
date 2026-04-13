@@ -4710,6 +4710,34 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   };
 
   const executeTool = async (name, input) => {
+    // ─── Shared job lookup helper — must be before switch to avoid TDZ ───────
+    const findJob = async (customer, jobTitle, actionLabel = "action") => {
+      if (!customer && !jobTitle) return { error: "No customer or job title provided." };
+      let q = supabase.from("job_cards")
+        .select("id,title,type,customer,status,address,value")
+        .eq("user_id", user?.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (customer) q = q.ilike("customer", `%${customer}%`);
+      if (jobTitle) q = q.or(`title.ilike.%${jobTitle}%,type.ilike.%${jobTitle}%`);
+      const { data: matches } = await q;
+      if (!matches?.length) return { error: `No job card found for "${customer || jobTitle}". Check the Jobs tab.` };
+      if (matches.length === 1) return { job: matches[0] };
+      if (customer && jobTitle) {
+        const exact = matches.find(j =>
+          (j.customer || "").toLowerCase().includes(customer.toLowerCase()) &&
+          (j.title || j.type || "").toLowerCase().includes(jobTitle.toLowerCase())
+        );
+        if (exact) return { job: exact };
+      }
+      const opts = matches.map(j => {
+        const addr = (j.address || "").split(",")[0].trim();
+        const val = j.value ? ` £${j.value}` : "";
+        return `"${j.title || j.type || "Job"}"${addr ? ` at ${addr}` : ""}${val} (${j.status || "active"})`;
+      }).join("; ");
+      return { error: `Multiple jobs found: ${opts}. Which job should I ${actionLabel}?` };
+    };
+    // ─────────────────────────────────────────────────────────────────────────
     try {
       switch (name) {
         case "create_customer": {
@@ -5082,43 +5110,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           pendingWidgetRef.current = { type: "invoice_list", data: list.slice(0, 10) };
           return `Here are your ${filterLabel}invoices:`;
         }
-        // ─── Shared job lookup helper ─────────────────────────────────────────
-        // Always searches by BOTH customer AND job title when both are provided.
-        // Falls back to listing options if ambiguous.
-        const findJob = async (customer, jobTitle, actionLabel = "action") => {
-          if (!customer && !jobTitle) return { error: "No customer or job title provided." };
-          let q = supabase.from("job_cards")
-            .select("id,title,type,customer,status,address,value")
-            .eq("user_id", user?.id)
-            .order("created_at", { ascending: false })
-            .limit(20);
-          // Filter by customer if provided
-          if (customer) q = q.ilike("customer", `%${customer}%`);
-          // Filter by title in DB if provided — narrows at query level, not just in JS
-          if (jobTitle) q = q.or(`title.ilike.%${jobTitle}%,type.ilike.%${jobTitle}%`);
-          const { data: matches } = await q;
-          if (!matches?.length) {
-            return { error: `No job card found for "${customer || jobTitle}". Check the Jobs tab.` };
-          }
-          if (matches.length === 1) return { job: matches[0] };
-          // Multiple results — try to narrow by both customer AND title together
-          if (customer && jobTitle) {
-            const custLower = customer.toLowerCase();
-            const titleLower = jobTitle.toLowerCase();
-            const exact = matches.find(j =>
-              (j.customer || "").toLowerCase().includes(custLower) &&
-              ((j.title || j.type || "").toLowerCase().includes(titleLower))
-            );
-            if (exact) return { job: exact };
-          }
-          // Still ambiguous — list with address and value so tradesperson can identify by site and scale
-          const opts = matches.map(j => {
-            const addr = (j.address || "").split(",")[0].trim();
-            const val = j.value ? ` £${j.value}` : "";
-            return `"${j.title || j.type || "Job"}"${addr ? ` at ${addr}` : ""}${val} (${j.status || "active"})`;
-          }).join("; ");
-          return { error: `Multiple jobs found: ${opts}. Which job should I ${actionLabel}?` };
-        };
         // ─────────────────────────────────────────────────────────────────────
 
         case "list_jobs": {
