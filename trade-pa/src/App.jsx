@@ -3962,7 +3962,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       speechEnded = true;
       clearTimeout(safetyTimer);
       ttsAudioRef.current = null;
-      if (handsFreeRef.current) restartMicAfterSpeak(1500);
+      if (handsFreeRef.current) restartMicAfterSpeak(600);
     };
 
     const wrappedEnd = () => onSpeechEnd();
