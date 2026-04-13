@@ -4243,7 +4243,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "create_material",
-      description: "Add a material or item to the materials list to order or track. Always include unit_price if the user mentions a cost or price.",
+      description: "Add a material or item to the materials list. ALWAYS include customer and job if mentioned — this links the material to the job card so it shows in job costs and profit. Always include unit_price if a price is stated.",
       input_schema: {
         type: "object",
         properties: {
@@ -4251,8 +4251,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           qty: { type: "number", description: "Quantity needed" },
           unit_price: { type: "number", description: "Cost per unit in £ — always include if user states a price or cost" },
           supplier: { type: "string", description: "Preferred supplier" },
-          job: { type: "string", description: "Which job this is for" },
-          job_title: { type: "string", description: "Job title to help identify the right job for repeat customers" },
+          customer: { type: "string", description: "Customer name — include to help find the right job card" },
+          job: { type: "string", description: "Job name or description this material is for" },
+          job_title: { type: "string", description: "Job title — include to target the right job for repeat customers" },
         },
         required: ["item"],
       },
@@ -4803,13 +4804,40 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Reminder set: "${input.text}" — ${label}.`;
         }
         case "create_material": {
+          // Look up the real job_id from the job name — materials won't show on the job card without it
+          let resolvedJobId = input.job_id || null;
+          let resolvedJobName = input.job || input.job_title || "";
+          if (!resolvedJobId && resolvedJobName) {
+            // Search job_cards by customer name and/or job title
+            const jobSearch = input.customer || resolvedJobName;
+            let jq = supabase.from("job_cards").select("id,title,type,customer")
+              .eq("user_id", user?.id).order("created_at", { ascending: false }).limit(10);
+            // Try customer name first if provided, otherwise search job title
+            if (input.customer) {
+              jq = jq.ilike("customer", `%${input.customer}%`);
+            } else {
+              jq = jq.or(`title.ilike.%${resolvedJobName}%,type.ilike.%${resolvedJobName}%,customer.ilike.%${resolvedJobName}%`);
+            }
+            const { data: jobMatches } = await jq;
+            if (jobMatches?.length) {
+              // If job_title given, try to narrow further
+              const titleHint = (input.job_title || resolvedJobName).toLowerCase();
+              const match = jobMatches.find(j =>
+                (j.title || j.type || "").toLowerCase().includes(titleHint)
+              ) || jobMatches[0];
+              resolvedJobId = match.id;
+              resolvedJobName = `${match.customer} - ${match.title || match.type || ""}`.trim();
+            }
+          }
           const matPayload = {
             user_id: user?.id,
             company_id: companyId || null,
             item: input.item, qty: parseInt(input.qty) || 1,
             unit_price: parseFloat(input.unit_price || input.price || 0) || 0,
-            supplier: input.supplier || "", job: input.job || "",
-            job_id: input.job_id || null, status: "to_order",
+            supplier: input.supplier || "",
+            job: resolvedJobName,
+            job_id: resolvedJobId,
+            status: "to_order",
             created_at: new Date().toISOString(),
           };
           // Dedup: only block if same item was added in the LAST 60 SECONDS (catches double-fire)
