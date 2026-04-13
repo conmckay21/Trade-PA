@@ -4386,12 +4386,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "update_material_status",
-      description: "Update the status of a material — mark as ordered or collected. Use when the user says materials have been ordered or collected/arrived.",
+      description: "Update the status of a material. ALWAYS include job if mentioned — prevents updating materials across all jobs when customer has multiple jobs.",
       input_schema: {
         type: "object",
         properties: {
           item: { type: "string", description: "Material item name to match" },
           status: { type: "string", enum: ["to_order", "ordered", "collected"], description: "New status" },
+          job: { type: "string", description: "Job name — always include if mentioned to target the right job" },
+          job_title: { type: "string", description: "Job title — alternative to job" },
         },
         required: ["item", "status"],
       },
@@ -4807,26 +4809,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           // Look up the real job_id from the job name — materials won't show on the job card without it
           let resolvedJobId = input.job_id || null;
           let resolvedJobName = input.job || input.job_title || "";
-          if (!resolvedJobId && resolvedJobName) {
-            // Search job_cards by customer name and/or job title
-            const jobSearch = input.customer || resolvedJobName;
-            let jq = supabase.from("job_cards").select("id,title,type,customer")
-              .eq("user_id", user?.id).order("created_at", { ascending: false }).limit(10);
-            // Try customer name first if provided, otherwise search job title
-            if (input.customer) {
-              jq = jq.ilike("customer", `%${input.customer}%`);
-            } else {
-              jq = jq.or(`title.ilike.%${resolvedJobName}%,type.ilike.%${resolvedJobName}%,customer.ilike.%${resolvedJobName}%`);
-            }
-            const { data: jobMatches } = await jq;
-            if (jobMatches?.length) {
-              // If job_title given, try to narrow further
-              const titleHint = (input.job_title || resolvedJobName).toLowerCase();
-              const match = jobMatches.find(j =>
-                (j.title || j.type || "").toLowerCase().includes(titleHint)
-              ) || jobMatches[0];
-              resolvedJobId = match.id;
-              resolvedJobName = `${match.customer} - ${match.title || match.type || ""}`.trim();
+          if (!resolvedJobId && (input.customer || resolvedJobName)) {
+            const { job: matJobMatch } = await findJob(
+              input.customer || resolvedJobName,
+              input.job_title || (input.customer ? resolvedJobName : null)
+            );
+            if (matJobMatch) {
+              resolvedJobId = matJobMatch.id;
+              resolvedJobName = `${matJobMatch.customer} - ${matJobMatch.title || matJobMatch.type || ""}`.trim();
             }
           }
           const matPayload = {
@@ -4973,20 +4963,27 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "update_material_status": {
           const term = input.item.toLowerCase();
-          // Query Supabase directly to avoid stale closure
-          const { data: matRows } = await supabase.from("materials").select("id, item")
+          // Build query — filter by job if provided to avoid updating across all jobs
+          let statusQuery = supabase.from("materials").select("id, item, job")
             .eq("user_id", user?.id).ilike("item", `%${input.item}%`);
-          if (!matRows?.length) return `Couldn't find a material matching "${input.item}".`;
+          if (input.job || input.job_title) {
+            statusQuery = statusQuery.ilike("job", `%${input.job || input.job_title}%`);
+          }
+          const { data: matRows } = await statusQuery;
+          if (!matRows?.length) return `Couldn't find a material matching "${input.item}"${input.job ? ` on ${input.job}` : ""}.`;
+          // Dedup: if already this status, skip silently
+          const needsUpdate = matRows.filter(m => m.status !== input.status);
+          if (!needsUpdate.length) return "";
           const { error: updateErr } = await supabase.from("materials")
             .update({ status: input.status })
-            .in("id", matRows.map(m => m.id));
+            .in("id", needsUpdate.map(m => m.id));
           if (updateErr) return `Failed to update status: ${updateErr.message}`;
           // Sync React state directly without triggering DELETE+INSERT wrapper
           setMaterialsRaw(prev => (prev || []).map(m =>
             m.item.toLowerCase().includes(term) ? { ...m, status: input.status } : m
           ));
           setLastAction({ type: "material", label: `${input.status}: ${matRows[0].item}`, view: "Materials" });
-          return `${matRows.length > 1 ? matRows.length + " entries" : `"${matRows[0].item}"`} marked as ${input.status}.`;
+          return `${needsUpdate.length > 1 ? needsUpdate.length + " entries" : `"${needsUpdate[0].item}"`} marked as ${input.status}${input.job ? ` on ${input.job}` : ""}.`;
         }
         case "create_job_card": {
           // Check for existing job card to avoid duplicates
@@ -5066,6 +5063,45 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           pendingWidgetRef.current = { type: "invoice_list", data: list.slice(0, 10) };
           return `Here are your ${filterLabel}invoices:`;
         }
+        // ─── Shared job lookup helper ─────────────────────────────────────────
+        // Always searches by BOTH customer AND job title when both are provided.
+        // Falls back to listing options if ambiguous.
+        const findJob = async (customer, jobTitle, actionLabel = "action") => {
+          if (!customer && !jobTitle) return { error: "No customer or job title provided." };
+          let q = supabase.from("job_cards")
+            .select("id,title,type,customer,status,address,value")
+            .eq("user_id", user?.id)
+            .order("created_at", { ascending: false })
+            .limit(20);
+          // Filter by customer if provided
+          if (customer) q = q.ilike("customer", `%${customer}%`);
+          // Filter by title in DB if provided — narrows at query level, not just in JS
+          if (jobTitle) q = q.or(`title.ilike.%${jobTitle}%,type.ilike.%${jobTitle}%`);
+          const { data: matches } = await q;
+          if (!matches?.length) {
+            return { error: `No job card found for "${customer || jobTitle}". Check the Jobs tab.` };
+          }
+          if (matches.length === 1) return { job: matches[0] };
+          // Multiple results — try to narrow by both customer AND title together
+          if (customer && jobTitle) {
+            const custLower = customer.toLowerCase();
+            const titleLower = jobTitle.toLowerCase();
+            const exact = matches.find(j =>
+              (j.customer || "").toLowerCase().includes(custLower) &&
+              ((j.title || j.type || "").toLowerCase().includes(titleLower))
+            );
+            if (exact) return { job: exact };
+          }
+          // Still ambiguous — list with address and value so tradesperson can identify by site and scale
+          const opts = matches.map(j => {
+            const addr = (j.address || "").split(",")[0].trim();
+            const val = j.value ? ` £${j.value}` : "";
+            return `"${j.title || j.type || "Job"}"${addr ? ` at ${addr}` : ""}${val} (${j.status || "active"})`;
+          }).join("; ");
+          return { error: `Multiple jobs found: ${opts}. Which job should I ${actionLabel}?` };
+        };
+        // ─────────────────────────────────────────────────────────────────────
+
         case "list_jobs": {
           const filter = input.filter || "all";
           const { data: jobList } = await supabase.from("job_cards").select("*").eq("user_id", user?.id).order("created_at", { ascending: false }).limit(20);
@@ -5085,7 +5121,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (filter === "ordered") query = query.eq("status", "ordered");
           if (filter === "collected") query = query.eq("status", "collected");
           const { data: freshMats } = await query.limit(50);
-          const list = freshMats || materials || [];
+          // Deduplicate by id — React state can accumulate duplicates across sessions
+          const allMats = freshMats || materials || [];
+          const seenMatIds = new Set();
+          const list = allMats.filter(m => {
+            const id = m.id || m.item + (m.job || "");
+            if (seenMatIds.has(id)) return false;
+            seenMatIds.add(id);
+            return true;
+          });
           if (!list.length) return `No ${filter === "all" ? "" : filter + " "}materials found.`;
           const mapped = list.map(m => ({
             item: m.item || m.name || "",
@@ -5155,19 +5199,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "get_job_full": {
           const term = (input.customer || input.title || "").toLowerCase();
-          const { data: found } = await supabase.from("job_cards")
-            .select("*").eq("user_id", user?.id)
-            .ilike("customer", `%${term || ""}%`)
-            .order("created_at", { ascending: false }).limit(10);
-          if (!found?.length) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
-          let job;
-          if (input.title && found.length > 1) {
-            const tl = input.title.toLowerCase();
-            job = found.find(j => (j.title || j.type || "").toLowerCase().includes(tl)) || found[0];
-          } else if (!input.title && found.length > 1) {
-            const jobList = found.map(j => `"${j.title || j.type || "Job"}" (${j.status || "active"})`).join(", ");
-            return `${found[0].customer} has ${found.length} job cards: ${jobList}. Which one would you like to open?`;
-          } else { job = found[0]; }
+          const { job, error: fullJobErr } = await findJob(input.customer || term, input.title, "open");
+          if (fullJobErr) return fullJobErr;
           let notes = { data: [] }, timeLogs = { data: [] }, materials = { data: [] };
           let drawings = { data: [] }, vos = { data: [] }, docs = { data: [] };
           try {
@@ -5197,20 +5230,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "get_job_profit": {
           const profitTerm = (input.customer || input.title || "").toLowerCase();
-          const { data: profitJobs } = await supabase.from("job_cards")
-            .select("id,title,type,customer,value,status")
-            .eq("user_id", user?.id)
-            .ilike("customer", `%${profitTerm || ""}%`)
-            .order("created_at", { ascending: false }).limit(10);
-          if (!profitJobs?.length) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
-          let pJob;
-          if (input.title && profitJobs.length > 1) {
-            const tl = input.title.toLowerCase();
-            pJob = profitJobs.find(j => (j.title || j.type || "").toLowerCase().includes(tl)) || profitJobs[0];
-          } else if (!input.title && profitJobs.length > 1) {
-            const jobList = profitJobs.map(j => `"${j.title || j.type || "Job"}" (£${j.value || 0})`).join(", ");
-            return `${profitJobs[0].customer} has ${profitJobs.length} job cards: ${jobList}. Which job's profit would you like to see?`;
-          } else { pJob = profitJobs[0]; }
+          const { job: pJob, error: profitJobErr } = await findJob(input.customer || profitTerm, input.title, "calculate profit for");
+          if (profitJobErr) return profitJobErr;
 
           // Fetch core cost data
           const [{ data: tLogs }, { data: mats }, { data: vos }] = await Promise.all([
@@ -5463,16 +5484,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const matIdx = (materials || []).findIndex(m => m.item?.toLowerCase().includes(input.item.toLowerCase()));
           if (matIdx < 0) return `Couldn't find material "${input.item}". Check the Materials tab.`;
           const mat = (materials || [])[matIdx];
-          const { data: jobMatches } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).order("created_at", { ascending: false }).limit(10);
-          if (!jobMatches?.length) return `No job card found for "${input.customer}". Check the Jobs tab.`;
-          let job;
-          if (input.job_title) {
-            const tl = input.job_title.toLowerCase();
-            job = jobMatches.find(j => (j.title || j.type || "").toLowerCase().includes(tl)) || jobMatches[0];
-          } else if (jobMatches.length > 1) {
-            const jobList = jobMatches.map(j => `"${j.title || j.type || "Job"}"`).join(", ");
-            return `${input.customer} has ${jobMatches.length} jobs: ${jobList}. Which job should I assign this material to?`;
-          } else { job = jobMatches[0]; }
+          const { job, error: assignJobErr } = await findJob(input.customer, input.job_title, "assign this material to");
+          if (assignJobErr) return assignJobErr;
           // Update in state by index (not by reference which can fail)
           setMaterials(prev => (prev || []).map((m, i) => i === matIdx ? { ...m, job_id: job.id, job: job.title || job.type || input.customer } : m));
           // Also persist to Supabase if material has an ID
@@ -5483,25 +5496,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `"${mat.item}" linked to ${job.customer}'s job. It will now show in that job's profit breakdown.`;
         }
         case "log_time": {
-          // Find job cards for this customer
-          const { data: timeJobs } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).order("created_at", { ascending: false }).limit(10);
-          if (!timeJobs?.length) return `No job card found for "${input.customer}". Create a job card first, then log time to it.`;
-          
-          let timeJob;
-          if (input.job_title) {
-            // Match by job title if provided
-            const titleLower = input.job_title.toLowerCase();
-            timeJob = timeJobs.find(j =>
-              (j.title || j.type || "").toLowerCase().includes(titleLower) ||
-              titleLower.includes((j.title || j.type || "").toLowerCase().slice(0, 6))
-            ) || timeJobs[0];
-          } else if (timeJobs.length > 1) {
-            // Multiple jobs, no title specified — ask which one
-            const jobList = timeJobs.map(j => `"${j.title || j.type || "Job"}" (${j.status || "active"})`).join(", ");
-            return `${input.customer} has ${timeJobs.length} job cards: ${jobList}. Which job should I log this labour to?`;
-          } else {
-            timeJob = timeJobs[0];
-          }
+          const { job: timeJob, error: timeJobErr } = await findJob(input.customer, input.job_title, "log this labour to");
+          if (timeJobErr) return timeJobErr;
           const today = new Date().toISOString().split("T")[0];
           const type = input.labour_type || "hourly";
           let hours = 0, total = 0;
@@ -5580,16 +5576,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return milesMsg;
         }
         case "add_job_note": {
-          const { data: noteJobs } = await supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user?.id).ilike("customer", `%${input.customer}%`).order("created_at", { ascending: false }).limit(10);
-          if (!noteJobs?.length) return `No job card found for "${input.customer}". Check the Jobs tab.`;
-          let noteJob;
-          if (input.job_title) {
-            const tl = input.job_title.toLowerCase();
-            noteJob = noteJobs.find(j => (j.title || j.type || "").toLowerCase().includes(tl)) || noteJobs[0];
-          } else if (noteJobs.length > 1) {
-            const jobList = noteJobs.map(j => `"${j.title || j.type || "Job"}"`).join(", ");
-            return `${input.customer} has ${noteJobs.length} jobs: ${jobList}. Which one should I add this note to?`;
-          } else { noteJob = noteJobs[0]; }
+          const { job: noteJob, error: noteJobErr } = await findJob(input.customer, input.job_title, "add this note to");
+          if (noteJobErr) return noteJobErr;
           await supabase.from("job_notes").insert({ job_id: noteJob.id, user_id: user?.id, note: input.note, created_at: new Date().toISOString() });
           setLastAction({ type: "job", label: `Note added — ${input.customer}`, view: "Jobs" });
           return `Note added to ${input.customer}'s job: "${input.note.slice(0, 60)}${input.note.length > 60 ? "..." : ""}"`;
@@ -5731,9 +5719,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Here are your subcontractors:`;
         }
         case "add_compliance_cert": {
-          const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type").eq("user_id", user?.id).or(`customer.ilike.%${input.customer||""}%,title.ilike.%${input.job_title||""}%`).order("created_at", { ascending: false }).limit(1);
-          if (!jc?.length) return `Couldn't find a job card for "${input.customer || input.job_title}". Check the Jobs tab.`;
-          const { data, error } = await supabase.from("compliance_docs").insert({
+          const { job: jcMatch, error: dwErr } = await findJob(input.customer, input.job_title, "log daywork to");
+          if (dwErr) return dwErr;
+          const jc = [jcMatch];
+                    const { data, error } = await supabase.from("compliance_docs").insert({
             job_id: jc[0].id, user_id: user?.id,
             doc_type: input.doc_type || "", doc_number: input.doc_number || "",
             issued_date: input.issued_date || new Date().toISOString().slice(0,10),
@@ -5744,9 +5733,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${input.doc_type} certificate added to ${jc[0].customer}'s job card.`;
         }
         case "add_variation_order": {
-          const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type,value").eq("user_id", user?.id).or(`customer.ilike.%${input.customer||""}%,title.ilike.%${input.job_title||""}%`).order("created_at", { ascending: false }).limit(1);
-          if (!jc?.length) return `Couldn't find a job card for "${input.customer || input.job_title}".`;
-          const amount = parseFloat(input.amount) || 0;
+          const { job: jcMatch, error: voErr } = await findJob(input.customer, input.job_title, "add this variation to");
+          if (voErr) return voErr;
+          const jc = [jcMatch];
+                    const amount = parseFloat(input.amount) || 0;
           // Dedup: same job + same description + same amount = duplicate
           const { data: existingVo } = await supabase.from("variation_orders")
             .select("id").eq("job_id", jc[0].id).eq("user_id", user?.id)
@@ -5762,9 +5752,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Variation order added to ${jc[0].customer}'s job — ${input.description} — £${amount.toFixed(2)}.`;
         }
         case "log_daywork": {
-          const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type").eq("user_id", user?.id).or(`customer.ilike.%${input.customer||""}%,title.ilike.%${input.job_title||""}%`).order("created_at", { ascending: false }).limit(1);
-          if (!jc?.length) return `Couldn't find a job card for "${input.customer || input.job_title}".`;
-          const total = (parseFloat(input.hours) || 0) * (parseFloat(input.rate) || 0);
+          const { job: jcMatch, error: certErr } = await findJob(input.customer, input.job_title, "add this certificate to");
+          if (certErr) return certErr;
+          const jc = [jcMatch];
+                    const total = (parseFloat(input.hours) || 0) * (parseFloat(input.rate) || 0);
           const sheetDate = input.date || new Date().toISOString().slice(0,10);
           // Dedup: same job + same date + same total = duplicate
           const { data: existingDw } = await supabase.from("daywork_sheets")
@@ -6629,7 +6620,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           // Track completed actions so system prompt can tell Claude what's been done
           const ACTION_TOOLS = ["log_mileage","log_time","create_material","create_job_card","create_job",
             "create_invoice","create_customer","log_expense","log_cis_statement","add_subcontractor",
-            "log_subcontractor_payment","add_compliance_cert","add_variation_order","log_daywork","add_stage_payment"];
+            "log_subcontractor_payment","add_compliance_cert","add_variation_order","log_daywork","add_stage_payment",
+            "update_material_status","update_material","delete_material","add_job_note","assign_material_to_job"];
           if (result && ACTION_TOOLS.includes(block.name)) {
             sessionActionsRef.current = [...sessionActionsRef.current.slice(-9), `${block.name}(${JSON.stringify(block.input).slice(0,60)})`];
           }
@@ -17206,7 +17198,7 @@ export default function App() {
           supabase.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
           supabase.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
           supabase.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
-          supabase.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
+          supabase.from("materials").select("*").or(`company_id.eq.${cid},user_id.eq.${user.id}`).order("created_at", { ascending: true }),
           supabase.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
         ]);
         if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
