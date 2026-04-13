@@ -7347,14 +7347,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
           {/* Scan buttons + Help */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <input ref={homeSubScanRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display: "none" }} onChange={e => { homeSubScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
+            <input ref={homeSubScanRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { homeSubScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
             <button onClick={() => homeSubScanRef.current?.click()}
               style={{ width: "100%", padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 13, cursor: "pointer", textAlign: "left" }}>
               📄  Scan / Upload Subcontractor Invoice
             </button>
             {onScanReceipt && (
               <div>
-                <input ref={homeScanRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display: "none" }} onChange={e => { homeScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
+                <input ref={homeScanRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { homeScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
                 <button onClick={() => homeScanRef.current?.click()}
                   style={{ width: "100%", padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 13, cursor: "pointer", textAlign: "left" }}>
                   🧾  Scan Material Invoice / Receipt
@@ -15290,16 +15290,22 @@ function SubcontractorsTab({ user, brand }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>Subcontractors</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* Row 1: title + action buttons */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>Subcontractors</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setView("add_worker")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Worker</button>
+            <button onClick={() => setView("add_payment")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Payment</button>
+            <button onClick={() => setView("add_sub")} style={S.btn("primary")}>+ Add</button>
+          </div>
+        </div>
+        {/* Row 2: scan buttons */}
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => subScanFileRef.current?.click()} style={{ ...S.btn("ghost"), fontSize: 12, color: C.amber }}>📷 Scan Invoice</button>
-          <button onClick={() => subScanUploadRef.current?.click()} style={{ ...S.btn("ghost"), fontSize: 12, color: C.amber }}>📎 Upload Invoice</button>
-          <input ref={subScanFileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleSubInvoiceScan(f); e.target.value = ""; }} />
+          <input ref={subScanFileRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleSubInvoiceScan(f); e.target.value = ""; }} />
           <input ref={subScanUploadRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleSubInvoiceScan(f); e.target.value = ""; }} />
-          <button onClick={() => setView("add_worker")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Worker</button>
-          <button onClick={() => setView("add_payment")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Payment</button>
-          <button onClick={() => setView("add_sub")} style={S.btn("primary")}>+ Subcontractor</button>
+          <button onClick={() => subScanFileRef.current?.click()} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: C.amber }}>📷 Scan Invoice</button>
+          <button onClick={() => subScanUploadRef.current?.click()} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: C.amber }}>📎 Upload Invoice</button>
         </div>
       </div>
 
@@ -17871,7 +17877,7 @@ export default function App() {
           supabase.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
           supabase.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
           supabase.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
-          supabase.from("materials").select("*").or(`company_id.eq.${cid},user_id.eq.${user.id}`).order("created_at", { ascending: true }),
+          supabase.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
           supabase.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
         ]);
         if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
