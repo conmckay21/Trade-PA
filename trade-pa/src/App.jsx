@@ -725,7 +725,6 @@ const DEFAULT_BRAND = {
   certNextNumber: 1,
   certPrefix: "CERT",
   // Financial
-  gasSafeLogo: null,
   vatNumber: "",
   utrNumber: "",
   bankName: "",
@@ -7070,8 +7069,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             case "email_sent":
               return `${d.isChase ? "Chase email" : d.isQuote ? "Quote" : "Invoice"} sent to ${d.customer}.`;
 
-            case "email_sent":
-              return `Email sent to ${d.customer}.`;
+
 
             case "stock_item_entry":
               return `${d.name} added to stock. Current quantity ${d.quantity} ${d.unit||""}.`;
