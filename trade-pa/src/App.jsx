@@ -759,6 +759,20 @@ function vatLabel(inv) {
   return `${r}% Income`;
 }
 
+// ── Currency formatter ───────────────────────────────────────────────────────
+// Always shows 2 decimal places with thousands separators: £30,000.00
+function fmtCurrency(n) {
+  const num = parseFloat(n) || 0;
+  return "£" + num.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Short version for widgets: £30,000 (no decimals for whole numbers)
+function fmtAmount(n) {
+  const num = parseFloat(n) || 0;
+  const hasDecimals = num % 1 !== 0;
+  return "£" + num.toLocaleString("en-GB", { minimumFractionDigits: hasDecimals ? 2 : 0, maximumFractionDigits: 2 });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function buildRef(brand, inv) {
   const num = (inv.id || "INV-001").replace(/\D/g, "");
   const surname = (inv.customer || "").split(" ").pop().toUpperCase();
@@ -976,19 +990,19 @@ function buildInvoiceHTML(brand, inv) {
       const cisVat = vatEnabled && !isDrc ? parseFloat((cisGross * vatRate / 100).toFixed(2)) : 0;
       const cisNetTotal = cisGross + cisVat - cisDeduction;
       return `
-    <div class="total-row"><span>Labour</span><span>£${cisLabour.toFixed(2)}</span></div>
-    ${cisMaterials > 0 ? `<div class="total-row"><span>Materials (no CIS deduction)</span><span>£${cisMaterials.toFixed(2)}</span></div>` : ""}
-    <div class="total-row"><span>Gross (labour + materials)</span><span>£${cisGross.toFixed(2)}</span></div>
-    ${vatEnabled && !isDrc ? `<div class="total-row"><span>${vatLabel(inv)}</span><span>£${cisVat.toFixed(2)}</span></div>` : ""}
+    <div class="total-row"><span>Labour</span><span>${fmtCurrency(cisLabour)}</span></div>
+    ${cisMaterials > 0 ? `<div class="total-row"><span>Materials (no CIS deduction)</span><span>${fmtCurrency(cisMaterials)}</span></div>` : ""}
+    <div class="total-row"><span>Gross (labour + materials)</span><span>${fmtCurrency(cisGross)}</span></div>
+    ${vatEnabled && !isDrc ? `<div class="total-row"><span>${vatLabel(inv)}</span><span>${fmtCurrency(cisVat)}</span></div>` : ""}
     ${vatEnabled && isDrc ? `<div class="total-row" style="color:#888"><span>${vatLabel(inv)} — contractor accounts for VAT</span><span>£0.00</span></div>` : ""}
-    <div class="total-row" style="color:#c0392b"><span>CIS Deduction @ ${cisRate}% (labour only)</span><span>-£${cisDeduction.toFixed(2)}</span></div>
-    <div class="total-row grand"><span>Net Amount Payable</span><span>£${cisNetTotal.toFixed(2)}</span></div>`;
+    <div class="total-row" style="color:#c0392b"><span>CIS Deduction @ ${cisRate}% (labour only)</span><span>-${fmtCurrency(cisDeduction)}</span></div>
+    <div class="total-row grand"><span>Net Amount Payable</span><span>${fmtCurrency(cisNetTotal)}</span></div>`;
     })() : vatEnabled ? `
-    <div class="total-row"><span>Net amount</span><span>£${netAmount.toFixed(2)}</span></div>
-    <div class="total-row"><span>${vatLabel(inv)}</span><span>£${vatAmount.toFixed(2)}</span></div>
-    <div class="total-row grand"><span>${isQuote ? "Quote Total (inc. VAT)" : "Total Due (inc. VAT)"}</span><span>£${grossAmount.toFixed(2)}</span></div>
+    <div class="total-row"><span>Net amount</span><span>${fmtCurrency(netAmount)}</span></div>
+    <div class="total-row"><span>${vatLabel(inv)}</span><span>${fmtCurrency(vatAmount)}</span></div>
+    <div class="total-row grand"><span>${isQuote ? "Quote Total (inc. VAT)" : "Total Due (inc. VAT)"}</span><span>${fmtCurrency(grossAmount)}</span></div>
     ` : `
-    <div class="total-row grand"><span>${isQuote ? "Quote Total" : "Total Due"}</span><span>£${grossAmount.toFixed(2)}</span></div>
+    <div class="total-row grand"><span>${isQuote ? "Quote Total" : "Total Due"}</span><span>${fmtCurrency(grossAmount)}</span></div>
     `}
     ${cisEnabled ? `<div style="font-size:10px;color:#888;margin-top:8px;padding-top:8px;border-top:1px solid #eee">CIS tax deducted by contractor under the Construction Industry Scheme. This statement will be provided by the contractor.</div>` : ""}
     ${inv.vatZeroRated ? `<div style="font-size:10px;color:#888;margin-top:8px">Zero-rated VAT — new residential construction (VATA 1994, Group 5)</div>` : ""}
@@ -1018,7 +1032,7 @@ function buildInvoiceHTML(brand, inv) {
     <div class="pay-block stripe">
       <div class="pay-title stripe-title">${showBacs ? "Option 2 — Pay by Card (Stripe)" : "Pay by Card (Stripe)"}</div>
       <div style="font-size:12px;color:#555;margin-bottom:10px">Pay securely online by debit or credit card. Takes 30 seconds.</div>
-      <div class="stripe-btn">Pay £${grossAmount.toFixed(2)} online</div>
+      <div class="stripe-btn">Pay ${fmtCurrency(grossAmount)} online</div>
       <div class="stripe-url">Payment link sent separately by email</div>
     </div>` : ""}
 
@@ -1172,9 +1186,9 @@ function InvoicePreview({ brand, invoice }) {
             {(inv.desc || "").split("\n").filter(Boolean).map((line, i) => (
               <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
                 <td style={{ padding: "10px 0", fontSize: 13 }}>{line}</td>
-                {vatEnabled && <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: i === 0 ? "#1a1a1a" : "#888" }}>{i === 0 ? `£${netAmount.toFixed(2)}` : "—"}</td>}
-                {vatEnabled && <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: i === 0 ? "#1a1a1a" : "#888" }}>{i === 0 ? `£${vatAmount.toFixed(2)}` : "—"}</td>}
-                <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: i === 0 ? "#1a1a1a" : "#888" }}>{i === 0 ? `£${parseFloat(grossAmount).toFixed(2)}` : "—"}</td>
+                {vatEnabled && <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: i === 0 ? "#1a1a1a" : "#888" }}>{i === 0 ? `${fmtCurrency(netAmount)}` : "—"}</td>}
+                {vatEnabled && <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: i === 0 ? "#1a1a1a" : "#888" }}>{i === 0 ? `${fmtCurrency(vatAmount)}` : "—"}</td>}
+                <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: i === 0 ? "#1a1a1a" : "#888" }}>{i === 0 ? `${fmtCurrency(parseFloat(grossAmount))}` : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -2506,9 +2520,9 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         {[
-          { label: "Total Quote Value", value: `£${totalQuoteValue.toLocaleString()}`, sub: `${allQuotes.length} quote${allQuotes.length !== 1 ? "s" : ""}`, color: C.blue, onClick: () => setView("Quotes") },
-          { label: "Total Invoice Value", value: `£${totalInvoiceValue.toLocaleString()}`, sub: `${allInvoices.filter(i => i.status !== "paid").length} outstanding`, color: C.amber, onClick: () => setView("Invoices") },
-          { label: "Overdue Invoices", value: `£${overdueValue.toLocaleString()}`, sub: `${overdueInvoices.length} invoice${overdueInvoices.length !== 1 ? "s" : ""} overdue`, color: overdueValue > 0 ? C.red : C.muted, onClick: () => setView("Invoices") },
+          { label: "Total Quote Value", value: `${fmtCurrency(totalQuoteValue)}`, sub: `${allQuotes.length} quote${allQuotes.length !== 1 ? "s" : ""}`, color: C.blue, onClick: () => setView("Quotes") },
+          { label: "Total Invoice Value", value: `${fmtCurrency(totalInvoiceValue)}`, sub: `${allInvoices.filter(i => i.status !== "paid").length} outstanding`, color: C.amber, onClick: () => setView("Invoices") },
+          { label: "Overdue Invoices", value: `${fmtCurrency(overdueValue)}`, sub: `${overdueInvoices.length} invoice${overdueInvoices.length !== 1 ? "s" : ""} overdue`, color: overdueValue > 0 ? C.red : C.muted, onClick: () => setView("Invoices") },
           { label: "New Enquiries", value: newEnquiries.length, sub: `${(enquiries || []).filter(e => e.urgent).length} urgent`, color: C.green, onClick: () => setView("Enquiries") },
         ].map((stat, i) => (
           <div key={i} style={{ ...S.statCard(stat.color), cursor: "pointer" }} onClick={stat.onClick}>
@@ -2808,7 +2822,7 @@ function Schedule({ jobs, setJobs }) {
                 { label: "Job Type", value: selectedJob.type },
                 { label: "Date & Time", value: selectedJob.dateObj ? new Date(selectedJob.dateObj).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " at " + new Date(selectedJob.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : selectedJob.date },
                 { label: "Address", value: selectedJob.address || "Not set" },
-                { label: "Value", value: selectedJob.value > 0 ? `£${selectedJob.value}` : "Not set" },
+                { label: "Value", value: selectedJob.value > 0 ? `${fmtAmount(selectedJob.value)}` : "Not set" },
               ].map(({ label, value }) => (
                 <div key={label} style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                   <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
@@ -3389,10 +3403,10 @@ Return only JSON, no other text.` },
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
         {[
-          { l: "To Order", v: (materials || []).filter(m => m.status === "to_order").length, sub: toOrderCost > 0 ? `Est. £${toOrderCost.toFixed(2)}` : "No prices set", c: C.red },
+          { l: "To Order", v: (materials || []).filter(m => m.status === "to_order").length, sub: toOrderCost > 0 ? `Est. ${fmtCurrency(toOrderCost)}` : "No prices set", c: C.red },
           { l: "Ordered", v: (materials || []).filter(m => m.status === "ordered").length, sub: "Awaiting delivery", c: C.amber },
           { l: "Collected", v: (materials || []).filter(m => m.status === "collected").length, sub: "Ready to use", c: C.green },
-          { l: "Total Cost", v: totalCost > 0 ? `£${totalCost.toFixed(2)}` : "—", sub: "All materials", c: C.text },
+          { l: "Total Cost", v: totalCost > 0 ? `${fmtCurrency(totalCost)}` : "—", sub: "All materials", c: C.text },
         ].map((st, i) => (
           <div key={i} style={S.card}>
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{st.l}</div>
@@ -4793,7 +4807,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       }
       const opts = matches.map(j => {
         const addr = (j.address || "").split(",")[0].trim();
-        const val = j.value ? ` £${j.value}` : "";
+        const val = j.value ? ` ${fmtAmount(j.value)}` : "";
         return `"${j.title || j.type || "Job"}"${addr ? ` at ${addr}` : ""}${val} (${j.status || "active"})`;
       }).join("; ");
       return { error: `Multiple jobs found: ${opts}. Which job should I ${actionLabel}?` };
@@ -4860,9 +4874,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           };
           setInvoices(prev => [inv, ...(prev || [])]);
           syncInvoiceToAccounting(user?.id, inv);
-          setLastAction({ type: "invoice", label: `${id} — £${totalAmount} — ${input.customer}`, view: "Invoices" });
+          setLastAction({ type: "invoice", label: `${id} — ${fmtAmount(totalAmount)} — ${input.customer}`, view: "Invoices" });
           pendingWidgetRef.current = { type: "invoice", data: inv };
-          return `Invoice ${id} created for ${input.customer} — £${totalAmount} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
+          return `Invoice ${id} created for ${input.customer} — ${fmtAmount(totalAmount)} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
         }
         case "create_quote": {
           const id = nextQuoteId(invoices);
@@ -4885,9 +4899,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             isQuote: true,
           };
           setInvoices(prev => [quote, ...(prev || [])]);
-          setLastAction({ type: "invoice", label: `${id} — £${totalAmount} — ${input.customer}`, view: "Quotes" });
+          setLastAction({ type: "invoice", label: `${id} — ${fmtAmount(totalAmount)} — ${input.customer}`, view: "Quotes" });
           pendingWidgetRef.current = { type: "quote", data: quote };
-          return `Quote ${id} created for ${input.customer} — £${totalAmount} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
+          return `Quote ${id} created for ${input.customer} — ${fmtAmount(totalAmount)} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
         }
         case "log_enquiry": {
           // Dedup: same name + same source today
@@ -4986,7 +5000,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (!match) return `Couldn't find that invoice. Check the Invoices tab.`;
           setInvoices(prev => (prev || []).filter(i => i.id !== match.id));
           setLastAction({ type: "invoice", label: `Deleted: ${match.id} — ${match.customer}`, view: "Invoices" });
-          return `Invoice ${match.id} for ${match.customer} (£${match.amount}) deleted.`;
+          return `Invoice ${match.id} for ${match.customer} (${fmtAmount(match.amount)}) deleted.`;
         }
         case "delete_enquiry": {
           const match = (enquiries || []).find(e => e.name.toLowerCase().includes(input.name.toLowerCase()));
@@ -5057,9 +5071,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (!match) return `Couldn't find an unpaid invoice matching that. Check the Invoices tab.`;
           setInvoices(prev => (prev || []).map(i => i.id === match.id ? { ...i, status: "paid", due: "Paid" } : i));
           syncInvoiceToAccounting(user?.id, { ...match, status: "paid" });
-          sendPush({ title: "💰 Invoice Paid", body: `${match.customer} paid £${match.amount}`, url: "/", type: "invoice_paid", tag: "invoice-paid" });
+          sendPush({ title: "💰 Invoice Paid", body: `${match.customer} paid ${fmtAmount(match.amount)}`, url: "/", type: "invoice_paid", tag: "invoice-paid" });
           setLastAction({ type: "invoice", label: `Paid: ${match.id} — ${match.customer}`, view: "Invoices" });
-          return `Invoice ${match.id} for ${match.customer} (£${match.amount}) marked as paid.`;
+          return `Invoice ${match.id} for ${match.customer} (${fmtAmount(match.amount)}) marked as paid.`;
         }
         case "update_job_status": {
           const match = (jobs || []).find(j => j.customer.toLowerCase().includes(input.customer.toLowerCase()) && (!input.job_type || j.type.toLowerCase().includes(input.job_type.toLowerCase())));
@@ -5080,7 +5094,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const inv = { ...match, id: newId, isQuote: false, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
           setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== match.id)]);
           setLastAction({ type: "invoice", label: `Converted: ${newId} — ${match.customer}`, view: "Invoices" });
-          return `Quote ${match.id} converted to invoice ${newId} for ${match.customer} — £${match.amount}.`;
+          return `Quote ${match.id} converted to invoice ${newId} for ${match.customer} — ${fmtAmount(match.amount)}.`;
         }
         case "update_material_status": {
           const term = input.item.toLowerCase();
@@ -5144,7 +5158,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (refreshJobs) refreshJobs();
           setLastAction({ type: "job_card", label: `${input.title || input.customer}`, view: "Jobs" });
           pendingWidgetRef.current = { type: "job_full", data: { ...payload, id: jobCard?.id, jobNotes: [], photos: [], timeLogs: [], linkedMaterials: [], drawings: [], vos: [], docs: [] } };
-          return `Job card created for ${input.customer}${input.title ? ` — ${input.title}` : ""}${input.value ? ` (£${input.value})` : ""}.`;
+          return `Job card created for ${input.customer}${input.title ? ` — ${input.title}` : ""}${input.value ? ` (${fmtAmount(input.value)})` : ""}.`;
         }
         case "update_brand": {
           const updates = {};
@@ -5605,8 +5619,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { error: timeErr } = await supabase.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, log_date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
           if (timeErr) return `Labour log failed: ${timeErr.message}`;
           setLastAction({ type: "job", label: `Time logged — ${input.customer}`, view: "Jobs" });
-          const label = type === "hourly" ? `${input.hours}hrs @ £${input.rate}/hr` : type === "day_rate" ? `${input.days} days @ £${input.rate}/day` : `Price work £${input.total}`;
-          return `Labour logged for ${input.customer}: ${label} = £${total.toFixed(2)}.`;
+          const label = type === "hourly" ? `${input.hours}hrs @ ${fmtAmount(input.rate)}/hr` : type === "day_rate" ? `${input.days} days @ ${fmtAmount(input.rate)}/day` : `Price work ${fmtAmount(input.total)}`;
+          return `Labour logged for ${input.customer}: ${label} = ${fmtCurrency(total)}.`;
         }
         case "log_mileage": {
           const today = new Date().toISOString().split("T")[0];
@@ -5659,7 +5673,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           setLastAction({ type: "mileage", label: `${miles} miles logged`, view: "Mileage" });
           const milesMsg = miles === 0
             ? `Trip saved: ${input.from_location || "start"} → ${input.to_location || "destination"}. Miles set to 0 — update it later by saying "update mileage for [route] to X miles".`
-            : `Mileage logged: ${miles} miles from ${input.from_location || "start"} to ${input.to_location || "destination"}${distanceNote} — £${value} claimable at the HMRC rate.`;
+            : `Mileage logged: ${miles} miles from ${input.from_location || "start"} to ${input.to_location || "destination"}${distanceNote} — ${fmtAmount(value)} claimable at the HMRC rate.`;
           return milesMsg;
         }
         case "add_job_note": {
@@ -5690,7 +5704,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             setMaterials(prev => [...(prev || []), ...newMats]);
           }
           setLastAction({ type: "po", label: `${poNum} — ${input.supplier}`, view: "Purchase Orders" });
-          return `Purchase order ${poNum} created for ${input.supplier}${input.job_ref ? ` (job: ${input.job_ref})` : ""}${total > 0 ? ` — total £${total.toFixed(2)}` : ""}. ${poItems.length} item${poItems.length !== 1 ? "s" : ""} also added to Materials.`;
+          return `Purchase order ${poNum} created for ${input.supplier}${input.job_ref ? ` (job: ${input.job_ref})` : ""}${total > 0 ? ` — total ${fmtCurrency(total)}` : ""}. ${poItems.length} item${poItems.length !== 1 ? "s" : ""} also added to Materials.`;
         }
         case "update_stock": {
           const { data: stockItems } = await supabase.from("stock_items").select("*").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
@@ -5723,7 +5737,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }).select().single();
           if (error) return `Failed to log expense: ${error.message}`;
           pendingWidgetRef.current = { type: "expense_entry", data };
-          return `Expense logged: ${input.description || input.exp_type} — £${amount.toFixed(2)}`;
+          return `Expense logged: ${input.description || input.exp_type} — ${fmtCurrency(amount)}`;
         }
         case "list_expenses": {
           const { data } = await supabase.from("expenses").select("*").eq("user_id", user?.id).order("exp_date", { ascending: false }).limit(20);
@@ -5752,7 +5766,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }).select().single();
           if (error) return `Failed to log CIS statement: ${error.message}`;
           pendingWidgetRef.current = { type: "cis_statement", data };
-          return `CIS statement logged — ${input.contractor_name}: gross £${gross.toFixed(2)}, deduction £${deduction.toFixed(2)}, net £${(gross-deduction).toFixed(2)}.`;
+          return `CIS statement logged — ${input.contractor_name}: gross ${fmtCurrency(gross)}, deduction ${fmtCurrency(deduction)}, net ${fmtCurrency((gross-deduction))}.`;
         }
         case "list_cis_statements": {
           const { data } = await supabase.from("cis_statements").select("*").eq("user_id", user?.id).order("tax_month", { ascending: false }).limit(12);
@@ -5832,10 +5846,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (error) return `Failed to log payment: ${error.message}`;
           pendingWidgetRef.current = { type: "subcontractor_payment", data: { ...data, subcontractor_name: sub.name } };
           let payDesc = "";
-          if (payType === "day_rate") payDesc = `${input.days} days @ £${input.rate}/day = `;
-          else if (payType === "hourly") payDesc = `${input.hours}hrs @ £${input.rate}/hr = `;
-          else if (execLabour || execMats) payDesc = `labour £${execLabour.toFixed(2)}, materials £${execMats.toFixed(2)} = `;
-          return `Payment logged for ${sub.name} — ${payDesc}gross £${gross.toFixed(2)}, CIS deduction £${deduction.toFixed(2)} (on ${payType === "price_work" && execLabour > 0 ? "labour only" : "full amount"}), net to pay £${net.toFixed(2)}.`;
+          if (payType === "day_rate") payDesc = `${input.days} days @ ${fmtAmount(input.rate)}/day = `;
+          else if (payType === "hourly") payDesc = `${input.hours}hrs @ ${fmtAmount(input.rate)}/hr = `;
+          else if (execLabour || execMats) payDesc = `labour ${fmtCurrency(execLabour)}, materials ${fmtCurrency(execMats)} = `;
+          return `Payment logged for ${sub.name} — ${payDesc}gross ${fmtCurrency(gross)}, CIS deduction ${fmtCurrency(deduction)} (on ${payType === "price_work" && execLabour > 0 ? "labour only" : "full amount"}), net to pay ${fmtCurrency(net)}.`;
         }
         case "list_subcontractors": {
           const { data } = await supabase.from("subcontractors").select("*").eq("user_id", user?.id).order("name");
@@ -5874,7 +5888,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }).select().single();
           if (error) return `Failed to add variation order: ${error.message}`;
           pendingWidgetRef.current = { type: "variation_order", data: { ...data, customer: jc[0].customer } };
-          return `Variation order added to ${jc[0].customer}'s job — ${input.description} — £${amount.toFixed(2)}.`;
+          return `Variation order added to ${jc[0].customer}'s job — ${input.description} — ${fmtCurrency(amount)}.`;
         }
         case "log_daywork": {
           const { job: jcMatch, error: certErr } = await findJob(input.customer, input.job_title, "add this certificate to");
@@ -5898,7 +5912,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }).select().single();
           if (error) return `Failed to log daywork: ${error.message}`;
           pendingWidgetRef.current = { type: "daywork_sheet", data: { ...data, customer: jc[0].customer, total } };
-          return `Daywork logged for ${jc[0].customer} — ${input.hours}hrs @ £${input.rate}/hr = £${total.toFixed(2)}.`;
+          return `Daywork logged for ${jc[0].customer} — ${input.hours}hrs @ ${fmtAmount(input.rate)}/hr = ${fmtCurrency(total)}.`;
         }
         case "send_review_request": {
           const { data: custSearch } = await supabase.from("customers").select("email,name").eq("user_id", user?.id).ilike("name", `%${input.customer||""}%`).limit(1);
@@ -5996,7 +6010,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const total = data.reduce((s, t) => s + parseFloat(t.miles || 0), 0);
           const value = data.reduce((s, t) => s + parseFloat(t.value || 0), 0);
           pendingWidgetRef.current = { type: "mileage_list", data, total, value };
-          return `Here are your recent mileage logs — ${data.length} trip${data.length !== 1 ? "s" : ""}, ${total.toFixed(1)} miles total, £${value.toFixed(2)} claimable:`;
+          return `Here are your recent mileage logs — ${data.length} trip${data.length !== 1 ? "s" : ""}, ${total.toFixed(1)} miles total, ${fmtCurrency(value)} claimable:`;
         }
         case "list_stock": {
           const { data } = await supabase.from("stock_items").select("*").eq("user_id", user?.id).order("name");
@@ -6060,7 +6074,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             const custMs = allInvs.filter(i => (i.customer || "").toLowerCase().includes(termI));
             if (custMs.length === 1) { inv = custMs[0]; }
             else if (custMs.length > 1) {
-              const list = custMs.map(i => `${i.id} £${parseFloat(i.grossAmount || i.amount || 0).toFixed(2)}${i.address ? " · " + i.address.split(",")[0] : ""}`).join(", ");
+              const list = custMs.map(i => `${i.id} ${fmtCurrency(parseFloat(i.grossAmount || i.amount || 0))}${i.address ? " · " + i.address.split(",")[0] : ""}`).join(", ");
               return `${custMs[0].customer} has ${custMs.length} invoices: ${list}. Which one should I send?`;
             }
           }
@@ -6091,9 +6105,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
             <div style="padding:24px 28px;background:#fff;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px;">
               <p style="font-size:15px;">Dear ${inv.customer},</p>
-              <p style="color:#555;">Please find your invoice ${inv.id} for <strong>£${invAmt}</strong> below. Payment is due ${invDue}.</p>
+              <p style="color:#555;">Please find your invoice ${inv.id} for <strong>${fmtAmount(invAmt)}</strong> below. Payment is due ${invDue}.</p>
               <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
-                <div style="font-size:22px;font-weight:700;color:${accent};">£${invAmt}</div>
+                <div style="font-size:22px;font-weight:700;color:${accent};">${fmtAmount(invAmt)}</div>
                 <div style="font-size:12px;color:#888;margin-top:4px;">Due: ${invDue}</div>
               </div>
               ${bacsBlock}
@@ -6131,7 +6145,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             const custMs = allQ.filter(i => (i.customer || "").toLowerCase().includes(termQ));
             if (custMs.length === 1) { quote = custMs[0]; }
             else if (custMs.length > 1) {
-              const list = custMs.map(i => `${i.id} £${parseFloat(i.grossAmount || i.amount || 0).toFixed(2)}${i.address ? " · " + i.address.split(",")[0] : ""}`).join(", ");
+              const list = custMs.map(i => `${i.id} ${fmtCurrency(parseFloat(i.grossAmount || i.amount || 0))}${i.address ? " · " + i.address.split(",")[0] : ""}`).join(", ");
               return `${custMs[0].customer} has ${custMs.length} quotes: ${list}. Which one should I send?`;
             }
           }
@@ -6140,7 +6154,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const email = input.email || custRowQ?.[0]?.email || quote.email;
           if (!email) return `No email for ${quote.customer}. Provide their email address.`;
           const subject = `Quote ${quote.id} from ${brand?.tradingName || ""}`;
-          const body = `<p>Dear ${quote.customer},</p><p>Thank you for your enquiry. Please find your quote ${quote.id} for £${parseFloat(quote.grossAmount || quote.amount || 0).toFixed(2)} below.</p><p>This quote is valid for 30 days. Please don't hesitate to get in touch if you have any questions.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
+          const body = `<p>Dear ${quote.customer},</p><p>Thank you for your enquiry. Please find your quote ${quote.id} for ${fmtCurrency(parseFloat(quote.grossAmount || quote.amount || 0))} below.</p><p>This quote is valid for 30 days. Please don't hesitate to get in touch if you have any questions.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
             // Generate PDF, upload to Supabase Storage, pass URL to server — same as invoices
             let quotePdfBase64 = null;
@@ -6161,7 +6175,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           // Query Supabase directly, with React state as fallback
           // (invoices may be indexed by company_id not user_id depending on account setup)
           const { data: invRows } = await supabase.from("invoices")
-            .select("id, customer, amount, gross_amount, status, email, is_quote")
+            .select("*")
             .eq("user_id", user?.id).eq("is_quote", false).neq("status", "paid")
             .order("created_at", { ascending: false }).limit(50);
           // Build search pool: Supabase results + React state (deduped by id)
@@ -6187,7 +6201,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             if (custInvs.length === 1) {
               inv = custInvs[0];
             } else if (custInvs.length > 1) {
-              const list = custInvs.map(i => `${i.id} £${parseFloat(i.grossAmount || i.amount || 0).toFixed(2)}${i.address ? " · " + i.address.split(",")[0] : ""}`).join(", ");
+              const list = custInvs.map(i => `${i.id} ${fmtCurrency(parseFloat(i.grossAmount || i.amount || 0))}${i.address ? " · " + i.address.split(",")[0] : ""}`).join(", ");
               return `${custInvs[0].customer} has ${custInvs.length} unpaid invoices: ${list}. Which one should I chase?`;
             }
           }
@@ -6237,7 +6251,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfBase64, `Invoice-${inv.id}.pdf`);
             const chaseAttachNote = chasePdfBase64 ? " (PDF attached)" : chasePdfError ? ` (PDF failed: ${chasePdfError})` : " (no PDF)";
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
-            return `Payment chase sent to ${inv.customer} at ${email} for invoice ${inv.id} (£${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)})${chaseAttachNote}.`;
+            return `Payment chase sent to ${inv.customer} at ${email} for invoice ${inv.id} (${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))})${chaseAttachNote}.`;
           } catch(e) {
             return `Chase email failed: ${e.message}`;
           }
@@ -6252,7 +6266,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const lineItems = [];
           if (timeLogs?.length) {
             timeLogs.forEach(t => {
-              const desc = t.labour_type === "day_rate" ? `Labour — ${t.days} days @ £${t.rate}/day` : t.labour_type === "price" ? "Labour (fixed price)" : `Labour — ${t.hours}hrs @ £${t.rate}/hr`;
+              const desc = t.labour_type === "day_rate" ? `Labour — ${t.days} days @ ${fmtAmount(t.rate)}/day` : t.labour_type === "price" ? "Labour (fixed price)" : `Labour — ${t.hours}hrs @ ${fmtAmount(t.rate)}/hr`;
               lineItems.push({ description: desc, amount: parseFloat(t.total || (t.hours * t.rate) || 0) });
             });
           }
@@ -6265,7 +6279,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const newInv = { id: invNum, customer: jc.customer, address: jc.address || "", email: "", amount: total, grossAmount: total, status: "draft", lineItems, jobRef: String(jc.id), isQuote: false, vatEnabled: brand?.vatEnabled || false, vatRate: brand?.vatRate || 20, due: "30 days", date: new Date().toLocaleDateString("en-GB") };
           setInvoices(prev => [newInv, ...(prev || [])]);
           pendingWidgetRef.current = { type: "invoice", data: newInv };
-          return `Invoice ${invNum} created from ${jc.customer}'s job card — ${lineItems.length} line item${lineItems.length !== 1 ? "s" : ""}, total £${total.toFixed(2)}. Review and send when ready.`;
+          return `Invoice ${invNum} created from ${jc.customer}'s job card — ${lineItems.length} line item${lineItems.length !== 1 ? "s" : ""}, total ${fmtCurrency(total)}. Review and send when ready.`;
         }
         case "add_stage_payment": {
           const term = (input.customer || input.job_title || "").toLowerCase();
@@ -6285,7 +6299,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { error } = await supabase.from("job_cards").update({ stage_payments: JSON.stringify(stagesWithAmounts) }).eq("id", jc.id);
           if (error) return `Failed to save stage payments: ${error.message}`;
           pendingWidgetRef.current = { type: "stage_payments", data: { customer: jc.customer, jobValue, stages: stagesWithAmounts } };
-          return `Stage payments set for ${jc.customer} — ${stagesWithAmounts.length} stages totalling £${stagesWithAmounts.reduce((s,st) => s + st.amount, 0).toFixed(2)}.`;
+          return `Stage payments set for ${jc.customer} — ${stagesWithAmounts.length} stages totalling ${fmtCurrency(stagesWithAmounts.reduce((s,st) => s + st.amount, 0))}.`;
         }
         case "list_inbox_actions": {
           try {
@@ -6331,7 +6345,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const totalDed = payments.reduce((s,p) => s + parseFloat(p.deduction||0), 0);
           const totalNet = payments.reduce((s,p) => s + parseFloat(p.net||0), 0);
           pendingWidgetRef.current = { type: "subcontractor_statement", data: { sub, payments, month, totalGross, totalDed, totalNet } };
-          return `Here's the CIS statement for ${sub.name} — ${month}: gross £${totalGross.toFixed(2)}, deduction £${totalDed.toFixed(2)}, net £${totalNet.toFixed(2)}.`;
+          return `Here's the CIS statement for ${sub.name} — ${month}: gross ${fmtCurrency(totalGross)}, deduction ${fmtCurrency(totalDed)}, net ${fmtCurrency(totalNet)}.`;
         }
 
 
@@ -6453,7 +6467,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }).select().single();
           if (wErr) return `Failed to add worker: ${wErr.message}`;
           const workerType = input.type === "employed" ? "employed staff member" : "subcontractor";
-          return `Worker added: ${input.name}${input.role ? ` (${input.role})` : ""} as a ${workerType}${input.day_rate ? ` — day rate £${input.day_rate}` : ""}${input.hourly_rate ? ` — hourly rate £${input.hourly_rate}` : ""}.`;
+          return `Worker added: ${input.name}${input.role ? ` (${input.role})` : ""} as a ${workerType}${input.day_rate ? ` — day rate ${fmtAmount(input.day_rate)}` : ""}${input.hourly_rate ? ` — hourly rate ${fmtAmount(input.hourly_rate)}` : ""}.`;
         }
         case "list_workers": {
           const { data: workerList } = await supabase.from("workers")
@@ -6492,7 +6506,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             created_at: new Date().toISOString(),
           });
           if (jwErr) return `Failed to assign worker: ${jwErr.message}`;
-          return `${worker.name} assigned to ${assignJob.customer} — ${assignJob.title || assignJob.type}${input.rate ? ` at £${input.rate}/${input.rate_type === "hourly" ? "hr" : "day"}` : ""}.`;
+          return `${worker.name} assigned to ${assignJob.customer} — ${assignJob.title || assignJob.type}${input.rate ? ` at ${fmtAmount(input.rate)}/${input.rate_type === "hourly" ? "hr" : "day"}` : ""}.`;
         }
         case "log_worker_time": {
           // Find worker — check workers table first, then subcontractors
@@ -6531,7 +6545,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 created_at: new Date().toISOString(),
               });
               if (spErr) return `Failed to log payment: ${spErr.message}`;
-              return `Labour logged for ${sub.name} (subcontractor): £${spGross.toFixed(2)}${spJobRef ? ` → ${spJobRef}` : ""}.`;
+              return `Labour logged for ${sub.name} (subcontractor): ${fmtCurrency(spGross)}${spJobRef ? ` → ${spJobRef}` : ""}.`;
             }
             return `"${input.worker_name}" not found. Add them with "add a worker" or "add a subcontractor" first.`;
           }
@@ -6554,8 +6568,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             worker: wtWorker.name,
           });
           if (wtLogErr) return `Failed to log time: ${wtLogErr.message}`;
-          const wtLabel = wtType === "hourly" ? `${input.hours}hrs @ £${input.rate}/hr` : wtType === "day_rate" ? `${input.days} days @ £${input.rate}/day` : `Price work £${input.total}`;
-          return `Time logged for ${wtWorker.name} on ${wtJob.customer} — ${wtJob.title || wtJob.type}: ${wtLabel} = £${wtTotal.toFixed(2)}.`;
+          const wtLabel = wtType === "hourly" ? `${input.hours}hrs @ ${fmtAmount(input.rate)}/hr` : wtType === "day_rate" ? `${input.days} days @ ${fmtAmount(input.rate)}/day` : `Price work ${fmtAmount(input.total)}`;
+          return `Time logged for ${wtWorker.name} on ${wtJob.customer} — ${wtJob.title || wtJob.type}: ${wtLabel} = ${fmtCurrency(wtTotal)}.`;
         }
         case "add_worker_document": {
           const { data: wdMatches } = await supabase.from("workers")
@@ -6655,7 +6669,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           spUpdates.net = parseFloat((newGross - spUpdates.deduction).toFixed(2));
           const { error: spUpdErr } = await supabase.from("subcontractor_payments").update(spUpdates).eq("id", pay.id).eq("user_id", user?.id);
           if (spUpdErr) return `Failed to update: ${spUpdErr.message}`;
-          return `Payment updated for ${sub.name}: gross £${spUpdates.gross.toFixed(2)}, CIS -£${spUpdates.deduction.toFixed(2)}, net £${spUpdates.net.toFixed(2)}.`;
+          return `Payment updated for ${sub.name}: gross ${fmtCurrency(spUpdates.gross)}, CIS -${fmtCurrency(spUpdates.deduction)}, net ${fmtCurrency(spUpdates.net)}.`;
         }
         case "delete_subcontractor_payment": {
           const { data: subFindDel } = await supabase.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
@@ -6669,7 +6683,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             : dpRows[0];
           const { error: dpDelErr } = await supabase.from("subcontractor_payments").delete().eq("id", dp.id).eq("user_id", user?.id);
           if (dpDelErr) return `Failed to delete: ${dpDelErr.message}`;
-          return `Payment of £${parseFloat(dp.gross).toFixed(2)} on ${dp.date} deleted for ${subFindDel[0].name}.`;
+          return `Payment of ${fmtCurrency(parseFloat(dp.gross))} on ${dp.date} deleted for ${subFindDel[0].name}.`;
         }
         case "delete_job_card": {
           const term = (input.customer || input.title || "").toLowerCase();
@@ -6722,7 +6736,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             const data = await res.json();
             if (data.error) return `Xero sync failed: ${data.error}`;
             pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "Xero", customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, success: true } };
-            return `Invoice ${inv.id} for ${inv.customer} sent to Xero — £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)}.`;
+            return `Invoice ${inv.id} for ${inv.customer} sent to Xero — ${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))}.`;
           } catch(e) {
             return `Xero sync failed: ${e.message}. Check Xero is connected in Settings.`;
           }
@@ -6737,7 +6751,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             const data = await res.json();
             if (data.error) return `QuickBooks sync failed: ${data.error}`;
             pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "QuickBooks", customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, success: true } };
-            return `Invoice ${inv.id} for ${inv.customer} sent to QuickBooks — £${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)}.`;
+            return `Invoice ${inv.id} for ${inv.customer} sent to QuickBooks — ${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))}.`;
           } catch(e) {
             return `QuickBooks sync failed: ${e.message}. Check QuickBooks is connected in Settings.`;
           }
@@ -6751,7 +6765,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             const data = await res.json();
             if (data.error) return `Xero bill failed: ${data.error}`;
             pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "Xero", customer: mat.supplier || "Supplier", invoice_id: mat.item, amount: (mat.unitPrice || 0) * (mat.qty || 1), success: true, isBill: true } };
-            return `Bill created in Xero for ${mat.item}${mat.supplier ? " from " + mat.supplier : ""} — £${((mat.unitPrice || 0) * (mat.qty || 1)).toFixed(2)}.`;
+            return `Bill created in Xero for ${mat.item}${mat.supplier ? " from " + mat.supplier : ""} — ${fmtCurrency(((mat.unitPrice || 0) * (mat.qty || 1)))}.`;
           } catch(e) {
             return `Xero bill failed: ${e.message}`;
           }
@@ -6765,7 +6779,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             const data = await res.json();
             if (data.error) return `QuickBooks bill failed: ${data.error}`;
             pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "QuickBooks", customer: mat.supplier || "Supplier", invoice_id: mat.item, amount: (mat.unitPrice || 0) * (mat.qty || 1), success: true, isBill: true } };
-            return `Bill created in QuickBooks for ${mat.item}${mat.supplier ? " from " + mat.supplier : ""} — £${((mat.unitPrice || 0) * (mat.qty || 1)).toFixed(2)}.`;
+            return `Bill created in QuickBooks for ${mat.item}${mat.supplier ? " from " + mat.supplier : ""} — ${fmtCurrency(((mat.unitPrice || 0) * (mat.qty || 1)))}.`;
           } catch(e) {
             return `QuickBooks bill failed: ${e.message}`;
           }
@@ -7227,7 +7241,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               return `Variation order ${d.vo_number||""} for ${d.customer}, ${fmt(d.amount)}.`;
 
             case "daywork_sheet":
-              return `Daywork sheet for ${d.customer}, ${d.hours} hours at £${d.rate} per hour, total ${fmt(d.total)}.`;
+              return `Daywork sheet for ${d.customer}, ${d.hours} hours at ${fmtAmount(d.rate)} per hour, total ${fmt(d.total)}.`;
 
             case "compliance_cert":
               return `${d.doc_type} certificate issued for ${d.customer}.`;
@@ -7244,7 +7258,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               return `${d.customer} synced to ${d.platform}. Invoice ${d.invoice_id}, ${d.amount ? "£" + parseFloat(d.amount).toFixed(2) : ""}.`;
 
             case "expense_entry":
-              return `Expense logged — ${d.description || d.exp_type}, £${parseFloat(d.amount||0).toFixed(2)}.`;
+              return `Expense logged — ${d.description || d.exp_type}, ${fmtCurrency(parseFloat(d.amount||0))}.`;
 
             case "inbox_actions": {
               if (!d || !d.length) return "No pending inbox actions.";
@@ -7253,7 +7267,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             }
 
             case "material_receipt":
-              return `Receipt found — ${d.supplier || "supplier"}, £${parseFloat(d.amount||d.total||0).toFixed(2)}.`;
+              return `Receipt found — ${d.supplier || "supplier"}, ${fmtCurrency(parseFloat(d.amount||d.total||0))}.`;
 
             case "rams_step1":
               return "RAMS started. I need the project title, site address and scope of work. What are they?";
@@ -7444,7 +7458,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       if (start === -1 || end === -1) throw new Error("Could not read invoice");
       const parsed = JSON.parse(raw.slice(start, end + 1));
       pendingWidgetRef.current = { type: "sub_invoice_scan", data: { ...parsed, imageData: dataUrl } };
-      setMessages(prev => [...prev, { role: "assistant", content: `Subcontractor invoice scanned. ${parsed.subcontractor_name ? parsed.subcontractor_name + " · " : ""}${parsed.invoice_number ? parsed.invoice_number + " · " : ""}Gross £${(parsed.gross_total || 0).toFixed(2)}. Go to the Subcontractors tab to review and save the payment.` }]);
+      setMessages(prev => [...prev, { role: "assistant", content: `Subcontractor invoice scanned. ${parsed.subcontractor_name ? parsed.subcontractor_name + " · " : ""}${parsed.invoice_number ? parsed.invoice_number + " · " : ""}Gross ${fmtCurrency((parsed.gross_total || 0))}. Go to the Subcontractors tab to review and save the payment.` }]);
     } catch (e) {
       setMessages(prev => [...prev, { role: "assistant", content: "Couldn't read that invoice — try a clearer photo or PDF." }]);
     }
@@ -7811,7 +7825,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                           <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <div>
                               <div style={{ fontSize: 12, fontWeight: 700 }}>{mat.item}</div>
-                              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{mat.supplier}{mat.unitPrice > 0 ? ` · £${(mat.unitPrice * mat.qty).toFixed(2)}` : ""}</div>
+                              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{mat.supplier}{mat.unitPrice > 0 ? ` · ${fmtCurrency((mat.unitPrice * mat.qty))}` : ""}</div>
                             </div>
                             <div style={{ fontSize: 10, color: mat.status === "to_order" ? C.red : mat.status === "ordered" ? C.amber : C.green }}>{mat.status?.replace(/_/g, " ")}</div>
                           </div>
@@ -7896,11 +7910,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                               </div>}
                               {job.timeLogs?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>LABOUR ({job.timeLogs.length} entries · £{job.timeLogs.reduce((s,t) => s + parseFloat(t.total || (t.hours||0)*(t.rate||0) || 0), 0).toFixed(2)})</div>
-                                {job.timeLogs.map((t,ti) => <div key={ti} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {t.labour_type === "day_rate" ? `${t.days} days @ £${t.rate}/day` : `${t.hours}hrs @ £${t.rate}/hr`} — £{parseFloat(t.total || (t.hours||0)*(t.rate||0)).toFixed(2)}</div>)}
+                                {job.timeLogs.map((t,ti) => <div key={ti} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {t.labour_type === "day_rate" ? `${t.days} days @ ${fmtAmount(t.rate)}/day` : `${t.hours}hrs @ ${fmtAmount(t.rate)}/hr`} — £{parseFloat(t.total || (t.hours||0)*(t.rate||0)).toFixed(2)}</div>)}
                               </div>}
                               {job.linkedMaterials?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>MATERIALS ({job.linkedMaterials.length})</div>
-                                {job.linkedMaterials.map((mat,mi) => <div key={mi} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {mat.item} ×{mat.qty}{mat.supplier ? ` — ${mat.supplier}` : ""}{mat.unitPrice > 0 ? ` · £${((mat.unitPrice||0)*(mat.qty||1)).toFixed(2)}` : ""}</div>)}
+                                {job.linkedMaterials.map((mat,mi) => <div key={mi} style={{ fontSize: 12, color: C.textDim, paddingBottom: 4 }}>· {mat.item} ×{mat.qty}{mat.supplier ? ` — ${mat.supplier}` : ""}{mat.unitPrice > 0 ? ` · ${fmtCurrency(((mat.unitPrice||0)*(mat.qty||1)))}` : ""}</div>)}
                               </div>}
                               {job.drawings?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>DRAWINGS ({job.drawings.length})</div>
@@ -8629,7 +8643,7 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
       syncInvoiceToAccounting(user?.id, { ...inv, status: "paid" });
       if (sendPush) sendPush({
         title: "💰 Invoice Paid",
-        body: `${inv.customer} paid £${inv.amount}`,
+        body: `${inv.customer} paid ${fmtAmount(inv.amount)}`,
         url: "/",
         type: "invoice_paid",
         tag: "invoice-paid",
@@ -10376,7 +10390,7 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending) {
   const docType = isQuote ? "Quote" : "Invoice";
   const subject = `${docType} ${doc.id} from ${brand.tradingName} - GBP${doc.amount}`;
   const body = `<p>Dear ${doc.customer},</p>
-<p>Please find your ${docType.toLowerCase()} ${doc.id} for £${doc.amount} attached below.</p>
+<p>Please find your ${docType.toLowerCase()} ${doc.id} for ${fmtAmount(doc.amount)} attached below.</p>
 ${!isQuote && brand.bankName ? `<p><strong>Payment details:</strong><br>
 Bank: ${brand.bankName}<br>
 Sort code: ${brand.sortCode}<br>
@@ -13103,7 +13117,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
     if (error) {
       // If new columns don't exist, retry with basic payload
       if (error.message?.includes("labour_type") || error.message?.includes("total") || error.message?.includes("worker") || error.message?.includes("days") || error.message?.includes("date")) {
-        const basicPayload = { job_id: selected.id, user_id: user.id, hours, rate, description: `${addTime.description || ""}${type !== "hourly" ? ` [${type}: £${total.toFixed(2)}]` : ""}` };
+        const basicPayload = { job_id: selected.id, user_id: user.id, hours, rate, description: `${addTime.description || ""}${type !== "hourly" ? ` [${type}: ${fmtCurrency(total)}]` : ""}` };
         const { data: d2, error: e2 } = await supabase.from("time_logs").insert(basicPayload).select().single();
         if (e2) { alert(`Failed to log labour: ${e2.message}\n\nPlease run the SQL migration in Supabase to add missing columns.`); return; }
         if (d2) { setTimeLogs(prev => [{ ...d2, labour_type: type, total, days, log_date: addTime.date }, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" }); }
@@ -13430,10 +13444,10 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                     const type = t.labour_type || "hourly";
                     const cost = parseFloat(t.total || 0) || (parseFloat(t.hours || 0) * parseFloat(t.rate || 0));
                     const label = type === "day_rate"
-                      ? `${t.days || (t.hours / 8)} day${(t.days || t.hours / 8) !== 1 ? "s" : ""} @ £${t.rate}/day`
+                      ? `${t.days || (t.hours / 8)} day${(t.days || t.hours / 8) !== 1 ? "s" : ""} @ ${fmtAmount(t.rate)}/day`
                       : type === "price_work"
                       ? "Price work"
-                      : `${t.hours}hrs @ £${t.rate}/hr`;
+                      : `${t.hours}hrs @ ${fmtAmount(t.rate)}/hr`;
                     const icon = type === "day_rate" ? "📅" : type === "price_work" ? "💷" : "⏱";
                     return (
                       <div key={t.id} style={{ ...S.row, marginBottom: 8 }}>
@@ -13507,7 +13521,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                               created: new Date().toLocaleDateString("en-GB"),
                             };
                             setInvoices(prev => [newInv, ...(prev || [])]);
-                            alert(`✓ VO approved — draft invoice ${invId} created for £${v.amount}. Review and send from the Invoices tab.`);
+                            alert(`✓ VO approved — draft invoice ${invId} created for ${fmtAmount(v.amount)}. Review and send from the Invoices tab.`);
                           }}>Approve</button>
                           <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.red }} onClick={async () => { await supabase.from("variation_orders").update({ status: "rejected" }).eq("id", v.id); setVos(prev => prev.map(x => x.id === v.id ? { ...x, status: "rejected" } : x)); }}>Reject</button>
                         </div>
@@ -13877,7 +13891,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                               <div style="background:#f9f9f9;padding:14px;border-radius:8px">
                                 <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:6px">Job</div>
                                 <div style="font-weight:600;font-size:14px">${selected.title || selected.type || ""}</div>
-                                ${selected.value ? `<div style="color:#666;font-size:12px;margin-top:4px">Value: £${selected.value}</div>` : ""}
+                                ${selected.value ? `<div style="color:#666;font-size:12px;margin-top:4px">Value: ${fmtAmount(selected.value)}</div>` : ""}
                                 ${selected.po_number ? `<div style="color:#666;font-size:12px">PO: ${selected.po_number}</div>` : ""}
                               </div>
                             </div>
@@ -14039,7 +14053,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               return (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: diff < 0.01 ? C.green + "18" : C.red + "18", borderRadius: 8, marginBottom: 14, border: `1px solid ${diff < 0.01 ? C.green + "44" : C.red + "44"}` }}>
                   <span style={{ fontSize: 12, color: diff < 0.01 ? C.green : C.red }}>
-                    {diff < 0.01 ? "✓ Stages total correctly" : `⚠ Stages total £${total.toFixed(2)} — job value is £${selected.value}`}
+                    {diff < 0.01 ? "✓ Stages total correctly" : `⚠ Stages total ${fmtCurrency(total)} — job value is ${fmtAmount(selected.value)}`}
                   </span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: diff < 0.01 ? C.green : C.red }}>£{total.toFixed(2)}</span>
                 </div>
@@ -14188,9 +14202,9 @@ function ExpensesTab({ user }) {
       {/* Summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
         {[
-          { l: "Total Expenses", v: `£${filtered.reduce((s,e) => s + (e.amount||0), 0).toFixed(2)}`, c: C.amber },
+          { l: "Total Expenses", v: `${fmtCurrency(filtered.reduce((s,e) => s + (e.amount||0), 0))}`, c: C.amber },
           { l: "Mileage", v: `${totalMileage.toFixed(0)} miles`, c: C.blue },
-          { l: "Mileage Value", v: `£${(totalMileage * MILEAGE_RATE).toFixed(2)}`, c: C.green },
+          { l: "Mileage Value", v: `${fmtCurrency((totalMileage * MILEAGE_RATE))}`, c: C.green },
           { l: "This period", v: filtered.length + " entries", c: C.muted },
         ].map((st, i) => (
           <div key={i} style={S.card}>
@@ -14341,9 +14355,9 @@ function CISStatementsTab({ user }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
         {[
-          { l: "Total Gross", v: `£${totalGross.toLocaleString()}`, c: C.text },
-          { l: "CIS Deducted", v: `£${totalDeducted.toLocaleString()}`, c: C.red },
-          { l: "Net Received", v: `£${totalNet.toLocaleString()}`, c: C.green },
+          { l: "Total Gross", v: `${fmtCurrency(totalGross)}`, c: C.text },
+          { l: "CIS Deducted", v: `${fmtCurrency(totalDeducted)}`, c: C.red },
+          { l: "Net Received", v: `${fmtCurrency(totalNet)}`, c: C.green },
         ].map((st, i) => (
           <div key={i} style={S.card}>
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{st.l}</div>
@@ -15245,7 +15259,7 @@ function MileageTab({ user }) {
   const yearValue = calcValue(yearMiles);
 
   const exportPDF = () => {
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Mileage Log</title><style>body{font-family:Arial,sans-serif;padding:32px;font-size:12px}h1{font-size:20px;margin-bottom:4px}.meta{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;padding:8px;text-align:left;font-size:10px;text-transform:uppercase;border-bottom:2px solid #e5e7eb}td{padding:8px;border-bottom:1px solid #f3f4f6}tr.tot td{font-weight:700;background:#fef9f0}</style></head><body><h1>Mileage Log</h1><div class="meta">Tax Year · ${yearMiles.toFixed(1)} miles · £${yearValue.toFixed(2)} claimable at HMRC rates</div><table><thead><tr><th>Date</th><th>From</th><th>To</th><th>Miles</th><th>Purpose / Job</th><th>Value</th></tr></thead><tbody>${trips.map(t=>`<tr><td>${new Date(t.date).toLocaleDateString("en-GB")}</td><td>${t.from_location||"—"}</td><td>${t.to_location||"—"}</td><td>${t.miles}</td><td>${t.purpose||t.job_ref||"—"}</td><td>£${(t.value||0).toFixed(2)}</td></tr>`).join("")}<tr class="tot"><td colspan="3"><b>Total (Tax Year)</b></td><td>${yearMiles.toFixed(1)}</td><td></td><td>£${yearValue.toFixed(2)}</td></tr></tbody></table><p style="margin-top:20px;font-size:11px;color:#888">HMRC mileage rate: 45p/mile for first 10,000 miles · 25p/mile thereafter</p></body></html>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Mileage Log</title><style>body{font-family:Arial,sans-serif;padding:32px;font-size:12px}h1{font-size:20px;margin-bottom:4px}.meta{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;padding:8px;text-align:left;font-size:10px;text-transform:uppercase;border-bottom:2px solid #e5e7eb}td{padding:8px;border-bottom:1px solid #f3f4f6}tr.tot td{font-weight:700;background:#fef9f0}</style></head><body><h1>Mileage Log</h1><div class="meta">Tax Year · ${yearMiles.toFixed(1)} miles · ${fmtCurrency(yearValue)} claimable at HMRC rates</div><table><thead><tr><th>Date</th><th>From</th><th>To</th><th>Miles</th><th>Purpose / Job</th><th>Value</th></tr></thead><tbody>${trips.map(t=>`<tr><td>${new Date(t.date).toLocaleDateString("en-GB")}</td><td>${t.from_location||"—"}</td><td>${t.to_location||"—"}</td><td>${t.miles}</td><td>${t.purpose||t.job_ref||"—"}</td><td>${fmtCurrency((t.value||0))}</td></tr>`).join("")}<tr class="tot"><td colspan="3"><b>Total (Tax Year)</b></td><td>${yearMiles.toFixed(1)}</td><td></td><td>${fmtCurrency(yearValue)}</td></tr></tbody></table><p style="margin-top:20px;font-size:11px;color:#888">HMRC mileage rate: 45p/mile for first 10,000 miles · 25p/mile thereafter</p></body></html>`;
     window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
   };
 
@@ -15597,8 +15611,8 @@ function SubcontractorsTab({ user, brand }) {
       </div>
     </div>
     <table><thead><tr><th>Date</th><th>Description</th><th>Invoice</th><th>Gross</th><th>Deduction (${sub.cis_rate || 20}%)</th><th>Net Paid</th></tr></thead>
-    <tbody>${monthPayments.map(p=>`<tr><td>${new Date(p.date).toLocaleDateString("en-GB")}</td><td>${p.description||p.job_ref||"—"}</td><td>${p.invoice_number||"—"}</td><td>£${parseFloat(p.gross||0).toFixed(2)}</td><td>£${parseFloat(p.deduction||0).toFixed(2)}</td><td>£${parseFloat(p.net||0).toFixed(2)}</td></tr>`).join("")}
-    <tr class="tot"><td colspan="3">Total</td><td>£${totalGross.toFixed(2)}</td><td>£${totalDed.toFixed(2)}</td><td>£${totalNet.toFixed(2)}</td></tr>
+    <tbody>${monthPayments.map(p=>`<tr><td>${new Date(p.date).toLocaleDateString("en-GB")}</td><td>${p.description||p.job_ref||"—"}</td><td>${p.invoice_number||"—"}</td><td>${fmtCurrency(parseFloat(p.gross||0))}</td><td>${fmtCurrency(parseFloat(p.deduction||0))}</td><td>${fmtCurrency(parseFloat(p.net||0))}</td></tr>`).join("")}
+    <tr class="tot"><td colspan="3">Total</td><td>${fmtCurrency(totalGross)}</td><td>${fmtCurrency(totalDed)}</td><td>${fmtCurrency(totalNet)}</td></tr>
     </tbody></table>
     <div class="notice">Under the Construction Industry Scheme, the contractor is required to deduct ${sub.cis_rate || 20}% from payments made to this subcontractor and pay this to HMRC. The subcontractor can use this statement as evidence of deductions made when completing their self-assessment tax return.</div>
     </body></html>`;
@@ -15805,9 +15819,9 @@ function SubcontractorsTab({ user, brand }) {
                     <div style={{ fontSize: 11, color: C.muted }}>{new Date(p.date).toLocaleDateString("en-GB")}{p.invoice_number ? ` · ${p.invoice_number}` : ""}{p.description ? ` · ${p.description}` : ""}{p.job_ref ? ` · ${p.job_ref}` : ""}</div>
                     {p.payment_type === "price_work" && (p.labour_amount > 0 || p.materials_amount > 0) && (
                       <div style={{ fontSize: 11, color: C.muted }}>
-                        {p.labour_amount > 0 && `Labour £${parseFloat(p.labour_amount).toFixed(2)}`}
+                        {p.labour_amount > 0 && `Labour ${fmtCurrency(parseFloat(p.labour_amount))}`}
                         {p.labour_amount > 0 && p.materials_amount > 0 && " · "}
-                        {p.materials_amount > 0 && `Materials £${parseFloat(p.materials_amount).toFixed(2)}`}
+                        {p.materials_amount > 0 && `Materials ${fmtCurrency(parseFloat(p.materials_amount))}`}
                       </div>
                     )}
                   </div>
@@ -16785,7 +16799,7 @@ function StockTab({ user }) {
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
                   {item.sku && `SKU: ${item.sku} · `}
                   {item.location && `📍 ${item.location} · `}
-                  {item.unit_cost > 0 && `£${parseFloat(item.unit_cost).toFixed(2)}/${item.unit}`}
+                  {item.unit_cost > 0 && `${fmtCurrency(parseFloat(item.unit_cost))}/${item.unit}`}
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -16892,8 +16906,8 @@ function PurchaseOrdersTab({ user, brand }) {
       <div class="box"><div class="box-label">Delivery</div>${order.expected_delivery ? `<div style="font-weight:700">${new Date(order.expected_delivery).toLocaleDateString("en-GB")}</div>` : '<div style="color:#9ca3af">No date specified</div>'}${order.job_ref ? `<div style="font-size:12px;color:#666;margin-top:4px">Job: ${order.job_ref}</div>` : ""}</div>
     </div>
     <table><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit Price</th><th>Total</th></tr></thead>
-    <tbody>${items.map(i => `<tr><td>${i.description}</td><td>${i.qty}</td><td>${i.unit||"unit"}</td><td>£${parseFloat(i.unit_price||0).toFixed(2)}</td><td>£${lineTotal(i).toFixed(2)}</td></tr>`).join("")}
-    <tr class="total"><td colspan="4">Total</td><td>£${total.toFixed(2)}</td></tr></tbody></table>
+    <tbody>${items.map(i => `<tr><td>${i.description}</td><td>${i.qty}</td><td>${i.unit||"unit"}</td><td>${fmtCurrency(parseFloat(i.unit_price||0))}</td><td>${fmtCurrency(lineTotal(i))}</td></tr>`).join("")}
+    <tr class="total"><td colspan="4">Total</td><td>${fmtCurrency(total)}</td></tr></tbody></table>
     ${order.notes ? `<div class="notice"><b>Notes:</b> ${order.notes}</div>` : ""}
     </body></html>`;
     window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
