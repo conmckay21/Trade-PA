@@ -4184,6 +4184,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         type: "object",
         properties: {
           customer: { type: "string", description: "Customer full name" },
+          address: { type: "string", description: "Client address — always include if mentioned or if known from customer/job records. Appears in the Bill To section of the PDF." },
           line_items: {
             type: "array",
             description: "Individual line items — one per service or product. Each has a description and price.",
@@ -4208,6 +4209,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         type: "object",
         properties: {
           customer: { type: "string", description: "Customer full name" },
+          address: { type: "string", description: "Client address — always include if mentioned or known. Appears in the Bill To section of the PDF." },
           line_items: {
             type: "array",
             description: "Individual line items — one per service or product. Each has a description and price.",
@@ -4637,9 +4639,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "add_stock_item", description: "Add a new stock item.", input_schema: { type: "object", properties: { name: { type: "string" }, quantity: { type: "string" }, unit: { type: "string" }, unit_cost: { type: "string" }, reorder_level: { type: "string" }, location: { type: "string" }, sku: { type: "string" } }, required: ["name"] } },
     { name: "delete_stock_item", description: "Delete a stock item.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
     { name: "list_rams", description: "Show saved RAMS documents.", input_schema: { type: "object", properties: {} } },
-    { name: "send_invoice", description: "Send an invoice to a customer by email.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, email: { type: "string" } } } },
-    { name: "send_quote", description: "Send a quote to a customer by email.", input_schema: { type: "object", properties: { customer: { type: "string" }, quote_id: { type: "string" }, email: { type: "string" } } } },
-    { name: "chase_invoice", description: "Send a payment chase/reminder email for an overdue or unpaid invoice.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, email: { type: "string" } } } },
+    { name: "send_invoice", description: "Send an invoice to a customer by email. Include amount and/or address if mentioned — used to find the correct invoice when a customer has multiple.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, amount: { type: "number", description: "Invoice amount in £ — include if mentioned to identify the right invoice" }, address: { type: "string", description: "Client address — include if mentioned to narrow down the correct invoice" }, email: { type: "string" } } } },
+    { name: "send_quote", description: "Send a quote to a customer by email. Include amount and/or address if mentioned — used to find the correct quote when a customer has multiple.", input_schema: { type: "object", properties: { customer: { type: "string" }, quote_id: { type: "string" }, amount: { type: "number", description: "Quote amount in £ — include if mentioned to identify the right quote" }, address: { type: "string", description: "Client address — include if mentioned to narrow down the correct quote" }, email: { type: "string" } } } },
+    { name: "chase_invoice", description: "Send a payment chase/reminder email. If user mentions a specific amount OR job value (e.g. 'the £30,000 invoice', 'the £30,000 job', 'the big one'), ALWAYS pass that as amount — this is the only way to find the right invoice when a customer has multiple. If no amount given and customer has multiple invoices, the system will ask which one.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, amount: { type: "number", description: "Invoice/job amount in £ — extract from ANY mention of a value, even 'for the £30k job' or 'the big invoice'" }, address: { type: "string", description: "Client address — include if mentioned" }, email: { type: "string" } } } },
     { name: "create_invoice_from_job", description: "Create an invoice directly from a job card, pulling in all logged labour and materials.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" } } } },
     { name: "add_stage_payment", description: "Add stage payment milestones to a job card.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, stages: { type: "string", description: "JSON array of stages [{label,type,value}] or leave empty for default 30/40/30 split" } } } },
     { name: "list_inbox_actions", description: "Show pending inbox email actions — suggested actions from emails that need approval. Use when user asks about inbox, emails, or pending actions.", input_schema: { type: "object", properties: {} } },
@@ -4682,9 +4684,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
   // ── Execute tool calls ────────────────────────────────────────────────────
   // Email helper — routes to the send-invoice-email endpoint which handles PDF attachment
-  // ── PDF generation + Supabase Storage upload ─────────────────────────────
-  // Generates PDF client-side, uploads to Supabase Storage, returns a signed URL.
-  // Server fetches from URL — avoids Vercel's 4.5MB body limit entirely.
+  // ── Client-side PDF generation ─────────────────────────────────────────────
+  // Renders invoice in an off-screen div, captures with html2canvas, converts to
+  // PDF with jsPDF, returns base64 string. Sent directly to server — no storage needed.
 
   const loadScript = (src) => new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
@@ -4693,12 +4695,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     document.head.appendChild(s);
   });
 
-  const generateAndUploadInvoicePDF = async (brand, inv, filename) => {
-    // 1. Load libs
+  const generateInvoicePDFBase64 = async (brand, inv) => {
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
 
-    // 2. Build invoice HTML
     const html = buildInvoiceHTML(brand, {
       ...inv,
       grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
@@ -4707,14 +4707,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       paymentMethod: inv.payment_method || inv.paymentMethod || "both",
     });
 
-    // 3. Render in off-screen div at A4 width (1x scale keeps file small)
     const container = document.createElement("div");
     container.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;background:#fff;z-index:-1;";
     container.innerHTML = html;
     container.querySelectorAll(".back-bar,.no-print").forEach(el => el.remove());
     document.body.appendChild(container);
 
-    let pdfBlob;
     try {
       await Promise.all([...container.querySelectorAll("img")].map(img =>
         img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
@@ -4728,42 +4726,26 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = pdf.internal.pageSize.getHeight();
       const imgH = (canvas.height * pdfW) / canvas.width;
-      const imgData = canvas.toDataURL("image/jpeg", 0.85);
+      const imgData = canvas.toDataURL("image/jpeg", 0.82);
       let y = 0;
       while (y < imgH) {
         pdf.addImage(imgData, "JPEG", 0, -y, pdfW, imgH);
         y += pdfH;
         if (y < imgH) pdf.addPage();
       }
-      pdfBlob = pdf.output("blob");
+      return pdf.output("datauristring").split(",")[1]; // base64 only
     } finally {
       document.body.removeChild(container);
     }
-
-    // 4. Upload to Supabase Storage (bucket: invoice-pdfs)
-    const storagePath = `${user?.id}/${filename}`;
-    const { error: upErr } = await supabase.storage
-      .from("invoice-pdfs")
-      .upload(storagePath, pdfBlob, { contentType: "application/pdf", upsert: true });
-
-    if (upErr) throw new Error(`PDF upload failed: ${upErr.message}`);
-
-    // 5. Get signed URL valid for 1 hour
-    const { data: signedData, error: signErr } = await supabase.storage
-      .from("invoice-pdfs")
-      .createSignedUrl(storagePath, 3600);
-
-    if (signErr) throw new Error(`Could not get PDF URL: ${signErr.message}`);
-    return { url: signedData.signedUrl, path: storagePath };
   };
-  // ────────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
 
-  const sendEmailViaConnectedAccount = async (userId, to, subject, body, pdfUrl = null, filename = "document.pdf") => {
-    // Sends email via server. If pdfUrl provided, server fetches PDF from Supabase Storage and attaches.
+  const sendEmailViaConnectedAccount = async (userId, to, subject, body, pdfBase64 = null, filename = "document.pdf") => {
+    // Sends email via server. pdfBase64 is a base64 string generated client-side.
     const res = await fetch("/api/send-invoice-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, to, subject, body, pdfUrl, filename }),
+      body: JSON.stringify({ userId, to, subject, body, pdfBase64, filename }),
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => res.status.toString());
@@ -4859,9 +4841,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const id = nextInvoiceId(invoices);
           const lineItems = input.line_items || [{ description: input.description || "Services", amount: input.amount || 0 }];
           const totalAmount = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
+          // Auto-pull address from customer record if not provided
+          let invAddress = input.address || "";
+          if (!invAddress && input.customer) {
+            const custMatch = (customers || []).find(c => (c.name || "").toLowerCase().includes(input.customer.toLowerCase()));
+            if (custMatch?.address) invAddress = custMatch.address;
+          }
           const inv = {
             id,
             customer: input.customer,
+            address: invAddress,
             amount: totalAmount,
             due: `Due in ${input.due_days || 30} days`,
             status: "sent",
@@ -4879,9 +4868,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const id = nextQuoteId(invoices);
           const lineItems = input.line_items || [{ description: input.description || "Services", amount: input.amount || 0 }];
           const totalAmount = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
+          let quoteAddress = input.address || "";
+          if (!quoteAddress && input.customer) {
+            const custMatch = (customers || []).find(c => (c.name || "").toLowerCase().includes(input.customer.toLowerCase()));
+            if (custMatch?.address) quoteAddress = custMatch.address;
+          }
           const quote = {
             id,
             customer: input.customer,
+            address: quoteAddress,
             amount: totalAmount,
             due: `Valid for ${input.valid_days || 30} days`,
             status: "sent",
@@ -6051,7 +6046,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const stateInvs2 = (invoices || []).filter(i => !i.isQuote);
           const seenIds2 = new Set((invRows2 || []).map(i => i.id));
           const allInvs = [...(invRows2 || []), ...stateInvs2.filter(i => !seenIds2.has(i.id))];
-          const inv = allInvs.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || allInvs[0];
+          const termI = (input.customer || "").toLowerCase();
+          let inv = null;
+          if (input.invoice_id) inv = allInvs.find(i => (i.id || "").toLowerCase().includes(input.invoice_id.toLowerCase()));
+          if (!inv && input.amount) {
+            const byC = allInvs.filter(i => (i.customer || "").toLowerCase().includes(termI));
+            inv = byC.find(i => Math.abs(parseFloat(i.grossAmount || i.amount || 0) - parseFloat(input.amount)) < 1) || null;
+          }
+          if (!inv && input.address) {
+            inv = allInvs.find(i => (i.address || "").toLowerCase().includes(input.address.toLowerCase()) && (i.customer || "").toLowerCase().includes(termI));
+          }
+          if (!inv) {
+            const custMs = allInvs.filter(i => (i.customer || "").toLowerCase().includes(termI));
+            if (custMs.length === 1) { inv = custMs[0]; }
+            else if (custMs.length > 1) {
+              const list = custMs.map(i => `${i.id} £${parseFloat(i.grossAmount || i.amount || 0).toFixed(2)}${i.address ? " · " + i.address.split(",")[0] : ""}`).join(", ");
+              return `${custMs[0].customer} has ${custMs.length} invoices: ${list}. Which one should I send?`;
+            }
+          }
           if (!inv) return `No invoice found for "${input.customer || input.invoice_id}".`;
           const { data: custRow2 } = await supabase.from("customers").select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
           const email = input.email || custRow2?.[0]?.email || inv.email;
@@ -6090,17 +6102,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           </div>`;
           try {
-            // Generate PDF, upload to Supabase Storage, pass URL to server
-            let pdfUrl = null, pdfPath = null;
-            try {
-              const pdfResult = await generateAndUploadInvoicePDF(brand, inv, `Invoice-${inv.id}.pdf`);
-              pdfUrl = pdfResult.url;
-              pdfPath = pdfResult.path;
-            } catch(pe) { console.warn("PDF upload failed, sending without attachment:", pe.message); }
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body, pdfUrl, `Invoice-${inv.id}.pdf`);
-            // Clean up storage after sending
-            if (pdfPath) supabase.storage.from("invoice-pdfs").remove([pdfPath]).catch(() => {});
-            const attachNote = pdfUrl ? " (PDF attached)" : "";
+            let invPdfBase64 = null;
+            let invPdfError = "";
+            try { invPdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { invPdfError = pe.message; console.warn("PDF gen failed:", pe.message); }
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body, invPdfBase64, `Invoice-${inv.id}.pdf`);
+            const attachNote = invPdfBase64 ? " (PDF attached)" : invPdfError ? ` (PDF failed: ${invPdfError})` : " (no PDF)";
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount } };
             return `Invoice ${inv.id} sent to ${inv.customer} at ${email}${attachNote}.`;
           } catch(e) {
@@ -6111,7 +6117,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const term = (input.customer || input.quote_id || "").toLowerCase();
           const { data: qRows } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", true).order("created_at", { ascending: false }).limit(50);
           const allQ = qRows || (invoices || []).filter(i => i.isQuote);
-          const quote = allQ.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term)) || allQ[0];
+          const termQ = (input.customer || "").toLowerCase();
+          let quote = null;
+          if (input.quote_id) quote = allQ.find(i => (i.id || "").toLowerCase().includes(input.quote_id.toLowerCase()));
+          if (!quote && input.amount) {
+            const byC = allQ.filter(i => (i.customer || "").toLowerCase().includes(termQ));
+            quote = byC.find(i => Math.abs(parseFloat(i.grossAmount || i.amount || 0) - parseFloat(input.amount)) < 1) || null;
+          }
+          if (!quote && input.address) {
+            quote = allQ.find(i => (i.address || "").toLowerCase().includes(input.address.toLowerCase()) && (i.customer || "").toLowerCase().includes(termQ));
+          }
+          if (!quote) {
+            const custMs = allQ.filter(i => (i.customer || "").toLowerCase().includes(termQ));
+            if (custMs.length === 1) { quote = custMs[0]; }
+            else if (custMs.length > 1) {
+              const list = custMs.map(i => `${i.id} £${parseFloat(i.grossAmount || i.amount || 0).toFixed(2)}${i.address ? " · " + i.address.split(",")[0] : ""}`).join(", ");
+              return `${custMs[0].customer} has ${custMs.length} quotes: ${list}. Which one should I send?`;
+            }
+          }
           if (!quote) return `No quote found for "${input.customer || input.quote_id}".`;
           const { data: custRowQ } = await supabase.from("customers").select("email").eq("user_id", user?.id).ilike("name", `%${quote.customer}%`).limit(1);
           const email = input.email || custRowQ?.[0]?.email || quote.email;
@@ -6120,23 +6143,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const body = `<p>Dear ${quote.customer},</p><p>Thank you for your enquiry. Please find your quote ${quote.id} for £${parseFloat(quote.grossAmount || quote.amount || 0).toFixed(2)} below.</p><p>This quote is valid for 30 days. Please don't hesitate to get in touch if you have any questions.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
           try {
             // Generate PDF, upload to Supabase Storage, pass URL to server — same as invoices
-            let quotePdfUrl = null, quotePdfPath = null;
+            let quotePdfBase64 = null;
             try {
-              const quoteForPdf = {
-                ...quote,
-                grossAmount: quote.gross_amount || quote.grossAmount || quote.amount,
-                lineItems: quote.line_items || quote.lineItems || [],
-                vatEnabled: quote.vat_enabled || quote.vatEnabled,
-                paymentMethod: quote.payment_method || quote.paymentMethod || "both",
-                isQuote: true,
-              };
-              const quotePdfResult = await generateAndUploadInvoicePDF(brand, quoteForPdf, `Quote-${quote.id}.pdf`);
-              quotePdfUrl = quotePdfResult.url;
-              quotePdfPath = quotePdfResult.path;
-            } catch(pe) { console.warn("Quote PDF upload failed, sending without attachment:", pe.message); }
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body, quotePdfUrl, `Quote-${quote.id}.pdf`);
-            if (quotePdfPath) supabase.storage.from("invoice-pdfs").remove([quotePdfPath]).catch(() => {});
-            const qAttachNote = quotePdfUrl ? " (PDF attached)" : "";
+              const quoteForPdf = { ...quote, grossAmount: quote.gross_amount || quote.grossAmount || quote.amount, lineItems: quote.line_items || quote.lineItems || [], vatEnabled: quote.vat_enabled || quote.vatEnabled, paymentMethod: quote.payment_method || quote.paymentMethod || "both", isQuote: true };
+              quotePdfBase64 = await generateInvoicePDFBase64(brand, quoteForPdf);
+            } catch(pe) { console.warn("PDF gen failed:", pe.message); }
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body, quotePdfBase64, `Quote-${quote.id}.pdf`);
+            const qAttachNote = quotePdfBase64 ? " (PDF attached)" : "";
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: quote.customer, invoice_id: quote.id, amount: quote.grossAmount || quote.amount, isQuote: true } };
             return `Quote ${quote.id} sent to ${quote.customer} at ${email}${qAttachNote}.`;
           } catch(e) {
@@ -6156,7 +6169,28 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const dbInvs = (invRows || []).map(r => ({ ...r, grossAmount: parseFloat(r.gross_amount || r.amount) || 0 }));
           const seenIds = new Set(dbInvs.map(i => i.id));
           const all = [...dbInvs, ...stateInvs.filter(i => !seenIds.has(i.id))];
-          const inv = all.find(i => (i.id || "").toLowerCase().includes(term) || (i.customer || "").toLowerCase().includes(term));
+          // Match: invoice_id > amount > address > customer only (ask if ambiguous)
+          let inv = null;
+          if (input.invoice_id) {
+            inv = all.find(i => (i.id || "").toLowerCase().includes(input.invoice_id.toLowerCase()));
+          }
+          if (!inv && input.amount) {
+            const byC = all.filter(i => (i.customer || "").toLowerCase().includes(term));
+            // Exact match only — if no exact match, fall through to ask which one
+            inv = byC.find(i => Math.abs(parseFloat(i.grossAmount || i.amount || 0) - parseFloat(input.amount)) < 1) || null;
+          }
+          if (!inv && input.address) {
+            inv = all.find(i => (i.address || "").toLowerCase().includes(input.address.toLowerCase()) && (i.customer || "").toLowerCase().includes(term));
+          }
+          if (!inv) {
+            const custInvs = all.filter(i => (i.customer || "").toLowerCase().includes(term));
+            if (custInvs.length === 1) {
+              inv = custInvs[0];
+            } else if (custInvs.length > 1) {
+              const list = custInvs.map(i => `${i.id} £${parseFloat(i.grossAmount || i.amount || 0).toFixed(2)}${i.address ? " · " + i.address.split(",")[0] : ""}`).join(", ");
+              return `${custInvs[0].customer} has ${custInvs.length} unpaid invoices: ${list}. Which one should I chase?`;
+            }
+          }
           if (!inv) return `No unpaid invoice found for "${input.customer || input.invoice_id}". Check the Invoices tab — it may already be marked paid.`;
           // Get email: explicit input → customer record → invoice email field
           const { data: custRows } = await supabase.from("customers")
@@ -6197,15 +6231,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           </div>`;
           try {
             // Generate PDF, upload to Supabase Storage, pass URL to server
-            let chasePdfUrl = null, chasePdfPath = null;
-            try {
-              const chasePdfResult = await generateAndUploadInvoicePDF(brand, inv, `Invoice-${inv.id}-chase.pdf`);
-              chasePdfUrl = chasePdfResult.url;
-              chasePdfPath = chasePdfResult.path;
-            } catch(pe) { console.warn("PDF upload failed, sending without attachment:", pe.message); }
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfUrl, `Invoice-${inv.id}.pdf`);
-            if (chasePdfPath) supabase.storage.from("invoice-pdfs").remove([chasePdfPath]).catch(() => {});
-            const chaseAttachNote = chasePdfUrl ? " (PDF attached)" : "";
+            let chasePdfBase64 = null;
+            let chasePdfError = "";
+            try { chasePdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { chasePdfError = pe.message; console.warn("PDF gen failed:", pe.message); }
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfBase64, `Invoice-${inv.id}.pdf`);
+            const chaseAttachNote = chasePdfBase64 ? " (PDF attached)" : chasePdfError ? ` (PDF failed: ${chasePdfError})` : " (no PDF)";
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
             return `Payment chase sent to ${inv.customer} at ${email} for invoice ${inv.id} (£${parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2)})${chaseAttachNote}.`;
           } catch(e) {
