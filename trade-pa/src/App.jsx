@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, Component } from "react";
 import { supabase } from "./supabase.js";
 import { Device } from "@twilio/voice-sdk";
+import HelpCentre from "./HelpCentre.jsx";
 
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
@@ -17945,6 +17946,8 @@ export default function App() {
   const [callMuted, setCallMuted] = useState(false);
   const [callSpeaker, setCallSpeaker] = useState(true); // browser defaults to speaker
   const [micBlocked, setMicBlocked] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpSlug, setHelpSlug] = useState(null);
   const now = Date.now();
 
   // Send push notification to this user via server
@@ -18816,6 +18819,7 @@ export default function App() {
               </div>
             )}
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
+            <button onClick={() => { setHelpSlug(null); setHelpOpen(true); }} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Help & how-to">?</button>
             <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
           </div>
         </div>
@@ -18900,6 +18904,7 @@ export default function App() {
         {view === "RAMS" && <RAMSTab user={user} brand={brand} />}
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} /></ErrorBoundary>}
       </main>
+      <HelpCentre open={helpOpen} openSlug={helpSlug} onClose={() => { setHelpOpen(false); setHelpSlug(null); }} />
     </div>
   );
 }
