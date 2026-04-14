@@ -3719,7 +3719,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", userCommands = [] }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -3779,17 +3779,32 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const handsFreeRef = useRef(false);
   const wakeWordRef = useRef(null); // Porcupine wake word engine
 
-  // Custom assistant persona + commands
-  const [assistantSetupOpen, setAssistantSetupOpen] = useState(false);
-  const [assistantName, setAssistantName] = useState("Trade PA");
-  const [assistantWakeWords, setAssistantWakeWords] = useState(["hey trade pa", "trade pa", "trade pay"]);
-  const [assistantPersona, setAssistantPersona] = useState("");
-  const [assistantSignoff, setAssistantSignoff] = useState("");
-  const [userCommands, setUserCommands] = useState([]);
-  const assistantNameRef = useRef("Trade PA");
-  const assistantWakeWordsRef = useRef(["hey trade pa", "trade pa", "trade pay"]);
-  const assistantSignoffRef = useRef("");
-  const userCommandsRef = useRef([]);
+  // Mirror persona props into refs so mic callbacks always see fresh values
+  const assistantNameRef = useRef(assistantName);
+  const assistantWakeWordsRef = useRef(assistantWakeWords);
+  const assistantSignoffRef = useRef(assistantSignoff);
+  const userCommandsRef = useRef(userCommands);
+
+  // Hands-free auto-exit: count consecutive noise/silence cycles.
+  // MUST be declared before useWhisper() — it's captured by onTranscriptRef closure.
+  const emptyCyclesRef = useRef(0);
+
+  // Returns true if `text` looks like background noise, not a real command
+  const isNoiseTranscript = (text) => {
+    if (!text) return true;
+    const t = text.toLowerCase().trim().replace(/[.,!?\-—'"]/g, "");
+    if (t.length < 3) return true;
+    const words = t.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return true;
+    const FILLERS = new Set([
+      "um","umm","uh","uhh","hm","hmm","mm","mmm","mhm","ah","ahh","er","err",
+      "eh","oh","ooh","oof","huh","hey","yo","ow","ouch","cough",
+    ]);
+    if (words.length === 1 && FILLERS.has(words[0])) return true;
+    if (words.every(w => FILLERS.has(w))) return true;
+    if (t.length < 6 && !/[aeiou]/.test(t)) return true;
+    return false;
+  };
   const [wakeWordReady, setWakeWordReady] = useState(false);
   const [wakeWordListening, setWakeWordListening] = useState(false);
 
@@ -3911,31 +3926,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   useEffect(() => { assistantSignoffRef.current = assistantSignoff; }, [assistantSignoff]);
   useEffect(() => { userCommandsRef.current = userCommands; }, [userCommands]);
 
-  // Load assistant persona + custom commands on login
-  useEffect(() => {
-    if (!user?.id) return;
-    (async () => {
-      const { data: s } = await supabase
-        .from("user_settings")
-        .select("assistant_name, assistant_wake_words, assistant_persona, assistant_signoff")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (s) {
-        if (s.assistant_name) setAssistantName(s.assistant_name);
-        if (s.assistant_wake_words?.length) setAssistantWakeWords(s.assistant_wake_words);
-        if (s.assistant_persona) setAssistantPersona(s.assistant_persona);
-        if (s.assistant_signoff) setAssistantSignoff(s.assistant_signoff);
-      }
-      const { data: cmds } = await supabase
-        .from("user_commands")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("enabled", true)
-        .order("created_at", { ascending: true });
-      if (cmds) setUserCommands(cmds);
-    })();
-  }, [user?.id]);
-
   // ── Error capture system ─────────────────────────────────────────────────
   const logError = async (type, fields = {}) => {
     if (!user?.id) return;
@@ -3987,26 +3977,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     (text) => onTranscriptRef.current && onTranscriptRef.current(text),
     () => onSilenceRef.current && onSilenceRef.current()
   );
-
-  // Count consecutive transcripts that were just noise — auto-exit after too many
-  const emptyCyclesRef = React.useRef(0);
-
-  // Returns true if `text` looks like background noise, not a real command
-  const isNoiseTranscript = (text) => {
-    if (!text) return true;
-    const t = text.toLowerCase().trim().replace(/[.,!?\-—'"]/g, "");
-    if (t.length < 3) return true;
-    const words = t.split(/\s+/).filter(Boolean);
-    if (words.length === 0) return true;
-    const FILLERS = new Set([
-      "um","umm","uh","uhh","hm","hmm","mm","mmm","mhm","ah","ahh","er","err",
-      "eh","oh","ooh","oof","huh","hey","yo","ow","ouch","cough",
-    ]);
-    if (words.length === 1 && FILLERS.has(words[0])) return true;
-    if (words.every(w => FILLERS.has(w))) return true;
-    if (t.length < 6 && !/[aeiou]/.test(t)) return true;
-    return false;
-  };
 
   // Update refs on every render so they always point to fresh closures
   onTranscriptRef.current = (text) => {
@@ -4074,7 +4044,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   onSilenceRef.current = () => {
     // Use handsFreeRef only — `recording` state is stale in this callback closure
     if (handsFreeRef.current) {
-      // Count a pure-silence cycle toward the auto-exit budget
       emptyCyclesRef.current += 1;
       if (emptyCyclesRef.current >= 3) {
         emptyCyclesRef.current = 0;
@@ -18134,7 +18103,39 @@ export default function App() {
   const [micBlocked, setMicBlocked] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpSlug, setHelpSlug] = useState(null);
+  // Custom assistant persona — state here in App (passed to AIAssistant as props)
+  const [assistantSetupOpen, setAssistantSetupOpen] = useState(false);
+  const [assistantName, setAssistantName] = useState("Trade PA");
+  const [assistantWakeWords, setAssistantWakeWords] = useState(["hey trade pa", "trade pa", "trade pay"]);
+  const [assistantPersona, setAssistantPersona] = useState("");
+  const [assistantSignoff, setAssistantSignoff] = useState("");
+  const [userCommands, setUserCommands] = useState([]);
   const now = Date.now();
+
+  // Load assistant persona + custom commands on login
+  useEffect(() => {
+    if (!user?.id) return;
+    (async () => {
+      const { data: s } = await supabase
+        .from("user_settings")
+        .select("assistant_name, assistant_wake_words, assistant_persona, assistant_signoff")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (s) {
+        if (s.assistant_name) setAssistantName(s.assistant_name);
+        if (s.assistant_wake_words?.length) setAssistantWakeWords(s.assistant_wake_words);
+        if (s.assistant_persona) setAssistantPersona(s.assistant_persona);
+        if (s.assistant_signoff) setAssistantSignoff(s.assistant_signoff);
+      }
+      const { data: cmds } = await supabase
+        .from("user_commands")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("enabled", true)
+        .order("created_at", { ascending: true });
+      if (cmds) setUserCommands(cmds);
+    })();
+  }, [user?.id]);
 
   // Send push notification to this user via server
   const sendPush = (opts) => {
@@ -19077,7 +19078,7 @@ export default function App() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
-        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} /></div>
+        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
@@ -19097,7 +19098,7 @@ export default function App() {
         onClose={() => setAssistantSetupOpen(false)}
         supabase={supabase}
         user={user}
-        tools={TOOLS}
+        tools={null}
         mode="edit"
         onSaved={(s) => {
           setAssistantName(s.assistant_name);
