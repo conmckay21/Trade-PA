@@ -102,11 +102,15 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
     <div
       onClick={onClose}
       style={{
-        position: "fixed", inset: 0, background: "#000c",
+        position: "fixed",
+        inset: 0,
+        background: "#000c",
         display: "flex", alignItems: "flex-start", justifyContent: "center",
-        zIndex: 400, padding: 16,
+        zIndex: 400,
+        padding: 16,
         paddingTop: "max(52px, env(safe-area-inset-top, 52px))",
-        overflowY: "auto", fontFamily: T.font,
+        overflowY: "auto",
+        fontFamily: T.font,
       }}
     >
       <div
@@ -115,10 +119,11 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
           background: T.surface,
           border: `1px solid ${T.border}`,
           borderRadius: 12,
-          width: "100%", maxWidth: 560,
-          maxHeight: "calc(100vh - 80px)",
+          width: "100%", maxWidth: 480,
+          marginBottom: 16,
           display: "flex", flexDirection: "column",
           color: T.text, overflow: "hidden",
+          minWidth: 0,
         }}
       >
         {/* Header */}
@@ -247,16 +252,18 @@ function BrowseView({ query, setQuery, activeCategory, setActiveCategory, filter
                 cursor: "pointer", textAlign: "left",
                 display: "flex", gap: 10, alignItems: "flex-start",
                 fontFamily: T.font, color: T.text,
+                width: "100%", maxWidth: "100%",
+                boxSizing: "border-box", minWidth: 0,
               }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.amber; }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.border; }}
             >
               <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{cat?.icon || "📘"}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4, wordBreak: "break-word" }}>
                   {a.title}
                 </div>
-                <div style={{ fontSize: 11, color: T.textDim, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 11, color: T.textDim, lineHeight: 1.5, wordBreak: "break-word" }}>
                   {a.summary}
                 </div>
               </div>
@@ -428,9 +435,12 @@ const CATEGORIES = [
   { id: "labour-mileage",  label: "Labour & mileage",  icon: "⏱️" },
   { id: "voice-ai",        label: "Voice & AI",        icon: "🎙️" },
   { id: "invoicing",       label: "Invoicing & paid",  icon: "💷" },
+  { id: "calls-messages",  label: "Calls & messages",  icon: "📞" },
   { id: "compliance",      label: "RAMS & compliance", icon: "🦺" },
   { id: "stock",           label: "Stock & van",       icon: "🚐" },
   { id: "accounts",        label: "Accountant & Xero", icon: "📊" },
+  { id: "reports-data",    label: "Reports & insights", icon: "📈" },
+  { id: "settings",        label: "Settings & team",   icon: "⚙️" },
   { id: "troubleshooting", label: "Troubleshooting",   icon: "🛠️" },
 ];
 
@@ -796,5 +806,616 @@ const ARTICLES = [
       "Try toggling mute and speaker once during the call.",
       "If still failing, hang up and try again — sometimes Twilio needs a moment.",
     ],
+  },
+
+  // ─── Getting started (extras) ───────────────────────────────────────────
+  {
+    slug: "enable-notifications",
+    title: "Turn on push notifications",
+    category: "getting-started",
+    summary: "Get pinged when invoices are paid, calls come in, or the AI completes a job.",
+    steps: [
+      "Install Trade PA to your home screen first (see 'Install Trade PA on your phone').",
+      "Open the app and allow notifications when prompted.",
+      "If you missed the prompt, go to your phone Settings → Trade PA → Notifications and enable them.",
+      "Test by asking the AI to do something — you'll get a confirmation push.",
+    ],
+    tips: [
+      "Notifications work best on installed PWAs. In a normal browser tab, they're hit-and-miss.",
+    ],
+    related: ["install-pwa"],
+  },
+  {
+    slug: "dashboard",
+    title: "Read your dashboard at a glance",
+    category: "getting-started",
+    summary: "Quote value, invoice value, overdue, new enquiries — all on the home screen.",
+    steps: [
+      "Tap Dashboard (under the Work category).",
+      "Tiles across the top show total quote value, invoice value, overdue, and new enquiries.",
+      "Tap any tile to jump straight to that section.",
+      "Below the tiles you'll find today's schedule, recent enquiries, outstanding invoices, and active quotes.",
+    ],
+    tips: [
+      "Dashboard is the best 30-second check-in at the start of the day.",
+    ],
+  },
+
+  // ─── Customers & jobs (extras) ──────────────────────────────────────────
+  {
+    slug: "schedule-view",
+    title: "See your week on the Schedule",
+    category: "customers-jobs",
+    summary: "Calendar view of every job, colour-coded by status.",
+    steps: [
+      "Tap Schedule under the Work category.",
+      "Toggle between day, week and month views.",
+      "Tap a job to open the full job card.",
+      "Drag jobs to reschedule (where supported on your device).",
+    ],
+    related: ["create-job"],
+  },
+  {
+    slug: "add-photos",
+    title: "Add photos to a job",
+    category: "customers-jobs",
+    summary: "Before/after evidence ready if a customer queries the bill.",
+    steps: [
+      "Open the job card.",
+      "Tap the camera/photos button.",
+      "Take a photo or pick from the gallery.",
+      "Photos are saved against the job and visible to anyone on your team.",
+    ],
+    tips: [
+      "Take a photo before you start AND after you finish — it ends 90% of disputes.",
+    ],
+  },
+  {
+    slug: "job-notes",
+    title: "Add notes to a job",
+    category: "customers-jobs",
+    summary: "The 'why' of every decision, captured as it happens.",
+    steps: [
+      "Open the job card.",
+      "Tap Notes → Add.",
+      "Voice-fill works here — speak the note, save.",
+      "Notes are timestamped and linked to the job.",
+    ],
+    tips: [
+      "Use notes for anything you'd otherwise forget — customer requests, snags, materials needed.",
+    ],
+  },
+  {
+    slug: "job-card-overview",
+    title: "What's on a Job Card",
+    category: "customers-jobs",
+    summary: "One card per job — materials, labour, photos, notes, RAMS, invoice.",
+    steps: [
+      "Open Jobs → tap any job.",
+      "Top: customer, site address, scope, dates, status.",
+      "Tabs/sections within: Materials, Labour, Photos, Notes, RAMS, Drawings, Invoice.",
+      "Everything you do on this job lives on this one card.",
+    ],
+    related: ["create-job", "add-materials", "log-labour", "add-photos"],
+  },
+  {
+    slug: "reminders",
+    title: "Use reminders so nothing slips",
+    category: "customers-jobs",
+    summary: "Tap the bell, set a reminder, get pinged at the right time.",
+    steps: [
+      "Tap the bell icon (top of every screen).",
+      "Tap Add — type or voice the reminder.",
+      "Set a date/time.",
+      "When it's due, the bell flashes and you get a push notification.",
+    ],
+    tips: [
+      "The AI can also set reminders for you — \"Remind me to chase the Patel invoice on Monday\".",
+    ],
+  },
+
+  // ─── Materials & POs (extras) ───────────────────────────────────────────
+  {
+    slug: "scan-receipt",
+    title: "Scan a receipt with AI",
+    category: "materials-pos",
+    summary: "Photograph a merchant receipt — the AI extracts items and adds them to a job.",
+    steps: [
+      "Open the AI Assistant.",
+      "Tap the camera/scan icon.",
+      "Take a photo of the receipt (clear, flat, good light).",
+      "Review the extracted line items — pick which job they go against.",
+      "Save. Items appear in Materials, ready for the invoice.",
+    ],
+    tips: [
+      "Best results in good light. If the AI misses items, edit before saving.",
+    ],
+    related: ["add-materials"],
+  },
+  {
+    slug: "purchase-orders-tab",
+    title: "Manage all Purchase Orders in one place",
+    category: "materials-pos",
+    summary: "The PO tab shows every order across every job.",
+    steps: [
+      "Tap Purchase Orders.",
+      "Filter by status (draft, sent, received).",
+      "Tap a PO to view, edit, or mark received.",
+      "Marking received auto-updates linked job materials.",
+    ],
+    related: ["raise-po"],
+  },
+
+  // ─── Labour & mileage (extras) ──────────────────────────────────────────
+  {
+    slug: "add-worker",
+    title: "Add a worker to your team",
+    category: "labour-mileage",
+    summary: "Workers (employees) are separate from subcontractors — track day rates and docs.",
+    steps: [
+      "Tap Subcontractors → + Add Worker / Sub.",
+      "Choose 'Worker' (employed) vs 'Sub' (subcontractor).",
+      "Fill in name, contact, day rate, and any docs (insurance, qualifications).",
+      "Save. They now appear in labour-logging dropdowns.",
+    ],
+    related: ["log-labour", "subcontractors"],
+  },
+  {
+    slug: "daywork-sheets",
+    title: "Use daywork sheets for ad-hoc work",
+    category: "labour-mileage",
+    summary: "Capture extra time/materials outside the original quote.",
+    steps: [
+      "Open the job → Daywork Sheet → New.",
+      "Add labour, materials, and notes for the extra work.",
+      "Get the customer to sign on screen if possible.",
+      "Daywork rolls into the final invoice as a separate section.",
+    ],
+    tips: [
+      "Use this any time work goes beyond the original scope — it's the fastest way to avoid arguments later.",
+    ],
+  },
+  {
+    slug: "mileage-auto",
+    title: "Auto-calculate mileage between two postcodes",
+    category: "labour-mileage",
+    summary: "Don't know how far it was? Trade PA works it out for you.",
+    steps: [
+      "Open Mileage → Add.",
+      "Tap the auto-calc option.",
+      "Enter or pick the start and end postcodes.",
+      "Trade PA fills in the distance — review and save.",
+    ],
+    tips: [
+      "Powered by OpenStreetMap — works for any UK postcode pair.",
+    ],
+    related: ["log-mileage"],
+  },
+  {
+    slug: "cis-statements",
+    title: "Generate a CIS statement for a sub",
+    category: "labour-mileage",
+    summary: "Auto-calculated from sub payments — one tap to produce, one tap to send.",
+    steps: [
+      "Tap CIS (under Admin).",
+      "Pick the subcontractor and the period.",
+      "Trade PA pulls in all payments and applies the right CIS deduction.",
+      "Tap Generate → Send (PDF or email).",
+    ],
+    related: ["subcontractors"],
+  },
+
+  // ─── Voice & AI (extras) ────────────────────────────────────────────────
+  {
+    slug: "ai-memory",
+    title: "Tell the AI to remember things",
+    category: "voice-ai",
+    summary: "The AI builds up memory about your business so it doesn't ask twice.",
+    steps: [
+      "Just talk normally — \"My van is registered NK21 ABC\", \"I always charge £45/hr for second-fix\".",
+      "The AI extracts and saves these as memories in the background.",
+      "Or be explicit: \"Remember that I use Wickes for plywood\".",
+      "Memories carry across every conversation.",
+    ],
+    tips: [
+      "If the AI gets something wrong, correct it once — \"No, my hourly rate is £55\" — and the memory updates.",
+    ],
+    related: ["ai-assistant"],
+  },
+  {
+    slug: "ai-tools-list",
+    title: "What can the AI Assistant actually do?",
+    category: "voice-ai",
+    summary: "A non-exhaustive list of actions the AI can take.",
+    steps: [
+      "Create jobs, customers, enquiries, materials, labour entries, POs, reminders, mileage logs.",
+      "Update statuses (mark paid, mark complete, change job status).",
+      "Convert quotes to invoices, send invoices, mark as paid.",
+      "Generate RAMS drafts and start invoice drafts.",
+      "Search across customers, jobs, invoices, and materials by voice.",
+    ],
+    tips: [
+      "If you're not sure, just ask — \"Can you do X?\" — the AI will tell you.",
+    ],
+  },
+
+  // ─── Invoicing (extras) ─────────────────────────────────────────────────
+  {
+    slug: "variation-orders",
+    title: "Raise a Variation Order (VO)",
+    category: "invoicing",
+    summary: "Formal record of scope change — protects you if the customer pushes back.",
+    steps: [
+      "Open the job → Variation Orders → New.",
+      "Describe the change in scope, the cost impact, and the time impact.",
+      "Send to the customer for approval.",
+      "Once approved, the VO rolls into the final invoice.",
+    ],
+    tips: [
+      "Use a VO any time the customer asks for something not in the original quote — even small things.",
+    ],
+  },
+  {
+    slug: "chase-overdue",
+    title: "Chase an overdue invoice",
+    category: "invoicing",
+    summary: "Trade PA flags overdue invoices automatically — chase from the same screen.",
+    steps: [
+      "Tap Invoices → filter by Overdue.",
+      "Open the invoice → Send Reminder.",
+      "Pick template (gentle / firm / final) — Trade PA sends the reminder email.",
+      "Reminder is logged against the invoice and the customer.",
+    ],
+    tips: [
+      "Send a gentle nudge after 7 days, firm after 14, final after 21. Most pay on the firm.",
+    ],
+  },
+  {
+    slug: "expenses",
+    title: "Track business expenses",
+    category: "invoicing",
+    summary: "Log fuel, parking, tools, anything — for the year-end accounts.",
+    steps: [
+      "Tap Expenses (under Admin).",
+      "Tap Add → enter date, category, amount.",
+      "Attach a receipt photo if you have one.",
+      "End of year, export the lot for your accountant.",
+    ],
+    related: ["scan-receipt"],
+  },
+
+  // ─── Calls & messages ───────────────────────────────────────────────────
+  {
+    slug: "business-phone",
+    title: "Activate your business phone number",
+    category: "calls-messages",
+    summary: "Get a Twilio business number so customers don't have your personal mobile.",
+    steps: [
+      "Tap Settings → Business Phone.",
+      "Tap Activate Business Phone.",
+      "Trade PA picks a UK number for you.",
+      "Calls and SMS to that number now route through the app.",
+    ],
+    tips: [
+      "Once activated, customers never see your personal number again.",
+    ],
+  },
+  {
+    slug: "make-call",
+    title: "Make a call to a customer",
+    category: "calls-messages",
+    summary: "Tap the customer's number — call goes out from your business number.",
+    steps: [
+      "Open the customer (Customers tab or job card).",
+      "Tap their phone number.",
+      "Allow microphone if prompted.",
+      "Call dials — your business number shows on the customer's phone.",
+    ],
+    related: ["business-phone", "calls-not-connecting"],
+  },
+  {
+    slug: "receive-call",
+    title: "Receive an incoming call",
+    category: "calls-messages",
+    summary: "Customer calls your business number — Trade PA rings inside the app.",
+    steps: [
+      "Make sure the app is open (or has notifications on if installed).",
+      "Tap Answer when the incoming call appears.",
+      "Mute, speaker and hang-up controls during the call.",
+      "Call is logged automatically against the customer.",
+    ],
+    related: ["business-phone"],
+  },
+  {
+    slug: "send-sms",
+    title: "Send an SMS to a customer",
+    category: "calls-messages",
+    summary: "Quick text from your business number, logged against the customer.",
+    steps: [
+      "Open the customer or job.",
+      "Tap SMS / message icon.",
+      "Type the message (or use voice fill).",
+      "Send. Reply comes into your Inbox.",
+    ],
+  },
+  {
+    slug: "inbox",
+    title: "Inbox — emails and messages from customers",
+    category: "calls-messages",
+    summary: "Connected email and SMS in one stream — the AI can sort and reply.",
+    steps: [
+      "Tap Inbox under Admin.",
+      "Connect your email account on first use (Gmail / Outlook).",
+      "Incoming customer emails and SMS appear here.",
+      "Use the AI to draft replies, create enquiries, or convert messages into jobs.",
+    ],
+    tips: [
+      "The AI scans inbound messages and flags potential enquiries automatically.",
+    ],
+  },
+
+  // ─── Compliance (extras) ────────────────────────────────────────────────
+  {
+    slug: "trade-certificates",
+    title: "Issue trade certificates (Gas Safe, NICEIC, OFTEC, etc.)",
+    category: "compliance",
+    summary: "Pre-filled with your registration numbers — issue from the job in minutes.",
+    steps: [
+      "Set your trade types and registration numbers in Settings → Brand & Compliance.",
+      "Open the job → Certificates → New.",
+      "Pick the certificate type (gas, electrical, oil, MCS, FENSA, etc.).",
+      "Fill in the test results / details — your registration numbers are pre-populated.",
+      "Issue the PDF — copy goes to the customer and stays on the job.",
+    ],
+    tips: [
+      "Set up your registration numbers once. After that, every cert is pre-stamped.",
+    ],
+  },
+  {
+    slug: "compliance-docs",
+    title: "Store insurance, qualifications and other compliance docs",
+    category: "compliance",
+    summary: "One vault for all your compliance — easy to send when a contractor asks.",
+    steps: [
+      "Tap Documents (under Admin).",
+      "Upload your public liability, employer's liability, qualifications, etc.",
+      "Set expiry dates so you get reminded before they lapse.",
+      "Share with a contractor in one tap when asked.",
+    ],
+  },
+  {
+    slug: "worker-docs",
+    title: "Store worker / subcontractor documents",
+    category: "compliance",
+    summary: "Insurance, CSCS cards, qualifications — all on the worker's profile.",
+    steps: [
+      "Open Subcontractors → tap the worker.",
+      "Tap + Doc.",
+      "Upload the document, set expiry date.",
+      "Trade PA flags expiring docs before they lapse.",
+    ],
+    related: ["add-worker"],
+  },
+
+  // ─── Accounts (extras) ──────────────────────────────────────────────────
+  {
+    slug: "quickbooks-sync",
+    title: "Connect QuickBooks instead of Xero",
+    category: "accounts",
+    summary: "Same auto-sync, just for QuickBooks users.",
+    steps: [
+      "Tap Settings → Integrations → QuickBooks.",
+      "Sign in to your QuickBooks account.",
+      "Approve the connection.",
+      "Sent invoices and supplier bills now sync automatically.",
+    ],
+    related: ["xero-sync"],
+  },
+
+  // ─── Reports & insights ─────────────────────────────────────────────────
+  {
+    slug: "reports-overview",
+    title: "Generate business reports",
+    category: "reports-data",
+    summary: "Income, expenses, job profitability, mileage — all exportable.",
+    steps: [
+      "Tap Reports under Admin.",
+      "Pick a report type (income, expenses, profit by job, mileage, customer breakdown).",
+      "Set the date range.",
+      "View on screen or export as PDF / CSV.",
+    ],
+    tips: [
+      "Send the year-end pack to your accountant in one go.",
+    ],
+  },
+  {
+    slug: "reviews-requests",
+    title: "Ask happy customers for a review",
+    category: "reports-data",
+    summary: "One-tap review request — Google, Facebook, Trustpilot.",
+    steps: [
+      "After job complete, open the customer.",
+      "Tap Request Review.",
+      "Pick where (Google / Facebook / Trustpilot) and the review platform link.",
+      "Customer gets a polite request with the direct link.",
+    ],
+    tips: [
+      "Send within 24 hours of finishing — that's when satisfaction is highest.",
+    ],
+  },
+
+  // ─── Settings & team ────────────────────────────────────────────────────
+  {
+    slug: "brand-setup",
+    title: "Set up your business brand",
+    category: "settings",
+    summary: "Logo, trading name, contact details — appears on every invoice and certificate.",
+    steps: [
+      "Tap Settings → Brand.",
+      "Upload your logo (square or wide).",
+      "Fill in trading name, tagline, phone, email, website, address.",
+      "Preview an invoice to check it looks right.",
+    ],
+    tips: [
+      "A clean logo on your invoices is worth more than you think — looks more professional, gets paid faster.",
+    ],
+  },
+  {
+    slug: "team-members",
+    title: "Invite team members",
+    category: "settings",
+    summary: "Add staff or office help — set per-tab permissions for each.",
+    steps: [
+      "Tap Settings → Team.",
+      "Tap Invite Team Member.",
+      "Enter their email and pick permissions (which tabs they can see).",
+      "They get an invite email — once they accept, they appear on your team.",
+    ],
+    tips: [
+      "Permissions are per-tab — your office assistant can see Invoices but not Settings, for example.",
+    ],
+  },
+  {
+    slug: "subscription",
+    title: "Manage your Trade PA subscription",
+    category: "settings",
+    summary: "View your plan, upgrade or downgrade, manage billing.",
+    steps: [
+      "Tap Settings → Subscription.",
+      "See current plan and what's included.",
+      "Upgrade for more team members or premium features.",
+      "Update payment method or cancel from the same screen.",
+    ],
+  },
+  {
+    slug: "documents-tab",
+    title: "Documents tab — what goes where",
+    category: "settings",
+    summary: "Central place for any document not tied to a specific job.",
+    steps: [
+      "Tap Documents under Admin.",
+      "Upload contracts, terms & conditions, certifications, anything else.",
+      "Tag with categories so they're findable.",
+      "Share with customers in one tap when needed.",
+    ],
+    related: ["compliance-docs"],
+  },
+
+  // ─── Troubleshooting (extras) ───────────────────────────────────────────
+  {
+    slug: "xero-not-syncing",
+    title: "Invoices not syncing to Xero",
+    category: "troubleshooting",
+    summary: "Usually a connection that needs reauthorising.",
+    steps: [
+      "Tap Settings → Integrations → Xero.",
+      "Tap Disconnect, then Reconnect.",
+      "Sign in to Xero again, approve.",
+      "Open a recent invoice and tap Re-sync.",
+    ],
+    related: ["xero-sync"],
+  },
+  {
+    slug: "notifications-not-showing",
+    title: "Push notifications not showing up",
+    category: "troubleshooting",
+    summary: "Most common cause: notification permission or app not installed.",
+    steps: [
+      "Make sure Trade PA is installed to your home screen (not just in a browser tab).",
+      "Check phone Settings → Trade PA → Notifications are on.",
+      "Open the app once after granting permission so it can register the device.",
+      "Test with a small AI action — confirmation push should arrive within a few seconds.",
+    ],
+    related: ["enable-notifications", "install-pwa"],
+  },
+
+  // ─── Gap-fill articles (profit, plans, stage pay, price work, call log) ─
+  {
+    slug: "job-profit",
+    title: "See the profit on a job",
+    category: "customers-jobs",
+    summary: "Materials + labour + mileage rolled up against the invoice — live profit view per job.",
+    steps: [
+      "Open any job card.",
+      "Tap the Profit tab.",
+      "You'll see: total invoiced, materials cost, labour cost, mileage cost, and profit in pounds and as a margin %.",
+      "Check this before you finalise the invoice — if margin looks low, something might not have been logged.",
+    ],
+    tips: [
+      "If profit looks wrong, the usual cause is unlogged materials or a labour day that was forgotten.",
+      "Mileage at 45p/mile adds up — make sure every trip to the job is captured.",
+    ],
+    related: ["log-labour", "add-materials", "log-mileage", "send-invoice"],
+  },
+  {
+    slug: "job-plans",
+    title: "Upload drawings and plans to a job",
+    category: "customers-jobs",
+    summary: "Keep architect drawings, floor plans and sketches with the job — always to hand on site.",
+    steps: [
+      "Open the job, tap the Plans tab.",
+      "Tap Upload Drawing or Plan.",
+      "Pick a PDF or image from your phone.",
+      "Saved against the job and accessible from any device.",
+    ],
+    tips: [
+      "PDFs work best for architect drawings — they stay sharp when you pinch-zoom on site.",
+      "Take a photo of any hand-drawn site sketch and upload it the same way.",
+    ],
+  },
+  {
+    slug: "stage-payments",
+    title: "Set up stage payments on a big job",
+    category: "quotes-invoices",
+    summary: "Break a job into 30/40/30 (or custom) milestones — invoice each stage as you hit it.",
+    steps: [
+      "Open the job. Tap the invoice menu and choose Stage Payments.",
+      "Accept the 30/40/30 default, or enter your own split (e.g. 50/25/25, or fixed amounts).",
+      "As each stage completes, tap to generate that stage's invoice — it pulls materials and labour up to that point.",
+      "Customer pays each stage separately via the pay-now link.",
+    ],
+    voicePrompts: [
+      "Set up stage payments for the Patel kitchen, 30/40/30",
+      "Add a 50% deposit stage payment to the Beech Road extension",
+    ],
+    tips: [
+      "Default is 30/40/30 (start / mid-point / completion) — works for most domestic jobs.",
+      "For bigger contract work, a 20% deposit + 4 monthly stages + 10% retention is a common pattern.",
+    ],
+    related: ["send-invoice", "take-payment"],
+  },
+  {
+    slug: "price-work",
+    title: "Price work — quick job costing",
+    category: "customers-jobs",
+    summary: "Rough out a price for a job before you turn it into a quote.",
+    steps: [
+      "Open the job, tap Price Work.",
+      "Add expected materials and labour (rough is fine).",
+      "Trade PA shows target price at your mark-up %.",
+      "When you're happy, convert the price work into a formal Quote with one tap.",
+    ],
+    tips: [
+      "Use this to sanity-check that you're not under-pricing before sending a quote.",
+      "Set your default mark-up in Settings — Price Work will use it automatically.",
+    ],
+    related: ["quote-flow"],
+  },
+  {
+    slug: "call-log",
+    title: "View your call history",
+    category: "phone-calls",
+    summary: "Every incoming and outgoing call through your Trade PA number is logged against the customer.",
+    steps: [
+      "Open any customer.",
+      "Tap the Calls tab on their record.",
+      "See every call — date, duration, direction (in/out), and voicemail if there is one.",
+      "Tap a voicemail to play it back.",
+    ],
+    tips: [
+      "Missed calls also log here — good backup if you miss one while on a job.",
+      "Voicemails are transcribed by Trade PA so you can read them at a glance.",
+    ],
+    related: ["twilio-phone", "make-call"],
   },
 ];
