@@ -15547,7 +15547,6 @@ function SubcontractorsTab({ user, brand }) {
   const filteredPayments = filterSub === "all" ? payments : payments.filter(p => p.subcontractor_id === filterSub);
 
   return (
-    <>
     <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {/* Row 1: title + action buttons */}
@@ -16050,8 +16049,153 @@ function SubcontractorsTab({ user, brand }) {
         </div>
       )}
 
+      {/* ── Edit Payment Modal ───────────────────────────────────────── */}
+      {editingPayment && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "20px 16px" }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Payment</div>
+              <button onClick={() => setEditingPayment(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={S.label}>Subcontractor</label>
+                <select style={S.input} value={editingPayment.subcontractor_id} onChange={e => setEditingPayment(p => ({...p, subcontractor_id: e.target.value}))}>
+                  {subs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Date</label><input style={S.input} type="date" value={editingPayment.date||""} onChange={e => setEditingPayment(p => ({...p, date: e.target.value}))}/></div>
+                <div>
+                  <label style={S.label}>Payment Type</label>
+                  <select style={S.input} value={editingPayment.payment_type||"price_work"} onChange={e => setEditingPayment(p => ({...p, payment_type: e.target.value}))}>
+                    <option value="price_work">Price Work</option>
+                    <option value="day_rate">Day Rate</option>
+                    <option value="hourly">Hourly</option>
+                  </select>
+                </div>
+              </div>
+              {(editingPayment.payment_type === "price_work") && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Labour (£)</label><input style={S.input} type="number" value={editingPayment.labour_amount||""} onChange={e => setEditingPayment(p => ({...p, labour_amount: e.target.value}))}/></div>
+                  <div><label style={S.label}>Materials (£)</label><input style={S.input} type="number" value={editingPayment.materials_amount||""} onChange={e => setEditingPayment(p => ({...p, materials_amount: e.target.value}))}/></div>
+                </div>
+              )}
+              {(editingPayment.payment_type === "day_rate") && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Days</label><input style={S.input} type="number" value={editingPayment.days||""} onChange={e => setEditingPayment(p => ({...p, days: e.target.value}))}/></div>
+                  <div><label style={S.label}>Rate (£/day)</label><input style={S.input} type="number" value={editingPayment.rate||""} onChange={e => setEditingPayment(p => ({...p, rate: e.target.value}))}/></div>
+                </div>
+              )}
+              {(editingPayment.payment_type === "hourly") && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Hours</label><input style={S.input} type="number" value={editingPayment.hours||""} onChange={e => setEditingPayment(p => ({...p, hours: e.target.value}))}/></div>
+                  <div><label style={S.label}>Rate (£/hr)</label><input style={S.input} type="number" value={editingPayment.rate||""} onChange={e => setEditingPayment(p => ({...p, rate: e.target.value}))}/></div>
+                </div>
+              )}
+              {(editingPayment.payment_type !== "price_work") && (
+                <div><label style={S.label}>Gross Override (£) — leave blank to calculate</label><input style={S.input} type="number" value={editingPayment.gross||""} onChange={e => setEditingPayment(p => ({...p, gross: e.target.value}))}/></div>
+              )}
+              <div style={S.grid2}>
+                <div><label style={S.label}>Invoice No.</label><input style={S.input} value={editingPayment.invoice_number||""} onChange={e => setEditingPayment(p => ({...p, invoice_number: e.target.value}))}/></div>
+                <div><label style={S.label}>Job Ref</label><input style={S.input} value={editingPayment.job_ref||""} onChange={e => setEditingPayment(p => ({...p, job_ref: e.target.value}))}/></div>
+              </div>
+              <div><label style={S.label}>Description</label><input style={S.input} value={editingPayment.description||""} onChange={e => setEditingPayment(p => ({...p, description: e.target.value}))}/></div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={updatePayment}>Save Changes</button>
+              <button style={S.btn("ghost")} onClick={() => setEditingPayment(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Worker Modal ────────────────────────────────────────── */}
+      {editingWorker && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "20px 16px" }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Worker</div>
+              <button onClick={() => setEditingWorker(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div><label style={S.label}>Name</label><input style={S.input} value={editingWorker.name||""} onChange={e => setEditingWorker(w => ({...w, name: e.target.value}))}/></div>
+              <div style={S.grid2}>
+                <div>
+                  <label style={S.label}>Type</label>
+                  <select style={S.input} value={editingWorker.type||"subcontractor"} onChange={e => setEditingWorker(w => ({...w, type: e.target.value}))}>
+                    <option value="subcontractor">Subcontractor (CIS)</option>
+                    <option value="employed">Employed (PAYE)</option>
+                  </select>
+                </div>
+                <div><label style={S.label}>Role / Trade</label><input style={S.input} value={editingWorker.role||""} onChange={e => setEditingWorker(w => ({...w, role: e.target.value}))}/></div>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Day Rate (£)</label><input style={S.input} type="number" value={editingWorker.day_rate||""} onChange={e => setEditingWorker(w => ({...w, day_rate: e.target.value}))}/></div>
+                <div><label style={S.label}>Hourly Rate (£)</label><input style={S.input} type="number" value={editingWorker.hourly_rate||""} onChange={e => setEditingWorker(w => ({...w, hourly_rate: e.target.value}))}/></div>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Email</label><input style={S.input} type="email" value={editingWorker.email||""} onChange={e => setEditingWorker(w => ({...w, email: e.target.value}))}/></div>
+                <div><label style={S.label}>Phone</label><input style={S.input} value={editingWorker.phone||""} onChange={e => setEditingWorker(w => ({...w, phone: e.target.value}))}/></div>
+              </div>
+              {editingWorker.type === "subcontractor" && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>UTR Number</label><input style={S.input} value={editingWorker.utr||""} onChange={e => setEditingWorker(w => ({...w, utr: e.target.value}))}/></div>
+                  <div>
+                    <label style={S.label}>CIS Rate</label>
+                    <select style={S.input} value={editingWorker.cis_rate||20} onChange={e => setEditingWorker(w => ({...w, cis_rate: parseInt(e.target.value)}))}>
+                      <option value={20}>20% — Registered</option>
+                      <option value={30}>30% — Unregistered</option>
+                      <option value={0}>0% — Gross</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              {editingWorker.type === "employed" && (
+                <div><label style={S.label}>NI Number</label><input style={S.input} value={editingWorker.ni_number||""} onChange={e => setEditingWorker(w => ({...w, ni_number: e.target.value}))}/></div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={updateWorker}>Save Changes</button>
+              <button style={S.btn("ghost")} onClick={() => setEditingWorker(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Confirmations ─────────────────────────────────────── */}
+      {deletingPayment && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 360, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete Payment?</div>
+            <div style={{ fontSize: 13, color: C.textDim, marginBottom: 20 }}>
+              {subs.find(s => s.id === deletingPayment.subcontractor_id)?.name} · £{parseFloat(deletingPayment.gross||0).toFixed(2)} · {new Date(deletingPayment.date).toLocaleDateString("en-GB")}
+              <br/>This cannot be undone.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#ef4444", borderColor: "#ef444455" }} onClick={() => deletePayment(deletingPayment.id)}>Yes, delete</button>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => setDeletingPayment(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deletingWorker && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 360, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete Worker?</div>
+            <div style={{ fontSize: 13, color: C.textDim, marginBottom: 20 }}>
+              {deletingWorker.name} · {deletingWorker.role || deletingWorker.type}
+              <br/>This will also remove their documents. Cannot be undone.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#ef4444", borderColor: "#ef444455" }} onClick={() => deleteWorker(deletingWorker.id)}>Yes, delete</button>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => setDeletingWorker(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-    </>
   );
 }
 // ─── DOCUMENT STORAGE ────────────────────────────────────────────────────────
@@ -16436,156 +16580,6 @@ function ReviewsTab({ user, brand, customers }) {
         </div>
       )}
     </div>
-
-      {/* ── Edit Payment Modal ───────────────────────────────────────── */}
-      {editingPayment && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "20px 16px" }}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Payment</div>
-              <button onClick={() => setEditingPayment(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <label style={S.label}>Subcontractor</label>
-                <select style={S.input} value={editingPayment.subcontractor_id} onChange={e => setEditingPayment(p => ({...p, subcontractor_id: e.target.value}))}>
-                  {subs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-              <div style={S.grid2}>
-                <div><label style={S.label}>Date</label><input style={S.input} type="date" value={editingPayment.date||""} onChange={e => setEditingPayment(p => ({...p, date: e.target.value}))}/></div>
-                <div>
-                  <label style={S.label}>Payment Type</label>
-                  <select style={S.input} value={editingPayment.payment_type||"price_work"} onChange={e => setEditingPayment(p => ({...p, payment_type: e.target.value}))}>
-                    <option value="price_work">Price Work</option>
-                    <option value="day_rate">Day Rate</option>
-                    <option value="hourly">Hourly</option>
-                  </select>
-                </div>
-              </div>
-              {(editingPayment.payment_type === "price_work") && (
-                <div style={S.grid2}>
-                  <div><label style={S.label}>Labour (£)</label><input style={S.input} type="number" value={editingPayment.labour_amount||""} onChange={e => setEditingPayment(p => ({...p, labour_amount: e.target.value}))}/></div>
-                  <div><label style={S.label}>Materials (£)</label><input style={S.input} type="number" value={editingPayment.materials_amount||""} onChange={e => setEditingPayment(p => ({...p, materials_amount: e.target.value}))}/></div>
-                </div>
-              )}
-              {(editingPayment.payment_type === "day_rate") && (
-                <div style={S.grid2}>
-                  <div><label style={S.label}>Days</label><input style={S.input} type="number" value={editingPayment.days||""} onChange={e => setEditingPayment(p => ({...p, days: e.target.value}))}/></div>
-                  <div><label style={S.label}>Rate (£/day)</label><input style={S.input} type="number" value={editingPayment.rate||""} onChange={e => setEditingPayment(p => ({...p, rate: e.target.value}))}/></div>
-                </div>
-              )}
-              {(editingPayment.payment_type === "hourly") && (
-                <div style={S.grid2}>
-                  <div><label style={S.label}>Hours</label><input style={S.input} type="number" value={editingPayment.hours||""} onChange={e => setEditingPayment(p => ({...p, hours: e.target.value}))}/></div>
-                  <div><label style={S.label}>Rate (£/hr)</label><input style={S.input} type="number" value={editingPayment.rate||""} onChange={e => setEditingPayment(p => ({...p, rate: e.target.value}))}/></div>
-                </div>
-              )}
-              {(editingPayment.payment_type !== "price_work") && (
-                <div><label style={S.label}>Gross Override (£) — leave blank to calculate</label><input style={S.input} type="number" value={editingPayment.gross||""} onChange={e => setEditingPayment(p => ({...p, gross: e.target.value}))}/></div>
-              )}
-              <div style={S.grid2}>
-                <div><label style={S.label}>Invoice No.</label><input style={S.input} value={editingPayment.invoice_number||""} onChange={e => setEditingPayment(p => ({...p, invoice_number: e.target.value}))}/></div>
-                <div><label style={S.label}>Job Ref</label><input style={S.input} value={editingPayment.job_ref||""} onChange={e => setEditingPayment(p => ({...p, job_ref: e.target.value}))}/></div>
-              </div>
-              <div><label style={S.label}>Description</label><input style={S.input} value={editingPayment.description||""} onChange={e => setEditingPayment(p => ({...p, description: e.target.value}))}/></div>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={updatePayment}>Save Changes</button>
-              <button style={S.btn("ghost")} onClick={() => setEditingPayment(null)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Edit Worker Modal ────────────────────────────────────────── */}
-      {editingWorker && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "20px 16px" }}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Worker</div>
-              <button onClick={() => setEditingWorker(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div><label style={S.label}>Name</label><input style={S.input} value={editingWorker.name||""} onChange={e => setEditingWorker(w => ({...w, name: e.target.value}))}/></div>
-              <div style={S.grid2}>
-                <div>
-                  <label style={S.label}>Type</label>
-                  <select style={S.input} value={editingWorker.type||"subcontractor"} onChange={e => setEditingWorker(w => ({...w, type: e.target.value}))}>
-                    <option value="subcontractor">Subcontractor (CIS)</option>
-                    <option value="employed">Employed (PAYE)</option>
-                  </select>
-                </div>
-                <div><label style={S.label}>Role / Trade</label><input style={S.input} value={editingWorker.role||""} onChange={e => setEditingWorker(w => ({...w, role: e.target.value}))}/></div>
-              </div>
-              <div style={S.grid2}>
-                <div><label style={S.label}>Day Rate (£)</label><input style={S.input} type="number" value={editingWorker.day_rate||""} onChange={e => setEditingWorker(w => ({...w, day_rate: e.target.value}))}/></div>
-                <div><label style={S.label}>Hourly Rate (£)</label><input style={S.input} type="number" value={editingWorker.hourly_rate||""} onChange={e => setEditingWorker(w => ({...w, hourly_rate: e.target.value}))}/></div>
-              </div>
-              <div style={S.grid2}>
-                <div><label style={S.label}>Email</label><input style={S.input} type="email" value={editingWorker.email||""} onChange={e => setEditingWorker(w => ({...w, email: e.target.value}))}/></div>
-                <div><label style={S.label}>Phone</label><input style={S.input} value={editingWorker.phone||""} onChange={e => setEditingWorker(w => ({...w, phone: e.target.value}))}/></div>
-              </div>
-              {editingWorker.type === "subcontractor" && (
-                <div style={S.grid2}>
-                  <div><label style={S.label}>UTR Number</label><input style={S.input} value={editingWorker.utr||""} onChange={e => setEditingWorker(w => ({...w, utr: e.target.value}))}/></div>
-                  <div>
-                    <label style={S.label}>CIS Rate</label>
-                    <select style={S.input} value={editingWorker.cis_rate||20} onChange={e => setEditingWorker(w => ({...w, cis_rate: parseInt(e.target.value)}))}>
-                      <option value={20}>20% — Registered</option>
-                      <option value={30}>30% — Unregistered</option>
-                      <option value={0}>0% — Gross</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-              {editingWorker.type === "employed" && (
-                <div><label style={S.label}>NI Number</label><input style={S.input} value={editingWorker.ni_number||""} onChange={e => setEditingWorker(w => ({...w, ni_number: e.target.value}))}/></div>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={updateWorker}>Save Changes</button>
-              <button style={S.btn("ghost")} onClick={() => setEditingWorker(null)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Delete Confirmations ─────────────────────────────────────── */}
-      {deletingPayment && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 360, width: "100%", textAlign: "center" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete Payment?</div>
-            <div style={{ fontSize: 13, color: C.textDim, marginBottom: 20 }}>
-              {subs.find(s => s.id === deletingPayment.subcontractor_id)?.name} · £{parseFloat(deletingPayment.gross||0).toFixed(2)} · {new Date(deletingPayment.date).toLocaleDateString("en-GB")}
-              <br/>This cannot be undone.
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#ef4444", borderColor: "#ef444455" }} onClick={() => deletePayment(deletingPayment.id)}>Yes, delete</button>
-              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => setDeletingPayment(null)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {deletingWorker && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 360, width: "100%", textAlign: "center" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete Worker?</div>
-            <div style={{ fontSize: 13, color: C.textDim, marginBottom: 20 }}>
-              {deletingWorker.name} · {deletingWorker.role || deletingWorker.type}
-              <br/>This will also remove their documents. Cannot be undone.
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#ef4444", borderColor: "#ef444455" }} onClick={() => deleteWorker(deletingWorker.id)}>Yes, delete</button>
-              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => setDeletingWorker(null)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-    </>
   );
 }
 // ─── STOCK INVENTORY ─────────────────────────────────────────────────────────
