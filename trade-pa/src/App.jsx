@@ -4659,6 +4659,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "add_worker_document", description: "Add a certificate, insurance or licence to a worker. Use when user says 'add [name]'s CSCS card', 'log insurance for [worker]', 'add Gas Safe number'. Always include expiry_date if mentioned.", input_schema: { type: "object", properties: { worker_name: { type: "string" }, doc_type: { type: "string", description: "cscs, gas_safe, public_liability, employers_liability, driving_licence, right_to_work, other" }, doc_number: { type: "string" }, issued_date: { type: "string" }, expiry_date: { type: "string", description: "YYYY-MM-DD — always include if mentioned" }, notes: { type: "string" } }, required: ["worker_name","doc_type"] } },
     { name: "list_expiring_documents", description: "Show worker certs and documents expiring soon. Use when user asks 'what's expiring', 'any certs due', 'check documents'.", input_schema: { type: "object", properties: { days: { type: "number", description: "Days ahead to check — default 60" } } } },
     { name: "delete_subcontractor", description: "Delete/remove a subcontractor.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+    { name: "update_worker", description: "Update a worker's details — rate, CIS rate, role, contact info. Use when user says 'change [name]'s day rate to £X', 'update [worker]'s CIS to 20%'.", input_schema: { type: "object", properties: { name: { type: "string", description: "Worker name to find" }, day_rate: { type: "number" }, hourly_rate: { type: "number" }, cis_rate: { type: "number", description: "20, 30, or 0" }, role: { type: "string" }, email: { type: "string" }, phone: { type: "string" }, utr: { type: "string" } }, required: ["name"] } },
+    { name: "delete_worker", description: "Delete a worker record. Use when user says 'remove [name] from workers', 'delete [worker]'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+    { name: "update_subcontractor_payment", description: "Correct a subcontractor payment — change amount, date, description, labour/materials split. Use when user says 'fix [name]'s payment', 'change the £X payment to £Y', 'that payment was wrong'.", input_schema: { type: "object", properties: { name: { type: "string", description: "Subcontractor name" }, date: { type: "string", description: "Date of payment to find YYYY-MM-DD — helps identify which payment" }, gross: { type: "number", description: "New gross total" }, labour_amount: { type: "number" }, materials_amount: { type: "number" }, new_date: { type: "string", description: "New date if changing date" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name"] } },
+    { name: "delete_subcontractor_payment", description: "Delete a subcontractor payment. Use when user says 'delete that payment', 'remove [name]'s payment on [date]'.", input_schema: { type: "object", properties: { name: { type: "string" }, date: { type: "string", description: "Date YYYY-MM-DD to identify the payment" }, gross: { type: "number", description: "Amount to identify the payment" } }, required: ["name"] } },
     { name: "delete_job_card", description: "Delete a job card permanently.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
     { name: "delete_mileage", description: "Delete a mileage log. By default deletes the most recent one. If user specifies a date or location, use those to target the right entry.", input_schema: { type: "object", properties: { date: { type: "string", description: "Date of trip to delete YYYY-MM-DD" }, from_location: { type: "string", description: "Start location to match" }, to_location: { type: "string", description: "Destination to match" } } } },
     { name: "delete_rams", description: "Delete a RAMS document.", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
@@ -6521,6 +6525,80 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (!found?.length) return `Subcontractor not found.`;
           await supabase.from("subcontractors").delete().eq("id", found[0].id);
           return `${found[0].name} removed from subcontractors.`;
+        }
+        case "update_worker": {
+          const { data: wMatches } = await supabase.from("workers").select("*").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          if (!wMatches?.length) return `Worker "${input.name}" not found.`;
+          const w = wMatches[0];
+          const updates = {};
+          if (input.day_rate !== undefined) updates.day_rate = parseFloat(input.day_rate);
+          if (input.hourly_rate !== undefined) updates.hourly_rate = parseFloat(input.hourly_rate);
+          if (input.cis_rate !== undefined) updates.cis_rate = parseInt(input.cis_rate);
+          if (input.role) updates.role = input.role;
+          if (input.email) updates.email = input.email;
+          if (input.phone) updates.phone = input.phone;
+          if (input.utr) updates.utr = input.utr;
+          if (!Object.keys(updates).length) return `Nothing to update for ${w.name} — tell me what to change.`;
+          const { error: wUpdErr } = await supabase.from("workers").update(updates).eq("id", w.id).eq("user_id", user?.id);
+          if (wUpdErr) return `Failed to update: ${wUpdErr.message}`;
+          const changes = Object.entries(updates).map(([k,v]) => `${k.replace(/_/g," ")} → ${v}`).join(", ");
+          return `${w.name} updated: ${changes}.`;
+        }
+        case "delete_worker": {
+          const { data: wDel } = await supabase.from("workers").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          if (!wDel?.length) return `Worker "${input.name}" not found.`;
+          const { error: wDelErr } = await supabase.from("workers").delete().eq("id", wDel[0].id).eq("user_id", user?.id);
+          if (wDelErr) return `Failed to delete: ${wDelErr.message}`;
+          return `${wDel[0].name} removed from workers.`;
+        }
+        case "update_subcontractor_payment": {
+          const { data: subFind } = await supabase.from("subcontractors").select("id,name,cis_rate").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          if (!subFind?.length) return `Subcontractor "${input.name}" not found.`;
+          const sub = subFind[0];
+          let pQuery = supabase.from("subcontractor_payments").select("*").eq("user_id", user?.id).eq("subcontractor_id", sub.id).order("date", { ascending: false });
+          if (input.date) pQuery = pQuery.eq("date", input.date);
+          const { data: spRows } = await pQuery.limit(5);
+          if (!spRows?.length) return `No payment found for ${sub.name}${input.date ? ` on ${input.date}` : ""}. Check the Subcontractors tab.`;
+          const pay = input.gross
+            ? spRows.find(p => Math.abs(parseFloat(p.gross) - parseFloat(input.gross)) < 1) || spRows[0]
+            : spRows[0];
+          const spUpdates = {};
+          if (input.new_date) spUpdates.date = input.new_date;
+          if (input.description) spUpdates.description = input.description;
+          if (input.invoice_number) spUpdates.invoice_number = input.invoice_number;
+          let newGross = parseFloat(pay.gross);
+          let newLabour = parseFloat(pay.labour_amount || 0);
+          let newMats = parseFloat(pay.materials_amount || 0);
+          if (input.labour_amount !== undefined) newLabour = parseFloat(input.labour_amount);
+          if (input.materials_amount !== undefined) newMats = parseFloat(input.materials_amount);
+          if (input.gross !== undefined) newGross = parseFloat(input.gross);
+          if (input.labour_amount !== undefined || input.materials_amount !== undefined) {
+            if (newLabour || newMats) newGross = newLabour + newMats;
+            spUpdates.labour_amount = newLabour || null;
+            spUpdates.materials_amount = newMats || null;
+          }
+          const cisBase = (pay.payment_type === "price_work" && newLabour > 0) ? newLabour : newGross;
+          const cisRate = (sub.cis_rate || pay.cis_rate || 20) / 100;
+          spUpdates.gross = newGross;
+          spUpdates.deduction = parseFloat((cisBase * cisRate).toFixed(2));
+          spUpdates.net = parseFloat((newGross - spUpdates.deduction).toFixed(2));
+          const { error: spUpdErr } = await supabase.from("subcontractor_payments").update(spUpdates).eq("id", pay.id).eq("user_id", user?.id);
+          if (spUpdErr) return `Failed to update: ${spUpdErr.message}`;
+          return `Payment updated for ${sub.name}: gross £${spUpdates.gross.toFixed(2)}, CIS -£${spUpdates.deduction.toFixed(2)}, net £${spUpdates.net.toFixed(2)}.`;
+        }
+        case "delete_subcontractor_payment": {
+          const { data: subFindDel } = await supabase.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          if (!subFindDel?.length) return `Subcontractor "${input.name}" not found.`;
+          let dpQuery = supabase.from("subcontractor_payments").select("id,gross,date").eq("user_id", user?.id).eq("subcontractor_id", subFindDel[0].id).order("date", { ascending: false });
+          if (input.date) dpQuery = dpQuery.eq("date", input.date);
+          const { data: dpRows } = await dpQuery.limit(5);
+          if (!dpRows?.length) return `No payment found for ${subFindDel[0].name}${input.date ? ` on ${input.date}` : ""}.`;
+          const dp = input.gross
+            ? dpRows.find(p => Math.abs(parseFloat(p.gross) - parseFloat(input.gross)) < 1) || dpRows[0]
+            : dpRows[0];
+          const { error: dpDelErr } = await supabase.from("subcontractor_payments").delete().eq("id", dp.id).eq("user_id", user?.id);
+          if (dpDelErr) return `Failed to delete: ${dpDelErr.message}`;
+          return `Payment of £${parseFloat(dp.gross).toFixed(2)} on ${dp.date} deleted for ${subFindDel[0].name}.`;
         }
         case "delete_job_card": {
           const term = (input.customer || input.title || "").toLowerCase();
@@ -15252,6 +15330,10 @@ function SubcontractorsTab({ user, brand }) {
   }, [user?.id]);
   const [payForm, setPayForm] = useState({ subcontractor_id: "", job_id: "", date: new Date().toISOString().split("T")[0], payment_type: "price_work", days: "", hours: "", rate: "", gross: "", labour_amount: "", material_items: [{ desc: "", amount: "" }], job_ref: "", description: "", invoice_number: "" });
   const [filterSub, setFilterSub] = useState("all");
+  const [editingPayment, setEditingPayment] = useState(null); // payment object being edited
+  const [editingWorker, setEditingWorker] = useState(null);   // worker object being edited
+  const [deletingPayment, setDeletingPayment] = useState(null);
+  const [deletingWorker, setDeletingWorker] = useState(null);
 
   useEffect(() => { if (user?.id) load(); }, [user?.id]);
 
@@ -15359,6 +15441,71 @@ function SubcontractorsTab({ user, brand }) {
       created_at: new Date().toISOString(),
     }).select().single();
     if (!error && data) { setPayments(p => [data, ...p]); setView("list"); setSubScanResult(null); setSubScanImage(null); setPayForm({ subcontractor_id: "", job_id: "", date: new Date().toISOString().split("T")[0], payment_type: "price_work", days: "", hours: "", rate: "", gross: "", labour_amount: "", material_items: [{ desc: "", amount: "" }], job_ref: "", description: "", invoice_number: "" }); }
+  };
+
+  const updatePayment = async () => {
+    if (!editingPayment) return;
+    const sub = subs.find(s => s.id === editingPayment.subcontractor_id);
+    let gross = parseFloat(editingPayment.gross) || 0;
+    let labourAmount = parseFloat(editingPayment.labour_amount) || 0;
+    let materialsAmount = parseFloat(editingPayment.materials_amount) || 0;
+    if (editingPayment.payment_type === "day_rate" && editingPayment.days && editingPayment.rate) {
+      gross = parseFloat(editingPayment.days) * parseFloat(editingPayment.rate);
+    } else if (editingPayment.payment_type === "hourly" && editingPayment.hours && editingPayment.rate) {
+      gross = parseFloat(editingPayment.hours) * parseFloat(editingPayment.rate);
+    } else if (editingPayment.payment_type === "price_work" && (labourAmount || materialsAmount)) {
+      gross = labourAmount + materialsAmount;
+    }
+    if (!gross) return;
+    const cisRate = (sub?.cis_rate || editingPayment.cis_rate || 20) / 100;
+    const cisBase = (editingPayment.payment_type === "price_work" && labourAmount > 0) ? labourAmount : gross;
+    const deduction = parseFloat((cisBase * cisRate).toFixed(2));
+    const net = parseFloat((gross - deduction).toFixed(2));
+    const { error } = await supabase.from("subcontractor_payments").update({
+      date: editingPayment.date, gross, deduction, net,
+      payment_type: editingPayment.payment_type,
+      days: parseFloat(editingPayment.days) || null,
+      hours: parseFloat(editingPayment.hours) || null,
+      rate: parseFloat(editingPayment.rate) || null,
+      labour_amount: labourAmount || null,
+      materials_amount: materialsAmount || null,
+      job_id: editingPayment.job_id || null,
+      job_ref: editingPayment.job_ref || "",
+      description: editingPayment.description || "",
+      invoice_number: editingPayment.invoice_number || "",
+    }).eq("id", editingPayment.id).eq("user_id", user.id);
+    if (!error) {
+      setPayments(ps => ps.map(p => p.id === editingPayment.id
+        ? { ...editingPayment, gross, deduction, net } : p));
+      setEditingPayment(null);
+    }
+  };
+
+  const deletePayment = async (id) => {
+    const { error } = await supabase.from("subcontractor_payments").delete().eq("id", id).eq("user_id", user.id);
+    if (!error) { setPayments(ps => ps.filter(p => p.id !== id)); setDeletingPayment(null); }
+  };
+
+  const updateWorker = async () => {
+    if (!editingWorker) return;
+    const { error } = await supabase.from("workers").update({
+      name: editingWorker.name, type: editingWorker.type,
+      role: editingWorker.role || "", email: editingWorker.email || "",
+      phone: editingWorker.phone || "", address: editingWorker.address || "",
+      day_rate: parseFloat(editingWorker.day_rate) || null,
+      hourly_rate: parseFloat(editingWorker.hourly_rate) || null,
+      utr: editingWorker.utr || "", cis_rate: parseInt(editingWorker.cis_rate) || 20,
+      ni_number: editingWorker.ni_number || "",
+    }).eq("id", editingWorker.id).eq("user_id", user.id);
+    if (!error) {
+      setWorkers(ws => ws.map(w => w.id === editingWorker.id ? { ...w, ...editingWorker } : w));
+      setEditingWorker(null);
+    }
+  };
+
+  const deleteWorker = async (id) => {
+    const { error } = await supabase.from("workers").delete().eq("id", id).eq("user_id", user.id);
+    if (!error) { setWorkers(ws => ws.filter(w => w.id !== id)); setDeletingWorker(null); }
   };
 
   const generateStatement = (sub, month) => {
@@ -15509,7 +15656,11 @@ function SubcontractorsTab({ user, brand }) {
                       ))}
                     </div>
                   )}
-                  <button onClick={() => { setDocForm(f => ({...f, worker_id: w.id})); setView("add_doc"); }} style={{ ...S.btn("ghost"), fontSize: 10, marginTop: 6, padding: "3px 8px" }}>+ Add cert/doc</button>
+                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                    <button onClick={() => { setDocForm(f => ({...f, worker_id: w.id})); setView("add_doc"); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "2px 8px" }}>+ Doc</button>
+                    <button onClick={() => setEditingWorker({...w})} style={{ ...S.btn("ghost"), fontSize: 11, padding: "2px 8px" }}>✏️ Edit</button>
+                    <button onClick={() => setDeletingWorker(w)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "2px 8px", color: "#ef4444", borderColor: "#ef444433" }}>🗑️ Delete</button>
+                  </div>
                 </div>
               );
             })}
@@ -15576,14 +15727,28 @@ function SubcontractorsTab({ user, brand }) {
           {filteredPayments.map(p => {
             const sub = subs.find(s => s.id === p.subcontractor_id);
             return (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{sub?.name || "Unknown"}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>{new Date(p.date).toLocaleDateString("en-GB")} {p.description && `· ${p.description}`} {p.job_ref && `· ${p.job_ref}`}</div>
+              <div key={p.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{sub?.name || "Unknown"}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{new Date(p.date).toLocaleDateString("en-GB")}{p.invoice_number ? ` · ${p.invoice_number}` : ""}{p.description ? ` · ${p.description}` : ""}{p.job_ref ? ` · ${p.job_ref}` : ""}</div>
+                    {p.payment_type === "price_work" && (p.labour_amount > 0 || p.materials_amount > 0) && (
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                        {p.labour_amount > 0 && `Labour £${parseFloat(p.labour_amount).toFixed(2)}`}
+                        {p.labour_amount > 0 && p.materials_amount > 0 && " · "}
+                        {p.materials_amount > 0 && `Materials £${parseFloat(p.materials_amount).toFixed(2)}`}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, color: C.muted }}>Gross: <span style={{ color: C.text, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.gross||0).toFixed(2)}</span></div>
+                    <div style={{ fontSize: 12, color: C.muted }}>CIS: <span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>-£{parseFloat(p.deduction||0).toFixed(2)}</span></div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Net: <span style={{ color: C.green, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.net||0).toFixed(2)}</span></div>
+                  </div>
                 </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 12, color: C.muted }}>Gross: <span style={{ color: C.text, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.gross||0).toFixed(2)}</span></div>
-                  <div style={{ fontSize: 12, color: C.muted }}>CIS: <span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.deduction||0).toFixed(2)}</span> · Net: <span style={{ color: C.green, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.net||0).toFixed(2)}</span></div>
+                <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                  <button onClick={() => setEditingPayment({...p})} style={{ ...S.btn("ghost"), fontSize: 11, padding: "2px 10px" }}>✏️ Edit</button>
+                  <button onClick={() => setDeletingPayment(p)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "2px 10px", color: "#ef4444", borderColor: "#ef444433" }}>🗑️ Delete</button>
                 </div>
               </div>
             );
@@ -16268,6 +16433,155 @@ function ReviewsTab({ user, brand, customers }) {
           </div>
         </div>
       )}
+    </div>
+
+      {/* ── Edit Payment Modal ───────────────────────────────────────── */}
+      {editingPayment && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "20px 16px" }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Payment</div>
+              <button onClick={() => setEditingPayment(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={S.label}>Subcontractor</label>
+                <select style={S.input} value={editingPayment.subcontractor_id} onChange={e => setEditingPayment(p => ({...p, subcontractor_id: e.target.value}))}>
+                  {subs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Date</label><input style={S.input} type="date" value={editingPayment.date||""} onChange={e => setEditingPayment(p => ({...p, date: e.target.value}))}/></div>
+                <div>
+                  <label style={S.label}>Payment Type</label>
+                  <select style={S.input} value={editingPayment.payment_type||"price_work"} onChange={e => setEditingPayment(p => ({...p, payment_type: e.target.value}))}>
+                    <option value="price_work">Price Work</option>
+                    <option value="day_rate">Day Rate</option>
+                    <option value="hourly">Hourly</option>
+                  </select>
+                </div>
+              </div>
+              {(editingPayment.payment_type === "price_work") && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Labour (£)</label><input style={S.input} type="number" value={editingPayment.labour_amount||""} onChange={e => setEditingPayment(p => ({...p, labour_amount: e.target.value}))}/></div>
+                  <div><label style={S.label}>Materials (£)</label><input style={S.input} type="number" value={editingPayment.materials_amount||""} onChange={e => setEditingPayment(p => ({...p, materials_amount: e.target.value}))}/></div>
+                </div>
+              )}
+              {(editingPayment.payment_type === "day_rate") && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Days</label><input style={S.input} type="number" value={editingPayment.days||""} onChange={e => setEditingPayment(p => ({...p, days: e.target.value}))}/></div>
+                  <div><label style={S.label}>Rate (£/day)</label><input style={S.input} type="number" value={editingPayment.rate||""} onChange={e => setEditingPayment(p => ({...p, rate: e.target.value}))}/></div>
+                </div>
+              )}
+              {(editingPayment.payment_type === "hourly") && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>Hours</label><input style={S.input} type="number" value={editingPayment.hours||""} onChange={e => setEditingPayment(p => ({...p, hours: e.target.value}))}/></div>
+                  <div><label style={S.label}>Rate (£/hr)</label><input style={S.input} type="number" value={editingPayment.rate||""} onChange={e => setEditingPayment(p => ({...p, rate: e.target.value}))}/></div>
+                </div>
+              )}
+              {(editingPayment.payment_type !== "price_work") && (
+                <div><label style={S.label}>Gross Override (£) — leave blank to calculate</label><input style={S.input} type="number" value={editingPayment.gross||""} onChange={e => setEditingPayment(p => ({...p, gross: e.target.value}))}/></div>
+              )}
+              <div style={S.grid2}>
+                <div><label style={S.label}>Invoice No.</label><input style={S.input} value={editingPayment.invoice_number||""} onChange={e => setEditingPayment(p => ({...p, invoice_number: e.target.value}))}/></div>
+                <div><label style={S.label}>Job Ref</label><input style={S.input} value={editingPayment.job_ref||""} onChange={e => setEditingPayment(p => ({...p, job_ref: e.target.value}))}/></div>
+              </div>
+              <div><label style={S.label}>Description</label><input style={S.input} value={editingPayment.description||""} onChange={e => setEditingPayment(p => ({...p, description: e.target.value}))}/></div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={updatePayment}>Save Changes</button>
+              <button style={S.btn("ghost")} onClick={() => setEditingPayment(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Worker Modal ────────────────────────────────────────── */}
+      {editingWorker && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "20px 16px" }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Worker</div>
+              <button onClick={() => setEditingWorker(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div><label style={S.label}>Name</label><input style={S.input} value={editingWorker.name||""} onChange={e => setEditingWorker(w => ({...w, name: e.target.value}))}/></div>
+              <div style={S.grid2}>
+                <div>
+                  <label style={S.label}>Type</label>
+                  <select style={S.input} value={editingWorker.type||"subcontractor"} onChange={e => setEditingWorker(w => ({...w, type: e.target.value}))}>
+                    <option value="subcontractor">Subcontractor (CIS)</option>
+                    <option value="employed">Employed (PAYE)</option>
+                  </select>
+                </div>
+                <div><label style={S.label}>Role / Trade</label><input style={S.input} value={editingWorker.role||""} onChange={e => setEditingWorker(w => ({...w, role: e.target.value}))}/></div>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Day Rate (£)</label><input style={S.input} type="number" value={editingWorker.day_rate||""} onChange={e => setEditingWorker(w => ({...w, day_rate: e.target.value}))}/></div>
+                <div><label style={S.label}>Hourly Rate (£)</label><input style={S.input} type="number" value={editingWorker.hourly_rate||""} onChange={e => setEditingWorker(w => ({...w, hourly_rate: e.target.value}))}/></div>
+              </div>
+              <div style={S.grid2}>
+                <div><label style={S.label}>Email</label><input style={S.input} type="email" value={editingWorker.email||""} onChange={e => setEditingWorker(w => ({...w, email: e.target.value}))}/></div>
+                <div><label style={S.label}>Phone</label><input style={S.input} value={editingWorker.phone||""} onChange={e => setEditingWorker(w => ({...w, phone: e.target.value}))}/></div>
+              </div>
+              {editingWorker.type === "subcontractor" && (
+                <div style={S.grid2}>
+                  <div><label style={S.label}>UTR Number</label><input style={S.input} value={editingWorker.utr||""} onChange={e => setEditingWorker(w => ({...w, utr: e.target.value}))}/></div>
+                  <div>
+                    <label style={S.label}>CIS Rate</label>
+                    <select style={S.input} value={editingWorker.cis_rate||20} onChange={e => setEditingWorker(w => ({...w, cis_rate: parseInt(e.target.value)}))}>
+                      <option value={20}>20% — Registered</option>
+                      <option value={30}>30% — Unregistered</option>
+                      <option value={0}>0% — Gross</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              {editingWorker.type === "employed" && (
+                <div><label style={S.label}>NI Number</label><input style={S.input} value={editingWorker.ni_number||""} onChange={e => setEditingWorker(w => ({...w, ni_number: e.target.value}))}/></div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={updateWorker}>Save Changes</button>
+              <button style={S.btn("ghost")} onClick={() => setEditingWorker(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Confirmations ─────────────────────────────────────── */}
+      {deletingPayment && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 360, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete Payment?</div>
+            <div style={{ fontSize: 13, color: C.textDim, marginBottom: 20 }}>
+              {subs.find(s => s.id === deletingPayment.subcontractor_id)?.name} · £{parseFloat(deletingPayment.gross||0).toFixed(2)} · {new Date(deletingPayment.date).toLocaleDateString("en-GB")}
+              <br/>This cannot be undone.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#ef4444", borderColor: "#ef444455" }} onClick={() => deletePayment(deletingPayment.id)}>Yes, delete</button>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => setDeletingPayment(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deletingWorker && (
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 16 }}>
+          <div style={{ ...S.card, maxWidth: 360, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete Worker?</div>
+            <div style={{ fontSize: 13, color: C.textDim, marginBottom: 20 }}>
+              {deletingWorker.name} · {deletingWorker.role || deletingWorker.type}
+              <br/>This will also remove their documents. Cannot be undone.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#ef4444", borderColor: "#ef444455" }} onClick={() => deleteWorker(deletingWorker.id)}>Yes, delete</button>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={() => setDeletingWorker(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
