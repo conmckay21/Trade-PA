@@ -203,12 +203,13 @@ function BrowseView({ query, setQuery, activeCategory, setActiveCategory, filter
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search — e.g. mileage, RAMS, voice"
-        autoFocus
         style={{
           width: "100%", boxSizing: "border-box",
           background: T.surfaceHigh, border: `1px solid ${T.border}`,
           borderRadius: 8, padding: "10px 12px",
-          color: T.text, fontSize: 13, fontFamily: T.font, outline: "none",
+          color: T.text,
+          fontSize: 16,  // 16px prevents iOS Safari auto-zoom on focus
+          fontFamily: T.font, outline: "none",
         }}
       />
 
