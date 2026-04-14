@@ -17687,7 +17687,17 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
 }
 
 
-const VIEWS = ["AI Assistant", "Dashboard", "Schedule", "Enquiries", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "Purchase Orders", "RAMS", "Settings"];
+const NAV_GROUPS = [
+  { id: "work",  label: "Work",   icon: "📋", views: ["AI Assistant", "Dashboard", "Schedule", "Enquiries", "Jobs", "Customers"] },
+  { id: "money", label: "Money",  icon: "£",  views: ["Invoices", "Quotes", "Payments", "Expenses", "CIS", "Reports", "Purchase Orders"] },
+  { id: "people",label: "People", icon: "👷", views: ["Subcontractors", "Reviews"] },
+  { id: "site",  label: "Site",   icon: "🏗", views: ["Materials", "Stock", "Mileage", "RAMS", "Documents"] },
+  { id: "admin", label: "Admin",  icon: "⚙️", views: ["Inbox", "Reminders", "Settings"] },
+];
+// Flat list still used for permissions checks
+const VIEWS = NAV_GROUPS.flatMap(g => g.views);
+// Helper: find which group a view belongs to
+const viewGroup = (v) => NAV_GROUPS.find(g => g.views.includes(v))?.id || "work";
 
 // Helper: convert VAPID public key for push subscription
 function urlBase64ToUint8Array(base64String) {
@@ -17819,12 +17829,24 @@ export default function App() {
   const [isIos, setIsIos] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [pdfHtml, setPdfHtml] = useState(null);
-  const [view, setView] = useState(() => {
+  const [viewRaw, setViewRaw] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('xero') || params.has('qb')) return "Settings";
     if (params.has('email_connected') || params.has('email_error')) return "Inbox";
     return "AI Assistant";
   });
+  const [activeCategory, setActiveCategory] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('xero') || params.has('qb')) return "admin";
+    if (params.has('email_connected') || params.has('email_error')) return "admin";
+    return "work";
+  });
+  const view = viewRaw;
+  const setView = (v) => {
+    setViewRaw(v);
+    const grp = viewGroup(v);
+    if (grp) setActiveCategory(grp);
+  };
   const [brand, setBrand] = useState(DEFAULT_BRAND);
   const { reminders, add, dismiss, remove } = useReminders(user?.id);
   const [dueNow, setDueNow] = useState([]);
@@ -18710,17 +18732,44 @@ export default function App() {
             <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
           </div>
         </div>
-        {/* Nav row — filtered by permissions for members */}
+        {/* Category pills */}
+        <div style={{ display: "flex", gap: 4, padding: "0 12px 5px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+          {NAV_GROUPS.map(g => {
+            const active = activeCategory === g.id;
+            return (
+              <button key={g.id} onClick={() => {
+                setActiveCategory(g.id);
+                const allowed = g.views.filter(v => {
+                  if (userRole !== "owner" && v === "Settings") return false;
+                  const myMember = members.find(m => m.user_id === user?.id);
+                  const perms = myMember?.permissions;
+                  return !perms || perms[v] !== false;
+                });
+                if (allowed.length && !allowed.includes(view)) setView(allowed[0]);
+              }} style={{
+                flexShrink: 0, padding: "4px 12px", borderRadius: 20,
+                border: `1px solid ${active ? C.amber : C.border}`,
+                background: active ? C.amber : "transparent",
+                color: active ? "#000" : C.muted,
+                fontSize: 11, fontWeight: active ? 700 : 400, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 4,
+              }}>
+                <span>{g.icon}</span>{g.label}
+              </button>
+            );
+          })}
+        </div>
+        {/* Sub-tabs for active category */}
         <div className="nav-scroll" style={{ display: "flex", overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "0 12px 8px", gap: 2, scrollbarWidth: "none" }}>
-          {VIEWS.filter(v => {
-            if (userRole === "owner") return true;
-            if (v === "Settings") return false; // members never see Settings
+          {(NAV_GROUPS.find(g => g.id === activeCategory)?.views || []).filter(v => {
+            if (userRole !== "owner" && v === "Settings") return false;
             const myMember = members.find(m => m.user_id === user?.id);
             const perms = myMember?.permissions;
-            if (!perms) return true; // no restrictions set yet
-            return perms[v] !== false;
+            return !perms || perms[v] !== false;
           }).map(v => (
-            <button key={v} onClick={() => setView(v)} style={{ ...S.navBtn(view === v), flexShrink: 0 }}>{v === "AI Assistant" ? "🏠 Home" : v}</button>
+            <button key={v} onClick={() => setView(v)} style={{ ...S.navBtn(view === v), flexShrink: 0 }}>
+              {v === "AI Assistant" ? "🏠 Home" : v}
+            </button>
           ))}
         </div>
       </header>
