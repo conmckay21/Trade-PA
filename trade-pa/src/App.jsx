@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, Component } from "react";
 import { supabase } from "./supabase.js";
 import { Device } from "@twilio/voice-sdk";
 import HelpCentre from "./HelpCentre.jsx";
+import AssistantSetup from "./AssistantSetup.jsx";
 
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
@@ -527,7 +528,7 @@ function useWhisper(onTranscript, onSilence) {
       let silenceStart = null;
       // RMS threshold — 50 handles real-world ambient noise (dog, TV, traffic, kitchen).
       // Lower values cause ambient noise to be mistaken for speech, preventing silence detection.
-      const SILENCE_THRESHOLD = 50;
+      const SILENCE_THRESHOLD = 70;
       const graceMs = silenceDuration >= 3000 ? 2000 : 1500;
       const check = () => {
         if (!analyserRef.current) return;
@@ -1618,7 +1619,7 @@ function CertificationsCard({ brand, setBrand }) {
   );
 }
 
-function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit }) {
+function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit, openAssistantSetup, assistantName, assistantWakeWords, userCommandsCount }) {
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
@@ -2311,6 +2312,31 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             {(brand.certPrefix || "CERT")}-{String(brand.certNextNumber || 1).padStart(3, "0")}
           </div>
         </div>
+      </div>
+
+      {/* Assistant — name, wake words, custom commands */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>🤖 Your Assistant</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+          Name your AI, set its personality, choose wake words, and teach it your own voice commands.
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Name</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>{assistantName || "Trade PA"}</div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Wake words</div>
+            <div style={{ fontSize: 12, color: C.text, fontFamily: "'DM Mono',monospace" }}>{(assistantWakeWords || []).slice(0, 2).join(", ")}{(assistantWakeWords || []).length > 2 ? ` +${assistantWakeWords.length - 2}` : ""}</div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Custom commands</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: (userCommandsCount || 0) > 0 ? C.green : C.muted }}>{userCommandsCount || 0}</div>
+          </div>
+        </div>
+        <button onClick={() => openAssistantSetup && openAssistantSetup()} style={{ ...S.btn("primary"), width: "100%", justifyContent: "center" }}>
+          ⚙ Manage assistant
+        </button>
       </div>
 
       {/* Call Tracking */}
@@ -3007,6 +3033,19 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, us
             <button onClick={() => cycleStatus(i)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>
               {m.status === "to_order" ? "✓ Mark Ordered" : m.status === "ordered" ? "✓ Mark Collected" : "↺ Reset Status"}
             </button>
+            <button
+              onClick={async () => {
+                const paidValue = !m.paid;
+                const paid_on = paidValue ? new Date().toISOString().slice(0, 10) : null;
+                if (m.id) {
+                  await supabase.from("materials").update({ paid: paidValue, paid_on }).eq("id", m.id).eq("user_id", user?.id);
+                }
+                setMaterials(prev => (prev || []).map((x, j) => j === i ? { ...x, paid: paidValue, paid_on } : x));
+              }}
+              style={{ ...S.btn(m.paid ? "ghost" : "green"), fontSize: 12, padding: "6px 14px" }}
+            >
+              {m.paid ? `↺ Paid ${m.paid_on ? new Date(m.paid_on).toLocaleDateString("en-GB") : ""}` : "💷 Mark Paid"}
+            </button>
             <button onClick={() => setEditingMaterial({ index: i, item: m.item, qty: String(m.qty || 1), unitPrice: String(m.unitPrice || ""), supplier: m.supplier || "", job: m.job || "", status: m.status || "to_order", vatEnabled: m.vatEnabled || false, vatRate: m.vatRate || 20, dueDate: m.dueDate || "" })} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px" }}>✏ Edit</button>
             <button onClick={() => deleteMaterial(i)} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 14px", color: C.red, borderColor: C.red + "44" }}>Delete</button>
           </div>
@@ -3403,12 +3442,16 @@ Return only JSON, no other text.` },
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
-        {[
-          { l: "To Order", v: (materials || []).filter(m => m.status === "to_order").length, sub: toOrderCost > 0 ? `Est. ${fmtCurrency(toOrderCost)}` : "No prices set", c: C.red },
-          { l: "Ordered", v: (materials || []).filter(m => m.status === "ordered").length, sub: "Awaiting delivery", c: C.amber },
-          { l: "Collected", v: (materials || []).filter(m => m.status === "collected").length, sub: "Ready to use", c: C.green },
-          { l: "Total Cost", v: totalCost > 0 ? `${fmtCurrency(totalCost)}` : "—", sub: "All materials", c: C.text },
-        ].map((st, i) => (
+        {(() => {
+          const unpaidMats = (materials || []).filter(m => !m.paid);
+          const unpaidCost = unpaidMats.reduce((s, m) => s + (parseFloat(m.unitPrice) || 0) * (parseFloat(m.qty) || 1), 0);
+          return [
+            { l: "Unpaid", v: unpaidMats.length, sub: unpaidCost > 0 ? `${fmtCurrency(unpaidCost)} owed` : "Nothing owed", c: unpaidMats.length > 0 ? C.red : C.muted },
+            { l: "To Order", v: (materials || []).filter(m => m.status === "to_order").length, sub: toOrderCost > 0 ? `Est. ${fmtCurrency(toOrderCost)}` : "No prices set", c: C.amber },
+            { l: "Ordered", v: (materials || []).filter(m => m.status === "ordered").length, sub: "Awaiting delivery", c: C.blue },
+            { l: "Total Cost", v: totalCost > 0 ? `${fmtCurrency(totalCost)}` : "—", sub: "All materials", c: C.text },
+          ];
+        })().map((st, i) => (
           <div key={i} style={S.card}>
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{st.l}</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: st.c }}>{st.v}</div>
@@ -3735,6 +3778,18 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [handsFree, setHandsFree] = useState(false);
   const handsFreeRef = useRef(false);
   const wakeWordRef = useRef(null); // Porcupine wake word engine
+
+  // Custom assistant persona + commands
+  const [assistantSetupOpen, setAssistantSetupOpen] = useState(false);
+  const [assistantName, setAssistantName] = useState("Trade PA");
+  const [assistantWakeWords, setAssistantWakeWords] = useState(["hey trade pa", "trade pa", "trade pay"]);
+  const [assistantPersona, setAssistantPersona] = useState("");
+  const [assistantSignoff, setAssistantSignoff] = useState("");
+  const [userCommands, setUserCommands] = useState([]);
+  const assistantNameRef = useRef("Trade PA");
+  const assistantWakeWordsRef = useRef(["hey trade pa", "trade pa", "trade pay"]);
+  const assistantSignoffRef = useRef("");
+  const userCommandsRef = useRef([]);
   const [wakeWordReady, setWakeWordReady] = useState(false);
   const [wakeWordListening, setWakeWordListening] = useState(false);
 
@@ -3851,6 +3906,35 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     } catch(e) { /* silent */ }
   };
   useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
+  useEffect(() => { assistantNameRef.current = assistantName; }, [assistantName]);
+  useEffect(() => { assistantWakeWordsRef.current = assistantWakeWords; }, [assistantWakeWords]);
+  useEffect(() => { assistantSignoffRef.current = assistantSignoff; }, [assistantSignoff]);
+  useEffect(() => { userCommandsRef.current = userCommands; }, [userCommands]);
+
+  // Load assistant persona + custom commands on login
+  useEffect(() => {
+    if (!user?.id) return;
+    (async () => {
+      const { data: s } = await supabase
+        .from("user_settings")
+        .select("assistant_name, assistant_wake_words, assistant_persona, assistant_signoff")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (s) {
+        if (s.assistant_name) setAssistantName(s.assistant_name);
+        if (s.assistant_wake_words?.length) setAssistantWakeWords(s.assistant_wake_words);
+        if (s.assistant_persona) setAssistantPersona(s.assistant_persona);
+        if (s.assistant_signoff) setAssistantSignoff(s.assistant_signoff);
+      }
+      const { data: cmds } = await supabase
+        .from("user_commands")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("enabled", true)
+        .order("created_at", { ascending: true });
+      if (cmds) setUserCommands(cmds);
+    })();
+  }, [user?.id]);
 
   // ── Error capture system ─────────────────────────────────────────────────
   const logError = async (type, fields = {}) => {
@@ -3904,6 +3988,26 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     () => onSilenceRef.current && onSilenceRef.current()
   );
 
+  // Count consecutive transcripts that were just noise — auto-exit after too many
+  const emptyCyclesRef = React.useRef(0);
+
+  // Returns true if `text` looks like background noise, not a real command
+  const isNoiseTranscript = (text) => {
+    if (!text) return true;
+    const t = text.toLowerCase().trim().replace(/[.,!?\-—'"]/g, "");
+    if (t.length < 3) return true;
+    const words = t.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return true;
+    const FILLERS = new Set([
+      "um","umm","uh","uhh","hm","hmm","mm","mmm","mhm","ah","ahh","er","err",
+      "eh","oh","ooh","oof","huh","hey","yo","ow","ouch","cough",
+    ]);
+    if (words.length === 1 && FILLERS.has(words[0])) return true;
+    if (words.every(w => FILLERS.has(w))) return true;
+    if (t.length < 6 && !/[aeiou]/.test(t)) return true;
+    return false;
+  };
+
   // Update refs on every render so they always point to fresh closures
   onTranscriptRef.current = (text) => {
     if (!text) return;
@@ -3916,18 +4020,51 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     if (!handsFreeRef.current && ACTIVATE.some(p => lower.includes(p))) {
       setHandsFree(true);
       handsFreeRef.current = true;
+      emptyCyclesRef.current = 0;
       speak("Hands-free on. Go ahead.");
       return;
     }
 
     if (handsFreeRef.current) {
+      // Noise filter — ignore garbage transcripts and count them
+      if (isNoiseTranscript(text)) {
+        emptyCyclesRef.current += 1;
+        if (emptyCyclesRef.current >= 3) {
+          emptyCyclesRef.current = 0;
+          setHandsFree(false);
+          handsFreeRef.current = false;
+          speak("I'll pause there — say Hey " + (assistantNameRef.current || "Trade PA") + " when you need me.");
+        }
+        return;
+      }
+
       const isClosing = CLOSING_PHRASES.some(p => lower.includes(p));
       if (isClosing) {
+        emptyCyclesRef.current = 0;
         setHandsFree(false);
         handsFreeRef.current = false;
-        speak("No problem, I'll stop there. Just say Hey Trade PA whenever you need me.");
+        const signoffMsg = assistantSignoffRef.current
+          || ("No problem, I'll stop there. Just say Hey " + (assistantNameRef.current || "Trade PA") + " whenever you need me.");
+        speak(signoffMsg);
       } else {
-        send(text);
+        emptyCyclesRef.current = 0;
+        // Custom command match?
+        const cmd = (userCommandsRef.current || []).find(c =>
+          c.enabled && c.phrase && lower.includes(c.phrase.toLowerCase())
+        );
+        if (cmd) {
+          if (cmd.mode === "fast" && cmd.tool_name) {
+            const paramsHint = cmd.default_params && Object.keys(cmd.default_params).length
+              ? ` Use these default values: ${JSON.stringify(cmd.default_params)}.`
+              : "";
+            send(`[Custom command triggered: "${cmd.phrase}"] Please call the ${cmd.tool_name} tool now.${paramsHint} User said: "${text}"`);
+          } else {
+            const intentHint = cmd.intent ? ` Their intent: ${cmd.intent}` : "";
+            send(`[Custom command: "${cmd.phrase}"]${intentHint} User said: "${text}"`);
+          }
+        } else {
+          send(text);
+        }
       }
     } else {
       setInput(text);
@@ -3937,6 +4074,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   onSilenceRef.current = () => {
     // Use handsFreeRef only — `recording` state is stale in this callback closure
     if (handsFreeRef.current) {
+      // Count a pure-silence cycle toward the auto-exit budget
+      emptyCyclesRef.current += 1;
+      if (emptyCyclesRef.current >= 3) {
+        emptyCyclesRef.current = 0;
+        setHandsFree(false);
+        handsFreeRef.current = false;
+        speak("I'll pause there — say Hey " + (assistantNameRef.current || "Trade PA") + " when you need me.");
+        return;
+      }
       setTimeout(() => {
         if (handsFreeRef.current) startRecording(true, 3000);
       }, 600);
@@ -4086,10 +4232,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       const transcript = Array.from(e.results)
         .map(r => r[0].transcript.toLowerCase())
         .join(" ");
-      if (
-        (transcript.includes("hey trade") || transcript.includes("trade pa") || transcript.includes("trade pay")) &&
-        !recording && handsFreeRef.current
-      ) {
+      const wakes = assistantWakeWordsRef.current || [];
+      const matched = wakes.some(w => w && transcript.includes(w.toLowerCase()));
+      if (matched && !recording && handsFreeRef.current) {
         recognition.stop();
         speechRecognitionRef.current = null;
         setWakeWordListening(false);
@@ -6916,7 +7061,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     ? "ONBOARDING MODE: This is a new user who has not set up their business yet. Your FIRST job is to welcome them warmly and learn about their business through natural conversation. Ask ONE question at a time. Collect: their name, business/trading name, what trade they do, phone number, whether they are VAT registered, and their address. After collecting these, use the update_brand tool to save everything. Be warm and human. Example opening: Hi! I am Trade PA, your new business assistant. I am going to make running your business a lot easier. First things first, what is your name?"
     : ("You are assisting " + (brand.tradingName || "this business") + ". Be warm, concise, and proactive — like a PA who knows the business well.");
 
-  const SYSTEM = "You are Trade PA — a personal assistant for a UK sole trader tradesperson. You speak naturally and conversationally, like a smart human PA would. Today is " + new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + ".\n\n" + onboardingBlock
+  const SYSTEM = `You are ${assistantName} — a personal assistant for a UK sole trader tradesperson. You speak naturally and conversationally, like a smart human PA would. When referring to yourself, use the name "${assistantName}".` +
+    (assistantPersona ? `\n\nPERSONALITY: ${assistantPersona}` : "") +
+    (userCommands.length > 0 ? `\n\nCUSTOM COMMANDS DEFINED BY THIS USER:\n${userCommands.filter(c => c.enabled).map(c => `- "${c.phrase}" — ${c.mode === "fast" ? `runs the ${c.tool_name} tool` : c.intent}`).join("\n")}` : "") +
+    `\n\nToday is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.\n\n` + onboardingBlock
   + "\n\nCurrent business data:\n"
   + "- Jobs: " + ((jobs||[]).length === 0 ? "none" : (jobs||[]).map(j => j.customer + " (" + (j.type||j.title||"") + ", " + j.status + ")").join(", ")) + "\n"
   + "- Invoices: " + ((invoices||[]).filter(i=>!i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>!i.isQuote).map(i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")").join(", ")) + "\n"
@@ -15673,7 +15821,25 @@ function SubcontractorsTab({ user, brand }) {
     return months;
   };
 
-  const filteredPayments = filterSub === "all" ? payments : payments.filter(p => p.subcontractor_id === filterSub);
+  const [filterPaid, setFilterPaid] = useState("all"); // all | due | paid
+  const filteredPayments = payments.filter(p => {
+    if (filterSub !== "all" && p.subcontractor_id !== filterSub) return false;
+    if (filterPaid === "due" && p.paid) return false;
+    if (filterPaid === "paid" && !p.paid) return false;
+    return true;
+  });
+
+  const markPaymentPaid = async (pay, paidValue) => {
+    const paid_on = paidValue ? new Date().toISOString().slice(0, 10) : null;
+    const { error } = await supabase
+      .from("subcontractor_payments")
+      .update({ paid: paidValue, paid_on })
+      .eq("id", pay.id)
+      .eq("user_id", user?.id);
+    if (!error) {
+      setPayments(prev => prev.map(p => p.id === pay.id ? { ...p, paid: paidValue, paid_on } : p));
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
@@ -15697,15 +15863,21 @@ function SubcontractorsTab({ user, brand }) {
 
       {/* Summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
-        {[
-          ["Subcontractors", subs.length, C.text],
-          ["Total Paid (Gross)", "£" + payments.reduce((s,p) => s + parseFloat(p.gross||0), 0).toFixed(2), C.text],
-          ["CIS Deducted", "£" + payments.reduce((s,p) => s + parseFloat(p.deduction||0), 0).toFixed(2), C.amber],
-          ["Net Paid", "£" + payments.reduce((s,p) => s + parseFloat(p.net||0), 0).toFixed(2), C.green],
-        ].map(([l, v, col], i) => (
+        {(() => {
+          const outstanding = payments.filter(p => !p.paid).reduce((s,p) => s + parseFloat(p.net||0), 0);
+          const paidNet = payments.filter(p => p.paid).reduce((s,p) => s + parseFloat(p.net||0), 0);
+          const outCount = payments.filter(p => !p.paid).length;
+          return [
+            ["Outstanding", "£" + outstanding.toFixed(2), outstanding > 0 ? C.red : C.muted, `${outCount} due`],
+            ["Paid (Net)", "£" + paidNet.toFixed(2), C.green, `${payments.length - outCount} settled`],
+            ["CIS Deducted", "£" + payments.reduce((s,p) => s + parseFloat(p.deduction||0), 0).toFixed(2), C.amber, "All time"],
+            ["Subcontractors", subs.length, C.text, "On books"],
+          ];
+        })().map(([l, v, col, sub], i) => (
           <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{sub}</div>
           </div>
         ))}
       </div>
@@ -15846,20 +16018,28 @@ function SubcontractorsTab({ user, brand }) {
       {/* Payment history */}
       {payments.length > 0 && (
         <div style={{ ...S.card }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
             <div style={{ fontSize: 13, fontWeight: 700 }}>Payment History</div>
             <select style={{ ...S.input, width: "auto", fontSize: 11 }} value={filterSub} onChange={e => setFilterSub(e.target.value)}>
               <option value="all">All</option>
               {subs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            <button onClick={() => setFilterPaid("all")} style={S.pill(C.amber, filterPaid === "all")}>All</button>
+            <button onClick={() => setFilterPaid("due")} style={S.pill(C.red, filterPaid === "due")}>Due</button>
+            <button onClick={() => setFilterPaid("paid")} style={S.pill(C.green, filterPaid === "paid")}>Paid</button>
+          </div>
           {filteredPayments.map(p => {
             const sub = subs.find(s => s.id === p.subcontractor_id);
             return (
-              <div key={p.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+              <div key={p.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}`, borderLeft: p.paid ? `3px solid ${C.green}` : `3px solid ${C.red}`, paddingLeft: 10, marginLeft: -10 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{sub?.name || "Unknown"}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                      {sub?.name || "Unknown"}
+                      <span style={S.badge(p.paid ? C.green : C.red)}>{p.paid ? "PAID" : "DUE"}</span>
+                    </div>
                     <div style={{ fontSize: 11, color: C.muted }}>{new Date(p.date).toLocaleDateString("en-GB")}{p.invoice_number ? ` · ${p.invoice_number}` : ""}{p.description ? ` · ${p.description}` : ""}{p.job_ref ? ` · ${p.job_ref}` : ""}</div>
                     {p.payment_type === "price_work" && (p.labour_amount > 0 || p.materials_amount > 0) && (
                       <div style={{ fontSize: 11, color: C.muted }}>
@@ -15875,7 +16055,13 @@ function SubcontractorsTab({ user, brand }) {
                     <div style={{ fontSize: 12, color: C.muted }}>Net: <span style={{ color: C.green, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.net||0).toFixed(2)}</span></div>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => markPaymentPaid(p, !p.paid)}
+                    style={{ ...S.btn(p.paid ? "ghost" : "green"), fontSize: 11, padding: "2px 10px" }}
+                  >
+                    {p.paid ? `↺ Unmark (paid ${p.paid_on ? new Date(p.paid_on).toLocaleDateString("en-GB") : ""})` : "✓ Mark Paid"}
+                  </button>
                   <button onClick={() => setEditingPayment({...p})} style={{ ...S.btn("ghost"), fontSize: 11, padding: "2px 10px" }}>✏️ Edit</button>
                   <button onClick={() => setDeletingPayment(p)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "2px 10px", color: "#ef4444", borderColor: "#ef444433" }}>🗑️ Delete</button>
                 </div>
@@ -18820,6 +19006,7 @@ export default function App() {
             )}
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
             <button onClick={() => { setHelpSlug(null); setHelpOpen(true); }} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Help & how-to">?</button>
+            <button onClick={() => setAssistantSetupOpen(true)} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Assistant settings">⚙</button>
             <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
           </div>
         </div>
@@ -18902,9 +19089,27 @@ export default function App() {
         {view === "Stock" && <StockTab user={user} />}
         {view === "Purchase Orders" && <PurchaseOrdersTab user={user} brand={brand} />}
         {view === "RAMS" && <RAMSTab user={user} brand={brand} />}
-        {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} /></ErrorBoundary>}
+        {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} openAssistantSetup={() => setAssistantSetupOpen(true)} assistantName={assistantName} assistantWakeWords={assistantWakeWords} userCommandsCount={userCommands.length} /></ErrorBoundary>}
       </main>
       <HelpCentre open={helpOpen} openSlug={helpSlug} onClose={() => { setHelpOpen(false); setHelpSlug(null); }} />
+      <AssistantSetup
+        open={assistantSetupOpen}
+        onClose={() => setAssistantSetupOpen(false)}
+        supabase={supabase}
+        user={user}
+        tools={TOOLS}
+        mode="edit"
+        onSaved={(s) => {
+          setAssistantName(s.assistant_name);
+          setAssistantWakeWords(s.assistant_wake_words);
+          setAssistantPersona(s.assistant_persona);
+          setAssistantSignoff(s.assistant_signoff || "");
+          supabase.from("user_commands")
+            .select("*").eq("user_id", user.id).eq("enabled", true)
+            .order("created_at", { ascending: true })
+            .then(({ data }) => { if (data) setUserCommands(data); });
+        }}
+      />
     </div>
   );
 }
