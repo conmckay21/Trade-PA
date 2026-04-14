@@ -971,12 +971,12 @@ function buildInvoiceHTML(brand, inv) {
         <tr>
           <td>${line.description || line}</td>
           ${cisEnabled
-            ? `<td class="right">${lineAmt !== null ? "£" + Number(lineAmt).toFixed(2) : "—"}</td>`
+            ? `<td class="right">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
             : vatEnabled
-              ? `<td class="right">${lineNet !== null ? "£" + Number(lineNet).toFixed(2) : "—"}</td>
-                 <td class="right">${lineVat !== null ? "£" + Number(lineVat).toFixed(2) : "—"}</td>
-                 <td class="right">${lineAmt !== null ? "£" + Number(lineAmt).toFixed(2) : "—"}</td>`
-              : `<td class="right">${lineAmt !== null ? "£" + Number(lineAmt).toFixed(2) : "—"}</td>`
+              ? `<td class="right">${lineNet !== null ? fmtCurrency(lineNet) : "—"}</td>
+                 <td class="right">${lineVat !== null ? fmtCurrency(lineVat) : "—"}</td>
+                 <td class="right">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
+              : `<td class="right">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
           }
         </tr>`;
         }).join("")}
@@ -4874,6 +4874,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           };
           setInvoices(prev => [inv, ...(prev || [])]);
           syncInvoiceToAccounting(user?.id, inv);
+          // Persist to Supabase so send/chase can retrieve full line items
+          supabase.from("invoices").upsert({
+            id: inv.id, user_id: user?.id,
+            customer: inv.customer, address: inv.address || "",
+            amount: totalAmount, gross_amount: totalAmount,
+            status: "sent", is_quote: false,
+            due: inv.due || "Due in 30 days",
+            description: inv.description || "",
+            line_items: JSON.stringify(lineItems),
+            job_ref: input.job_ref || "",
+            created_at: new Date().toISOString(),
+          }).then(() => {}).catch(() => {});
           setLastAction({ type: "invoice", label: `${id} — ${fmtAmount(totalAmount)} — ${input.customer}`, view: "Invoices" });
           pendingWidgetRef.current = { type: "invoice", data: inv };
           return `Invoice ${id} created for ${input.customer} — ${fmtAmount(totalAmount)} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
@@ -4899,6 +4911,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             isQuote: true,
           };
           setInvoices(prev => [quote, ...(prev || [])]);
+          supabase.from("invoices").upsert({
+            id: quote.id, user_id: user?.id,
+            customer: quote.customer, address: quote.address || "",
+            amount: totalAmount, gross_amount: totalAmount,
+            status: "sent", is_quote: true,
+            due: quote.due || "Valid for 30 days",
+            description: quote.description || "",
+            line_items: JSON.stringify(lineItems),
+            job_ref: input.job_ref || "",
+            created_at: new Date().toISOString(),
+          }).then(() => {}).catch(() => {});
           setLastAction({ type: "invoice", label: `${id} — ${fmtAmount(totalAmount)} — ${input.customer}`, view: "Quotes" });
           pendingWidgetRef.current = { type: "quote", data: quote };
           return `Quote ${id} created for ${input.customer} — ${fmtAmount(totalAmount)} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
@@ -6058,8 +6081,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const term = (input.customer || input.invoice_id || "").toLowerCase();
           const { data: invRows2 } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", false).order("created_at", { ascending: false }).limit(50);
           const stateInvs2 = (invoices || []).filter(i => !i.isQuote);
-          const seenIds2 = new Set((invRows2 || []).map(i => i.id));
-          const allInvs = [...(invRows2 || []), ...stateInvs2.filter(i => !seenIds2.has(i.id))];
+          const invRows2Mapped = (invRows2 || []).map(r => {
+            let parsedLI = r.line_items;
+            if (typeof parsedLI === "string") { try { parsedLI = JSON.parse(parsedLI); } catch(e) { parsedLI = null; } }
+            const sm = stateInvs2.find(s => s.id === r.id);
+            return { ...r, grossAmount: parseFloat(r.gross_amount || r.amount) || 0, lineItems: parsedLI || sm?.lineItems || [], address: r.address || sm?.address || "" };
+          });
+          const seenIds2 = new Set(invRows2Mapped.map(i => i.id));
+          const allInvs = [...invRows2Mapped, ...stateInvs2.filter(i => !seenIds2.has(i.id))];
           const termI = (input.customer || "").toLowerCase();
           let inv = null;
           if (input.invoice_id) inv = allInvs.find(i => (i.id || "").toLowerCase().includes(input.invoice_id.toLowerCase()));
@@ -6180,7 +6209,21 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             .order("created_at", { ascending: false }).limit(50);
           // Build search pool: Supabase results + React state (deduped by id)
           const stateInvs = (invoices || []).filter(i => !i.isQuote && i.status !== "paid");
-          const dbInvs = (invRows || []).map(r => ({ ...r, grossAmount: parseFloat(r.gross_amount || r.amount) || 0 }));
+          const dbInvs = (invRows || []).map(r => {
+            // Parse line_items from JSON string if stored that way
+            let parsedLineItems = r.line_items;
+            if (typeof parsedLineItems === "string") {
+              try { parsedLineItems = JSON.parse(parsedLineItems); } catch(e) { parsedLineItems = null; }
+            }
+            // Merge React state lineItems if DB doesn't have them
+            const stateMatch = (invoices || []).find(s => s.id === r.id);
+            return {
+              ...r,
+              grossAmount: parseFloat(r.gross_amount || r.amount) || 0,
+              lineItems: parsedLineItems || stateMatch?.lineItems || [],
+              address: r.address || stateMatch?.address || "",
+            };
+          });
           const seenIds = new Set(dbInvs.map(i => i.id));
           const all = [...dbInvs, ...stateInvs.filter(i => !seenIds.has(i.id))];
           // Match: invoice_id > amount > address > customer only (ask if ambiguous)
