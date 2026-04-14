@@ -15547,6 +15547,7 @@ function SubcontractorsTab({ user, brand }) {
   const filteredPayments = filterSub === "all" ? payments : payments.filter(p => p.subcontractor_id === filterSub);
 
   return (
+    <>
     <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {/* Row 1: title + action buttons */}
@@ -16583,6 +16584,7 @@ function ReviewsTab({ user, brand, customers }) {
       )}
 
     </div>
+    </>
   );
 }
 // ─── STOCK INVENTORY ─────────────────────────────────────────────────────────
