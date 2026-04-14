@@ -16051,6 +16051,7 @@ function SubcontractorsTab({ user, brand }) {
       )}
 
     </div>
+    </>
   );
 }
 // ─── DOCUMENT STORAGE ────────────────────────────────────────────────────────
