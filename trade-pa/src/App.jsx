@@ -4577,7 +4577,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "create_invoice",
-      description: "Create a new invoice. Triggers: \"invoice [customer] £[X]\", \"bill [customer] for [work]\", \"raise an invoice\". ASK IF MISSING: customer name first, then amount. If user says a job name, use create_invoice_from_job instead. DEFAULTS: due date → 14 days, VAT → brand setting. AFTER: \"Invoice created — £[total] for [customer]. Send it now?\"",
+      description: "Create a new invoice. Triggers: \"invoice [customer] £[X]\", \"bill [customer] for [work]\", \"raise an invoice\". ASK IF MISSING: customer name first, then amount. If user says a job name, use create_invoice_from_job instead. CUSTOMER LOOKUP: If the customer name matches an existing customer record, the system AUTOMATICALLY pulls in their email, address and phone — do NOT ask the user for these details if the customer is already in the customer list (you can see customer names in the business data block). Just take the action. The system will tell you in the response which fields it auto-filled. DEFAULTS: due date → 14 days, VAT → brand setting. AFTER: \"Invoice created — £[total] for [customer]. Send it now?\" If auto-fill happened, mention it briefly: \"Used the saved address — invoice created.\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4602,7 +4602,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "create_quote",
-      description: "Create a price quote for a customer. Triggers: \"quote [customer] £X for [work]\", \"send an estimate\", \"give [customer] a price\". ASK IF MISSING: customer name, then amount. DEFAULTS: expiry → 30 days, VAT → brand setting. AFTER: \"Quote created for [customer] — £[amount]. Send it now?\"",
+      description: "Create a price quote for a customer. Triggers: \"quote [customer] £X for [work]\", \"send an estimate\", \"give [customer] a price\". ASK IF MISSING: customer name, then amount. CUSTOMER LOOKUP: If the customer name matches an existing customer record, the system AUTOMATICALLY pulls in their email, address and phone — do NOT ask the user for these details if the customer is already saved. Just take the action. DEFAULTS: expiry → 30 days, VAT → brand setting. AFTER: \"Quote created for [customer] — £[amount]. Send it now?\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4641,7 +4641,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "set_reminder",
-      description: "Set a reminder. Triggers: \"remind me to [thing]\", \"nudge me about [thing]\", \"don't let me forget to [thing]\". Prefer iso_time when the user gives a specific time. For vague phrasings (\"tomorrow morning\", \"next week\") pick a sensible time and confirm in the response: \"Reminder set for 9am tomorrow — ok?\" DEFAULTS: morning → 9am, afternoon → 2pm, evening → 6pm, no time → 9am that day. AFTER: \"Reminder set for [when]: [what].\"",
+      description: "Set a reminder. Triggers: \"remind me to [thing]\", \"nudge me about [thing]\", \"don't let me forget to [thing]\". Prefer iso_time when the user gives a specific time. For vague phrasings (\"tomorrow morning\", \"next week\") pick a sensible time and confirm in the response: \"Reminder set for 9am tomorrow — ok?\" DEFAULTS: morning → 9am, afternoon → 2pm, evening → 6pm, no time → 9am that day. NOTE: When the reminder fires, it stays in the user's Upcoming list as 'Overdue' until they tap Done ✓ — it does NOT auto-disappear. So users can keep track of things they haven't actually followed through on. AFTER: \"Reminder set for [when]: [what].\"",
       input_schema: {
         type: "object",
         properties: {
@@ -5225,16 +5225,29 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const id = nextInvoiceId(invoices);
           const lineItems = input.line_items || [{ description: input.description || "Services", amount: input.amount || 0 }];
           const totalAmount = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
-          // Auto-pull address from customer record if not provided
+          // Auto-pull customer details from customer record if not provided.
+          // Prefer exact (case-insensitive) match, fall back to substring match.
           let invAddress = input.address || "";
-          if (!invAddress && input.customer) {
-            const custMatch = (customers || []).find(c => (c.name || "").toLowerCase().includes(input.customer.toLowerCase()));
-            if (custMatch?.address) invAddress = custMatch.address;
+          let invEmail = input.email || "";
+          let invPhone = input.phone || "";
+          let matchedCustomer = null;
+          if (input.customer && (customers || []).length > 0) {
+            const needle = input.customer.toLowerCase().trim();
+            matchedCustomer =
+              (customers || []).find(c => (c.name || "").toLowerCase().trim() === needle) ||
+              (customers || []).find(c => (c.name || "").toLowerCase().includes(needle));
+            if (matchedCustomer) {
+              if (!invAddress && matchedCustomer.address) invAddress = matchedCustomer.address;
+              if (!invEmail && matchedCustomer.email) invEmail = matchedCustomer.email;
+              if (!invPhone && matchedCustomer.phone) invPhone = matchedCustomer.phone;
+            }
           }
           const inv = {
             id,
             customer: input.customer,
             address: invAddress,
+            email: invEmail,
+            phone: invPhone,
             amount: totalAmount,
             due: `Due in ${input.due_days || 30} days`,
             status: "sent",
@@ -5248,6 +5261,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           supabase.from("invoices").upsert({
             id: inv.id, user_id: user?.id,
             customer: inv.customer, address: inv.address || "",
+            email: inv.email || "", phone: inv.phone || "",
             amount: totalAmount, gross_amount: totalAmount,
             status: "sent", is_quote: false,
             due: inv.due || "Due in 30 days",
@@ -5258,21 +5272,43 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }).then(() => {}).catch(() => {});
           setLastAction({ type: "invoice", label: `${id} — ${fmtAmount(totalAmount)} — ${input.customer}`, view: "Invoices" });
           pendingWidgetRef.current = { type: "invoice", data: inv };
-          return `Invoice ${id} created for ${input.customer} — ${fmtAmount(totalAmount)} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
+          // Tell the AI what was auto-filled so it can mention it in the response
+          const autoFilled = matchedCustomer ? [
+            invEmail && !input.email ? "email" : null,
+            invAddress && !input.address ? "address" : null,
+            invPhone && !input.phone ? "phone" : null,
+          ].filter(Boolean) : [];
+          const autoNote = autoFilled.length > 0
+            ? ` Auto-filled ${autoFilled.join(", ")} from existing customer record.`
+            : (matchedCustomer ? "" : (input.customer ? " (No saved customer record found — added as ad-hoc.)" : ""));
+          return `Invoice ${id} created for ${input.customer} — ${fmtAmount(totalAmount)} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).${autoNote}`;
         }
         case "create_quote": {
           const id = nextQuoteId(invoices);
           const lineItems = input.line_items || [{ description: input.description || "Services", amount: input.amount || 0 }];
           const totalAmount = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
+          // Auto-pull customer details from customer record if not provided.
           let quoteAddress = input.address || "";
-          if (!quoteAddress && input.customer) {
-            const custMatch = (customers || []).find(c => (c.name || "").toLowerCase().includes(input.customer.toLowerCase()));
-            if (custMatch?.address) quoteAddress = custMatch.address;
+          let quoteEmail = input.email || "";
+          let quotePhone = input.phone || "";
+          let matchedCustomerQ = null;
+          if (input.customer && (customers || []).length > 0) {
+            const needle = input.customer.toLowerCase().trim();
+            matchedCustomerQ =
+              (customers || []).find(c => (c.name || "").toLowerCase().trim() === needle) ||
+              (customers || []).find(c => (c.name || "").toLowerCase().includes(needle));
+            if (matchedCustomerQ) {
+              if (!quoteAddress && matchedCustomerQ.address) quoteAddress = matchedCustomerQ.address;
+              if (!quoteEmail && matchedCustomerQ.email) quoteEmail = matchedCustomerQ.email;
+              if (!quotePhone && matchedCustomerQ.phone) quotePhone = matchedCustomerQ.phone;
+            }
           }
           const quote = {
             id,
             customer: input.customer,
             address: quoteAddress,
+            email: quoteEmail,
+            phone: quotePhone,
             amount: totalAmount,
             due: `Valid for ${input.valid_days || 30} days`,
             status: "sent",
@@ -5284,6 +5320,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           supabase.from("invoices").upsert({
             id: quote.id, user_id: user?.id,
             customer: quote.customer, address: quote.address || "",
+            email: quote.email || "", phone: quote.phone || "",
             amount: totalAmount, gross_amount: totalAmount,
             status: "sent", is_quote: true,
             due: quote.due || "Valid for 30 days",
@@ -5294,7 +5331,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }).then(() => {}).catch(() => {});
           setLastAction({ type: "invoice", label: `${id} — ${fmtAmount(totalAmount)} — ${input.customer}`, view: "Quotes" });
           pendingWidgetRef.current = { type: "quote", data: quote };
-          return `Quote ${id} created for ${input.customer} — ${fmtAmount(totalAmount)} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).`;
+          // Tell the AI what was auto-filled from the customer record
+          const autoFilledQ = matchedCustomerQ ? [
+            quoteEmail && !input.email ? "email" : null,
+            quoteAddress && !input.address ? "address" : null,
+            quotePhone && !input.phone ? "phone" : null,
+          ].filter(Boolean) : [];
+          const autoNoteQ = autoFilledQ.length > 0
+            ? ` Auto-filled ${autoFilledQ.join(", ")} from existing customer record.`
+            : (matchedCustomerQ ? "" : (input.customer ? " (No saved customer record found — added as ad-hoc.)" : ""));
+          return `Quote ${id} created for ${input.customer} — ${fmtAmount(totalAmount)} total (${lineItems.length} line item${lineItems.length > 1 ? "s" : ""}).${autoNoteQ}`;
         }
         case "log_enquiry": {
           // Dedup: same name + same source today
@@ -7360,6 +7406,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "\n"
   + "CONVERSATIONAL RECOVERY PATTERNS:\n"
   + "- Customer not found: \"No customer called [name] — did you mean [closest match]? Or shall I add them as a new customer?\"\n"
+  + "- DUPLICATE CUSTOMER NAMES — handle this carefully:\n"
+  + "  * If the customer list shows multiple customers with the same name (you'll see email/phone in [square brackets] after duplicates), ask the user which one BEFORE creating anything.\n"
+  + "  * Format the question like this: \"I've got two Glenn Mackays — which one?\\n  1. glenn.m@gmail.com · 07700 900123\\n  2. glenn@mackayplumbing.co.uk · 07700 900456\"\n"
+  + "  * Always show the contact details (email and phone) for each match — that's how the user tells them apart.\n"
+  + "  * Accept ANY of these as the answer: position (\"the first one\", \"second\", \"number 1\"); part of the email (\"the gmail one\", \"the mackayplumbing one\", \"the .co.uk one\"); part of the phone number (\"900456\", \"the 456 one\", \"ending 123\"); or the full email/phone.\n"
+  + "  * Once they pick, proceed with the right customer's full details (use their unique email/phone to identify the right record when calling tools).\n"
+  + "  * NEVER pick a duplicate silently. NEVER guess. Always confirm.\n"
   + "- Job not found: \"I can't see a job for [customer]. Want me to create one?\"\n"
   + "- Multiple matches: \"[Customer] has [N] jobs on the go — [list]. Which one?\"\n"
   + "- Invoice/quote not found by amount: \"No invoice matches £[X]. The closest ones are [list]. Which one did you mean?\"\n"
@@ -7436,6 +7489,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- WORKERS (workers table — PAYE or self-employed on your team): add_worker, log_worker_time, assign_worker_to_job, add_worker_document. log_worker_time searches the workers table first, then subcontractors — so it works for both.\n"
   + "- SUBCONTRACTORS (subcontractors table — CIS, UTR, own business): add_subcontractor, log_subcontractor_payment (include customer+job_title to link to a job). IMPORTANT: if someone is set up as a subcontractor (has CIS rate), ALWAYS use log_subcontractor_payment — never log_time. If you try log_worker_time and they are found as a subcontractor, the system will handle it automatically.\n"
   + "- RAMS: list_rams shows all saved RAMS. start_rams builds a new one conversationally.\n"
+  + "\n"
+  + "TRADE PA APP — FEATURES YOU SHOULD KNOW ABOUT (so you can answer user questions about the app itself):\n"
+  + "- APPEARANCE / THEME: Users can switch between Light, Dark or Auto mode in Settings → Appearance. Auto follows their phone's system setting. Light is best for outdoor sunlight on site. Dark is best for evenings or in the van. If a user asks 'how do I change to light mode' or 'switch to dark mode', tell them: 'Tap Settings, then Appearance, then pick Light, Dark or Auto.' You can't switch the theme yourself — only the user can.\n"
+  + "- FEEDBACK / REPORTING BUGS: There's a 💬 button in the top header (between ? and 👤) and a Send Feedback section in Settings. Users can report bugs, suggest improvements or share ideas. They can attach screenshots. If a user complains about a bug, says 'this is broken', 'this doesn't work', 'I have an idea for', or 'this could be better' — direct them: 'Tap the 💬 icon in the top header to send a bug report — you can attach a screenshot and we'll get it.' Don't try to fix the app yourself.\n"
+  + "- ACCOUNTS TAB (formerly 'Money'): The tab containing Invoices, Quotes, Payments, Expenses, CIS and Reports is called Accounts. Use 'Accounts' when referring to that group of features.\n"
+  + "- REMINDERS BEHAVIOUR: When a reminder fires at its set time, it does NOT automatically disappear. It stays in the user's Upcoming list as 'Overdue' (red bar) until they explicitly tap 'Done ✓' to mark it complete. This is deliberate — so users don't lose track of things they haven't actually followed through on. If a user asks 'where did my reminder go' or 'why is my reminder still showing', explain: 'Reminders stay in your Upcoming list until you tap Done ✓ — that way nothing slips. Tap Done ✓ once you've actually done it, or ✕ to delete it entirely.'\n"
+  + "- DESKTOP LAYOUT: On a desktop browser (≥900px wide), the navigation appears as a left-hand sidebar instead of category pills. On phones and PWAs, the pills layout is used. If a user mentions can't find the menu on desktop, tell them to look at the left side of the screen.\n"
   + (handsFree ? "\n\nHANDS-FREE MODE: Your reply is spoken aloud by text-to-speech. Rules:\n- Plain spoken English only. No markdown, bullets, asterisks or formatting.\n- Keep your text reply to 1-2 sentences — a brief spoken intro only.\n- When you use a tool to fetch data, your text reply is the spoken intro. E.g. \'You have four invoices awaiting payment, totalling 32700 pounds. What would you like to do?\'\n- ALWAYS end your reply with a question or prompt so the user knows to respond.\n- When the user questions or corrects data you returned: acknowledge it directly, explain what the system shows (e.g. \'Those invoices show as sent in the system, meaning they have been issued but not yet marked as paid.\'), and offer what you can do — mark as paid, filter differently, etc. Never just repeat the same data without explanation.\n- If the user says something seems wrong, explain the status honestly: sent = issued, awaiting payment. overdue = past due date. paid = marked paid. draft = not yet sent.\n- Be a real PA: if the data surprises them, help them understand it and offer next steps." : "")
   + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
   + (sessionActionsRef.current.length ? "\n\nACTIONS ALREADY COMPLETED THIS SESSION (do NOT repeat these):\n" + sessionActionsRef.current.map(a => "- " + a).join("\n") + "\n" : "")
@@ -7449,7 +7509,23 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     + "- Invoices: " + ((invoices||[]).filter(i=>!i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>!i.isQuote).map(i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")").join(", ")) + "\n"
     + "- Quotes: " + ((invoices||[]).filter(i=>i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>i.isQuote).map(i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")").join(", ")) + "\n"
     + "- Materials: " + ((materials||[]).length === 0 ? "none" : (materials||[]).map(m=> m.item + " x" + m.qty + " (" + m.status + ")").join(", ")) + "\n"
-    + "- Customers: " + ((customers||[]).length === 0 ? "none" : (customers||[]).map(c=>c.name).join(", ")) + "\n"
+    + "- Customers: " + (() => {
+      const cs = customers || [];
+      if (cs.length === 0) return "none";
+      // Count occurrences of each name (case-insensitive) so we know who has duplicates
+      const nameCounts = {};
+      cs.forEach(c => { const k = (c.name || "").toLowerCase().trim(); nameCounts[k] = (nameCounts[k] || 0) + 1; });
+      // For customers whose name is shared with at least one other, include email + phone
+      // so the AI can disambiguate. For unique names, just the name (saves tokens).
+      return cs.map(c => {
+        const isDup = nameCounts[(c.name || "").toLowerCase().trim()] > 1;
+        if (!isDup) return c.name;
+        const bits = [];
+        if (c.email) bits.push(c.email);
+        if (c.phone) bits.push(c.phone);
+        return c.name + (bits.length ? ` [${bits.join(" · ")}]` : "");
+      }).join(", ");
+    })() + "\n"
     + "- Enquiries: " + ((enquiries||[]).length === 0 ? "none" : (enquiries||[]).map(e=>e.name).join(", ")) + "\n"
     + "- Current RAMS session: " + (ramsSession ? "YES - step " + ramsSession.step : "none") + "\n"
     + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
