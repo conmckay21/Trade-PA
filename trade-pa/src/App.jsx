@@ -11473,7 +11473,9 @@ function LineItemsDisplay({ inv }) {
 
 // ─── InboxView (AI Email Agent) ───────────────────────────────────────────────
 function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, setLastAction }) {
-  const IC = { amber: "#f59e0b", amberLight: "#fef3c766", green: "#10b981", red: "#ef4444", blue: "#3b82f6", muted: "#6b7280", border: "#2a2a2a", bg2: "#1a1a1a", bg3: "#242424", text: "#e5e5e5" };
+  // Theme-aware: bg/text/border tokens use the same CSS variables as global C,
+  // so the Inbox tab follows light/dark mode. Accent colours stay as hex literals.
+  const IC = { amber: C.amber, amberLight: "#fef3c766", green: C.green, red: C.red, blue: C.blue, muted: C.muted, border: C.border, bg2: C.surface, bg3: C.surfaceHigh, text: C.text };
 
   const [connection, setConnection] = useState(null);
   const [pendingActions, setPendingActions] = useState([]);
