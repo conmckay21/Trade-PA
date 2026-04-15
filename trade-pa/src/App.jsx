@@ -18532,6 +18532,20 @@ function AppInner() {
   const [showPwaBanner, setShowPwaBanner] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  // Desktop browser detection — true when running in a regular browser tab
+  // (not installed as PWA) AND the viewport is wide enough for the rail layout.
+  // Drives the desktop layout: left rail navigation, wider content area.
+  const [isDesktopBrowser, setIsDesktopBrowser] = useState(false);
+  useEffect(() => {
+    const update = () => {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      const wideEnough = window.innerWidth >= 900;
+      setIsDesktopBrowser(!standalone && wideEnough);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
   const [pdfHtml, setPdfHtml] = useState(null);
   const [viewRaw, setViewRaw] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -19464,10 +19478,10 @@ function AppInner() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500;700&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
-        html,body{width:100%;overflow-x:hidden;background:#0f0f0f;}
+        html,body{width:100%;overflow-x:hidden;}
         ::-webkit-scrollbar{width:5px;}
-        ::-webkit-scrollbar-track{background:#1a1a1a;}
-        ::-webkit-scrollbar-thumb{background:#333;border-radius:3px;}
+        ::-webkit-scrollbar-track{background:var(--c-surface);}
+        ::-webkit-scrollbar-thumb{background:var(--c-border);border-radius:3px;}
         .nav-scroll::-webkit-scrollbar{display:none;}
         button:hover:not(:disabled){opacity:0.82;}
         input:focus,textarea:focus{border-color:#f59e0b !important;outline:none;}
@@ -19498,7 +19512,8 @@ function AppInner() {
             <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
           </div>
         </div>
-        {/* Category pills */}
+        {/* Category pills — hidden on desktop browser (rail nav replaces) */}
+        {!isDesktopBrowser && (<>
         <div style={{ display: "flex", gap: 4, padding: "0 12px 5px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
           {NAV_GROUPS.map(g => {
             const active = activeCategory === g.id;
@@ -19538,8 +19553,53 @@ function AppInner() {
             </button>
           ))}
         </div>
+        </>)}
       </header>
-      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24 }}>
+      <div style={isDesktopBrowser ? { display: "flex", alignItems: "flex-start", maxWidth: 1280, margin: "0 auto", width: "100%" } : {}}>
+        {isDesktopBrowser && (
+          <nav style={{ width: 220, flexShrink: 0, padding: "16px 8px", borderRight: `1px solid ${C.border}`, position: "sticky", top: "calc(48px + env(safe-area-inset-top, 0px))", maxHeight: "calc(100vh - 48px)", overflowY: "auto", boxSizing: "border-box" }}>
+            {NAV_GROUPS.map(g => {
+              const allowed = g.views.filter(v => {
+                if (userRole !== "owner" && v === "Settings") return false;
+                const myMember = members.find(m => m.user_id === user?.id);
+                const perms = myMember?.permissions;
+                return !perms || perms[v] !== false;
+              });
+              if (!allowed.length) return null;
+              return (
+                <div key={g.id} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 12px 6px", fontWeight: 700 }}>{g.label}</div>
+                  {allowed.map(v => {
+                    const active = view === v;
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => { setActiveCategory(g.id); setView(v); }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          width: "100%", padding: "8px 12px", marginBottom: 1,
+                          border: "none", borderRadius: 6,
+                          background: active ? C.amber : "transparent",
+                          color: active ? "#000" : C.text,
+                          fontSize: 12, fontWeight: active ? 700 : 500,
+                          fontFamily: "'DM Mono',monospace",
+                          cursor: "pointer", textAlign: "left",
+                          transition: "background 0.12s",
+                        }}
+                        onMouseEnter={e => { if (!active) e.currentTarget.style.background = C.surfaceHigh; }}
+                        onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <span style={{ fontSize: 13, opacity: active ? 1 : 0.85 }}>{g.icon}</span>
+                        <span>{v === "AI Assistant" ? "🏠 Home" : v}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </nav>
+        )}
+      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, ...(isDesktopBrowser ? { maxWidth: "none", flex: 1, padding: "24px 32px" } : {}) }}>
         {(() => {
           // Guard — redirect member to Dashboard if they're on a tab they can't access
           if (userRole !== "owner" && view !== "Dashboard") {
@@ -19578,6 +19638,7 @@ function AppInner() {
         {view === "RAMS" && <RAMSTab user={user} brand={brand} />}
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} openAssistantSetup={() => setAssistantSetupOpen(true)} assistantName={assistantName} assistantWakeWords={assistantWakeWords} userCommandsCount={userCommands.length} usageData={usageData} usageCaps={usageCaps} /></ErrorBoundary>}
       </main>
+      </div>
       <HelpCentre open={helpOpen} openSlug={helpSlug} onClose={() => { setHelpOpen(false); setHelpSlug(null); }} />
       <AssistantSetup
         open={assistantSetupOpen}
