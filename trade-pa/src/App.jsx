@@ -9886,8 +9886,17 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user, cus
                       style={S.input}
                       value=""
                       onChange={e => {
-                        const c = customers.find(x => x.id === e.target.value);
-                        if (c) setForm(f => ({ ...f, customer: c.name || "", email: c.email || "", address: c.address || "" }));
+                        const pickedId = e.target.value;
+                        if (!pickedId) return;
+                        const c = customers.find(x => String(x.id) === String(pickedId));
+                        if (c) {
+                          setForm(f => ({
+                            ...f,
+                            customer: c.name || c.customer_name || "",
+                            email: c.email || "",
+                            address: c.address || "",
+                          }));
+                        }
                       }}
                     >
                       <option value="">— New customer / type below —</option>
@@ -10205,8 +10214,17 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user, custo
                       style={S.input}
                       value=""
                       onChange={e => {
-                        const c = customers.find(x => x.id === e.target.value);
-                        if (c) setForm(f => ({ ...f, customer: c.name || "", email: c.email || "", address: c.address || "" }));
+                        const pickedId = e.target.value;
+                        if (!pickedId) return;
+                        const c = customers.find(x => String(x.id) === String(pickedId));
+                        if (c) {
+                          setForm(f => ({
+                            ...f,
+                            customer: c.name || c.customer_name || "",
+                            email: c.email || "",
+                            address: c.address || "",
+                          }));
+                        }
                       }}
                     >
                       <option value="">— New customer / type below —</option>
@@ -19557,7 +19575,7 @@ function AppInner() {
         </div>
         </>)}
       </header>
-      <div style={isDesktopBrowser ? { display: "flex", alignItems: "flex-start", maxWidth: 1280, margin: "0 auto", width: "100%" } : {}}>
+      <div style={isDesktopBrowser ? { display: "flex", alignItems: "flex-start", width: "100%" } : {}}>
         {isDesktopBrowser && (
           <nav style={{ width: 220, flexShrink: 0, padding: "16px 8px", borderRight: `1px solid ${C.border}`, position: "sticky", top: "calc(48px + env(safe-area-inset-top, 0px))", maxHeight: "calc(100vh - 48px)", overflowY: "auto", boxSizing: "border-box" }}>
             {NAV_GROUPS.map(g => {
@@ -19601,7 +19619,8 @@ function AppInner() {
             })}
           </nav>
         )}
-      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, ...(isDesktopBrowser ? { maxWidth: "none", flex: 1, padding: "24px 32px" } : {}) }}>
+      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
+        <div style={isDesktopBrowser ? { maxWidth: 720, margin: "0 auto", width: "100%" } : { display: "contents" }}>
         {(() => {
           // Guard — redirect member to Dashboard if they're on a tab they can't access
           if (userRole !== "owner" && view !== "Dashboard") {
@@ -19639,6 +19658,7 @@ function AppInner() {
         {view === "Stock" && <StockTab user={user} />}
         {view === "RAMS" && <RAMSTab user={user} brand={brand} />}
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} openAssistantSetup={() => setAssistantSetupOpen(true)} assistantName={assistantName} assistantWakeWords={assistantWakeWords} userCommandsCount={userCommands.length} usageData={usageData} usageCaps={usageCaps} /></ErrorBoundary>}
+        </div>
       </main>
       </div>
       <HelpCentre open={helpOpen} openSlug={helpSlug} onClose={() => { setHelpOpen(false); setHelpSlug(null); }} />
