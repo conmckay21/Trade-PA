@@ -718,6 +718,14 @@ function applyPalette(palette) {
   });
   // Set color-scheme so browser scrollbars / form controls match
   root.style.colorScheme = palette === LIGHT_PALETTE ? "light" : "dark";
+  // Set background on <html> and <body> so the page (including overscroll
+  // and any area outside the React root) follows the theme — without this,
+  // the app card sits on a dark page background in light mode.
+  root.style.background = palette.bg;
+  if (document.body) {
+    document.body.style.background = palette.bg;
+    document.body.style.color = palette.text;
+  }
 }
 
 // Apply dark palette immediately on module load so first paint is correct.
