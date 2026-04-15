@@ -1376,7 +1376,7 @@ function InvoicePreview({ brand, invoice }) {
               Pay securely online by debit or credit card. Takes 30 seconds.
             </div>
             <div style={{ display: "inline-block", padding: "8px 18px", background: "#635bff", borderRadius: 5, fontFamily: "Arial,sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>
-              Pay £{inv.amount} online →
+              Pay {fmtAmount(inv.amount)} online →
             </div>
             <div style={{ fontFamily: "Arial,sans-serif", fontSize: 10, color: "#888", marginTop: 8 }}>
               https://pay.stripe.com/i/acct_1Ox8.../inv_sample
@@ -2788,7 +2788,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{job.customer}</div>
                   <div style={{ fontSize: 11, color: C.muted }}>{job.type} · {new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
                 </div>
-                {job.value > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{job.value}</div>}
+                {job.value > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>{fmtAmount(job.value)}</div>}
               </div>
             ))
           }
@@ -2829,7 +2829,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
             <div key={inv.id} style={S.row}>
               <div style={{ fontSize: 12, color: C.muted, width: 70, flexShrink: 0 }}>{inv.id}</div>
               <div style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</span></div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 12, flexShrink: 0 }}>£{inv.amount}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 12, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
               <div style={{ flexShrink: 0, textAlign: "right", marginRight: 10 }}>
                 <div style={S.badge(statusColor[inv.status] || C.muted)}>{statusLabel[inv.status] || inv.status}</div>
                 <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{inv.due}</div>
@@ -2850,7 +2850,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
             <div key={q.id} style={S.row}>
               <div style={{ fontSize: 12, color: C.blue, width: 70, flexShrink: 0 }}>{q.id}</div>
               <div style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</span></div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 12, flexShrink: 0 }}>£{q.amount}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 12, flexShrink: 0 }}>{fmtAmount(q.amount)}</div>
               <div style={{ flexShrink: 0, textAlign: "right", marginRight: 10 }}>
                 <div style={S.badge(C.blue)}>Quote</div>
                 <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{q.due}</div>
@@ -8444,7 +8444,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                               <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{job.customer}</div>
                               <div style={{ fontSize: 11, color: C.muted }}>{job.type || job.title}{job.address ? " · " + job.address : ""}</div>
                             </div>
-                            {job.value > 0 && <div style={{ fontSize: 12, fontWeight: 700, color: C.amber, flexShrink: 0 }}>£{job.value}</div>}
+                            {job.value > 0 && <div style={{ fontSize: 12, fontWeight: 700, color: C.amber, flexShrink: 0 }}>{fmtAmount(job.value)}</div>}
                           </div>
                         ))}
                       </div>
@@ -8629,8 +8629,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                                 </div>
                               </div>
                               <div style={{ textAlign: "right", fontSize: 11, color: C.muted }}>
-                                {w.day_rate > 0 && <div>£{w.day_rate}/day</div>}
-                                {w.hourly_rate > 0 && <div>£{w.hourly_rate}/hr</div>}
+                                {w.day_rate > 0 && <div>{fmtAmount(w.day_rate)}/day</div>}
+                                {w.hourly_rate > 0 && <div>{fmtAmount(w.hourly_rate)}/hr</div>}
                                 {w.utr && <div style={{ color: C.muted }}>UTR: {w.utr}</div>}
                               </div>
                             </div>
@@ -8853,7 +8853,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 600 }}>{m.widget.data.worker_name || "Worker"} — {m.widget.data.customer}</div>
-                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{m.widget.data.hours}hrs @ £{m.widget.data.rate}/hr · {m.widget.data.sheet_date}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{m.widget.data.hours}hrs @ {fmtAmount(m.widget.data.rate)}/hr · {m.widget.data.sheet_date}</div>
                             {m.widget.data.description && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>{m.widget.data.description}</div>}
                           </div>
                           <div style={{ fontSize: 16, fontWeight: 700, color: C.amber }}>£{parseFloat(m.widget.data.total||0).toFixed(2)}</div>
@@ -9058,7 +9058,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                                 {Object.keys(d).length > 0 && (
                                   <div style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>
                                     {d.customer && <span style={{ marginRight: 8 }}>👤 {d.customer}</span>}
-                                    {d.amount && <span style={{ marginRight: 8 }}>£{d.amount}</span>}
+                                    {d.amount && <span style={{ marginRight: 8 }}>{fmtAmount(d.amount)}</span>}
                                     {d.supplier && <span style={{ marginRight: 8 }}>🏪 {d.supplier}</span>}
                                     {d.type && <span>{d.type}</span>}
                                   </div>
@@ -9311,7 +9311,7 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
                     <div style={{ fontSize: 10, color: C.muted }}>{inv.id} · {inv.due}</div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
                   <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
                   <button onClick={e => { e.stopPropagation(); updateStatus(inv.id, "paid"); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green, flexShrink: 0 }}>✓ Paid</button>
                   <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
@@ -9331,7 +9331,7 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
                     <div style={{ fontSize: 10, color: C.muted }}>{inv.id}</div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
                   <div style={S.badge(C.green)}>Paid</div>
                   <div style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>→</div>
                 </div>
@@ -9381,7 +9381,7 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
                     <div style={{ fontSize: 10, color: C.muted }}>{q.address || q.id} · {q.due}</div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>£{q.amount}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>{fmtAmount(q.amount)}</div>
                   <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
                     {q.status === "accepted" ? "Accepted" : q.status === "declined" ? "Declined" : "Sent"}
                   </div>
@@ -9406,7 +9406,7 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
                 </div>
                 <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{selected.customer}</div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "paid" ? C.green : selected.isQuote ? C.blue : C.amber }}>£{selected.amount}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "paid" ? C.green : selected.isQuote ? C.blue : C.amber }}>{fmtAmount(selected.amount)}</div>
                   <span style={S.badge(statusColor[selected.status] || C.muted)}>{statusLabel[selected.status] || selected.status}</span>
                 </div>
               </div>
@@ -10392,18 +10392,51 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user, custo
 function useReminders(userId) {
   const [reminders, setRemindersRaw] = useState([]);
 
-  // Load from localStorage once userId is known
+  // Load from localStorage once userId is known.
+  // Falls back to Supabase if local cache is empty (handles app reloads,
+  // new devices, or fresh installs where AI-set reminders went straight
+  // to the database but never made it into local cache).
   useEffect(() => {
     if (!userId) return;
-    try {
-      const saved = localStorage.getItem(`trade-pa-reminders-${userId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Only restore reminders that haven't fired yet or are completed
-        const valid = parsed.filter(r => r.done || r.time > Date.now() - 1000 * 60 * 60);
-        setRemindersRaw(valid);
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = localStorage.getItem(`trade-pa-reminders-${userId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          // Keep ALL reminders — overdue items must stay visible until
+          // the user explicitly marks them Done ✓ or deletes them.
+          // Only drop very old completed ones (>30 days) to avoid bloat.
+          const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          const valid = parsed.filter(r => !r.done || r.time > cutoff);
+          if (!cancelled) setRemindersRaw(valid);
+          if (valid.length > 0) return; // local cache hit, skip Supabase hydration
+        }
+        // Local empty — hydrate from Supabase
+        const { data } = await supabase
+          .from("reminders")
+          .select("*")
+          .eq("user_id", userId)
+          .order("fire_at", { ascending: false })
+          .limit(200);
+        if (cancelled) return;
+        if (data && data.length > 0) {
+          const hydrated = data.map(r => ({
+            id: r.id ? `r${r.id}` : `r${Date.parse(r.created_at) || Date.now()}`,
+            text: r.text,
+            time: Date.parse(r.fire_at),
+            timeLabel: new Date(r.fire_at).toLocaleString("en-GB"),
+            done: !!r.done,
+            fired: !!r.fired,
+          })).filter(r => !isNaN(r.time));
+          setRemindersRaw(hydrated);
+          try { localStorage.setItem(`trade-pa-reminders-${userId}`, JSON.stringify(hydrated)); } catch {}
+        }
+      } catch (e) {
+        console.warn("Reminders load:", e.message);
       }
-    } catch {}
+    })();
+    return () => { cancelled = true; };
   }, [userId]);
 
   const persist = (next) => {
@@ -10422,13 +10455,20 @@ function useReminders(userId) {
     persist(next);
     return next;
   });
+  // Mark as 'fired' (alert shown) without marking complete — reminder stays
+  // in Upcoming as Overdue until user explicitly confirms with "Done ✓".
+  const markFired = (id) => setRemindersRaw(prev => {
+    const next = prev.map(r => r.id === id ? { ...r, fired: true } : r);
+    persist(next);
+    return next;
+  });
   const remove = (id) => setRemindersRaw(prev => {
     const next = prev.filter(r => r.id !== id);
     persist(next);
     return next;
   });
 
-  return { reminders, add, dismiss, remove };
+  return { reminders, add, dismiss, markFired, remove };
 }
 
 function formatCountdown(ms) {
@@ -10894,7 +10934,7 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                   <div key={j.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>
                     <span style={{ color: C.text }}>{j.type}</span>
                     <span style={{ color: C.muted }}>{j.dateObj ? new Date(j.dateObj).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : j.date}</span>
-                    {j.value > 0 && <span style={{ color: C.amber }}>£{j.value}</span>}
+                    {j.value > 0 && <span style={{ color: C.amber }}>{fmtAmount(j.value)}</span>}
                   </div>
                 ))}
               </div>
@@ -10907,7 +10947,7 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                 {invoicesForCustomer(selected.name).map(i => (
                   <div key={i.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>
                     <span style={{ color: C.muted }}>{i.id}</span>
-                    <span style={{ color: C.text }}>£{i.amount}</span>
+                    <span style={{ color: C.text }}>{fmtAmount(i.amount)}</span>
                     <span style={S.badge(statusColor[i.status] || C.muted)}>{statusLabel[i.status] || i.status}</span>
                   </div>
                 ))}
@@ -11143,7 +11183,7 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
                 <div style={{ fontSize: 10, color: C.muted }}>{inv.address || inv.id} · {inv.due}</div>
               </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
               <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
               <button onClick={e => { e.stopPropagation(); sendDocumentEmail(inv, brand, customers, user?.id, setSendingId); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.blue, flexShrink: 0 }} disabled={sendingId === inv.id}>{sendingId === inv.id ? "..." : "✉"}</button>
               <button onClick={e => { e.stopPropagation(); updateStatus(inv.id, "paid"); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green, flexShrink: 0 }}>✓ Paid</button>
@@ -11164,7 +11204,7 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
                 <div style={{ fontSize: 10, color: C.muted }}>{inv.address || inv.id}</div>
               </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginRight: 8, flexShrink: 0 }}>£{inv.amount}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
               <div style={S.badge(C.green)}>Paid</div>
               <div style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>→</div>
             </div>
@@ -11190,7 +11230,7 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
                 <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Invoice · {selected.id}</div>
                 <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{selected.customer}</div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "paid" ? C.green : C.amber }}>£{selected.amount}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "paid" ? C.green : C.amber }}>{fmtAmount(selected.amount)}</div>
                   <span style={S.badge(statusColor[selected.status] || C.muted)}>{statusLabel[selected.status] || selected.status}</span>
                 </div>
               </div>
@@ -11376,7 +11416,7 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
                 <div style={{ fontSize: 10, color: C.muted }}>{q.address || q.id} · {q.due}</div>
               </div>
-              <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>£{q.amount}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>{fmtAmount(q.amount)}</div>
               <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
                 {q.status === "accepted" ? "Accepted" : q.status === "declined" ? "Declined" : "Sent"}
               </div>
@@ -11397,7 +11437,7 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
                 <div style={{ fontSize: 11, color: C.blue, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Quote · {selected.id}</div>
                 <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{selected.customer}</div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "accepted" ? C.green : C.blue }}>£{selected.amount}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "accepted" ? C.green : C.blue }}>{fmtAmount(selected.amount)}</div>
                   <span style={S.badge(selected.status === "accepted" ? C.green : selected.status === "declined" ? C.red : C.blue)}>
                     {selected.status === "accepted" ? "Accepted" : selected.status === "declined" ? "Declined" : "Sent"}
                   </span>
@@ -13871,7 +13911,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{j.customer}{j.address ? ` · ${j.address}` : ""}</div>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
-              {j.value > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>£{j.value}</div>}
+              {j.value > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>{fmtAmount(j.value)}</div>}
               <div style={S.badge(statusColor[j.status] || C.muted)}>{(j.status || "").replace("_"," ")}</div>
             </div>
           </div>
@@ -16386,8 +16426,8 @@ function SubcontractorsTab({ user, brand }) {
                       </div>
                     </div>
                     <div style={{ textAlign: "right", fontSize: 11, color: C.muted }}>
-                      {w.day_rate > 0 && <div>£{w.day_rate}/day</div>}
-                      {w.hourly_rate > 0 && <div>£{w.hourly_rate}/hr</div>}
+                      {w.day_rate > 0 && <div>{fmtAmount(w.day_rate)}/day</div>}
+                      {w.hourly_rate > 0 && <div>{fmtAmount(w.hourly_rate)}/hr</div>}
                     </div>
                   </div>
                   {/* Cert alerts */}
@@ -18586,7 +18626,7 @@ function AppInner() {
     if (grp) setActiveCategory(grp);
   };
   const [brand, setBrand] = useState(DEFAULT_BRAND);
-  const { reminders, add, dismiss, remove } = useReminders(user?.id);
+  const { reminders, add, dismiss, markFired, remove } = useReminders(user?.id);
   const [dueNow, setDueNow] = useState([]);
   const [bellFlash, setBellFlash] = useState(false);
   const [twilioDevice, setTwilioDevice] = useState(null);
@@ -19356,6 +19396,9 @@ function AppInner() {
   };
 
   // Watch for reminders that just became due
+  // Show the in-app alert + flash the bell, but don't auto-dismiss —
+  // the user must explicitly tap "Done ✓" so they don't lose track of
+  // things they haven't actually followed through on yet.
   useEffect(() => {
     const t = setInterval(() => {
       const due = reminders.filter(r => !r.done && !r._due && r.time <= Date.now() && r.time > Date.now() - 60000);
@@ -19363,7 +19406,9 @@ function AppInner() {
         setDueNow(d => [...d, ...due.filter(r => !d.find(x => x.id === r.id))]);
         setBellFlash(true);
         setTimeout(() => setBellFlash(false), 3000);
-        due.forEach(r => dismiss(r.id));
+        // Mark as 'fired' so we don't keep alerting on the same reminder,
+        // but leave 'done' false so it stays visible in Upcoming as Overdue.
+        due.forEach(r => markFired(r.id));
       }
     }, 5000);
     return () => clearInterval(t);
@@ -19528,7 +19573,7 @@ function AppInner() {
             )}
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
             <button onClick={() => { setHelpSlug(null); setHelpOpen(true); }} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Help & how-to">?</button>
-            <button onClick={() => setAssistantSetupOpen(true)} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Edit your AI Assistant">🎙</button>
+            <button onClick={() => setAssistantSetupOpen(true)} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Edit your AI Assistant">👤</button>
             <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
           </div>
         </div>
