@@ -259,9 +259,9 @@ function LandingPage({ onAuth }) {
           {/* Three plan cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 32 }}>
             {[
-              { name: "Solo", price: "£49", period: "/month", annual: "£500/year", users: "1 user", features: ["AI email agent","Voice dictation everywhere","All trade certificates","Jobs, quotes & invoices","CIS, DRC, Xero & QuickBooks","Overdue payment chasing","Annual service reminders","Digital signatures","Unlimited everything"], popular: false },
-              { name: "Team", price: "£89", period: "/month", annual: "£890/year", users: "Up to 5 users", features: ["Everything in Solo","GPS job tracking","Job assignment to team","Team scheduling","Permission controls","Staff timesheets"], popular: true },
-              { name: "Pro", price: "£129", period: "/month", annual: "£1,290/year", users: "Up to 10 users", features: ["Everything in Team","Up to 10 users","Priority support"], popular: false },
+              { name: "Solo", price: "£49", period: "/month", annual: "£500/year", users: "1 user", features: ["500 AI conversations / month","5 hours hands-free / month","Tap-to-talk voice — never capped","All 43 features included","Allowance resets 1st of month"], popular: false },
+              { name: "Team", price: "£89", period: "/month", annual: "£890/year", users: "Up to 5 users", features: ["2,000 AI conversations / month","20 hours hands-free / month","Team scheduling & permissions","Staff timesheets & GPS tracking","All 43 features included"], popular: true },
+              { name: "Pro", price: "£129", period: "/month", annual: "£1,290/year", users: "Up to 10 users", features: ["Unlimited AI conversations","Unlimited hands-free","Priority support","All 43 features included","Everything in Team, unlimited"], popular: false },
             ].map(plan => (
               <div key={plan.name} style={{ ...LP.pricingCard, maxWidth: "100%", border: plan.popular ? "2px solid #f59e0b" : "1px solid #222", position: "relative" }}>
                 {plan.popular && <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: "#f59e0b", color: "#000", fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 700, padding: "3px 14px", borderRadius: 100, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>MOST POPULAR</div>}
@@ -1619,7 +1619,7 @@ function CertificationsCard({ brand, setBrand }) {
   );
 }
 
-function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit, openAssistantSetup, assistantName, assistantWakeWords, userCommandsCount }) {
+function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit, openAssistantSetup, assistantName, assistantWakeWords, userCommandsCount, usageData, usageCaps }) {
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
@@ -2337,6 +2337,52 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         <button onClick={() => openAssistantSetup && openAssistantSetup()} style={{ ...S.btn("primary"), width: "100%", justifyContent: "center" }}>
           ⚙ Manage assistant
         </button>
+      </div>
+
+      {/* Usage — fair-use caps */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>📊 Monthly Usage</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+          Your allowance resets on the 1st of each month. Upgrade for higher limits.
+        </div>
+        {(() => {
+          const convUsed = usageData?.conversations_used || 0;
+          const convCap = usageCaps?.convos || 500;
+          const convPct = convCap === Infinity ? 0 : Math.min(1, convUsed / convCap);
+          const hfUsed = Math.round((usageData?.handsfree_seconds_used || 0) / 60);
+          const hfCap = usageCaps?.hf_hours === Infinity ? Infinity : (usageCaps?.hf_hours || 5) * 60;
+          const hfPct = hfCap === Infinity ? 0 : Math.min(1, hfUsed / hfCap);
+          const barBg = C.surfaceHigh;
+          const barStyle = (pct) => ({
+            height: 8, borderRadius: 4, background: barBg, overflow: "hidden", marginTop: 6, marginBottom: 14,
+          });
+          const fillStyle = (pct) => ({
+            height: "100%", borderRadius: 4, width: (pct * 100) + "%",
+            background: pct >= 1 ? "#ef4444" : pct >= 0.8 ? C.amber : C.green,
+            transition: "width 0.3s ease",
+          });
+          return (<>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+              <span style={{ color: C.text, fontWeight: 600 }}>AI Conversations</span>
+              <span style={{ color: convPct >= 0.8 ? C.amber : C.muted, fontFamily: "'DM Mono',monospace" }}>
+                {convCap === Infinity ? `${convUsed} used (unlimited)` : `${convUsed} / ${convCap}`}
+              </span>
+            </div>
+            <div style={barStyle(convPct)}><div style={fillStyle(convPct)} /></div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+              <span style={{ color: C.text, fontWeight: 600 }}>Hands-free time</span>
+              <span style={{ color: hfPct >= 0.8 ? C.amber : C.muted, fontFamily: "'DM Mono',monospace" }}>
+                {hfCap === Infinity ? `${hfUsed} min used (unlimited)` : `${hfUsed} / ${hfCap} min`}
+              </span>
+            </div>
+            <div style={barStyle(hfPct)}><div style={fillStyle(hfPct)} /></div>
+
+            <div style={{ fontSize: 11, color: C.muted, textAlign: "center" }}>
+              {planTier === "solo" ? "Solo plan" : planTier === "team" ? "Team plan" : "Pro plan"} — resets 1st of each month
+            </div>
+          </>);
+        })()}
       </div>
 
       {/* Call Tracking */}
@@ -3719,7 +3765,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", userCommands = [] }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 500, hf_hours: 5 }, currentMonth = "" }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -3784,6 +3830,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const assistantWakeWordsRef = useRef(assistantWakeWords);
   const assistantSignoffRef = useRef(assistantSignoff);
   const userCommandsRef = useRef(userCommands);
+
+  // Usage tracking refs — needed by mic callbacks (stale closure protection)
+  const usageDataRef = useRef(usageData);
+  const usageCapsRef = useRef(usageCaps);
+  const handsFreeStartRef = useRef(null);
 
   // Hands-free auto-exit: count consecutive noise/silence cycles.
   // MUST be declared before useWhisper() — it's captured by onTranscriptRef closure.
@@ -3921,10 +3972,34 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     } catch(e) { /* silent */ }
   };
   useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
+
+  // Track hands-free session duration and flush to DB on end
+  useEffect(() => {
+    if (handsFree) {
+      handsFreeStartRef.current = Date.now();
+    } else if (handsFreeStartRef.current) {
+      const elapsed = Math.round((Date.now() - handsFreeStartRef.current) / 1000);
+      handsFreeStartRef.current = null;
+      if (elapsed > 5 && user?.id && currentMonth) {
+        // Update local state immediately
+        setUsageData(prev => ({
+          ...prev,
+          handsfree_seconds_used: (prev.handsfree_seconds_used || 0) + elapsed,
+        }));
+        // Flush to DB (non-blocking)
+        supabase.rpc("increment_usage", {
+          p_user_id: user.id, p_month: currentMonth,
+          p_conversations: 0, p_seconds: elapsed,
+        }).catch(() => {});
+      }
+    }
+  }, [handsFree]);
   useEffect(() => { assistantNameRef.current = assistantName; }, [assistantName]);
   useEffect(() => { assistantWakeWordsRef.current = assistantWakeWords; }, [assistantWakeWords]);
   useEffect(() => { assistantSignoffRef.current = assistantSignoff; }, [assistantSignoff]);
   useEffect(() => { userCommandsRef.current = userCommands; }, [userCommands]);
+  useEffect(() => { usageDataRef.current = usageData; }, [usageData]);
+  useEffect(() => { usageCapsRef.current = usageCaps; }, [usageCaps]);
 
   // ── Error capture system ─────────────────────────────────────────────────
   const logError = async (type, fields = {}) => {
@@ -3988,6 +4063,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       "enable hands free", "turn on hands free", "back on hands free",
       "put it on hands free", "start hands free", "go handsfree"];
     if (!handsFreeRef.current && ACTIVATE.some(p => lower.includes(p))) {
+      // Fair-use cap check — is hands-free allowance exhausted?
+      const caps = usageCapsRef.current || {};
+      if (caps.hf_hours !== Infinity) {
+        const secUsed = usageDataRef.current?.handsfree_seconds_used || 0;
+        if (secUsed >= caps.hf_hours * 3600) {
+          speak("You've used your " + caps.hf_hours + " hour hands-free allowance this month. Upgrade your plan for more, or tap the mic to keep using voice.");
+          return;
+        }
+      }
       setHandsFree(true);
       handsFreeRef.current = true;
       emptyCyclesRef.current = 0;
@@ -4754,6 +4838,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "add_subcontractor", description: "Add a new subcontractor. Always include address if mentioned.", input_schema: { type: "object", properties: { name: { type: "string" }, company: { type: "string" }, utr: { type: "string" }, cis_rate: { type: "string", description: "20 registered, 30 unregistered, 0 gross" }, email: { type: "string" }, phone: { type: "string" }, address: { type: "string", description: "Business or home address" } }, required: ["name"] } },
     { name: "log_subcontractor_payment", description: "Log a payment to a subcontractor and optionally link it to a job card. Include customer and job_title to attach the cost to the right job — this makes it appear in the job profit breakdown.", input_schema: { type: "object", properties: { name: { type: "string", description: "Subcontractor name" }, customer: { type: "string", description: "Customer name to link this cost to a job card" }, job_title: { type: "string", description: "Job title to identify which job card to link to" }, payment_type: { type: "string", enum: ["price_work","day_rate","hourly"], description: "How they are paid" }, labour_amount: { type: "number", description: "Labour portion in £ (price_work) — CIS applies to this" }, materials_amount: { type: "number", description: "Materials portion in £ (price_work) — no CIS" }, gross: { type: "number", description: "Total gross if not splitting labour/materials" }, days: { type: "number", description: "Days worked (day_rate only)" }, hours: { type: "number", description: "Hours worked (hourly only)" }, rate: { type: "number", description: "Day or hourly rate in £" }, date: { type: "string" }, job_ref: { type: "string" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name"] } },
     { name: "list_subcontractors", description: "Show all subcontractors.", input_schema: { type: "object", properties: {} } },
+    { name: "list_unpaid", description: "Show what the user still owes — unpaid subcontractor payments and/or unpaid materials. ALWAYS choose the correct scope based on the user\u2019s question:\n- scope=\"subcontractors\" when they ask about subcontractors, subs, subbies, workers, labour payments. Examples: \"do I owe any subbies?\", \"what do I owe my subcontractors?\", \"who haven\u2019t I paid from my team?\".\n- scope=\"materials\" when they ask about materials, supplier bills, merchant invoices, stock. Examples: \"any unpaid materials?\", \"what do I owe the merchant?\", \"outstanding supplier bills?\".\n- scope=\"all\" only for general/ambiguous questions. Examples: \"what do I owe?\", \"any bills outstanding?\", \"money out?\", \"show me everything unpaid\".\nThis is about money the user OWES others (money out) — NOT money owed TO them (that would be invoices/list_invoices).", input_schema: { type: "object", properties: { scope: { type: "string", enum: ["all","subcontractors","materials"], description: "Which category to list. Pick the most specific one that matches the user\u2019s question." } }, required: ["scope"] } },
     { name: "add_compliance_cert", description: "Add a compliance certificate to a job card — CP12, EICR, PAT, EIC, Pressure Test, Part P etc.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, doc_type: { type: "string" }, doc_number: { type: "string" }, issued_date: { type: "string" }, expiry_date: { type: "string" }, notes: { type: "string" } }, required: ["doc_type"] } },
     { name: "add_variation_order", description: "Add a variation order (extra work / change to scope) to a job card.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, description: { type: "string" }, amount: { type: "string" }, vo_number: { type: "string" } }, required: ["description","amount"] } },
     { name: "log_daywork", description: "Log a daywork sheet on a job.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, date: { type: "string" }, worker_name: { type: "string" }, hours: { type: "string" }, rate: { type: "string" }, description: { type: "string" }, contractor_name: { type: "string" } }, required: ["hours","rate"] } },
@@ -5995,6 +6080,63 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           pendingWidgetRef.current = { type: "subcontractor_list", data };
           return `Here are your subcontractors:`;
         }
+        case "list_unpaid": {
+          const scope = input?.scope || "all";
+          let unpaidSubs = [];
+          let unpaidMats = [];
+
+          if (scope === "all" || scope === "subcontractors") {
+            const { data: pays } = await supabase
+              .from("subcontractor_payments")
+              .select("id, date, gross, net, deduction, subcontractor_id, description, job_ref, invoice_number, paid")
+              .eq("user_id", user?.id)
+              .eq("paid", false)
+              .order("date", { ascending: true });
+            if (pays?.length) {
+              const subIds = [...new Set(pays.map(p => p.subcontractor_id).filter(Boolean))];
+              const { data: subs } = subIds.length
+                ? await supabase.from("subcontractors").select("id, name").eq("user_id", user?.id).in("id", subIds)
+                : { data: [] };
+              const subMap = Object.fromEntries((subs || []).map(s => [s.id, s.name]));
+              unpaidSubs = pays.map(p => ({ ...p, subcontractor_name: subMap[p.subcontractor_id] || "Unknown" }));
+            }
+          }
+
+          if (scope === "all" || scope === "materials") {
+            const { data: mats } = await supabase
+              .from("materials")
+              .select("id, item, qty, unit_price, supplier, job, paid, created_at")
+              .eq("user_id", user?.id)
+              .eq("paid", false)
+              .order("created_at", { ascending: true });
+            if (mats?.length) unpaidMats = mats;
+          }
+
+          const subTotal = unpaidSubs.reduce((s, p) => s + parseFloat(p.net || 0), 0);
+          const matTotal = unpaidMats.reduce((s, m) => s + (parseFloat(m.unit_price) || 0) * (parseFloat(m.qty) || 1), 0);
+          const grandTotal = subTotal + matTotal;
+
+          if (unpaidSubs.length === 0 && unpaidMats.length === 0) {
+            return "Nothing outstanding — you\u2019re all paid up.";
+          }
+
+          // Build a text summary for both TTS and display
+          const parts = [];
+          if (unpaidSubs.length > 0) {
+            parts.push(`${unpaidSubs.length} subcontractor payment${unpaidSubs.length !== 1 ? "s" : ""} totalling ${fmtCurrency(subTotal)}`);
+          }
+          if (unpaidMats.length > 0) {
+            parts.push(`${unpaidMats.length} material${unpaidMats.length !== 1 ? "s" : ""} totalling ${fmtCurrency(matTotal)}`);
+          }
+          const summary = `You owe ${parts.join(" and ")}. Grand total: ${fmtCurrency(grandTotal)}.`;
+
+          pendingWidgetRef.current = {
+            type: "unpaid_list",
+            data: { subs: unpaidSubs, materials: unpaidMats, subTotal, matTotal, grandTotal }
+          };
+
+          return summary;
+        }
         case "add_compliance_cert": {
           const { job: jcMatch, error: dwErr } = await findJob(input.customer, input.job_title, "log daywork to");
           if (dwErr) return dwErr;
@@ -7030,18 +7172,21 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     ? "ONBOARDING MODE: This is a new user who has not set up their business yet. Your FIRST job is to welcome them warmly and learn about their business through natural conversation. Ask ONE question at a time. Collect: their name, business/trading name, what trade they do, phone number, whether they are VAT registered, and their address. After collecting these, use the update_brand tool to save everything. Be warm and human. Example opening: Hi! I am Trade PA, your new business assistant. I am going to make running your business a lot easier. First things first, what is your name?"
     : ("You are assisting " + (brand.tradingName || "this business") + ". Be warm, concise, and proactive — like a PA who knows the business well.");
 
-  const SYSTEM = `You are ${assistantName} — a personal assistant for a UK sole trader tradesperson. You speak naturally and conversationally, like a smart human PA would. When referring to yourself, use the name "${assistantName}".` +
+  // ─────────────────────────────────────────────────────────────────────
+  // SYSTEM is split into TWO blocks for prompt caching:
+  //   SYSTEM_STABLE  — persona, rules, tool catalog, voice triggers.
+  //                    Stable across calls → marked cache:true on the server.
+  //   SYSTEM_VOLATILE — today's date, business data, RAMS state, memories,
+  //                     session actions, support mode. Changes every call →
+  //                     sent uncached.
+  // The server (/api/claude.js) accepts `system` as an array of text blocks
+  // and forwards cache_control:{type:'ephemeral'} on the blocks flagged
+  // cache:true. String-shaped `system` is still accepted (legacy).
+  // ─────────────────────────────────────────────────────────────────────
+  const SYSTEM_STABLE = `You are ${assistantName} — a personal assistant for a UK sole trader tradesperson. You speak naturally and conversationally, like a smart human PA would. When referring to yourself, use the name "${assistantName}".` +
     (assistantPersona ? `\n\nPERSONALITY: ${assistantPersona}` : "") +
     (userCommands.length > 0 ? `\n\nCUSTOM COMMANDS DEFINED BY THIS USER:\n${userCommands.filter(c => c.enabled).map(c => `- "${c.phrase}" — ${c.mode === "fast" ? `runs the ${c.tool_name} tool` : c.intent}`).join("\n")}` : "") +
-    `\n\nToday is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.\n\n` + onboardingBlock
-  + "\n\nCurrent business data:\n"
-  + "- Jobs: " + ((jobs||[]).length === 0 ? "none" : (jobs||[]).map(j => j.customer + " (" + (j.type||j.title||"") + ", " + j.status + ")").join(", ")) + "\n"
-  + "- Invoices: " + ((invoices||[]).filter(i=>!i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>!i.isQuote).map(i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")").join(", ")) + "\n"
-  + "- Quotes: " + ((invoices||[]).filter(i=>i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>i.isQuote).map(i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")").join(", ")) + "\n"
-  + "- Materials: " + ((materials||[]).length === 0 ? "none" : (materials||[]).map(m=> m.item + " x" + m.qty + " (" + m.status + ")").join(", ")) + "\n"
-  + "- Customers: " + ((customers||[]).length === 0 ? "none" : (customers||[]).map(c=>c.name).join(", ")) + "\n"
-  + "- Enquiries: " + ((enquiries||[]).length === 0 ? "none" : (enquiries||[]).map(e=>e.name).join(", ")) + "\n"
-  + "\nIMPORTANT — HOW TO RESPOND:\n"
+    "\n\nIMPORTANT — HOW TO RESPOND:\n"
   + "- NEVER tell the user to go to the Jobs tab or check the Invoices section or navigate anywhere. Everything is shown HERE.\n"
   + "- When asked to show/find something, ALWAYS use the appropriate find_ or list_ tool so it appears inline.\n"
   + "- When you create something (invoice, job, quote), it automatically shows inline — no need to send the user elsewhere.\n"
@@ -7073,7 +7218,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- For RAMS or method statements — use start_rams, then guide through steps using rams_save_step1 through rams_save_step5.\n"
   + "- RAMS flow: start_rams → rams_save_step1 → rams_save_step2 (categories) → rams_confirm_hazards (after user reviews) → rams_save_step3 (after user reviews method steps) → rams_save_step4 (COSHH) → rams_save_step5 (emergency/save).\n"
   + "- After user answers each RAMS question, immediately call the matching rams_save_stepN tool.\n"
-  + "- Current RAMS session active: " + (ramsSession ? "YES - step " + ramsSession.step : "none") + "\n"
+  + "- Current RAMS session state is provided in the business data block below.\n"
   + "- When ramsSession is active, keep focused on completing it — guide user step by step.\n"
   + "- EVERY feature of the app is actionable here — jobs, invoices, quotes, materials, labour, mileage, expenses, CIS, subcontractors, reminders, RAMS, stock, purchase orders, compliance certificates, variation orders, daywork, review requests, reports.\n"
   + "- For expenses say: log_expense. For CIS say: log_cis_statement. For subcontractor payments say: log_subcontractor_payment.\n"
@@ -7108,6 +7253,20 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + (sessionActionsRef.current.length ? "\n\nACTIONS ALREADY COMPLETED THIS SESSION (do NOT repeat these):\n" + sessionActionsRef.current.map(a => "- " + a).join("\n") + "\n" : "")
   + (supportMode ? "\nSUPPORT MODE ACTIVE: The user needs help with the app. Your job is to resolve their issue conversationally — walk them through it step by step, explain how features work, and troubleshoot problems. You know every feature of Trade PA in detail. If after 3 genuine attempts you still cannot resolve the issue, use the escalate_to_support tool to collect their details and email the issue to the support team. Be warm, patient and thorough. Never tell them to contact support unless you have tried everything." : "");
 
+  // VOLATILE block: rebuilt every render. This part varies per call so we
+  // deliberately keep it out of the cache block above.
+  const SYSTEM_VOLATILE = `Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.\n\n` + onboardingBlock
+    + "\n\nCurrent business data:\n"
+    + "- Jobs: " + ((jobs||[]).length === 0 ? "none" : (jobs||[]).map(j => j.customer + " (" + (j.type||j.title||"") + ", " + j.status + ")").join(", ")) + "\n"
+    + "- Invoices: " + ((invoices||[]).filter(i=>!i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>!i.isQuote).map(i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")").join(", ")) + "\n"
+    + "- Quotes: " + ((invoices||[]).filter(i=>i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>i.isQuote).map(i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")").join(", ")) + "\n"
+    + "- Materials: " + ((materials||[]).length === 0 ? "none" : (materials||[]).map(m=> m.item + " x" + m.qty + " (" + m.status + ")").join(", ")) + "\n"
+    + "- Customers: " + ((customers||[]).length === 0 ? "none" : (customers||[]).map(c=>c.name).join(", ")) + "\n"
+    + "- Enquiries: " + ((enquiries||[]).length === 0 ? "none" : (enquiries||[]).map(e=>e.name).join(", ")) + "\n"
+    + "- Current RAMS session: " + (ramsSession ? "YES - step " + ramsSession.step : "none") + "\n"
+    + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
+    + (sessionActionsRef.current.length ? "\n\nACTIONS ALREADY COMPLETED THIS SESSION (do NOT repeat these):\n" + sessionActionsRef.current.map(a => "- " + a).join("\n") + "\n" : "");
+
 
   // Auto-trigger onboarding for new users — placed here so isNewUser and send are both defined
   useEffect(() => {
@@ -7121,6 +7280,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
   const send = async (text) => {
     if (!text.trim() || loading) return;
+
+    // Fair-use cap: check conversation allowance
+    const _caps = usageCapsRef.current || {};
+    if (_caps.convos !== Infinity && (usageDataRef.current?.conversations_used || 0) >= _caps.convos) {
+      const capMsg = `You've used all ${_caps.convos} AI conversations for this month. Your allowance resets on the 1st. Upgrade your plan for a higher limit.`;
+      setMessages(prev => [...prev, { role: "user", content: text }, { role: "assistant", content: capMsg }]);
+      if (handsFreeRef.current) speak(capMsg);
+      return;
+    }
     const isOnboardingTrigger = text === "__onboarding_start__";
     const userMsg = { role: "user", content: isOnboardingTrigger ? "Hello" : text };
     // Use messagesRef.current (not messages) to avoid stale closure bug
@@ -7157,7 +7325,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 1000,
-          system: SYSTEM,
+          // Structured system: stable block cached, volatile block sent fresh.
+          // Server wraps stable block with cache_control:ephemeral before
+          // forwarding to Anthropic.
+          system: [
+            { type: "text", text: SYSTEM_STABLE, cache: true },
+            { type: "text", text: SYSTEM_VOLATILE },
+          ],
           tools: TOOLS,
           messages: apiMessages,
         }),
@@ -7528,6 +7702,26 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       }
 
       setLoading(false); // Clear spinner immediately — mic restart + TTS run async after this
+
+      // Increment usage counter
+      if (user?.id && currentMonth && !isOnboardingTrigger) {
+        const newCount = (usageDataRef.current?.conversations_used || 0) + 1;
+        setUsageData(prev => ({ ...prev, conversations_used: newCount }));
+        supabase.rpc("increment_usage", {
+          p_user_id: user.id, p_month: currentMonth,
+          p_conversations: 1, p_seconds: 0,
+        }).catch(() => {});
+        // Nudge at 80% of cap
+        const caps = usageCapsRef.current || {};
+        if (caps.convos !== Infinity && newCount === Math.floor(caps.convos * 0.8)) {
+          const nudge = `By the way, you've used ${newCount} of your ${caps.convos} monthly conversations. Plenty left — just keeping you posted.`;
+          // Append as a system note after a small delay so it doesn't clash with the current reply
+          setTimeout(() => {
+            setMessages(prev => [...prev, { role: "assistant", content: nudge }]);
+            if (handsFreeRef.current) speak(nudge);
+          }, 2000);
+        }
+      }
 
       // Background: extract learnable facts from this exchange (non-blocking, non-critical)
       const lastUserMsg = updated.filter(m => m.role === "user").slice(-1)[0]?.content || "";
@@ -18103,6 +18297,16 @@ export default function App() {
   const [micBlocked, setMicBlocked] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpSlug, setHelpSlug] = useState(null);
+
+  // ── Fair-use caps: usage tracking ─────────────────────────────
+  const currentMonth = new Date().toISOString().slice(0, 7); // "2026-04"
+  const [usageData, setUsageData] = useState({ conversations_used: 0, handsfree_seconds_used: 0 });
+  const USAGE_CAPS = {
+    solo: { convos: 500, hf_hours: 5 },
+    team: { convos: 2000, hf_hours: 20 },
+    pro:  { convos: Infinity, hf_hours: Infinity },
+  };
+  const usageCaps = USAGE_CAPS[planTier] || USAGE_CAPS.solo;
   // Custom assistant persona — state here in App (passed to AIAssistant as props)
   const [assistantSetupOpen, setAssistantSetupOpen] = useState(false);
   const [assistantName, setAssistantName] = useState("Trade PA");
@@ -18134,6 +18338,22 @@ export default function App() {
         .eq("enabled", true)
         .order("created_at", { ascending: true });
       if (cmds) setUserCommands(cmds);
+    })();
+  }, [user?.id]);
+
+  // Load usage tracking for current month
+  useEffect(() => {
+    if (!user?.id) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("usage_tracking")
+          .select("conversations_used, handsfree_seconds_used")
+          .eq("user_id", user.id)
+          .eq("month", currentMonth)
+          .maybeSingle();
+        if (!error && data) setUsageData(data);
+      } catch (e) { console.warn("[usage] load failed:", e?.message); }
     })();
   }, [user?.id]);
 
@@ -19078,7 +19298,7 @@ export default function App() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
-        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} /></div>
+        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
@@ -19090,7 +19310,7 @@ export default function App() {
         {view === "Stock" && <StockTab user={user} />}
         {view === "Purchase Orders" && <PurchaseOrdersTab user={user} brand={brand} />}
         {view === "RAMS" && <RAMSTab user={user} brand={brand} />}
-        {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} openAssistantSetup={() => setAssistantSetupOpen(true)} assistantName={assistantName} assistantWakeWords={assistantWakeWords} userCommandsCount={userCommands.length} /></ErrorBoundary>}
+        {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} openAssistantSetup={() => setAssistantSetupOpen(true)} assistantName={assistantName} assistantWakeWords={assistantWakeWords} userCommandsCount={userCommands.length} usageData={usageData} usageCaps={usageCaps} /></ErrorBoundary>}
       </main>
       <HelpCentre open={helpOpen} openSlug={helpSlug} onClose={() => { setHelpOpen(false); setHelpSlug(null); }} />
       <AssistantSetup
