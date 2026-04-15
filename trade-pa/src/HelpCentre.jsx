@@ -6,30 +6,6 @@
 //
 // To add or edit help articles: scroll to the ARTICLES array near the bottom
 // of this file. Each article is a plain object — append, edit, remove freely.
-//
-// ─── WIRING (4 changes to App.jsx) ──────────────────────────────────────────
-//
-// 1. Import (near the top of App.jsx, with the other imports):
-//      import HelpCentre from "./HelpCentre.jsx";
-//
-// 2. State (inside `export default function App()`, with the other useState calls):
-//      const [helpOpen, setHelpOpen] = useState(false);
-//      const [helpSlug, setHelpSlug] = useState(null);
-//
-// 3. Header button (in the top row of the header, BEFORE the "Out" button):
-//      <button
-//        onClick={() => { setHelpSlug(null); setHelpOpen(true); }}
-//        style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.amber }}
-//        title="Help & how-to"
-//      >?</button>
-//
-// 4. Render at the end of the App return (just before the closing </div>):
-//      <HelpCentre
-//        open={helpOpen}
-//        openSlug={helpSlug}
-//        onClose={() => { setHelpOpen(false); setHelpSlug(null); }}
-//      />
-//
 // ============================================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -57,15 +33,12 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
   const [activeCategory, setActiveCategory] = useState(null);
   const [activeSlug, setActiveSlug] = useState(null);
 
-  // Deep-link to an article when openSlug changes
   useEffect(() => { if (openSlug) setActiveSlug(openSlug); }, [openSlug]);
 
-  // Reset state when closed
   useEffect(() => {
     if (!open) { setQuery(""); setActiveCategory(null); setActiveSlug(null); }
   }, [open]);
 
-  // ESC key closes
   useEffect(() => {
     if (!open) return;
     const handler = (e) => { if (e.key === "Escape") onClose(); };
@@ -126,7 +99,6 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
           minWidth: 0,
         }}
       >
-        {/* Header */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "12px 16px", borderBottom: `1px solid ${T.border}`,
@@ -162,7 +134,6 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
           >×</button>
         </div>
 
-        {/* Body — scrolls */}
         <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
           {activeArticle
             ? <ArticleView article={activeArticle} onSelect={setActiveSlug} />
@@ -175,7 +146,6 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
           }
         </div>
 
-        {/* Footer */}
         {!activeArticle && (
           <div style={{
             padding: "10px 16px",
@@ -193,11 +163,9 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
   );
 }
 
-// ─── Browse view ────────────────────────────────────────────────────────────
 function BrowseView({ query, setQuery, activeCategory, setActiveCategory, filteredArticles, onSelect }) {
   return (
     <div style={{ padding: 16 }}>
-      {/* Search input */}
       <input
         type="search"
         value={query}
@@ -208,12 +176,11 @@ function BrowseView({ query, setQuery, activeCategory, setActiveCategory, filter
           background: T.surfaceHigh, border: `1px solid ${T.border}`,
           borderRadius: 8, padding: "10px 12px",
           color: T.text,
-          fontSize: 16,  // 16px prevents iOS Safari auto-zoom on focus
+          fontSize: 16,
           fontFamily: T.font, outline: "none",
         }}
       />
 
-      {/* Category pills */}
       {!query && (
         <div style={{
           display: "flex", flexWrap: "wrap", gap: 6,
@@ -231,7 +198,6 @@ function BrowseView({ query, setQuery, activeCategory, setActiveCategory, filter
         </div>
       )}
 
-      {/* Article list */}
       <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
         {filteredArticles.length === 0 ? (
           <div style={{
@@ -297,7 +263,6 @@ function CategoryPill({ label, icon, active, onClick }) {
   );
 }
 
-// ─── Article view ───────────────────────────────────────────────────────────
 function ArticleView({ article, onSelect }) {
   const cat = CATEGORIES.find(c => c.id === article.category);
   const related = (article.related || [])
@@ -306,7 +271,6 @@ function ArticleView({ article, onSelect }) {
 
   return (
     <div style={{ padding: 18 }}>
-      {/* Category breadcrumb */}
       {cat && (
         <div style={{
           fontSize: 10, color: T.muted,
@@ -318,7 +282,6 @@ function ArticleView({ article, onSelect }) {
         </div>
       )}
 
-      {/* Title */}
       <div style={{
         fontSize: 18, fontWeight: 700, color: T.text,
         marginBottom: 8, lineHeight: 1.3,
@@ -326,12 +289,10 @@ function ArticleView({ article, onSelect }) {
         {article.title}
       </div>
 
-      {/* Summary */}
       <div style={{ fontSize: 13, color: T.textDim, lineHeight: 1.6, marginBottom: 18 }}>
         {article.summary}
       </div>
 
-      {/* Steps */}
       {article.steps?.length > 0 && (
         <Section title="HOW TO DO IT">
           <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -351,7 +312,6 @@ function ArticleView({ article, onSelect }) {
         </Section>
       )}
 
-      {/* Voice prompts */}
       {article.voicePrompts?.length > 0 && (
         <Section title="🎙️  TRY SAYING">
           <div style={{
@@ -372,7 +332,6 @@ function ArticleView({ article, onSelect }) {
         </Section>
       )}
 
-      {/* Tips */}
       {article.tips?.length > 0 && (
         <Section title="PRO TIPS">
           <div style={{
@@ -390,7 +349,6 @@ function ArticleView({ article, onSelect }) {
         </Section>
       )}
 
-      {/* Related */}
       {related.length > 0 && (
         <Section title="RELATED">
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -430,19 +388,20 @@ function Section({ title, children }) {
 // ============================================================================
 
 const CATEGORIES = [
-  { id: "getting-started", label: "Getting started",   icon: "🚀" },
-  { id: "customers-jobs",  label: "Customers & jobs",  icon: "📋" },
-  { id: "materials-pos",   label: "Materials & POs",   icon: "🧰" },
-  { id: "labour-mileage",  label: "Labour & mileage",  icon: "⏱️" },
-  { id: "voice-ai",        label: "Voice & AI",        icon: "🎙️" },
-  { id: "invoicing",       label: "Invoicing & paid",  icon: "💷" },
-  { id: "calls-messages",  label: "Calls & messages",  icon: "📞" },
-  { id: "compliance",      label: "RAMS & compliance", icon: "🦺" },
-  { id: "stock",           label: "Stock & van",       icon: "🚐" },
-  { id: "accounts",        label: "Accountant & Xero", icon: "📊" },
-  { id: "reports-data",    label: "Reports & insights", icon: "📈" },
-  { id: "settings",        label: "Settings & team",   icon: "⚙️" },
-  { id: "troubleshooting", label: "Troubleshooting",   icon: "🛠️" },
+  { id: "getting-started",    label: "Getting started",      icon: "🚀" },
+  { id: "plans-usage",        label: "Plans & usage",        icon: "📊" },
+  { id: "customers-jobs",     label: "Customers & jobs",     icon: "📋" },
+  { id: "materials-ordering", label: "Materials & ordering", icon: "🧰" },
+  { id: "labour-mileage",     label: "Labour & mileage",     icon: "⏱️" },
+  { id: "voice-ai",           label: "Voice & AI",           icon: "🎙️" },
+  { id: "invoicing",          label: "Invoicing & paid",     icon: "💷" },
+  { id: "calls-messages",     label: "Calls & messages",     icon: "📞" },
+  { id: "compliance",         label: "RAMS & compliance",    icon: "🦺" },
+  { id: "stock",              label: "Stock & van",          icon: "🚐" },
+  { id: "accounts",           label: "Accountant & Xero",    icon: "📊" },
+  { id: "reports-data",       label: "Reports & insights",   icon: "📈" },
+  { id: "settings",           label: "Settings & team",      icon: "⚙️" },
+  { id: "troubleshooting",    label: "Troubleshooting",      icon: "🛠️" },
 ];
 
 const ARTICLES = [
@@ -452,6 +411,11 @@ const ARTICLES = [
     title: "Your first 90 seconds in Trade PA",
     category: "getting-started",
     summary: "The fastest path from signup to a working job card.",
+    voicePrompts: [
+      "Create a customer called Dave Wilson at 22 Mill Lane, Reading",
+      "Create a job for Dave Wilson to replace a boiler, two days",
+      "Invoice Dave Wilson for the boiler job",
+    ],
     steps: [
       "Tap Customers, then Add. Use the mic to dictate name, phone and address.",
       "Tap Jobs, then Add. Pick the customer you just made.",
@@ -469,6 +433,11 @@ const ARTICLES = [
     title: "Install Trade PA on your phone",
     category: "getting-started",
     summary: "Add to home screen so it behaves like a normal app.",
+    voicePrompts: [
+      "How do I install Trade PA on my phone?",
+      "Walk me through adding this to my home screen",
+      "Help me install the app",
+    ],
     steps: [
       "Open tradespa.co.uk in your phone browser.",
       "iPhone: tap Share → Add to Home Screen.",
@@ -481,6 +450,11 @@ const ARTICLES = [
     title: "Finding your way around",
     category: "getting-started",
     summary: "How the tabs and categories are organised.",
+    voicePrompts: [
+      "Where do I find invoices?",
+      "Take me to the jobs tab",
+      "How do I get to the Materials tab?",
+    ],
     steps: [
       "Top row: logo (tap to go home), bell for reminders, ? for help, Out to log out.",
       "Middle row: category pills (Work, Admin, etc.) — tap to switch group.",
@@ -488,333 +462,16 @@ const ARTICLES = [
       "Tap the TP logo any time to jump back to the AI Assistant home.",
     ],
   },
-
-  // ─── Customers & jobs ───────────────────────────────────────────────────
-  {
-    slug: "add-customer",
-    title: "Add a customer (by voice)",
-    category: "customers-jobs",
-    summary: "Get a customer in the system in under 10 seconds.",
-    steps: [
-      "Tap the Customers tab.",
-      "Tap Add (or the + icon).",
-      "Tap the mic icon at the top of the form.",
-      "Speak naturally — name, phone, address, anything you know.",
-      "Check the fields, fix anything that misheard, tap Save.",
-    ],
-    voicePrompts: [
-      "Dave Wilson, 07700 900123, 22 Mill Lane, Reading",
-      "Mrs Patel, mobile is oh-seven-seven-five-five, lives at 14 Beech Road, Slough",
-    ],
-    related: ["voice-fill"],
-  },
-  {
-    slug: "create-job",
-    title: "Create a job",
-    category: "customers-jobs",
-    summary: "One job card holds materials, labour, photos, notes and the invoice.",
-    steps: [
-      "Tap Jobs, then Add.",
-      "Pick the customer (or add a new one inline).",
-      "Fill in scope, site address (defaults to customer address) and dates.",
-      "Save. The job card is now ready for materials, labour, photos and notes.",
-    ],
-    tips: [
-      "Faster: ask the AI Assistant — \"Create a job for Mrs Patel, second-fix kitchen, two days\".",
-    ],
-    related: ["ai-assistant", "add-materials", "log-labour"],
-  },
-  {
-    slug: "enquiries",
-    title: "Turn an enquiry into a job",
-    category: "customers-jobs",
-    summary: "Capture leads, then convert them when they become real work.",
-    steps: [
-      "Tap Enquiries to see incoming leads (manual or via the AI from messages/emails).",
-      "Open an enquiry, review the details.",
-      "Tap Convert to Job — it carries the customer and scope across.",
-      "Add dates and you're done.",
-    ],
-  },
-
-  // ─── Materials & POs ────────────────────────────────────────────────────
-  {
-    slug: "add-materials",
-    title: "Add materials to a job",
-    category: "materials-pos",
-    summary: "Voice-fill at the merchant so nothing falls off the invoice.",
-    steps: [
-      "Open the job card.",
-      "Tap Materials → Add.",
-      "Tap the mic. Say the item, quantity, and rough cost.",
-      "Save. It links to this job and pulls into the invoice automatically.",
-    ],
-    voicePrompts: [
-      "50 metres of 2.5mm twin and earth, 75 quid",
-      "Two boxes of 35mm screws, ten pounds each",
-    ],
-    related: ["raise-po"],
-  },
-  {
-    slug: "raise-po",
-    title: "Raise a Purchase Order (and the hidden trick)",
-    category: "materials-pos",
-    summary: "A PO automatically creates the matching materials entries on the job.",
-    steps: [
-      "Open the job. Tap Purchase Orders → New PO.",
-      "Pick the supplier and add line items (voice-fill works here too).",
-      "Save / send.",
-      "Check the Materials tab — the PO items are already there, linked to this job.",
-    ],
-    tips: [
-      "Most users don't realise this for weeks. One tap, two boxes ticked.",
-    ],
-    related: ["add-materials", "xero-sync"],
-  },
-
-  // ─── Labour & mileage ───────────────────────────────────────────────────
-  {
-    slug: "log-labour",
-    title: "Log labour to a job",
-    category: "labour-mileage",
-    summary: "Days, hours, worker, type. Auto-totals to the invoice.",
-    steps: [
-      "Open the job. Tap Labour → Add.",
-      "Pick the worker (you, a sub, or team).",
-      "Enter days or hours, pick labour type (first-fix, second-fix, etc).",
-      "Save. The cost rolls up into the job total.",
-    ],
-    tips: [
-      "Log at the end of every day, not at the end of the week. You will forget.",
-    ],
-  },
-  {
-    slug: "log-mileage",
-    title: "Log mileage by voice",
-    category: "labour-mileage",
-    summary: "Claim every mile you drive. Voice-log from the driveway.",
-    steps: [
-      "Open the Mileage tab.",
-      "Tap Add, then the mic icon.",
-      "Say the trip — \"22 miles to Mrs Patel today\".",
-      "Save. End of year, it is all there for the accountant.",
-    ],
-    voicePrompts: [
-      "22 miles to the Mill Lane job today",
-      "Round trip to Wickes, 14 miles, for the Patel job",
-    ],
-    tips: [
-      "Average sole-trader misses ~30% of claimable mileage. At 45p a mile that adds up fast.",
-      "Mileage can also be auto-calculated between two postcodes — try it.",
-    ],
-  },
-
-  // ─── Voice & AI ─────────────────────────────────────────────────────────
-  {
-    slug: "voice-fill",
-    title: "Use voice fill on any form",
-    category: "voice-ai",
-    summary: "Look for the mic icon on every form — speak naturally.",
-    steps: [
-      "Tap the mic icon (top of form, or next to a field).",
-      "Speak as you would to a person — names, numbers, items, costs.",
-      "The fields fill themselves. Check, fix any misheard bits, save.",
-    ],
-    tips: [
-      "Voice is tuned for UK and regional accents. Speak normally — no need to slow down.",
-      "Background noise is fine — vans, sites, traffic. It's tested in all of them.",
-    ],
-    related: ["ai-assistant", "voice-not-working"],
-  },
-  {
-    slug: "ai-assistant",
-    title: "Tell the AI to do the work",
-    category: "voice-ai",
-    summary: "Lots of actions the AI can take for you, from natural language.",
-    steps: [
-      "Tap the AI Assistant (home) tab — or the TP logo.",
-      "Type or speak what you want done, naturally, no special syntax.",
-      "It builds the job, materials, labour, PO, note (whatever you asked for).",
-      "When done, it takes you straight to what it made.",
-    ],
-    voicePrompts: [
-      "Create a job for Mrs Patel at 14 Beech Road, second-fix kitchen, two days, John on labour",
-      "Add 50m of 2.5mm cable and 8 single sockets to the Patel job",
-      "Log 22 miles for me today on the Mill Lane job",
-      "Raise a PO to Wickes for 4 sheets of 18mm ply on the Beech Road job",
-    ],
-    tips: [
-      "Specific is better. \"Two days\" beats \"a couple of days\".",
-      "Review before confirming — the AI can't undo what it does.",
-    ],
-  },
-  {
-    slug: "hands-free",
-    title: "Use Trade PA hands-free",
-    category: "voice-ai",
-    summary: "Keep the AI listening so you never touch the screen.",
-    steps: [
-      "Open the AI Assistant.",
-      "Switch on hands-free mode (toggle on the assistant).",
-      "Wait for the prompt sound, then speak.",
-      "It reads the answer back. Say \"Hey Trade PA\" to start the next request.",
-    ],
-    tips: [
-      "Best for in the van or on site when your hands are full.",
-      "Works better with the phone in a cradle near you, not in your pocket.",
-    ],
-  },
-
-  // ─── Invoicing ──────────────────────────────────────────────────────────
-  {
-    slug: "send-invoice",
-    title: "Send your first invoice",
-    category: "invoicing",
-    summary: "Materials and labour pull through automatically. Add a Stripe link to get paid faster.",
-    steps: [
-      "Open the job, tap Invoice.",
-      "Check the line items — materials and labour are already there.",
-      "Add anything extra (call-out fee, parking, etc).",
-      "Tap Send. Customer gets it by email with a pay-now link.",
-    ],
-    tips: [
-      "Send the same day. Invoices sent within 24 hours get paid roughly twice as fast.",
-    ],
-    related: ["take-payment", "xero-sync"],
-  },
-  {
-    slug: "take-payment",
-    title: "Take card payment via Stripe",
-    category: "invoicing",
-    summary: "Customer taps the link in your invoice email, pays by card. Money in days.",
-    steps: [
-      "Make sure Stripe is connected in Settings.",
-      "When sending an invoice, leave \"Include pay-now link\" ticked.",
-      "The customer's invoice email has a Pay Now button.",
-      "You see paid status update in Trade PA the moment it clears.",
-    ],
-  },
-  {
-    slug: "quotes-to-invoices",
-    title: "Convert a quote to an invoice",
-    category: "invoicing",
-    summary: "When the customer says yes, one tap turns the quote into the invoice.",
-    steps: [
-      "Open Quotes, find the accepted quote.",
-      "Tap Convert to Invoice.",
-      "All line items carry across. Edit if needed.",
-      "Send.",
-    ],
-  },
-
-  // ─── Compliance ─────────────────────────────────────────────────────────
-  {
-    slug: "rams",
-    title: "Build a RAMS in three minutes",
-    category: "compliance",
-    summary: "Voice-fill on Steps 1 and 5 turns the worst job of the week into a quick one.",
-    steps: [
-      "Open the job, tap RAMS → New.",
-      "Step 1 (Hazards): tap the mic, talk through what could go wrong on this site.",
-      "Steps 2–4: pick from the standard options.",
-      "Step 5 (Method): tap the mic, talk through how you will do it safely.",
-      "Save. Site-ready PDF available to send.",
-    ],
-    voicePrompts: [
-      "Working at height on a dormer roof, scaffold tower, two operatives, weather is fine",
-      "Hot works in a domestic loft, fire blanket and extinguisher on hand, no flammables nearby",
-    ],
-  },
-  {
-    slug: "subcontractors",
-    title: "Add and pay subcontractors",
-    category: "compliance",
-    summary: "Track subbies, their rates, insurance, and CIS payments in one place.",
-    steps: [
-      "Tap Subcontractors.",
-      "Add a sub — name, UTR, CIS rate, contact, insurance.",
-      "When paying, tap + Payment, pick the sub and the job.",
-      "Trade PA calculates CIS deduction and generates the statement.",
-    ],
-  },
-
-  // ─── Stock ──────────────────────────────────────────────────────────────
-  {
-    slug: "stock",
-    title: "Track van stock",
-    category: "stock",
-    summary: "Know what is on the van before you head to the merchant.",
-    steps: [
-      "Tap the Stock tab.",
-      "Add an item (voice fill works here too).",
-      "When you use stock on a job, deduct it from the count.",
-      "Check Stock before any merchant trip — stop double-buying.",
-    ],
-  },
-
-  // ─── Accounts ───────────────────────────────────────────────────────────
-  {
-    slug: "xero-sync",
-    title: "Push invoices and bills to Xero",
-    category: "accounts",
-    summary: "Invoices and supplier bills auto-sync. Your accountant gets clean books.",
-    steps: [
-      "Connect Xero in Settings → Integrations.",
-      "Once connected, sent invoices sync automatically.",
-      "Supplier bills attached to POs sync too.",
-      "Check the Xero log if anything looks off.",
-    ],
-    tips: [
-      "Tell your accountant. Most charge less when the books arrive clean.",
-    ],
-  },
-
-  // ─── Troubleshooting ────────────────────────────────────────────────────
-  {
-    slug: "voice-not-working",
-    title: "Voice fill not working?",
-    category: "troubleshooting",
-    summary: "Almost always a mic permission. Here's how to fix it.",
-    steps: [
-      "Check the mic permission for your browser (Settings → Apps → Browser → Permissions → Microphone).",
-      "For installed PWA, check the same under the Trade PA app entry.",
-      "Restart the app once permission is granted.",
-      "Still stuck? Email support — include phone model and browser.",
-    ],
-  },
-  {
-    slug: "ai-wrong-result",
-    title: "AI Assistant did the wrong thing",
-    category: "troubleshooting",
-    summary: "Two quick fixes plus how to give better instructions.",
-    steps: [
-      "Open the thing it created and edit or delete as needed.",
-      "Try again with more specific wording — names, numbers, units.",
-      "If it keeps misunderstanding the same thing, screenshot it and email support.",
-    ],
-    tips: [
-      "Specific beats short. \"Two days, John on labour\" beats \"a couple of days\".",
-    ],
-  },
-  {
-    slug: "calls-not-connecting",
-    title: "Twilio calls not connecting",
-    category: "troubleshooting",
-    summary: "Most common cause: mic permission or Twilio not activated.",
-    steps: [
-      "Check Settings → Business Phone is activated.",
-      "Make sure mic permission is granted to your browser/PWA.",
-      "Try toggling mute and speaker once during the call.",
-      "If still failing, hang up and try again — sometimes Twilio needs a moment.",
-    ],
-  },
-
-  // ─── Getting started (extras) ───────────────────────────────────────────
   {
     slug: "enable-notifications",
     title: "Turn on push notifications",
     category: "getting-started",
     summary: "Get pinged when invoices are paid, calls come in, or the AI completes a job.",
+    voicePrompts: [
+      "How do I turn on notifications?",
+      "Enable push notifications",
+      "Walk me through setting up alerts",
+    ],
     steps: [
       "Install Trade PA to your home screen first (see 'Install Trade PA on your phone').",
       "Open the app and allow notifications when prompted.",
@@ -831,6 +488,12 @@ const ARTICLES = [
     title: "Read your dashboard at a glance",
     category: "getting-started",
     summary: "Quote value, invoice value, overdue, new enquiries — all on the home screen.",
+    voicePrompts: [
+      "Show me my dashboard",
+      "How am I doing this month?",
+      "Give me today's summary",
+      "What's happening today?",
+    ],
     steps: [
       "Tap Dashboard (under the Work category).",
       "Tiles across the top show total quote value, invoice value, overdue, and new enquiries.",
@@ -842,7 +505,119 @@ const ARTICLES = [
     ],
   },
 
-  // ─── Customers & jobs (extras) ──────────────────────────────────────────
+  // ─── Plans & usage (NEW) ────────────────────────────────────────────────
+  {
+    slug: "plan-differences",
+    title: "Solo vs Team vs Pro — what's different",
+    category: "plans-usage",
+    summary: "Every plan has every feature. Tiers differ by user count and monthly usage allowance.",
+    voicePrompts: [
+      "What's the difference between Solo and Team?",
+      "Help me pick a plan",
+      "Which plan should I be on?",
+      "Do I need to upgrade to Team?",
+    ],
+    steps: [
+      "Every plan gets all 43 features — invoicing, RAMS, mileage, calls, certificates, everything.",
+      "Solo (£49/mo): 1 user, 500 AI conversations, 5 hours hands-free per month.",
+      "Team (£89/mo): up to 5 users, 2,000 AI conversations, 20 hours hands-free per month.",
+      "Pro (£129/mo): up to 10 users, unlimited AI conversations, unlimited hands-free.",
+      "Tap-to-talk voice (press-and-hold the mic) is never capped on any plan — only continuous hands-free counts.",
+      "Upgrade any time from Settings → Subscription — takes effect immediately.",
+    ],
+    tips: [
+      "Most sole traders stay on Solo — the allowances are designed for a busy daily driver.",
+      "Move to Team when you bring on your first team member, or if you're consistently hitting 80%+ of Solo caps.",
+      "Pro is for larger firms that want the 'never think about usage' experience.",
+    ],
+    related: ["fair-use-caps", "subscription"],
+  },
+  {
+    slug: "fair-use-caps",
+    title: "Your monthly usage allowance",
+    category: "plans-usage",
+    summary: "What the AI-conversations and hands-free allowances mean, and how to track them.",
+    voicePrompts: [
+      "How much of my allowance have I used?",
+      "Show me my usage",
+      "Am I close to my cap?",
+      "How many conversations have I used this month?",
+    ],
+    steps: [
+      "Check your current usage any time in Settings → Monthly Usage.",
+      "You'll see two progress bars: AI conversations used, and hands-free minutes used.",
+      "Green below 80%, amber 80–100%, red when you've hit the cap.",
+      "Allowances reset on the 1st of each month.",
+      "If you hit a cap mid-month, you can either upgrade (instant) or wait for reset.",
+    ],
+    tips: [
+      "At 80% you'll get a gentle in-chat nudge — plenty of warning, no surprise cut-offs.",
+      "If you're on Solo and regularly hitting 80% of conversations, moving to Team is usually cheaper than paying the same attention to usage every month.",
+      "Hands-free is the one that burns quicker — 5 hours is about 15 minutes a day, 5 days a week.",
+    ],
+    related: ["plan-differences", "subscription", "usage-cap-hit"],
+  },
+
+  // ─── Customers & jobs ───────────────────────────────────────────────────
+  {
+    slug: "add-customer",
+    title: "Add a customer (by voice)",
+    category: "customers-jobs",
+    summary: "Get a customer in the system in under 10 seconds.",
+    steps: [
+      "Tap the Customers tab.",
+      "Tap Add (or the + icon).",
+      "Tap the mic icon at the top of the form.",
+      "Speak naturally — name, phone, address, anything you know.",
+      "Check the fields, fix anything that misheard, tap Save.",
+    ],
+    voicePrompts: [
+      "Add a customer — Dave Wilson, 07700 900123, 22 Mill Lane, Reading",
+      "New customer Mrs Patel, mobile 07755 123456, 14 Beech Road, Slough",
+      "Save a new customer called Trevor Kinsman at 45 Copper Close",
+    ],
+    related: ["voice-fill"],
+  },
+  {
+    slug: "create-job",
+    title: "Create a job",
+    category: "customers-jobs",
+    summary: "One job card holds materials, labour, photos, notes and the invoice.",
+    steps: [
+      "Tap Jobs, then Add.",
+      "Pick the customer (or add a new one inline).",
+      "Fill in scope, site address (defaults to customer address) and dates.",
+      "Save. The job card is now ready for materials, labour, photos and notes.",
+    ],
+    voicePrompts: [
+      "Create a job for Mrs Patel, second-fix kitchen, Tuesday 9am, two days",
+      "Add a job card for Dave Wilson — boiler install, no date yet",
+      "New job for Trevor Kinsman at 45 Copper Close, bathroom refurb, £3,500",
+      "Book in the Watts extension for Monday at 8am",
+    ],
+    tips: [
+      "Voice the scope in plain English — the AI sorts the rest.",
+      "Use \"job card\" for work without a date yet, \"job\" for anything scheduled.",
+    ],
+    related: ["ai-assistant", "add-materials", "log-labour"],
+  },
+  {
+    slug: "enquiries",
+    title: "Turn an enquiry into a job",
+    category: "customers-jobs",
+    summary: "Capture leads, then convert them when they become real work.",
+    steps: [
+      "Tap Enquiries to see incoming leads (manual or via the AI from messages/emails).",
+      "Open an enquiry, review the details.",
+      "Tap Convert to Job — it carries the customer and scope across.",
+      "Add dates and you're done.",
+    ],
+    voicePrompts: [
+      "Log an enquiry — Sarah Jones, 07700 900456, kitchen rewire in Reading",
+      "New lead from a Gumtree message — Mike Brown, loft conversion, Slough",
+      "Add an enquiry for Mrs Patel's neighbour, she wants a quote for a rewire",
+    ],
+  },
   {
     slug: "schedule-view",
     title: "See your week on the Schedule",
@@ -854,6 +629,11 @@ const ARTICLES = [
       "Tap a job to open the full job card.",
       "Drag jobs to reschedule (where supported on your device).",
     ],
+    voicePrompts: [
+      "What's on my schedule this week?",
+      "Show me today's jobs",
+      "What am I doing on Friday?",
+    ],
     related: ["create-job"],
   },
   {
@@ -861,6 +641,11 @@ const ARTICLES = [
     title: "Add photos to a job",
     category: "customers-jobs",
     summary: "Before/after evidence ready if a customer queries the bill.",
+    voicePrompts: [
+      "How do I add photos to a job?",
+      "Attach a photo to the Smith job",
+      "Walk me through taking job photos",
+    ],
     steps: [
       "Open the job card.",
       "Tap the camera/photos button.",
@@ -882,6 +667,11 @@ const ARTICLES = [
       "Voice-fill works here — speak the note, save.",
       "Notes are timestamped and linked to the job.",
     ],
+    voicePrompts: [
+      "Add a note to the Patel job: customer wants extra sockets in the dining room",
+      "Note on Beech Road — delivery delayed by a week, pushed the fit-out back",
+      "Log on the Wilson job that the boss approved the kitchen extras by phone today",
+    ],
     tips: [
       "Use notes for anything you'd otherwise forget — customer requests, snags, materials needed.",
     ],
@@ -891,6 +681,12 @@ const ARTICLES = [
     title: "What's on a Job Card",
     category: "customers-jobs",
     summary: "One card per job — materials, labour, photos, notes, RAMS, invoice.",
+    voicePrompts: [
+      "Show me the Smith job card",
+      "Open Mrs Patel's job",
+      "Find the Mill Lane job",
+      "Pull up the Wilson kitchen",
+    ],
     steps: [
       "Open Jobs → tap any job.",
       "Top: customer, site address, scope, dates, status.",
@@ -910,17 +706,140 @@ const ARTICLES = [
       "Set a date/time.",
       "When it's due, the bell flashes and you get a push notification.",
     ],
+    voicePrompts: [
+      "Remind me to chase the Patel invoice on Monday",
+      "Set a reminder to call Dave Wilson tomorrow at 2pm",
+      "Remind me to order materials for the Beech Road job on Friday morning",
+      "Remind me to book the scaffold for the Watts job next Wednesday",
+    ],
+  },
+  {
+    slug: "job-profit",
+    title: "See the profit on a job",
+    category: "customers-jobs",
+    summary: "Materials + labour + mileage rolled up against the invoice — live profit view per job.",
+    steps: [
+      "Open any job card.",
+      "Tap the Profit tab.",
+      "You'll see: total invoiced, materials cost, labour cost, mileage cost, and profit in pounds and as a margin %.",
+      "Check this before you finalise the invoice — if margin looks low, something might not have been logged.",
+    ],
+    voicePrompts: [
+      "How much profit did I make on the Patel job?",
+      "What's the margin on Mill Lane?",
+    ],
     tips: [
-      "The AI can also set reminders for you — \"Remind me to chase the Patel invoice on Monday\".",
+      "If profit looks wrong, the usual cause is unlogged materials or a labour day that was forgotten.",
+      "Mileage at 45p/mile adds up — make sure every trip to the job is captured.",
+    ],
+    related: ["log-labour", "add-materials", "log-mileage", "send-invoice"],
+  },
+  {
+    slug: "job-plans",
+    title: "Upload drawings and plans to a job",
+    category: "customers-jobs",
+    summary: "Keep architect drawings, floor plans and sketches with the job — always to hand on site.",
+    voicePrompts: [
+      "How do I upload drawings to a job?",
+      "Add a plan to the Patel job",
+      "Where do I put site drawings?",
+    ],
+    steps: [
+      "Open the job, tap the Plans tab.",
+      "Tap Upload Drawing or Plan.",
+      "Pick a PDF or image from your phone.",
+      "Saved against the job and accessible from any device.",
+    ],
+    tips: [
+      "PDFs work best for architect drawings — they stay sharp when you pinch-zoom on site.",
+      "Take a photo of any hand-drawn site sketch and upload it the same way.",
+    ],
+  },
+  {
+    slug: "price-work",
+    title: "Price work — quick job costing",
+    category: "customers-jobs",
+    summary: "Rough out a price for a job before you turn it into a quote.",
+    voicePrompts: [
+      "Price up a bathroom refurb for Mrs Patel, 3 days labour, 1500 in materials",
+      "Knock up a quote for Smith, 450 for the boiler service",
+      "Price the Mill Lane rewire, 5 days labour",
+    ],
+    steps: [
+      "Open the job, tap Price Work.",
+      "Add expected materials and labour (rough is fine).",
+      "Trade PA shows target price at your mark-up %.",
+      "When you're happy, convert the price work into a formal Quote with one tap.",
+    ],
+    tips: [
+      "Use this to sanity-check that you're not under-pricing before sending a quote.",
+      "Set your default mark-up in Settings — Price Work will use it automatically.",
     ],
   },
 
-  // ─── Materials & POs (extras) ───────────────────────────────────────────
+  // ─── Materials & ordering (renamed from materials-pos) ──────────────────
+  {
+    slug: "add-materials",
+    title: "Add materials to a job",
+    category: "materials-ordering",
+    summary: "Voice-add materials the way you actually talk about them — no special phrases needed.",
+    steps: [
+      "Open the AI Assistant, or tap the Materials tab → Add.",
+      "Speak naturally — say what you need, from where, for which job.",
+      "It saves as a Materials row with status 'To Order'.",
+      "When you've ordered it, tap once to mark 'Ordered'. When it arrives, tap again for 'Collected'.",
+      "Every material links to the job so it pulls into the invoice automatically.",
+    ],
+    voicePrompts: [
+      "Pop to Plumb Centre for 10 copper pipes on the Patel job",
+      "Need 50 metres of 2.5mm twin and earth, 75 quid, for Mill Lane",
+      "Nip to Screwfix for four valves, 12 each",
+      "Running low on solder — add a roll to the list",
+      "Stick a bag of fixings on the list for the Watts job",
+      "Order 20 litres of white emulsion from Wickes for Mrs Patel",
+    ],
+    tips: [
+      "Always include the job or customer if you can — it links the cost to job profit.",
+      "If the AI hears an unusual item, check the row before you save.",
+      "Three statuses move the work along: To Order → Ordered → Collected.",
+    ],
+    related: ["purchase-orders-now-in-materials", "scan-receipt", "job-profit"],
+  },
+  {
+    slug: "purchase-orders-now-in-materials",
+    title: "Where did Purchase Orders go?",
+    category: "materials-ordering",
+    summary: "Purchase Orders is now part of Materials — same workflow, one less tab to think about.",
+    voicePrompts: [
+      "Order 10 copper pipes from Plumb Centre for the Smith job",
+      "Pop to Plumb Centre for pipes and valves on the Patel job",
+      "Put 4 boxes of screws on order from Screwfix",
+      "Create a PO for Travis Perkins for 6 sheets of ply",
+      "Raise an order with Jewson for 20 bags of ballast",
+    ],
+    steps: [
+      "There's no separate Purchase Orders tab any more — it was confusing alongside Materials.",
+      "Everything you order, have on order, or have collected lives in Materials now.",
+      "Each material row moves through three statuses: To Order → Ordered → Collected.",
+      "Say \"order 10 pipes from Plumb Centre for the Patel job\" and it creates Materials rows automatically.",
+      "Materials still link to jobs, so job profit and invoices work exactly as before.",
+    ],
+    tips: [
+      "If you used to say \"create a PO for...\" — that still works. It just makes Materials rows now.",
+      "For multiple items in one supplier run, say them all in one go: \"Order 10 pipes, 4 valves and a roll of solder from Plumb Centre for the Patel job\".",
+    ],
+    related: ["add-materials", "xero-sync"],
+  },
   {
     slug: "scan-receipt",
     title: "Scan a receipt with AI",
-    category: "materials-pos",
+    category: "materials-ordering",
     summary: "Photograph a merchant receipt — the AI extracts items and adds them to a job.",
+    voicePrompts: [
+      "I've got a receipt to scan",
+      "Scan this Screwfix receipt against the Smith job",
+      "Process my Travis Perkins receipt",
+    ],
     steps: [
       "Open the AI Assistant.",
       "Tap the camera/scan icon.",
@@ -933,21 +852,71 @@ const ARTICLES = [
     ],
     related: ["add-materials"],
   },
-  {
-    slug: "purchase-orders-tab",
-    title: "Manage all Purchase Orders in one place",
-    category: "materials-pos",
-    summary: "The PO tab shows every order across every job.",
-    steps: [
-      "Tap Purchase Orders.",
-      "Filter by status (draft, sent, received).",
-      "Tap a PO to view, edit, or mark received.",
-      "Marking received auto-updates linked job materials.",
-    ],
-    related: ["raise-po"],
-  },
 
-  // ─── Labour & mileage (extras) ──────────────────────────────────────────
+  // ─── Labour & mileage ───────────────────────────────────────────────────
+  {
+    slug: "log-labour",
+    title: "Log labour to a job",
+    category: "labour-mileage",
+    summary: "Days, hours, worker, type. Auto-totals to the invoice.",
+    steps: [
+      "Open the job. Tap Labour → Add.",
+      "Pick the worker (you, a sub, or team).",
+      "Enter days or hours, pick labour type (first-fix, second-fix, etc).",
+      "Save. The cost rolls up into the job total.",
+    ],
+    voicePrompts: [
+      "Log 8 hours on the Patel job today, second fix",
+      "I did 6 hours at Beech Road yesterday",
+      "John worked 5 hours on the Mill Lane job today",
+      "Put me down for a full day on the Watts extension",
+    ],
+    tips: [
+      "Log at the end of every day, not at the end of the week. You will forget.",
+    ],
+  },
+  {
+    slug: "log-mileage",
+    title: "Log mileage by voice",
+    category: "labour-mileage",
+    summary: "Claim every mile you drive. Voice-log from the driveway.",
+    steps: [
+      "Open the Mileage tab.",
+      "Tap Add, then the mic icon.",
+      "Say the trip — \"22 miles to Mrs Patel today\".",
+      "Save. End of year, it is all there for the accountant.",
+    ],
+    voicePrompts: [
+      "Log 22 miles for me today on the Mill Lane job",
+      "Round trip to Wickes, 14 miles, for the Patel job",
+      "Drove 45 miles to site today and back",
+    ],
+    tips: [
+      "Average sole-trader misses ~30% of claimable mileage. At 45p a mile that adds up fast.",
+      "Mileage can also be auto-calculated between two postcodes — try it.",
+    ],
+  },
+  {
+    slug: "mileage-auto",
+    title: "Auto-calculate mileage between two postcodes",
+    category: "labour-mileage",
+    summary: "Don't know how far it was? Trade PA works it out for you.",
+    voicePrompts: [
+      "How far is RG1 4AB to SL6 7DP?",
+      "Work out the mileage from my postcode to the Patel job",
+      "Calculate the round trip to Mill Lane",
+    ],
+    steps: [
+      "Open Mileage → Add.",
+      "Tap the auto-calc option.",
+      "Enter or pick the start and end postcodes.",
+      "Trade PA fills in the distance — review and save.",
+    ],
+    tips: [
+      "Powered by OpenStreetMap — works for any UK postcode pair.",
+    ],
+    related: ["log-mileage"],
+  },
   {
     slug: "add-worker",
     title: "Add a worker to your team",
@@ -958,6 +927,10 @@ const ARTICLES = [
       "Choose 'Worker' (employed) vs 'Sub' (subcontractor).",
       "Fill in name, contact, day rate, and any docs (insurance, qualifications).",
       "Save. They now appear in labour-logging dropdowns.",
+    ],
+    voicePrompts: [
+      "Add a subbie — Mark Jenkins, plasterer, UTR 1234567890, 20% CIS",
+      "New worker — Kevin, day rate £180, labourer",
     ],
     related: ["log-labour", "subcontractors"],
   },
@@ -972,25 +945,13 @@ const ARTICLES = [
       "Get the customer to sign on screen if possible.",
       "Daywork rolls into the final invoice as a separate section.",
     ],
+    voicePrompts: [
+      "Add a daywork to the Patel job — extra 2 hours and 5m of cable",
+      "Log a daywork for the Wilson boiler — spent an extra half day on the flue",
+    ],
     tips: [
       "Use this any time work goes beyond the original scope — it's the fastest way to avoid arguments later.",
     ],
-  },
-  {
-    slug: "mileage-auto",
-    title: "Auto-calculate mileage between two postcodes",
-    category: "labour-mileage",
-    summary: "Don't know how far it was? Trade PA works it out for you.",
-    steps: [
-      "Open Mileage → Add.",
-      "Tap the auto-calc option.",
-      "Enter or pick the start and end postcodes.",
-      "Trade PA fills in the distance — review and save.",
-    ],
-    tips: [
-      "Powered by OpenStreetMap — works for any UK postcode pair.",
-    ],
-    related: ["log-mileage"],
   },
   {
     slug: "cis-statements",
@@ -1003,10 +964,102 @@ const ARTICLES = [
       "Trade PA pulls in all payments and applies the right CIS deduction.",
       "Tap Generate → Send (PDF or email).",
     ],
+    voicePrompts: [
+      "Log a CIS payment of £800 to Mark Jenkins for the Patel job",
+      "Generate a CIS statement for Mark for March",
+    ],
     related: ["subcontractors"],
   },
+  {
+    slug: "subcontractors",
+    title: "Add and pay subcontractors",
+    category: "compliance",
+    summary: "Track subbies, their rates, insurance, and CIS payments in one place.",
+    steps: [
+      "Tap Subcontractors.",
+      "Add a sub — name, UTR, CIS rate, contact, insurance.",
+      "When paying, tap + Payment, pick the sub and the job.",
+      "Trade PA calculates CIS deduction and generates the statement.",
+    ],
+    voicePrompts: [
+      "Add a subbie — Mark Jenkins, plasterer, UTR 1234567890, 20% CIS rate",
+      "Paid Mark £450 for the Patel job",
+      "Log a sub payment of £1,200 to Gary for the Watts extension",
+    ],
+  },
 
-  // ─── Voice & AI (extras) ────────────────────────────────────────────────
+  // ─── Voice & AI ─────────────────────────────────────────────────────────
+  {
+    slug: "voice-fill",
+    title: "Use voice fill on any form",
+    category: "voice-ai",
+    summary: "Look for the mic icon on every form — speak naturally.",
+    voicePrompts: [
+      "How do I use voice fill?",
+      "Test my microphone",
+      "Walk me through dictating a form",
+    ],
+    steps: [
+      "Tap the mic icon (top of form, or next to a field).",
+      "Speak as you would to a person — names, numbers, items, costs.",
+      "The fields fill themselves. Check, fix any misheard bits, save.",
+    ],
+    tips: [
+      "Voice is tuned for UK and regional accents. Speak normally — no need to slow down.",
+      "Background noise is fine — vans, sites, traffic. It's tested in all of them.",
+      "Tap-to-talk voice never counts toward your monthly hands-free allowance.",
+    ],
+    related: ["ai-assistant", "voice-not-working"],
+  },
+  {
+    slug: "ai-assistant",
+    title: "Tell the AI to do the work",
+    category: "voice-ai",
+    summary: "Lots of actions the AI can take for you, from natural language.",
+    steps: [
+      "Tap the AI Assistant (home) tab — or the TP logo.",
+      "Type or speak what you want done, naturally, no special syntax.",
+      "It builds the job, materials, labour, invoice, note (whatever you asked for).",
+      "When done, it takes you straight to what it made.",
+    ],
+    voicePrompts: [
+      "Create a job for Mrs Patel at 14 Beech Road, second-fix kitchen, two days, John on labour",
+      "Add 50m of 2.5mm cable and 8 single sockets to the Patel job",
+      "Log 22 miles for me today on the Mill Lane job",
+      "Invoice the Patel job",
+      "Pop to Plumb Centre for 10 copper pipes for the Beech Road job",
+      "Remind me to chase the Wilson invoice on Monday morning",
+    ],
+    tips: [
+      "Specific is better. \"Two days\" beats \"a couple of days\".",
+      "Review before confirming — the AI can't undo what it does.",
+      "Each AI action counts as one 'conversation' toward your monthly allowance.",
+    ],
+  },
+  {
+    slug: "hands-free",
+    title: "Use Trade PA hands-free",
+    category: "voice-ai",
+    summary: "Keep the AI listening so you never touch the screen.",
+    steps: [
+      "Open the AI Assistant.",
+      "Say \"Hey Trade PA, go hands-free\" or switch on the hands-free toggle.",
+      "Wait for the prompt tone, then speak.",
+      "It reads the answer back. Keep talking — no need to tap between requests.",
+      "Say \"stop hands-free\" or toggle it off when done.",
+    ],
+    voicePrompts: [
+      "Hey Trade PA, go hands-free",
+      "Turn on hands-free mode",
+      "Stop hands-free",
+    ],
+    tips: [
+      "Best for in the van or on site when your hands are full.",
+      "Works better with the phone in a cradle near you, not in your pocket.",
+      "Hands-free time counts toward your monthly allowance. Tap-to-talk doesn't.",
+    ],
+    related: ["fair-use-caps"],
+  },
   {
     slug: "ai-memory",
     title: "Tell the AI to remember things",
@@ -1018,6 +1071,11 @@ const ARTICLES = [
       "Or be explicit: \"Remember that I use Wickes for plywood\".",
       "Memories carry across every conversation.",
     ],
+    voicePrompts: [
+      "Remember that I always use Plumb Centre for copper pipe",
+      "Remember my hourly rate is £55",
+      "My usual mark-up on materials is 20%",
+    ],
     tips: [
       "If the AI gets something wrong, correct it once — \"No, my hourly rate is £55\" — and the memory updates.",
     ],
@@ -1028,19 +1086,81 @@ const ARTICLES = [
     title: "What can the AI Assistant actually do?",
     category: "voice-ai",
     summary: "A non-exhaustive list of actions the AI can take.",
+    voicePrompts: [
+      "What can you do?",
+      "What are your abilities?",
+      "Show me what you can help with",
+      "What features do you have?",
+    ],
     steps: [
-      "Create jobs, customers, enquiries, materials, labour entries, POs, reminders, mileage logs.",
-      "Update statuses (mark paid, mark complete, change job status).",
-      "Convert quotes to invoices, send invoices, mark as paid.",
-      "Generate RAMS drafts and start invoice drafts.",
-      "Search across customers, jobs, invoices, and materials by voice.",
+      "Create: jobs, customers, enquiries, materials, labour entries, reminders, mileage logs, invoices, quotes, variation orders, daywork sheets, stage payments, certificates, subcontractors, stock items.",
+      "Update: mark invoices paid, change job status, edit invoices, update material status, convert quotes to invoices.",
+      "Find/show: invoices, quotes, jobs, materials, schedule, expenses, CIS, subcontractors, reminders, enquiries, customers, mileage, stock, RAMS.",
+      "Report: get a summary of your week, month, or specific job.",
+      "Remember: tell it facts about your business and it keeps them between sessions.",
     ],
     tips: [
       "If you're not sure, just ask — \"Can you do X?\" — the AI will tell you.",
     ],
   },
 
-  // ─── Invoicing (extras) ─────────────────────────────────────────────────
+  // ─── Invoicing ──────────────────────────────────────────────────────────
+  {
+    slug: "send-invoice",
+    title: "Send your first invoice",
+    category: "invoicing",
+    summary: "Materials and labour pull through automatically. Add a Stripe link to get paid faster.",
+    steps: [
+      "Open the job, tap Invoice.",
+      "Check the line items — materials and labour are already there.",
+      "Add anything extra (call-out fee, parking, etc).",
+      "Tap Send. Customer gets it by email with a pay-now link.",
+    ],
+    voicePrompts: [
+      "Invoice the Patel job",
+      "Create an invoice for Mrs Patel, £1,850 for the kitchen second fix",
+      "Make an invoice from the Mill Lane job",
+      "Invoice Dave Wilson £450 for the boiler service",
+    ],
+    tips: [
+      "Send the same day. Invoices sent within 24 hours get paid roughly twice as fast.",
+    ],
+    related: ["take-payment", "xero-sync"],
+  },
+  {
+    slug: "take-payment",
+    title: "Take card payment via Stripe",
+    category: "invoicing",
+    summary: "Customer taps the link in your invoice email, pays by card. Money in days.",
+    steps: [
+      "Make sure Stripe is connected in Settings.",
+      "When sending an invoice, leave \"Include pay-now link\" ticked.",
+      "The customer's invoice email has a Pay Now button.",
+      "You see paid status update in Trade PA the moment it clears.",
+    ],
+    voicePrompts: [
+      "Mark the Patel invoice as paid",
+      "Patel paid in full today",
+      "Wilson paid £450 by bank transfer",
+    ],
+  },
+  {
+    slug: "quotes-to-invoices",
+    title: "Convert a quote to an invoice",
+    category: "invoicing",
+    summary: "When the customer says yes, one tap turns the quote into the invoice.",
+    steps: [
+      "Open Quotes, find the accepted quote.",
+      "Tap Convert to Invoice.",
+      "All line items carry across. Edit if needed.",
+      "Send.",
+    ],
+    voicePrompts: [
+      "Convert the Patel quote to an invoice",
+      "Turn Dave Wilson's quote into an invoice",
+      "Mrs Patel accepted the quote — make the invoice",
+    ],
+  },
   {
     slug: "variation-orders",
     title: "Raise a Variation Order (VO)",
@@ -1051,6 +1171,11 @@ const ARTICLES = [
       "Describe the change in scope, the cost impact, and the time impact.",
       "Send to the customer for approval.",
       "Once approved, the VO rolls into the final invoice.",
+    ],
+    voicePrompts: [
+      "Add a VO to the Patel job — customer wants oak skirting instead of MDF, £180 extra",
+      "New variation on Mill Lane — extra day for the rewire, £250",
+      "Log a VO on the Watts extension — upgraded spec on the radiators, £420 more",
     ],
     tips: [
       "Use a VO any time the customer asks for something not in the original quote — even small things.",
@@ -1067,6 +1192,11 @@ const ARTICLES = [
       "Pick template (gentle / firm / final) — Trade PA sends the reminder email.",
       "Reminder is logged against the invoice and the customer.",
     ],
+    voicePrompts: [
+      "Show me my overdue invoices",
+      "Who owes me money?",
+      "List unpaid invoices",
+    ],
     tips: [
       "Send a gentle nudge after 7 days, firm after 14, final after 21. Most pay on the firm.",
     ],
@@ -1082,7 +1212,33 @@ const ARTICLES = [
       "Attach a receipt photo if you have one.",
       "End of year, export the lot for your accountant.",
     ],
+    voicePrompts: [
+      "Log £47 fuel today",
+      "Spent £12 on parking at Reading for the Patel job",
+      "Expense — £85 at Screwfix for van tools today",
+    ],
     related: ["scan-receipt"],
+  },
+  {
+    slug: "stage-payments",
+    title: "Set up stage payments on a big job",
+    category: "invoicing",
+    summary: "Break a job into 30/40/30 (or custom) milestones — invoice each stage as you hit it.",
+    steps: [
+      "Open the job. Tap the invoice menu and choose Stage Payments.",
+      "Accept the 30/40/30 default, or enter your own split (e.g. 50/25/25, or fixed amounts).",
+      "As each stage completes, tap to generate that stage's invoice — it pulls materials and labour up to that point.",
+      "Customer pays each stage separately via the pay-now link.",
+    ],
+    voicePrompts: [
+      "Set up stage payments for the Patel kitchen, 30/40/30",
+      "Add a 50% deposit stage payment to the Beech Road extension",
+    ],
+    tips: [
+      "Default is 30/40/30 (start / mid-point / completion) — works for most domestic jobs.",
+      "For bigger contract work, a 20% deposit + 4 monthly stages + 10% retention is a common pattern.",
+    ],
+    related: ["send-invoice", "take-payment"],
   },
 
   // ─── Calls & messages ───────────────────────────────────────────────────
@@ -1091,6 +1247,11 @@ const ARTICLES = [
     title: "Activate your business phone number",
     category: "calls-messages",
     summary: "Get a Twilio business number so customers don't have your personal mobile.",
+    voicePrompts: [
+      "How do I activate my business phone?",
+      "Set up a business number",
+      "Walk me through Twilio setup",
+    ],
     steps: [
       "Tap Settings → Business Phone.",
       "Tap Activate Business Phone.",
@@ -1106,6 +1267,11 @@ const ARTICLES = [
     title: "Make a call to a customer",
     category: "calls-messages",
     summary: "Tap the customer's number — call goes out from your business number.",
+    voicePrompts: [
+      "How do I call a customer from Trade PA?",
+      "Walk me through making a call",
+      "Ring Mrs Patel",
+    ],
     steps: [
       "Open the customer (Customers tab or job card).",
       "Tap their phone number.",
@@ -1119,6 +1285,10 @@ const ARTICLES = [
     title: "Receive an incoming call",
     category: "calls-messages",
     summary: "Customer calls your business number — Trade PA rings inside the app.",
+    voicePrompts: [
+      "How do I answer incoming calls?",
+      "What happens when a customer rings my business number?",
+    ],
     steps: [
       "Make sure the app is open (or has notifications on if installed).",
       "Tap Answer when the incoming call appears.",
@@ -1132,6 +1302,11 @@ const ARTICLES = [
     title: "Send an SMS to a customer",
     category: "calls-messages",
     summary: "Quick text from your business number, logged against the customer.",
+    voicePrompts: [
+      "Text Mrs Patel to say I'll be there at 9",
+      "Message Dave Wilson: running 15 minutes late",
+      "Send Smith a text — job done, invoice on its way",
+    ],
     steps: [
       "Open the customer or job.",
       "Tap SMS / message icon.",
@@ -1144,6 +1319,12 @@ const ARTICLES = [
     title: "Inbox — emails and messages from customers",
     category: "calls-messages",
     summary: "Connected email and SMS in one stream — the AI can sort and reply.",
+    voicePrompts: [
+      "What's in my inbox?",
+      "Show me pending emails",
+      "Reply to that Smith enquiry saying I can do next week",
+      "Any new messages this morning?",
+    ],
     steps: [
       "Tap Inbox under Admin.",
       "Connect your email account on first use (Gmail / Outlook).",
@@ -1154,8 +1335,49 @@ const ARTICLES = [
       "The AI scans inbound messages and flags potential enquiries automatically.",
     ],
   },
+  {
+    slug: "call-log",
+    title: "View your call history",
+    category: "calls-messages",
+    summary: "Every incoming and outgoing call through your Trade PA number is logged against the customer.",
+    voicePrompts: [
+      "Who called today?",
+      "Show me calls from Mrs Patel",
+      "Any missed calls this morning?",
+      "Did Smith ring me back?",
+    ],
+    steps: [
+      "Open any customer.",
+      "Tap the Calls tab on their record.",
+      "See every call — date, duration, direction (in/out), and voicemail if there is one.",
+      "Tap a voicemail to play it back.",
+    ],
+    tips: [
+      "Missed calls also log here — good backup if you miss one while on a job.",
+      "Voicemails are transcribed by Trade PA so you can read them at a glance.",
+    ],
+    related: ["business-phone", "make-call"],
+  },
 
-  // ─── Compliance (extras) ────────────────────────────────────────────────
+  // ─── Compliance ─────────────────────────────────────────────────────────
+  {
+    slug: "rams",
+    title: "Build a RAMS in three minutes",
+    category: "compliance",
+    summary: "Voice-fill on Steps 1 and 5 turns the worst job of the week into a quick one.",
+    steps: [
+      "Open the job, tap RAMS → New.",
+      "Step 1 (Hazards): tap the mic, talk through what could go wrong on this site.",
+      "Steps 2–4: pick from the standard options.",
+      "Step 5 (Method): tap the mic, talk through how you will do it safely.",
+      "Save. Site-ready PDF available to send.",
+    ],
+    voicePrompts: [
+      "Working at height on a dormer roof, scaffold tower, two operatives, weather is fine",
+      "Hot works in a domestic loft, fire blanket and extinguisher on hand, no flammables nearby",
+      "Dust-generating work, M-class vac in use, dust sheets throughout",
+    ],
+  },
   {
     slug: "trade-certificates",
     title: "Issue trade certificates (Gas Safe, NICEIC, OFTEC, etc.)",
@@ -1168,6 +1390,12 @@ const ARTICLES = [
       "Fill in the test results / details — your registration numbers are pre-populated.",
       "Issue the PDF — copy goes to the customer and stays on the job.",
     ],
+    voicePrompts: [
+      "Add a CP12 for the Patel boiler",
+      "Issue an EICR for Mrs Wilson, all tests passed",
+      "Log a PAT test for Dave Wilson, 12 appliances, all passed",
+      "Add a MCS certificate for the Jones solar install",
+    ],
     tips: [
       "Set up your registration numbers once. After that, every cert is pre-stamped.",
     ],
@@ -1177,6 +1405,11 @@ const ARTICLES = [
     title: "Store insurance, qualifications and other compliance docs",
     category: "compliance",
     summary: "One vault for all your compliance — easy to send when a contractor asks.",
+    voicePrompts: [
+      "How do I upload my insurance?",
+      "Where do I store my public liability cert?",
+      "Add my qualifications to my documents",
+    ],
     steps: [
       "Tap Documents (under Admin).",
       "Upload your public liability, employer's liability, qualifications, etc.",
@@ -1189,6 +1422,11 @@ const ARTICLES = [
     title: "Store worker / subcontractor documents",
     category: "compliance",
     summary: "Insurance, CSCS cards, qualifications — all on the worker's profile.",
+    voicePrompts: [
+      "How do I store John's CSCS card?",
+      "Upload Mike's insurance docs",
+      "Where do worker qualifications go?",
+    ],
     steps: [
       "Open Subcontractors → tap the worker.",
       "Tap + Doc.",
@@ -1198,12 +1436,58 @@ const ARTICLES = [
     related: ["add-worker"],
   },
 
-  // ─── Accounts (extras) ──────────────────────────────────────────────────
+  // ─── Stock ──────────────────────────────────────────────────────────────
+  {
+    slug: "stock",
+    title: "Track van stock",
+    category: "stock",
+    summary: "Know what is on the van before you head to the merchant.",
+    steps: [
+      "Tap the Stock tab.",
+      "Add an item (voice fill works here too).",
+      "When you use stock on a job, deduct it from the count.",
+      "Check Stock before any merchant trip — stop double-buying.",
+    ],
+    voicePrompts: [
+      "Add 20m of 2.5mm cable to the van stock",
+      "Used 10m of the copper on the Patel job — update stock",
+      "Stock take — 5 boxes of screws, 3 rolls of solder, 12 pipe clips",
+      "Used 4 junction boxes today on the Mill Lane job",
+    ],
+  },
+
+  // ─── Accounts ───────────────────────────────────────────────────────────
+  {
+    slug: "xero-sync",
+    title: "Push invoices and bills to Xero",
+    category: "accounts",
+    summary: "Invoices and supplier bills auto-sync. Your accountant gets clean books.",
+    voicePrompts: [
+      "Connect Xero",
+      "Push the Patel invoice to Xero",
+      "Re-sync my invoices to Xero",
+      "How do I link Xero?",
+    ],
+    steps: [
+      "Connect Xero in Settings → Integrations.",
+      "Once connected, sent invoices sync automatically.",
+      "Supplier bills attached to Materials sync too.",
+      "Check the Xero log if anything looks off.",
+    ],
+    tips: [
+      "Tell your accountant. Most charge less when the books arrive clean.",
+    ],
+  },
   {
     slug: "quickbooks-sync",
     title: "Connect QuickBooks instead of Xero",
     category: "accounts",
     summary: "Same auto-sync, just for QuickBooks users.",
+    voicePrompts: [
+      "Connect QuickBooks",
+      "How do I link QuickBooks?",
+      "Set up QuickBooks sync",
+    ],
     steps: [
       "Tap Settings → Integrations → QuickBooks.",
       "Sign in to your QuickBooks account.",
@@ -1225,6 +1509,11 @@ const ARTICLES = [
       "Set the date range.",
       "View on screen or export as PDF / CSV.",
     ],
+    voicePrompts: [
+      "What did I invoice this month?",
+      "How much have I spent on materials this quarter?",
+      "Give me a report on job profit for March",
+    ],
     tips: [
       "Send the year-end pack to your accountant in one go.",
     ],
@@ -1239,6 +1528,11 @@ const ARTICLES = [
       "Tap Request Review.",
       "Pick where (Google / Facebook / Trustpilot) and the review platform link.",
       "Customer gets a polite request with the direct link.",
+    ],
+    voicePrompts: [
+      "Send Mrs Patel a review request for Google",
+      "Ask Dave Wilson for a Trustpilot review",
+      "Request a review from the Watts family",
     ],
     tips: [
       "Send within 24 hours of finishing — that's when satisfaction is highest.",
@@ -1257,6 +1551,10 @@ const ARTICLES = [
       "Fill in trading name, tagline, phone, email, website, address.",
       "Preview an invoice to check it looks right.",
     ],
+    voicePrompts: [
+      "Update my business name to Walsh Plumbing and Heating",
+      "Change my business phone to 07700 123456",
+    ],
     tips: [
       "A clean logo on your invoices is worth more than you think — looks more professional, gets paid faster.",
     ],
@@ -1266,6 +1564,11 @@ const ARTICLES = [
     title: "Invite team members",
     category: "settings",
     summary: "Add staff or office help — set per-tab permissions for each.",
+    voicePrompts: [
+      "How do I invite a team member?",
+      "Add Sarah to my team",
+      "Walk me through adding a worker",
+    ],
     steps: [
       "Tap Settings → Team.",
       "Tap Invite Team Member.",
@@ -1274,25 +1577,44 @@ const ARTICLES = [
     ],
     tips: [
       "Permissions are per-tab — your office assistant can see Invoices but not Settings, for example.",
+      "Team plan supports up to 5 users, Pro supports up to 10.",
     ],
+    related: ["plan-differences"],
   },
   {
     slug: "subscription",
     title: "Manage your Trade PA subscription",
     category: "settings",
-    summary: "View your plan, upgrade or downgrade, manage billing.",
+    summary: "View your plan, check usage, upgrade or downgrade, manage billing.",
+    voicePrompts: [
+      "Show me my usage this month",
+      "What plan am I on?",
+      "How much have I used?",
+      "Where do I change my subscription?",
+    ],
     steps: [
       "Tap Settings → Subscription.",
-      "See current plan and what's included.",
-      "Upgrade for more team members or premium features.",
+      "See your current plan: Solo (£49), Team (£89) or Pro (£129).",
+      "Check Monthly Usage card to see AI conversations used and hands-free minutes used this month.",
+      "Upgrade any time — takes effect immediately, pro-rated.",
       "Update payment method or cancel from the same screen.",
     ],
+    tips: [
+      "Every plan has every feature — you're only upgrading for more users or a higher usage allowance.",
+      "If you're regularly at 80%+ of Solo caps, Team usually pays for itself in saved stress.",
+    ],
+    related: ["plan-differences", "fair-use-caps"],
   },
   {
     slug: "documents-tab",
     title: "Documents tab — what goes where",
     category: "settings",
     summary: "Central place for any document not tied to a specific job.",
+    voicePrompts: [
+      "Where do I store documents?",
+      "Upload my terms and conditions",
+      "Add a contract to my documents",
+    ],
     steps: [
       "Tap Documents under Admin.",
       "Upload contracts, terms & conditions, certifications, anything else.",
@@ -1302,12 +1624,70 @@ const ARTICLES = [
     related: ["compliance-docs"],
   },
 
-  // ─── Troubleshooting (extras) ───────────────────────────────────────────
+  // ─── Troubleshooting ────────────────────────────────────────────────────
+  {
+    slug: "voice-not-working",
+    title: "Voice fill not working?",
+    category: "troubleshooting",
+    summary: "Almost always a mic permission. Here's how to fix it.",
+    voicePrompts: [
+      "Why isn't voice working?",
+      "My mic isn't working",
+      "Voice fill won't pick up what I say",
+    ],
+    steps: [
+      "Check the mic permission for your browser (Settings → Apps → Browser → Permissions → Microphone).",
+      "For installed PWA, check the same under the Trade PA app entry.",
+      "Restart the app once permission is granted.",
+      "Still stuck? Email support — include phone model and browser.",
+    ],
+  },
+  {
+    slug: "ai-wrong-result",
+    title: "AI Assistant did the wrong thing",
+    category: "troubleshooting",
+    summary: "Two quick fixes plus how to give better instructions.",
+    voicePrompts: [
+      "That wasn't right, try again",
+      "Delete what you just created",
+      "Undo that last action",
+    ],
+    steps: [
+      "Open the thing it created and edit or delete as needed.",
+      "Try again with more specific wording — names, numbers, units.",
+      "If it keeps misunderstanding the same thing, screenshot it and email support.",
+    ],
+    tips: [
+      "Specific beats short. \"Two days, John on labour\" beats \"a couple of days\".",
+    ],
+  },
+  {
+    slug: "calls-not-connecting",
+    title: "Twilio calls not connecting",
+    category: "troubleshooting",
+    summary: "Most common cause: mic permission or Twilio not activated.",
+    voicePrompts: [
+      "My calls aren't connecting",
+      "Why won't the call go through?",
+      "Twilio isn't working for me",
+    ],
+    steps: [
+      "Check Settings → Business Phone is activated.",
+      "Make sure mic permission is granted to your browser/PWA.",
+      "Try toggling mute and speaker once during the call.",
+      "If still failing, hang up and try again — sometimes Twilio needs a moment.",
+    ],
+  },
   {
     slug: "xero-not-syncing",
     title: "Invoices not syncing to Xero",
     category: "troubleshooting",
     summary: "Usually a connection that needs reauthorising.",
+    voicePrompts: [
+      "Xero isn't syncing",
+      "Reconnect Xero",
+      "Why won't this invoice push to Xero?",
+    ],
     steps: [
       "Tap Settings → Integrations → Xero.",
       "Tap Disconnect, then Reconnect.",
@@ -1321,6 +1701,11 @@ const ARTICLES = [
     title: "Push notifications not showing up",
     category: "troubleshooting",
     summary: "Most common cause: notification permission or app not installed.",
+    voicePrompts: [
+      "I'm not getting push notifications",
+      "Why don't my alerts work?",
+      "Help me turn notifications back on",
+    ],
     steps: [
       "Make sure Trade PA is installed to your home screen (not just in a browser tab).",
       "Check phone Settings → Trade PA → Notifications are on.",
@@ -1329,94 +1714,27 @@ const ARTICLES = [
     ],
     related: ["enable-notifications", "install-pwa"],
   },
-
-  // ─── Gap-fill articles (profit, plans, stage pay, price work, call log) ─
   {
-    slug: "job-profit",
-    title: "See the profit on a job",
-    category: "customers-jobs",
-    summary: "Materials + labour + mileage rolled up against the invoice — live profit view per job.",
-    steps: [
-      "Open any job card.",
-      "Tap the Profit tab.",
-      "You'll see: total invoiced, materials cost, labour cost, mileage cost, and profit in pounds and as a margin %.",
-      "Check this before you finalise the invoice — if margin looks low, something might not have been logged.",
-    ],
-    tips: [
-      "If profit looks wrong, the usual cause is unlogged materials or a labour day that was forgotten.",
-      "Mileage at 45p/mile adds up — make sure every trip to the job is captured.",
-    ],
-    related: ["log-labour", "add-materials", "log-mileage", "send-invoice"],
-  },
-  {
-    slug: "job-plans",
-    title: "Upload drawings and plans to a job",
-    category: "customers-jobs",
-    summary: "Keep architect drawings, floor plans and sketches with the job — always to hand on site.",
-    steps: [
-      "Open the job, tap the Plans tab.",
-      "Tap Upload Drawing or Plan.",
-      "Pick a PDF or image from your phone.",
-      "Saved against the job and accessible from any device.",
-    ],
-    tips: [
-      "PDFs work best for architect drawings — they stay sharp when you pinch-zoom on site.",
-      "Take a photo of any hand-drawn site sketch and upload it the same way.",
-    ],
-  },
-  {
-    slug: "stage-payments",
-    title: "Set up stage payments on a big job",
-    category: "quotes-invoices",
-    summary: "Break a job into 30/40/30 (or custom) milestones — invoice each stage as you hit it.",
-    steps: [
-      "Open the job. Tap the invoice menu and choose Stage Payments.",
-      "Accept the 30/40/30 default, or enter your own split (e.g. 50/25/25, or fixed amounts).",
-      "As each stage completes, tap to generate that stage's invoice — it pulls materials and labour up to that point.",
-      "Customer pays each stage separately via the pay-now link.",
-    ],
+    slug: "usage-cap-hit",
+    title: "I've hit my monthly usage cap",
+    category: "troubleshooting",
+    summary: "Two options: upgrade (instant) or wait for the 1st of the month.",
     voicePrompts: [
-      "Set up stage payments for the Patel kitchen, 30/40/30",
-      "Add a 50% deposit stage payment to the Beech Road extension",
+      "I've hit my usage cap, what now?",
+      "How do I upgrade my plan?",
+      "Show me my current usage",
+      "When does my allowance reset?",
     ],
-    tips: [
-      "Default is 30/40/30 (start / mid-point / completion) — works for most domestic jobs.",
-      "For bigger contract work, a 20% deposit + 4 monthly stages + 10% retention is a common pattern.",
-    ],
-    related: ["send-invoice", "take-payment"],
-  },
-  {
-    slug: "price-work",
-    title: "Price work — quick job costing",
-    category: "customers-jobs",
-    summary: "Rough out a price for a job before you turn it into a quote.",
     steps: [
-      "Open the job, tap Price Work.",
-      "Add expected materials and labour (rough is fine).",
-      "Trade PA shows target price at your mark-up %.",
-      "When you're happy, convert the price work into a formal Quote with one tap.",
+      "Check Settings → Monthly Usage to see which cap you've hit.",
+      "If it's AI conversations: tap-to-talk voice and the rest of the app still work normally.",
+      "If it's hands-free: you can still use tap-to-talk voice. Press-and-hold the mic instead.",
+      "Upgrade from Settings → Subscription if you need more right now (instant, pro-rated).",
+      "Or wait — allowances reset at 00:00 on the 1st of the month.",
     ],
     tips: [
-      "Use this to sanity-check that you're not under-pricing before sending a quote.",
-      "Set your default mark-up in Settings — Price Work will use it automatically.",
+      "If you're hitting caps most months, upgrading is almost always cheaper than the friction.",
     ],
-    related: ["quote-flow"],
-  },
-  {
-    slug: "call-log",
-    title: "View your call history",
-    category: "phone-calls",
-    summary: "Every incoming and outgoing call through your Trade PA number is logged against the customer.",
-    steps: [
-      "Open any customer.",
-      "Tap the Calls tab on their record.",
-      "See every call — date, duration, direction (in/out), and voicemail if there is one.",
-      "Tap a voicemail to play it back.",
-    ],
-    tips: [
-      "Missed calls also log here — good backup if you miss one while on a job.",
-      "Voicemails are transcribed by Trade PA so you can read them at a glance.",
-    ],
-    related: ["twilio-phone", "make-call"],
+    related: ["fair-use-caps", "plan-differences", "subscription"],
   },
 ];
