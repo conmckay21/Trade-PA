@@ -15,18 +15,40 @@ export default async function handler(req, res) {
       messages,
     };
 
-    // Prompt caching — marks system prompt and tools as cacheable.
-    // Cached content is charged at 10% of normal input token rate.
-    // Cache lasts 5 minutes and refreshes on each use, so stays warm
-    // throughout a conversation. No functional difference if cache misses.
+    // Prompt caching — supports two shapes for `system`:
+    //
+    //   (a) Legacy / simple: a plain string. We wrap the whole thing in one
+    //       cache block. Only useful if the full string is stable call-to-call.
+    //
+    //   (b) Recommended: an array of text blocks sent straight from the client,
+    //       with the client deciding which blocks are stable (cacheable) and
+    //       which are volatile (per-call data). We pass it through verbatim
+    //       after stamping cache_control on any block the client marked cached.
+    //
+    // For (b) the client sends objects of shape:
+    //   { type: 'text', text: '...', cache: true }   ← we convert `cache:true`
+    //                                                   to cache_control:ephemeral
+    //   { type: 'text', text: '...' }                ← volatile, not cached
     if (system) {
-      body.system = [
-        {
-          type: 'text',
-          text: system,
-          cache_control: { type: 'ephemeral' },
-        },
-      ];
+      if (typeof system === 'string') {
+        // Shape (a): plain string. Single cache block, as before.
+        body.system = [
+          { type: 'text', text: system, cache_control: { type: 'ephemeral' } },
+        ];
+      } else if (Array.isArray(system)) {
+        // Shape (b): structured array. Keep block order. Stamp cache_control
+        // only on blocks the client flagged with `cache: true`. Strip the
+        // `cache` helper flag before forwarding — Anthropic won't accept it.
+        body.system = system
+          .filter((b) => b && (typeof b.text === 'string') && b.text.length > 0)
+          .map((b) => {
+            const out = { type: 'text', text: b.text };
+            if (b.cache === true || b.cache_control) {
+              out.cache_control = b.cache_control || { type: 'ephemeral' };
+            }
+            return out;
+          });
+      }
     }
 
     if (tools) {
