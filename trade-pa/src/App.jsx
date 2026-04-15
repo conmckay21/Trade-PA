@@ -1431,7 +1431,7 @@ function CallTrackingSettings({ user }) {
 }
 
 function TeamInvite({ companyId, planTier, currentMemberCount }) {
-  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "Purchase Orders", "RAMS"];
+  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "RAMS"];
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [sending, setSending] = useState(false);
@@ -2455,7 +2455,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           const email = m.invited_email || m.users?.email || "Team member";
           const initials = email[0].toUpperCase();
           const perms = m.permissions || {};
-          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "Purchase Orders", "RAMS"];
+          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "RAMS"];
 
           return (
             <div key={i} style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 14, marginBottom: 14 }}>
@@ -4375,7 +4375,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   const TOOLS = [
     {
       name: "create_job",
-      description: "Create a new scheduled job in the calendar/schedule. Use ONLY when user specifies a date and time for the work e.g. 'book John Smith boiler service Friday 10am'. For job cards without specific times, use create_job_card instead.",
+      description: "Create a scheduled calendar job with a date and time. Triggers: \"book in [customer] for [date]\", \"schedule a job for [customer] on [day]\", \"add to the calendar\". ASK IF MISSING: customer name first, then date/time if vague. DEFAULTS: duration → 1 day unless stated. \"Tuesday\" → next Tuesday. \"Morning\" → 9am. Use create_job_card instead if no date is given. AFTER: \"Booked [customer] in for [date] at [time].\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4392,7 +4392,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "create_invoice",
-      description: "Create a new invoice. Use when the user mentions invoicing a customer, charging for completed work, or sending a bill. Extract each individual item/service as a separate line item with its own price. Never combine everything into one line.",
+      description: "Create a new invoice. Triggers: \"invoice [customer] £[X]\", \"bill [customer] for [work]\", \"raise an invoice\". ASK IF MISSING: customer name first, then amount. If user says a job name, use create_invoice_from_job instead. DEFAULTS: due date → 14 days, VAT → brand setting. AFTER: \"Invoice created — £[total] for [customer]. Send it now?\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4417,7 +4417,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "create_quote",
-      description: "Create a price quote for a customer. Use when the user mentions quoting, giving a price, or sending an estimate. Extract each individual item/service as a separate line item with its own price.",
+      description: "Create a price quote for a customer. Triggers: \"quote [customer] £X for [work]\", \"send an estimate\", \"give [customer] a price\". ASK IF MISSING: customer name, then amount. DEFAULTS: expiry → 30 days, VAT → brand setting. AFTER: \"Quote created for [customer] — £[amount]. Send it now?\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4442,7 +4442,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "log_enquiry",
-      description: "Log a new customer enquiry. Use when someone has contacted the tradesperson asking about work.",
+      description: "Log a new customer enquiry (someone who's asked about work but hasn't become a job yet). Triggers: \"log an enquiry from [name]\", \"new lead — [name] wants [work]\", \"someone called about [work]\". ASK IF MISSING: who enquired, and roughly what for. DEFAULTS: source → phone unless stated. AFTER: \"Enquiry logged for [name] — [work]. Want to quote or book them in?\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4456,7 +4456,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "set_reminder",
-      description: "Set a reminder. Use when the user asks to be reminded about something. Prefer iso_time when the user gives a specific time/date (e.g. '9am tomorrow', 'Monday at 10'). Use minutes_from_now only for relative times ('in 30 minutes', 'in 2 hours').",
+      description: "Set a reminder. Triggers: \"remind me to [thing]\", \"nudge me about [thing]\", \"don't let me forget to [thing]\". Prefer iso_time when the user gives a specific time. For vague phrasings (\"tomorrow morning\", \"next week\") pick a sensible time and confirm in the response: \"Reminder set for 9am tomorrow — ok?\" DEFAULTS: morning → 9am, afternoon → 2pm, evening → 6pm, no time → 9am that day. AFTER: \"Reminder set for [when]: [what].\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4470,7 +4470,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "create_material",
-      description: "Add a material or item to the materials list. ALWAYS include customer and job if mentioned — this links the material to the job card so it shows in job costs and profit. Always include unit_price if a price is stated.",
+      description: "Add a material or item to the materials list. Use this for ANY buying/ordering request — regardless of how the user phrases it. Common trade phrases to recognise: \"I need X\", \"order X\", \"put X on order\", \"get X from [supplier]\", \"pick up X from [merchant]\", \"grab some X\", \"pop to [merchant] for X\", \"nip to [yard] for X\", \"drop by [supplier] for X\", \"chase up X\", \"short on X\", \"running low on X\", \"need to get X in\", \"add X to my list\", \"stick X on my list\", \"create a PO for X\", \"raise a PO for X\". For multi-item requests (e.g. \"order 10 pipes and 4 valves from Plumb Centre\", \"need some pipes, valves and fittings\"), call this tool once per distinct item. ALWAYS include customer and job if mentioned — this links the material to the job card so it shows in job costs and profit. Always include unit_price if a price is stated. ASK IF MISSING: just item name is enough to log — don't block asking for qty or price. If they say a qty, use it; otherwise default to 1.",
       input_schema: {
         type: "object",
         properties: {
@@ -4487,7 +4487,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "delete_job",
-      description: "Delete or cancel a job. Use when the user says to remove, cancel, or delete a job. Match by customer name or job type.",
+      description: "Delete or cancel a scheduled job. Triggers: \"cancel the [customer] job\", \"remove that booking\", \"delete [job] from my schedule\". CONFIRM FIRST. If customer has multiple jobs, list them: \"[Customer] has [N] jobs — which one?\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4499,7 +4499,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "delete_invoice",
-      description: "Delete an invoice. Use when the user says to remove or delete an invoice. Match by invoice ID or customer name.",
+      description: "Delete an invoice. Triggers: \"remove that invoice\", \"delete invoice [X]\", \"scrap the [customer] invoice\". CONFIRM FIRST. Match by invoice ID or customer name. If customer has multiple invoices, list them: \"[Customer] has [N] invoices — which one?\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4511,7 +4511,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "delete_enquiry",
-      description: "Delete or dismiss an enquiry. Use when the user says to remove, dismiss, or delete an enquiry.",
+      description: "Delete or dismiss an enquiry. Triggers: \"remove that enquiry\", \"delete the [name] enquiry\", \"[name] went cold\". CONFIRM FIRST if multiple match.",
       input_schema: {
         type: "object",
         properties: {
@@ -4522,7 +4522,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "create_customer",
-      description: "Save a customer's contact details. Use when the user provides a customer's phone number, email, or address to store.",
+      description: "Save a new customer or update an existing one. Triggers: \"add a customer\", \"save this contact\", \"new client\", \"put [name] on file\". ASK IF MISSING: if only a name is given, log it and ask \"Got a phone number or email for them?\" — don't block on contact details. DEFAULTS: if an existing customer by the same name is found, treat as an update not a duplicate. AFTER: confirm with \"[Name] saved\" plus whatever contact details were captured.",
       input_schema: {
         type: "object",
         properties: {
@@ -4537,7 +4537,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "delete_customer",
-      description: "Delete a customer record. Use when the user says to remove or delete a customer.",
+      description: "Delete a customer record. Triggers: \"remove [name]\", \"delete that customer\", \"take [name] off my books\". CONFIRM FIRST — destructive action. \"Delete [name] from your customer list — you sure? They've got [X] jobs linked.\" If they have active jobs, flag that before deleting.",
       input_schema: {
         type: "object",
         properties: {
@@ -4548,7 +4548,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "update_material",
-      description: "Update an existing material — change unit price, quantity, or supplier. Use when user says 'update the price on blocks', 'fix the unit price', 'change quantity'. Always include job if known.",
+      description: "Update an existing material — change unit price, quantity, or supplier. Triggers: \"change the price on the blocks\", \"update 10 pipes to 15\", \"put those screws down to a fiver\". If multiple materials match the description, ask which one. AFTER: \"[Item] updated.\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4563,7 +4563,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "delete_material",
-      description: "Delete material(s) from the list. When user says delete duplicates or 'delete 3 of the blocks', use count to delete that many. Use count: 999 to delete ALL matching entries. Default count: 1.",
+      description: "Delete material(s) from the list. Triggers: \"delete the [item]\", \"remove those [items]\", \"scrap the extra blocks\". Use count param for multiples — count:3 deletes 3, count:999 deletes all matching. CONFIRM FIRST if deleting all matching.",
       input_schema: {
         type: "object",
         properties: {
@@ -4576,7 +4576,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "mark_invoice_paid",
-      description: "Mark an invoice as paid. Use when the user says a customer has paid, money has arrived, or to mark something as paid.",
+      description: "Mark an invoice as paid. Triggers: \"[customer] paid\", \"cleared the [customer] invoice\", \"money arrived from [customer]\", \"[customer] settled up\". If customer has multiple unpaid invoices, ask which one. DEFAULTS: payment date → today, payment method → bank transfer unless stated. AFTER: \"[Customer]'s invoice marked paid — £[amount]. Nice one.\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4588,7 +4588,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "update_job_status",
-      description: "Update the status of a job. Use when the user wants to confirm, mark as pending, or update a job's status.",
+      description: "Change a job's status. Triggers: \"mark [job] as in progress\", \"that one's done now\", \"confirm the [customer] job\", \"put [job] on hold\". Statuses: enquiry, quoted, accepted, in_progress, completed, on_hold. If ambiguous which job, list recent jobs for that customer. AFTER: \"[Customer] job marked as [status].\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4601,7 +4601,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "convert_quote_to_invoice",
-      description: "Convert a quote into an invoice. Use when the user says a customer has accepted a quote, or wants to raise an invoice from a quote.",
+      description: "Turn an accepted quote into an invoice. Triggers: \"[customer] accepted the quote\", \"turn the [customer] quote into an invoice\", \"they said yes — bill them\". For repeat customers, ask which quote if unclear. DEFAULTS: invoice date → today, due date → 14 days. AFTER: \"Quote converted — invoice ready for [customer], £[amount]. Send now?\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4613,7 +4613,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "update_material_status",
-      description: "Update the status of a material. ALWAYS include job if mentioned — prevents updating materials across all jobs when customer has multiple jobs.",
+      description: "Update material status — to_order → ordered → collected. Triggers: \"mark the [item] as ordered\", \"I've collected the pipes\", \"got the valves\". Updates ALL items with that name in one call. If user says \"I collected from Plumb Centre\", update all materials where supplier matches. AFTER: \"[N] items marked as [status].\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4627,7 +4627,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "create_job_card",
-      description: "Create a job card to track work, costs and profitability. Use when user says 'add a job for [customer]', 'create a job card', or describes work without a specific date/time. Job cards are different from scheduled calendar jobs.",
+      description: "Create a job tracking card WITHOUT a scheduled date — for tracking work, costs and profitability. Triggers: \"add a job for [customer]\", \"create a job card\", \"new job — no date yet\". ASK IF MISSING: customer name. Type/scope only if unclear. DEFAULTS: status → pending. Use create_job instead if they name a specific date/time. AFTER: \"Job card created for [customer]. Want to add materials or set a date?\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4645,7 +4645,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "assign_material_to_job",
-      description: "Link a material to a job card. ALWAYS include job_title if mentioned — critical for repeat customers with multiple jobs.",
+      description: "Link an existing material to a job. Triggers: \"put those 10 pipes on the Smith job\", \"assign the copper to Patel\". CRITICAL: if customer has multiple jobs, ask which one. AFTER: \"[Material] linked to [customer]'s [job].\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4658,7 +4658,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "log_time",
-      description: "Log labour time against a job. Handles hourly rate, day rate, or price work. ALWAYS include job_title when the user mentions the job name or type — this prevents logging to the wrong job when a customer has multiple jobs.",
+      description: "Log labour time against a job. Handles hourly rate, day rate, or price work. Triggers: \"log 8 hours on [job]\", \"2 days labour on [customer]\", \"I worked [X] on [customer]\", \"bang 4 hours on the [customer] job\". ALWAYS include job_title when customer has multiple jobs. DEFAULTS: labour type → hourly unless \"day\" or \"price work\" is said. Rate → worker's default rate unless stated. Date → today. Worker → user themselves unless someone else is named.",
       input_schema: {
         type: "object",
         properties: {
@@ -4677,7 +4677,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "log_mileage",
-      description: "Log a mileage trip for HMRC tax purposes. IMPORTANT: Just log it — do NOT ask the user to confirm addresses, do NOT ask for the purpose if not given (default to 'business'), do NOT ask clarifying questions unless information is genuinely missing. If the user gives two addresses, call the tool immediately. Only include miles if user states a number. Use log_without_miles: true if they say 'log it without miles' or 'add miles later'.",
+      description: "Log a mileage trip for HMRC tax purposes. IMPORTANT: Just log it — do NOT ask the user to confirm addresses, do NOT ask for the purpose if not given (default to 'business'), do NOT ask clarifying questions unless information is genuinely missing. If the user gives two addresses, call the tool immediately. Only include miles if user states a number. Use log_without_miles: true if they say 'log it without miles' or 'add miles later'. DEFAULTS: date → today, rate → 45p/mile. Triggers: \"log 20 miles to [customer]\", \"22 miles round trip to Wickes\", \"drove to [postcode] and back today\".",
       input_schema: {
         type: "object",
         properties: {
@@ -4693,7 +4693,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "add_job_note",
-      description: "Add a note to an existing job card. ALWAYS include job_title if mentioned — critical for repeat customers with multiple jobs.",
+      description: "Add a note to a job card. Triggers: \"note on the [customer] job — [text]\", \"add a note\", \"stick this on the [job] card\". ASK IF MISSING: note content, if unclear what to write. CRITICAL: always include job_title when customer has multiple jobs. AFTER: \"Note added to [customer]'s [job].\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4705,21 +4705,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       },
     },
     {
-      name: "create_purchase_order",
-      description: "Create a purchase order for a supplier. Use when user says 'order [items] from [supplier]' or 'create PO for [supplier]'.",
-      input_schema: {
-        type: "object",
-        properties: {
-          supplier: { type: "string", description: "Supplier name" },
-          items: { type: "array", items: { type: "object", properties: { description: { type: "string" }, qty: { type: "number" }, unit_price: { type: "number" } } }, description: "List of items to order" },
-          job_ref: { type: "string", description: "Job reference this PO is for" },
-        },
-        required: ["supplier"],
-      },
-    },
-    {
       name: "update_stock",
-      description: "Adjust stock quantity for an item. Use when user says they've used X of something or received stock.",
+      description: "Adjust stock quantity. Triggers: \"used 3 [items] today\", \"received 20 [items]\", \"take [X] off my stock\". Negative adjustments for usage, positive for deliveries. ASK IF MISSING: if no item specified, ask which. AFTER: \"[Item]: [new qty] in stock. [Below reorder level — want to add to materials?]\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4731,57 +4718,57 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "find_invoice",
-      description: "Find and display an existing invoice inline. Use when user asks to see, show, or view an invoice for a customer.",
+      description: "Find and display an existing invoice inline. Triggers: \"show me [customer]'s invoice\", \"pull up invoice [X]\", \"open the [customer] bill\". If multiple matches, list them: \"[Customer] has [N] invoices — which one?\" If none, offer: \"No invoice for [customer]. Want me to create one?\"",
       input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, id: { type: "string", description: "Invoice ID e.g. INV-042" } } },
     },
     {
       name: "find_quote",
-      description: "Find and display an existing quote inline. Use when user asks to see, show, or view a quote for a customer.",
+      description: "Find and display a specific quote inline. Triggers: \"show me [customer]'s quote\", \"pull up the [customer] estimate\". If multiple, list them. If none, offer: \"No quote for [customer]. Create one?\"",
       input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, id: { type: "string", description: "Quote ID e.g. QTE-001" } } },
     },
     {
       name: "find_job_card",
-      description: "Find and display an existing job card inline. Use when user asks to see, show, or view a job card for a customer.",
+      description: "Find and display a specific job card inline. Triggers: \"show me the [customer] job\", \"pull up [job]\", \"open the [customer] card\". If multiple matches, list them and ask which. If none, offer: \"No job card for [name]. Want me to create one?\"",
       input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, title: { type: "string", description: "Job title or type" } } },
     },
     {
       name: "list_invoices",
-      description: "Show a list of invoices inline. ALWAYS use filter: 'unpaid' for outstanding/due/unpaid/awaiting payment invoices. Use filter: 'paid' for paid/settled/collected invoices. Use filter: 'overdue' for overdue only. Use filter: 'all' ONLY if explicitly asked for all invoices regardless of status.",
+      description: "Show a list of invoices inline. ALWAYS use filter: 'unpaid' for outstanding/due/unpaid/awaiting payment queries. Use filter: 'paid' for paid/cleared. Triggers: \"show unpaid invoices\", \"what's due\", \"who owes me\", \"list invoices\", \"outstanding bills\". AFTER: summarise total if meaningful — \"[N] unpaid totalling £[X].\"",
       input_schema: { type: "object", properties: { filter: { type: "string", enum: ["all", "unpaid", "overdue", "paid"], description: "unpaid = outstanding/awaiting payment. paid = settled/collected. overdue = past due date. all = everything." } } },
     },
     {
       name: "list_jobs",
-      description: "Show a list of job cards inline — use for 'show my jobs', 'what jobs are active', 'what have I got on' etc.",
+      description: "Show a list of job cards inline. Triggers: \"what jobs have I got on\", \"show my active jobs\", \"list all jobs\", \"what's on the go\". No follow-up needed. If filtering (e.g. \"jobs for Smith\"), apply the filter.",
       input_schema: { type: "object", properties: { filter: { type: "string", enum: ["all", "active", "completed", "in_progress"], description: "Which jobs to show" } } },
     },
     {
       name: "list_materials",
-      description: "Show a list of materials inline — use for 'show my materials', 'what do I need to order' etc.",
+      description: "Show a list of materials inline. Triggers: \"what do I need to order\", \"show my materials\", \"what's still to pick up\", \"running list\". Filter by status if mentioned (\"to order\", \"collected\"). AFTER: summarise counts — \"[N] to order, [M] already out.\"",
       input_schema: { type: "object", properties: { filter: { type: "string", enum: ["all", "to_order", "ordered", "collected"], description: "Which materials to show" } } },
     },
     {
       name: "find_material_receipt",
-      description: "Show a material's receipt/invoice image inline. Use when user asks to see, show, or pull up a receipt or invoice for a material or supplier.",
+      description: "Show a material's receipt/invoice image inline. Triggers: \"show me the receipt for [item]\", \"pull up the invoice for the copper\", \"where's the Screwfix receipt\". If multiple matches, list them.",
       input_schema: { type: "object", properties: { item: { type: "string", description: "Material item name" }, supplier: { type: "string", description: "Supplier name" } } },
     },
     {
       name: "list_schedule",
-      description: "Show this week's or today's scheduled jobs (calendar jobs with date/time). Use for 'what have I got on today', 'show my schedule', 'what's on this week', 'what jobs are booked'.",
+      description: "Show this week's or today's scheduled calendar jobs (jobs with a date/time). Triggers: \"what have I got on today\", \"show my schedule\", \"what's on tomorrow\", \"this week's jobs\", \"what am I doing Friday\". DEFAULTS: range → today if unspecified, week if \"this week\". AFTER: \"[N] jobs this [period] — [brief summary].\"",
       input_schema: { type: "object", properties: { filter: { type: "string", enum: ["today", "this_week", "next_week"], description: "Which period to show" } } },
     },
     {
       name: "get_job_full",
-      description: "Fetch and display a complete job card with all details including notes, photos, documents, time logs, materials, drawings, variation orders, certificates. Use when user wants to see everything about a job.",
+      description: "Fetch and display a complete job card with ALL details — notes, photos, documents, time logs, materials, drawings, VOs, certs. Triggers: \"give me everything on the [customer] job\", \"full detail on [job]\", \"what's on the [customer] card\". For repeat customers, ask which job if unclear.",
       input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, title: { type: "string", description: "Job title or type" } } },
     },
     {
       name: "get_job_profit",
-      description: "Calculate and display a full profit breakdown for a job — revenue, labour costs, material costs, gross profit and margin. Use when user asks 'what's the profit', 'how much am I making', 'show the breakdown', 'what are my costs', 'profit on [job]', 'margin on this job'.",
+      description: "Calculate and display profit breakdown for a job — revenue, labour cost, material cost, gross profit, margin. Triggers: \"what's my profit on [job]\", \"how'd the [customer] job do\", \"am I making money on [job]\". For repeat customers, ask which job if unclear. AFTER: if margin < 15%, flag it gently: \"Margin looks tight at [X]% — might be unlogged materials or labour.\"",
       input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, title: { type: "string", description: "Job title if needed" } } },
     },
     {
       name: "start_rams",
-      description: "Start building a RAMS conversationally. Use when user asks to create RAMS or method statement.",
+      description: "Start building a RAMS (Risk Assessment Method Statement) conversationally — a multi-step flow. Triggers: \"create a RAMS for [job]\", \"need a method statement for [customer]\", \"start a RAMS\". ASK IF MISSING: which job it's for. DEFAULTS: site address → from job card if known. After starting, the AI walks through hazards → method step by step.",
       input_schema: { type: "object", properties: { job_ref: { type: "string" }, site_address: { type: "string" } } },
     },
     {
@@ -4796,7 +4783,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "rams_confirm_hazards",
-      description: "Confirm the hazard list after user reviews it. Call when user says confirmed, ok, yes, or specifies removals/additions.",
+      description: "Confirm the hazard list after the user reviews it during a RAMS build. Triggers: after showing hazards, any of \"confirmed\", \"ok\", \"yes\", \"good\", \"looks right\", or specific removals/additions like \"remove slips\" or \"add working at height\". Only call in the middle of a RAMS flow, not standalone.",
       input_schema: { type: "object", properties: { remove: { type: "string", description: "Hazards to remove, comma separated" }, add: { type: "string", description: "Custom hazards to add, one per line" } } },
     },
     {
@@ -4816,7 +4803,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "update_brand",
-      description: "Save or update the user's business settings. Use during onboarding to save name, trade, phone, address, VAT status etc.",
+      description: "Save or update the user's business details — name, trade, phone, address, email, VAT status, logo, registration numbers. Triggers: during onboarding, or \"change my trading name to [X]\", \"update my phone on invoices\", \"set my VAT number\". ASK IF MISSING: which field if unclear. AFTER: confirm what changed — \"Trading name updated to [X]. Will show on all new invoices.\"",
       input_schema: {
         type: "object",
         properties: {
@@ -4831,67 +4818,65 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         },
       },
     },
-    { name: "log_expense", description: "Log a business expense — fuel, parking, tools, accommodation, etc.", input_schema: { type: "object", properties: { exp_type: { type: "string", enum: ["fuel","parking","tools","accommodation","meals","other","mileage"] }, description: { type: "string" }, amount: { type: "string" }, miles: { type: "string" }, exp_date: { type: "string" } }, required: ["description"] } },
-    { name: "list_expenses", description: "Show recent expenses.", input_schema: { type: "object", properties: {} } },
-    { name: "log_cis_statement", description: "Log a CIS deduction statement from a contractor.", input_schema: { type: "object", properties: { contractor_name: { type: "string" }, gross_amount: { type: "string" }, deduction_amount: { type: "string" }, tax_month: { type: "string" }, notes: { type: "string" } }, required: ["contractor_name","gross_amount","deduction_amount"] } },
-    { name: "list_cis_statements", description: "Show CIS deduction statements.", input_schema: { type: "object", properties: {} } },
-    { name: "add_subcontractor", description: "Add a new subcontractor. Always include address if mentioned.", input_schema: { type: "object", properties: { name: { type: "string" }, company: { type: "string" }, utr: { type: "string" }, cis_rate: { type: "string", description: "20 registered, 30 unregistered, 0 gross" }, email: { type: "string" }, phone: { type: "string" }, address: { type: "string", description: "Business or home address" } }, required: ["name"] } },
-    { name: "log_subcontractor_payment", description: "Log a payment to a subcontractor and optionally link it to a job card. Include customer and job_title to attach the cost to the right job — this makes it appear in the job profit breakdown.", input_schema: { type: "object", properties: { name: { type: "string", description: "Subcontractor name" }, customer: { type: "string", description: "Customer name to link this cost to a job card" }, job_title: { type: "string", description: "Job title to identify which job card to link to" }, payment_type: { type: "string", enum: ["price_work","day_rate","hourly"], description: "How they are paid" }, labour_amount: { type: "number", description: "Labour portion in £ (price_work) — CIS applies to this" }, materials_amount: { type: "number", description: "Materials portion in £ (price_work) — no CIS" }, gross: { type: "number", description: "Total gross if not splitting labour/materials" }, days: { type: "number", description: "Days worked (day_rate only)" }, hours: { type: "number", description: "Hours worked (hourly only)" }, rate: { type: "number", description: "Day or hourly rate in £" }, date: { type: "string" }, job_ref: { type: "string" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name"] } },
-    { name: "list_subcontractors", description: "Show all subcontractors.", input_schema: { type: "object", properties: {} } },
-    { name: "list_unpaid", description: "Show what the user still owes — unpaid subcontractor payments and/or unpaid materials. ALWAYS choose the correct scope based on the user\u2019s question:\n- scope=\"subcontractors\" when they ask about subcontractors, subs, subbies, workers, labour payments. Examples: \"do I owe any subbies?\", \"what do I owe my subcontractors?\", \"who haven\u2019t I paid from my team?\".\n- scope=\"materials\" when they ask about materials, supplier bills, merchant invoices, stock. Examples: \"any unpaid materials?\", \"what do I owe the merchant?\", \"outstanding supplier bills?\".\n- scope=\"all\" only for general/ambiguous questions. Examples: \"what do I owe?\", \"any bills outstanding?\", \"money out?\", \"show me everything unpaid\".\nThis is about money the user OWES others (money out) — NOT money owed TO them (that would be invoices/list_invoices).", input_schema: { type: "object", properties: { scope: { type: "string", enum: ["all","subcontractors","materials"], description: "Which category to list. Pick the most specific one that matches the user\u2019s question." } }, required: ["scope"] } },
-    { name: "add_compliance_cert", description: "Add a compliance certificate to a job card — CP12, EICR, PAT, EIC, Pressure Test, Part P etc.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, doc_type: { type: "string" }, doc_number: { type: "string" }, issued_date: { type: "string" }, expiry_date: { type: "string" }, notes: { type: "string" } }, required: ["doc_type"] } },
-    { name: "add_variation_order", description: "Add a variation order (extra work / change to scope) to a job card.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, description: { type: "string" }, amount: { type: "string" }, vo_number: { type: "string" } }, required: ["description","amount"] } },
-    { name: "log_daywork", description: "Log a daywork sheet on a job.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, date: { type: "string" }, worker_name: { type: "string" }, hours: { type: "string" }, rate: { type: "string" }, description: { type: "string" }, contractor_name: { type: "string" } }, required: ["hours","rate"] } },
-    { name: "send_review_request", description: "Send a review request email to a customer.", input_schema: { type: "object", properties: { customer: { type: "string" }, email: { type: "string" } }, required: ["customer"] } },
-    { name: "get_report", description: "Show a financial report inline. Use when user asks how they are doing, what they have earned, revenue summary, last 3 months, last 6 months, this quarter etc.", input_schema: { type: "object", properties: { period: { type: "string", enum: ["this_month","last_month","last_3_months","last_6_months","this_quarter","last_quarter","this_year","last_year"] } } } },
-    { name: "list_purchase_orders", description: "Show recent purchase orders.", input_schema: { type: "object", properties: {} } },
-    { name: "list_reminders", description: "Show active reminders.", input_schema: { type: "object", properties: {} } },
-    { name: "list_enquiries", description: "Show recent enquiries.", input_schema: { type: "object", properties: {} } },
-    { name: "list_customers", description: "Show all customers.", input_schema: { type: "object", properties: {} } },
-    { name: "list_mileage", description: "Show recent mileage logs.", input_schema: { type: "object", properties: {} } },
-    { name: "list_stock", description: "Show all stock items.", input_schema: { type: "object", properties: {} } },
-    { name: "add_stock_item", description: "Add a new stock item.", input_schema: { type: "object", properties: { name: { type: "string" }, quantity: { type: "string" }, unit: { type: "string" }, unit_cost: { type: "string" }, reorder_level: { type: "string" }, location: { type: "string" }, sku: { type: "string" } }, required: ["name"] } },
-    { name: "delete_stock_item", description: "Delete a stock item.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
-    { name: "list_rams", description: "Show saved RAMS documents.", input_schema: { type: "object", properties: {} } },
-    { name: "send_invoice", description: "Send an invoice to a customer by email. Include amount and/or address if mentioned — used to find the correct invoice when a customer has multiple.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, amount: { type: "number", description: "Invoice amount in £ — include if mentioned to identify the right invoice" }, address: { type: "string", description: "Client address — include if mentioned to narrow down the correct invoice" }, email: { type: "string" } } } },
-    { name: "send_quote", description: "Send a quote to a customer by email. Include amount and/or address if mentioned — used to find the correct quote when a customer has multiple.", input_schema: { type: "object", properties: { customer: { type: "string" }, quote_id: { type: "string" }, amount: { type: "number", description: "Quote amount in £ — include if mentioned to identify the right quote" }, address: { type: "string", description: "Client address — include if mentioned to narrow down the correct quote" }, email: { type: "string" } } } },
-    { name: "chase_invoice", description: "Send a payment chase/reminder email. If user mentions a specific amount OR job value (e.g. 'the £30,000 invoice', 'the £30,000 job', 'the big one'), ALWAYS pass that as amount — this is the only way to find the right invoice when a customer has multiple. If no amount given and customer has multiple invoices, the system will ask which one.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, amount: { type: "number", description: "Invoice/job amount in £ — extract from ANY mention of a value, even 'for the £30k job' or 'the big invoice'" }, address: { type: "string", description: "Client address — include if mentioned" }, email: { type: "string" } } } },
-    { name: "create_invoice_from_job", description: "Create an invoice directly from a job card, pulling in all logged labour and materials.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" } } } },
-    { name: "add_stage_payment", description: "Add stage payment milestones to a job card.", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, stages: { type: "string", description: "JSON array of stages [{label,type,value}] or leave empty for default 30/40/30 split" } } } },
-    { name: "list_inbox_actions", description: "Show pending inbox email actions — suggested actions from emails that need approval. Use when user asks about inbox, emails, or pending actions.", input_schema: { type: "object", properties: {} } },
-    { name: "approve_inbox_action", description: "Approve a pending inbox action.", input_schema: { type: "object", properties: { action_id: { type: "string" }, description: { type: "string" } } } },
-    { name: "reject_inbox_action", description: "Reject/dismiss a pending inbox action.", input_schema: { type: "object", properties: { action_id: { type: "string" } } } },
-    { name: "generate_subcontractor_statement", description: "Generate a CIS statement for a subcontractor for a given month.", input_schema: { type: "object", properties: { name: { type: "string" }, month: { type: "string", description: "YYYY-MM" } }, required: ["name"] } },
-    { name: "update_job_card", description: "Update any field on a job card — title, customer, address, value, status, notes, scope of work, PO number. Use when user asks to change, edit or update a job card.", input_schema: { type: "object", properties: { customer: { type: "string", description: "Current customer name to find the job" }, title: { type: "string", description: "Current job title to find the job" }, new_title: { type: "string" }, new_customer: { type: "string" }, new_address: { type: "string" }, new_value: { type: "string" }, new_status: { type: "string", enum: ["enquiry","quoted","accepted","in_progress","completed","on_hold"] }, new_notes: { type: "string" }, new_scope: { type: "string" }, new_po_number: { type: "string" } } } },
-    { name: "update_invoice", description: "Update an invoice — change customer, amount, due date, status, payment method (bacs/card/both), VAT, or add/remove line items. Use when user asks to edit or change an invoice.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_due: { type: "string" }, new_status: { type: "string" }, new_address: { type: "string" }, new_payment_method: { type: "string", enum: ["bacs","card","both"], description: "bacs = bank transfer only, card = Stripe only, both = show both options" }, new_vat_enabled: { type: "string", description: "true or false" }, add_line_item: { type: "string", description: "Add a line item as 'description|amount' e.g. 'Extra labour|150'" }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
-    { name: "list_quotes", description: "Show all quotes. Use when user asks to see their quotes.", input_schema: { type: "object", properties: {} } },
-    { name: "delete_expense", description: "Delete an expense.", input_schema: { type: "object", properties: { description: { type: "string" } }, required: ["description"] } },
-    { name: "delete_purchase_order", description: "Delete a purchase order.", input_schema: { type: "object", properties: { po_number: { type: "string" }, supplier: { type: "string" } } } },
-    { name: "delete_cis_statement", description: "Delete a CIS statement.", input_schema: { type: "object", properties: { contractor_name: { type: "string" } }, required: ["contractor_name"] } },
-    { name: "add_worker", description: "Add a worker profile — subcontracted or employed. Use when user says 'add a worker', 'add [name] as a labourer/electrician/sub'. Always include type (subcontractor or employed) if mentioned.", input_schema: { type: "object", properties: { name: { type: "string" }, type: { type: "string", enum: ["subcontractor","employed"], description: "subcontractor = self-employed/CIS, employed = PAYE staff" }, role: { type: "string", description: "Their trade or role e.g. electrician, labourer, plasterer" }, email: { type: "string" }, phone: { type: "string" }, day_rate: { type: "number" }, hourly_rate: { type: "number" }, utr: { type: "string", description: "UTR number for subcontractors" }, cis_rate: { type: "number", description: "CIS deduction rate — 20 (registered), 30 (unregistered), 0 (gross)" }, ni_number: { type: "string", description: "NI number for employed staff" } }, required: ["name"] } },
-    { name: "list_workers", description: "Show all workers. Use when user asks 'show my workers', 'who do I have on my books', 'list my staff'.", input_schema: { type: "object", properties: { type: { type: "string", enum: ["all","subcontractor","employed"] } } } },
-    { name: "assign_worker_to_job", description: "Assign a worker to a job card. Use when user says 'put [name] on the [job]', 'assign [worker] to [customer]'.", input_schema: { type: "object", properties: { worker_name: { type: "string" }, customer: { type: "string" }, job_title: { type: "string" }, role: { type: "string" }, rate: { type: "number" }, rate_type: { type: "string", enum: ["day_rate","hourly","price_work"] }, start_date: { type: "string" } }, required: ["worker_name"] } },
-    { name: "log_worker_time", description: "Log hours or days worked by a worker (not yourself) on a job. Use when user says '[name] worked X days/hours on [job]'.", input_schema: { type: "object", properties: { worker_name: { type: "string" }, customer: { type: "string" }, job_title: { type: "string" }, hours: { type: "number" }, days: { type: "number" }, rate: { type: "number" }, rate_type: { type: "string", enum: ["hourly","day_rate","price_work"] }, total: { type: "number" }, date: { type: "string" }, description: { type: "string" } }, required: ["worker_name"] } },
-    { name: "add_worker_document", description: "Add a certificate, insurance or licence to a worker. Use when user says 'add [name]'s CSCS card', 'log insurance for [worker]', 'add Gas Safe number'. Always include expiry_date if mentioned.", input_schema: { type: "object", properties: { worker_name: { type: "string" }, doc_type: { type: "string", description: "cscs, gas_safe, public_liability, employers_liability, driving_licence, right_to_work, other" }, doc_number: { type: "string" }, issued_date: { type: "string" }, expiry_date: { type: "string", description: "YYYY-MM-DD — always include if mentioned" }, notes: { type: "string" } }, required: ["worker_name","doc_type"] } },
-    { name: "list_expiring_documents", description: "Show worker certs and documents expiring soon. Use when user asks 'what's expiring', 'any certs due', 'check documents'.", input_schema: { type: "object", properties: { days: { type: "number", description: "Days ahead to check — default 60" } } } },
-    { name: "delete_subcontractor", description: "Delete/remove a subcontractor.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
-    { name: "update_worker", description: "Update a worker's details — rate, CIS rate, role, contact info. Use when user says 'change [name]'s day rate to £X', 'update [worker]'s CIS to 20%'.", input_schema: { type: "object", properties: { name: { type: "string", description: "Worker name to find" }, day_rate: { type: "number" }, hourly_rate: { type: "number" }, cis_rate: { type: "number", description: "20, 30, or 0" }, role: { type: "string" }, email: { type: "string" }, phone: { type: "string" }, utr: { type: "string" } }, required: ["name"] } },
-    { name: "delete_worker", description: "Delete a worker record. Use when user says 'remove [name] from workers', 'delete [worker]'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
-    { name: "update_subcontractor_payment", description: "Correct a subcontractor payment — change amount, date, description, labour/materials split. Use when user says 'fix [name]'s payment', 'change the £X payment to £Y', 'that payment was wrong'.", input_schema: { type: "object", properties: { name: { type: "string", description: "Subcontractor name" }, date: { type: "string", description: "Date of payment to find YYYY-MM-DD — helps identify which payment" }, gross: { type: "number", description: "New gross total" }, labour_amount: { type: "number" }, materials_amount: { type: "number" }, new_date: { type: "string", description: "New date if changing date" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name"] } },
-    { name: "delete_subcontractor_payment", description: "Delete a subcontractor payment. Use when user says 'delete that payment', 'remove [name]'s payment on [date]'.", input_schema: { type: "object", properties: { name: { type: "string" }, date: { type: "string", description: "Date YYYY-MM-DD to identify the payment" }, gross: { type: "number", description: "Amount to identify the payment" } }, required: ["name"] } },
-    { name: "delete_job_card", description: "Delete a job card permanently.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
-    { name: "delete_mileage", description: "Delete a mileage log. By default deletes the most recent one. If user specifies a date or location, use those to target the right entry.", input_schema: { type: "object", properties: { date: { type: "string", description: "Date of trip to delete YYYY-MM-DD" }, from_location: { type: "string", description: "Start location to match" }, to_location: { type: "string", description: "Destination to match" } } } },
-    { name: "delete_rams", description: "Delete a RAMS document.", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
-    { name: "escalate_to_support", description: "Use ONLY when you have genuinely tried to resolve the user's issue and cannot. Collects their details and sends an email to the support team.", input_schema: { type: "object", properties: { issue_summary: { type: "string", description: "Clear description of the issue" }, steps_tried: { type: "string", description: "What you already tried" }, user_email: { type: "string", description: "User's email address if known" } }, required: ["issue_summary"] } },
-    { name: "request_signature", description: "Open the signature pad for a customer to sign off a completed job. Use when user says 'get signature', 'sign off', 'customer sign-off', 'completion sign-off'.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
-    { name: "sync_to_xero", description: "Upload/sync an invoice to Xero accounting. Use when user says 'send to Xero', 'sync invoice to Xero', 'push to Xero'.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
-    { name: "sync_to_quickbooks", description: "Upload/sync an invoice to QuickBooks. Use when user says 'send to QuickBooks', 'sync to QuickBooks'.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
-    { name: "sync_material_to_xero", description: "Create a bill in Xero for a material purchase. Use when user says 'send material to Xero', 'create Xero bill' for a material.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
-    { name: "sync_material_to_quickbooks", description: "Create a bill in QuickBooks for a material purchase.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
-    { name: "mark_invoice_paid_xero", description: "Mark an invoice as paid in Xero. Use when invoice is already in Xero and user confirms payment received.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
+    { name: "log_expense", description: "Log a business expense — fuel, parking, tools, accommodation, meals, other. Triggers: \"log £[X] for fuel\", \"add £[X] expense for parking\", \"claim £[X] for tools\", \"paid £[X] for [thing]\". ASK IF MISSING: amount and description are critical. Category — infer from description if possible (fuel/parking/tools/meals/accommodation/other). DEFAULTS: date → today. AFTER: \"£[amount] logged under [category].\"", input_schema: { type: "object", properties: { exp_type: { type: "string", enum: ["fuel","parking","tools","accommodation","meals","other","mileage"] }, description: { type: "string" }, amount: { type: "string" }, miles: { type: "string" }, exp_date: { type: "string" } }, required: ["description"] } },
+    { name: "list_expenses", description: "Show recent expenses inline. Triggers: \"show my expenses\", \"what have I spent\", \"expenses this month\". Filter by category or date range if mentioned. AFTER: total if meaningful — \"£[X] spent across [N] expenses this month.\"", input_schema: { type: "object", properties: {} } },
+    { name: "log_cis_statement", description: "Log a CIS deduction statement received from a contractor. Triggers: \"CIS from [contractor] — gross £[X], deducted £[Y]\", \"log my CIS statement\". ASK IF MISSING: contractor name, gross, deduction amounts are all required. Tax month — default to current month. AFTER: \"CIS logged — £[gross] gross, £[deduction] deducted ([rate]%).\"", input_schema: { type: "object", properties: { contractor_name: { type: "string" }, gross_amount: { type: "string" }, deduction_amount: { type: "string" }, tax_month: { type: "string" }, notes: { type: "string" } }, required: ["contractor_name","gross_amount","deduction_amount"] } },
+    { name: "list_cis_statements", description: "Show CIS deduction statements inline. Triggers: \"show my CIS\", \"CIS statements this year\", \"what CIS have I had\". Filter by tax year if mentioned.", input_schema: { type: "object", properties: {} } },
+    { name: "add_subcontractor", description: "Add a new subcontractor. Triggers: \"add [name] as a sub\", \"register [name] as a subbie\", \"new subbie — [name], [rate]% CIS\". ASK IF MISSING: name is required. UTR, CIS rate, phone/email — ask in priority order, only the most critical one. DEFAULTS: CIS rate → 20% (registered) unless stated. AFTER: \"[Name] added as a sub — [CIS rate]% CIS.\"", input_schema: { type: "object", properties: { name: { type: "string" }, company: { type: "string" }, utr: { type: "string" }, cis_rate: { type: "string", description: "20 registered, 30 unregistered, 0 gross" }, email: { type: "string" }, phone: { type: "string" }, address: { type: "string", description: "Business or home address" } }, required: ["name"] } },
+    { name: "log_subcontractor_payment", description: "Log a payment to a subcontractor, optionally linked to a job. Triggers: \"paid [name] £[X]\", \"sort [name]'s money — £[X] on [job]\", \"log £[X] to [subbie]\". Include customer and job_title to link the cost to a job — this makes it show in job profit. ASK IF MISSING: subbie name and amount are critical. Date → today. Payment type → price_work if just an amount, day_rate if \"per day\", hourly if \"per hour\". AFTER: \"£[amount] logged to [name]. CIS deduction: £[X].\"", input_schema: { type: "object", properties: { name: { type: "string", description: "Subcontractor name" }, customer: { type: "string", description: "Customer name to link this cost to a job card" }, job_title: { type: "string", description: "Job title to identify which job card to link to" }, payment_type: { type: "string", enum: ["price_work","day_rate","hourly"], description: "How they are paid" }, labour_amount: { type: "number", description: "Labour portion in £ (price_work) — CIS applies to this" }, materials_amount: { type: "number", description: "Materials portion in £ (price_work) — no CIS" }, gross: { type: "number", description: "Total gross if not splitting labour/materials" }, days: { type: "number", description: "Days worked (day_rate only)" }, hours: { type: "number", description: "Hours worked (hourly only)" }, rate: { type: "number", description: "Day or hourly rate in £" }, date: { type: "string" }, job_ref: { type: "string" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name"] } },
+    { name: "list_subcontractors", description: "Show all subcontractors inline. Triggers: \"show my subbies\", \"list my subcontractors\", \"who's on my sub list\". AFTER: count — \"[N] subbies on your books.\"", input_schema: { type: "object", properties: {} } },
+    { name: "list_unpaid", description: "Show what the user still owes — unpaid subcontractor payments and/or unpaid materials. ALWAYS choose the correct scope based on the user's question:\n- scope=\"subcontractors\" when they ask about subcontractors, subs, subbies, workers, labour payments. Examples: \"do I owe any subbies?\", \"what do I owe my subcontractors?\", \"who haven't I paid from my team?\".\n- scope=\"materials\" when they ask about materials, supplier bills, merchant invoices, stock. Examples: \"any unpaid materials?\", \"what do I owe the merchant?\", \"outstanding supplier bills?\".\n- scope=\"all\" only for general/ambiguous questions. Examples: \"what do I owe?\", \"any bills outstanding?\", \"money out?\", \"show me everything unpaid\".\nThis is about money the user OWES others (money out) — NOT money owed TO them (that would be invoices/list_invoices).", input_schema: { type: "object", properties: { scope: { type: "string", enum: ["all","subcontractors","materials"], description: "Which category to list. Pick the most specific one that matches the user\u2019s question." } }, required: ["scope"] } },
+    { name: "add_compliance_cert", description: "Log a compliance certificate record against a job card. Supported types: Gas Safety Certificate (CP12), Boiler Commissioning Sheet, EICR, Electrical Installation Certificate (EIC), Minor Works Certificate, PAT Testing, Pressure Test Certificate, Part P Certificate, Oil Safety Certificate, MCS, FENSA. ASK FOR MISSING INFO — if user says \"create a certificate\" without specifying type, ask which kind. If they name a type but no customer/job, ask which job it's for (or list recent jobs). If no cert number, ask for it. If no expiry date on a dated cert (CP12/EICR/Pressure/Oil — usually 12 months), suggest the standard validity. Default issued_date to today if unstated. NOTE: This logs the certificate record only. The full signed PDF with test results (pressure readings, tightness tests, appliance details, etc.) is completed in the job card's Certificates tab — mention this to the user after logging so they know to complete the PDF there.", input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name" }, job_title: { type: "string", description: "Job title or type — include for repeat customers" }, doc_type: { type: "string", description: "Certificate type — use standard UK names (CP12, EICR, PAT, EIC, Pressure Test, Part P, Oil Safety, MCS, FENSA)" }, doc_number: { type: "string", description: "Certificate reference number" }, issued_date: { type: "string", description: "Date issued YYYY-MM-DD — defaults to today if unstated" }, expiry_date: { type: "string", description: "Expiry date YYYY-MM-DD — most UK certs are 12 months" }, notes: { type: "string", description: "Any relevant notes — passes, defects, recommendations" } }, required: ["doc_type"] } },
+    { name: "add_variation_order", description: "Add a variation order (extra work/scope change) to a job. Triggers: \"VO on [job] for [work], £[X]\", \"variation on [customer] — extra [work]\", \"log a change on [job]\". ASK IF MISSING: description and amount are required. For repeat customers, confirm which job. AFTER: \"VO added to [customer]'s [job] — [description], £[amount].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, description: { type: "string" }, amount: { type: "string" }, vo_number: { type: "string" } }, required: ["description","amount"] } },
+    { name: "log_daywork", description: "Log a daywork sheet on a job — for ad-hoc work outside the original scope. Triggers: \"log dayworks on [job]\", \"daywork sheet for [customer] — [hours] at [£rate]\", \"add daywork to [job]\". ASK IF MISSING: hours and rate are required. Worker name — default to user if unclear. DEFAULTS: date → today. AFTER: \"Daywork logged — [hours]hr at £[rate]. Total £[amount].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, date: { type: "string" }, worker_name: { type: "string" }, hours: { type: "string" }, rate: { type: "string" }, description: { type: "string" }, contractor_name: { type: "string" } }, required: ["hours","rate"] } },
+    { name: "send_review_request", description: "Send a review request email to a customer. Triggers: \"ask [customer] for a review\", \"send a review request to [customer]\", \"get [customer] to leave a review\". ASK IF MISSING: no email on file → ask. AFTER: \"Review request sent to [customer] — [platforms].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, email: { type: "string" } }, required: ["customer"] } },
+    { name: "get_report", description: "Show a financial report inline — income, expenses, profit by job, mileage, customer breakdown. Triggers: \"how am I doing\", \"what have I earned\", \"revenue summary\", \"last 3 months\", \"this year so far\", \"top customers\". DEFAULTS: period → this month unless stated. AFTER: brief summary and the report inline.", input_schema: { type: "object", properties: { period: { type: "string", enum: ["this_month","last_month","last_3_months","last_6_months","this_quarter","last_quarter","this_year","last_year"] } } } },
+    { name: "list_reminders", description: "Show active reminders inline. Triggers: \"what have I got to do\", \"show my reminders\", \"what's coming up\". AFTER: \"[N] active reminders — [next one due at time].\"", input_schema: { type: "object", properties: {} } },
+    { name: "list_enquiries", description: "Show recent enquiries inline. Triggers: \"show my enquiries\", \"any new leads\", \"list pending enquiries\". AFTER: \"[N] open enquiries — [next action for each].\"", input_schema: { type: "object", properties: {} } },
+    { name: "list_customers", description: "Show the customer list inline. Triggers: \"show my customers\", \"who's on my books\", \"list all clients\", \"who do I work for\". No follow-up needed. If empty, say \"No customers saved yet — want me to add one?\"", input_schema: { type: "object", properties: {} } },
+    { name: "list_mileage", description: "Show recent mileage logs inline. Triggers: \"show my mileage\", \"what have I driven\", \"mileage for this month\". AFTER: total miles if meaningful — \"[N] trips, [X] miles total this month.\"", input_schema: { type: "object", properties: {} } },
+    { name: "list_stock", description: "Show all stock items inline. Triggers: \"what's on the van\", \"show my stock\", \"stock list\", \"what do I have in\". If reorder-level alerts are relevant, flag them: \"[N] items below reorder level.\"", input_schema: { type: "object", properties: {} } },
+    { name: "add_stock_item", description: "Add a new stock item to track in the van/store. Triggers: \"add 20 [items] to stock\", \"new stock item — [name]\", \"put [items] on stock\". ASK IF MISSING: item name is required. Quantity — default to the number stated; 1 if none. DEFAULTS: unit → \"each\" unless clear. AFTER: \"[Name] added to stock — [qty] units.\"", input_schema: { type: "object", properties: { name: { type: "string" }, quantity: { type: "string" }, unit: { type: "string" }, unit_cost: { type: "string" }, reorder_level: { type: "string" }, location: { type: "string" }, sku: { type: "string" } }, required: ["name"] } },
+    { name: "delete_stock_item", description: "Delete a stock item. Triggers: \"remove [item] from stock\", \"delete that stock entry\". CONFIRM FIRST.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+    { name: "list_rams", description: "Show saved RAMS documents inline. Triggers: \"show my RAMS\", \"list method statements\", \"what RAMS have I built\".", input_schema: { type: "object", properties: {} } },
+    { name: "send_invoice", description: "Email an existing invoice to the customer. Triggers: \"send [customer] their invoice\", \"email invoice to [customer]\", \"fire the [customer] invoice off\". ASK IF MISSING: no email on file → \"No email for [customer] — what's their address?\" If multiple invoices, disambiguate by amount or job. AFTER: \"Invoice sent to [email].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, amount: { type: "number", description: "Invoice amount in £ — include if mentioned to identify the right invoice" }, address: { type: "string", description: "Client address — include if mentioned to narrow down the correct invoice" }, email: { type: "string" } } } },
+    { name: "send_quote", description: "Email a quote to a customer. Triggers: \"send [customer] their quote\", \"email the [customer] estimate\". ASK IF MISSING: no email on file → ask. If multiple quotes for same customer, disambiguate by amount or job. AFTER: \"Quote emailed to [customer].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, quote_id: { type: "string" }, amount: { type: "number", description: "Quote amount in £ — include if mentioned to identify the right quote" }, address: { type: "string", description: "Client address — include if mentioned to narrow down the correct quote" }, email: { type: "string" } } } },
+    { name: "chase_invoice", description: "Send a payment chase/reminder email for an overdue invoice. Triggers: \"chase the [customer] invoice\", \"nudge [customer] about that invoice\", \"send a reminder to [customer]\". ASK IF MISSING: tone (gentle/firm/final) only if they haven't chased before; otherwise escalate one step from the last chase. AFTER: \"Reminder sent to [customer]. I'll flag it again in 7 days.\"", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, amount: { type: "number", description: "Invoice/job amount in £ — extract from ANY mention of a value, even 'for the £30k job' or 'the big invoice'" }, address: { type: "string", description: "Client address — include if mentioned" }, email: { type: "string" } } } },
+    { name: "create_invoice_from_job", description: "Create an invoice directly from a job card, pulling in all logged labour and materials. Triggers: \"invoice the [customer] job\", \"raise an invoice from [job]\", \"bill [customer] for [job]\". For repeat customers, ask which job. DEFAULTS: due date → 14 days. AFTER: \"Invoice created for [customer] — £[total]. Want me to send it?\"", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" } } } },
+    { name: "add_stage_payment", description: "Add stage payment milestones to a job card. Triggers: \"set up stage payments on [job]\", \"30/40/30 on [customer]\", \"add a 50% deposit stage to [job]\". DEFAULTS: if no split stated → 30/40/30. ASK IF MISSING: which job, if unclear. AFTER: \"[N] stages set on [customer]'s job — [summary].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, stages: { type: "string", description: "JSON array of stages [{label,type,value}] or leave empty for default 30/40/30 split" } } } },
+    { name: "list_inbox_actions", description: "Show pending email actions — suggested actions from emails that need user approval. Triggers: \"what's in my inbox\", \"show me pending emails\", \"any email actions\", \"anything to approve\". AFTER: \"[N] pending — [brief summary of each].\"", input_schema: { type: "object", properties: {} } },
+    { name: "approve_inbox_action", description: "Approve a pending inbox action (executes the suggested action). Triggers: \"approve that\", \"do it\", \"yes go ahead\" when context is an inbox action. Confirms by showing what was done.", input_schema: { type: "object", properties: { action_id: { type: "string" }, description: { type: "string" } } } },
+    { name: "reject_inbox_action", description: "Reject/dismiss a pending inbox action. Triggers: \"no\", \"dismiss that\", \"reject it\", \"not needed\" when context is an inbox action.", input_schema: { type: "object", properties: { action_id: { type: "string" } } } },
+    { name: "generate_subcontractor_statement", description: "Generate a CIS statement PDF for a subcontractor for a given tax month. Triggers: \"generate [name]'s CIS statement\", \"send [subbie] their CIS for [month]\". ASK IF MISSING: subbie name and month/period. DEFAULTS: month → last month if unstated. AFTER: \"Statement generated for [name] — [month]. Email or download?\"", input_schema: { type: "object", properties: { name: { type: "string" }, month: { type: "string", description: "YYYY-MM" } }, required: ["name"] } },
+    { name: "update_job_card", description: "Update any field on a job card — title, customer, address, value, status, scope, PO number. Triggers: \"change the value on [job] to £X\", \"update the address on the [customer] job\", \"set the PO number to ABC123\". ASK IF MISSING: which field to update, if unclear. For repeat customers with multiple jobs, always confirm which job.", input_schema: { type: "object", properties: { customer: { type: "string", description: "Current customer name to find the job" }, title: { type: "string", description: "Current job title to find the job" }, new_title: { type: "string" }, new_customer: { type: "string" }, new_address: { type: "string" }, new_value: { type: "string" }, new_status: { type: "string", enum: ["enquiry","quoted","accepted","in_progress","completed","on_hold"] }, new_notes: { type: "string" }, new_scope: { type: "string" }, new_po_number: { type: "string" } } } },
+    { name: "update_invoice", description: "Update an invoice — change customer, amount, due date, status, payment method, VAT, or add/remove line items. Triggers: \"change the [customer] invoice to £X\", \"update the due date on [customer]'s invoice\", \"add a line to [customer]'s bill\". ASK IF MISSING: which field to change.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_due: { type: "string" }, new_status: { type: "string" }, new_address: { type: "string" }, new_payment_method: { type: "string", enum: ["bacs","card","both"], description: "bacs = bank transfer only, card = Stripe only, both = show both options" }, new_vat_enabled: { type: "string", description: "true or false" }, add_line_item: { type: "string", description: "Add a line item as 'description|amount' e.g. 'Extra labour|150'" }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
+    { name: "list_quotes", description: "Show a list of quotes inline. Triggers: \"show my quotes\", \"what quotes are out\", \"list all estimates\", \"what's awaiting approval\". Filter by status if mentioned.", input_schema: { type: "object", properties: {} } },
+    { name: "delete_expense", description: "Delete an expense. Triggers: \"delete that expense\", \"remove the £[X] [category]\", \"scrap that fuel claim\". If multiple match, list them. CONFIRM FIRST.", input_schema: { type: "object", properties: { description: { type: "string" } }, required: ["description"] } },
+    { name: "delete_cis_statement", description: "Delete a CIS statement. Triggers: \"delete that CIS\", \"remove the [contractor] CIS from [month]\". If multiple match, list them. CONFIRM FIRST.", input_schema: { type: "object", properties: { contractor_name: { type: "string" } }, required: ["contractor_name"] } },
+    { name: "add_worker", description: "Add a worker profile — subcontracted or employed. Triggers: \"add a worker\", \"add [name] as a labourer/electrician/plumber\", \"new worker — [name]\". ASK IF MISSING: name is required. Role/trade and day rate — ask if intent suggests pricing matters. DEFAULTS: employment type → employed unless \"sub\" is said. AFTER: \"[Name] added to your team.\"", input_schema: { type: "object", properties: { name: { type: "string" }, type: { type: "string", enum: ["subcontractor","employed"], description: "subcontractor = self-employed/CIS, employed = PAYE staff" }, role: { type: "string", description: "Their trade or role e.g. electrician, labourer, plasterer" }, email: { type: "string" }, phone: { type: "string" }, day_rate: { type: "number" }, hourly_rate: { type: "number" }, utr: { type: "string", description: "UTR number for subcontractors" }, cis_rate: { type: "number", description: "CIS deduction rate — 20 (registered), 30 (unregistered), 0 (gross)" }, ni_number: { type: "string", description: "NI number for employed staff" } }, required: ["name"] } },
+    { name: "list_workers", description: "Show all workers inline. Triggers: \"show my workers\", \"who's on my team\", \"list my staff\", \"who do I have on my books\". AFTER: count — \"[N] on your team.\"", input_schema: { type: "object", properties: { type: { type: "string", enum: ["all","subcontractor","employed"] } } } },
+    { name: "assign_worker_to_job", description: "Assign a worker to a job. Triggers: \"put [name] on the [job]\", \"send [worker] to [customer]\", \"assign [worker] to [customer]\". ASK IF MISSING: which worker, or which job, if ambiguous. AFTER: \"[Worker] assigned to [customer]'s [job].\"", input_schema: { type: "object", properties: { worker_name: { type: "string" }, customer: { type: "string" }, job_title: { type: "string" }, role: { type: "string" }, rate: { type: "number" }, rate_type: { type: "string", enum: ["day_rate","hourly","price_work"] }, start_date: { type: "string" } }, required: ["worker_name"] } },
+    { name: "log_worker_time", description: "Log hours or days worked by another worker (not the user) on a job. Triggers: \"[name] worked 3 days on [job]\", \"log 8 hours for [worker] on [customer]\". ASK IF MISSING: worker name, hours/days, and which job. Always include job_title for repeat customers.", input_schema: { type: "object", properties: { worker_name: { type: "string" }, customer: { type: "string" }, job_title: { type: "string" }, hours: { type: "number" }, days: { type: "number" }, rate: { type: "number" }, rate_type: { type: "string", enum: ["hourly","day_rate","price_work"] }, total: { type: "number" }, date: { type: "string" }, description: { type: "string" } }, required: ["worker_name"] } },
+    { name: "add_worker_document", description: "Add a certificate, insurance or licence to a worker. Triggers: \"add [name]'s CSCS card\", \"log [worker]'s insurance\", \"[name]'s Gas Safe is [number]\". Types: cscs, gas_safe, public_liability, employers_liability, driving_licence, right_to_work, other. ASK IF MISSING: worker name and doc type are required. ALWAYS include expiry_date if mentioned. AFTER: \"[Doc type] logged for [name]. [Expiry in X months/days — I'll remind you.]\"", input_schema: { type: "object", properties: { worker_name: { type: "string" }, doc_type: { type: "string", description: "cscs, gas_safe, public_liability, employers_liability, driving_licence, right_to_work, other" }, doc_number: { type: "string" }, issued_date: { type: "string" }, expiry_date: { type: "string", description: "YYYY-MM-DD — always include if mentioned" }, notes: { type: "string" } }, required: ["worker_name","doc_type"] } },
+    { name: "list_expiring_documents", description: "Show worker certs and business compliance documents expiring soon. Triggers: \"what's expiring\", \"any certs due\", \"check my documents\", \"what's running out\". Default window: next 30 days unless stated. AFTER: \"[N] documents expiring — [summary]. Want me to set a reminder?\"", input_schema: { type: "object", properties: { days: { type: "number", description: "Days ahead to check — default 60" } } } },
+    { name: "delete_subcontractor", description: "Delete a subcontractor. Triggers: \"remove [name] from my subs\", \"delete [subbie]\". CONFIRM FIRST. Flag if they have linked payments: \"[Name] has [N] payments logged — delete anyway?\"", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+    { name: "update_worker", description: "Update a worker's details — rate, CIS rate, role, contact info. Triggers: \"change [name]'s day rate to £[X]\", \"update [worker]'s phone\", \"[name] is now [rate]% CIS\". ASK IF MISSING: which field if unclear. AFTER: \"[Name]'s [field] updated to [new value].\"", input_schema: { type: "object", properties: { name: { type: "string", description: "Worker name to find" }, day_rate: { type: "number" }, hourly_rate: { type: "number" }, cis_rate: { type: "number", description: "20, 30, or 0" }, role: { type: "string" }, email: { type: "string" }, phone: { type: "string" }, utr: { type: "string" } }, required: ["name"] } },
+    { name: "delete_worker", description: "Delete a worker record. Triggers: \"remove [name] from my workers\", \"delete [worker]\", \"[name] isn't with me anymore\". CONFIRM FIRST. Flag any linked jobs or time logs.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+    { name: "update_subcontractor_payment", description: "Correct a subcontractor payment — change amount, date, description, labour/materials split. Triggers: \"fix [name]'s payment from [date]\", \"change last week's payment to [X]\". ASK IF MISSING: which payment if multiple recent. DEFAULTS: leave unstated fields unchanged.", input_schema: { type: "object", properties: { name: { type: "string", description: "Subcontractor name" }, date: { type: "string", description: "Date of payment to find YYYY-MM-DD — helps identify which payment" }, gross: { type: "number", description: "New gross total" }, labour_amount: { type: "number" }, materials_amount: { type: "number" }, new_date: { type: "string", description: "New date if changing date" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name"] } },
+    { name: "delete_subcontractor_payment", description: "Delete a subcontractor payment. Triggers: \"delete [name]'s payment on [date]\", \"remove that £[X] I paid [subbie]\". If multiple match, list them. CONFIRM FIRST.", input_schema: { type: "object", properties: { name: { type: "string" }, date: { type: "string", description: "Date YYYY-MM-DD to identify the payment" }, gross: { type: "number", description: "Amount to identify the payment" } }, required: ["name"] } },
+    { name: "delete_job_card", description: "Permanently delete a job card and everything on it (materials, labour, notes, invoice). Triggers: \"delete the [customer] job card completely\", \"remove [job] entirely\". CONFIRM FIRST — this is destructive. Flag linked invoices: \"This will also remove the [£X] invoice. Proceed?\"", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
+    { name: "delete_mileage", description: "Delete a mileage log. Defaults to deleting the most recent one. Triggers: \"delete that mileage\", \"scrap the last trip\", \"remove the [location] mileage\". If user specifies a date or location, use those to target. CONFIRM FIRST if deleting more than one.", input_schema: { type: "object", properties: { date: { type: "string", description: "Date of trip to delete YYYY-MM-DD" }, from_location: { type: "string", description: "Start location to match" }, to_location: { type: "string", description: "Destination to match" } } } },
+    { name: "delete_rams", description: "Delete a RAMS document. Triggers: \"delete that RAMS\", \"remove the [job] method statement\". CONFIRM FIRST.", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
+    { name: "escalate_to_support", description: "Use ONLY when you have genuinely tried to resolve the user's issue and cannot. Collects their details and sends an email to Trade PA support. Triggers: user explicitly asks for human help, or after a real blocker. Never use as a first resort. AFTER: \"Sent to support — they'll email you back. Usually within a working day.\"", input_schema: { type: "object", properties: { issue_summary: { type: "string", description: "Clear description of the issue" }, steps_tried: { type: "string", description: "What you already tried" }, user_email: { type: "string", description: "User's email address if known" } }, required: ["issue_summary"] } },
+    { name: "request_signature", description: "Open the signature pad for a customer to sign off a completed job. Triggers: \"get signature\", \"sign off\", \"customer's ready to sign\", \"job done — need their signature\". ASK IF MISSING: which job. AFTER the sign completes, the job status typically moves to completed.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
+    { name: "sync_to_xero", description: "Upload/sync an invoice to Xero accounting. Triggers: \"send to Xero\", \"sync the [customer] invoice to Xero\", \"push [invoice] to Xero\". ASK IF MISSING: check Xero is connected first — if not, guide to Settings → Integrations. Which invoice if multiple recent ones. AFTER: \"Invoice synced to Xero — [Xero invoice number].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
+    { name: "sync_to_quickbooks", description: "Upload/sync an invoice to QuickBooks. Triggers: \"send to QuickBooks\", \"sync to QB\", \"push the [customer] invoice to QuickBooks\". ASK IF MISSING: check QuickBooks is connected. Which invoice if multiple.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
+    { name: "sync_material_to_xero", description: "Create a bill in Xero for a material purchase. Triggers: \"send the [item] to Xero\", \"push that receipt to Xero as a bill\". ASK IF MISSING: check Xero is connected first — if not, offer to help them connect it.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
+    { name: "sync_material_to_quickbooks", description: "Create a bill in QuickBooks for a material purchase. Triggers: \"send the [item] to QuickBooks\", \"push that material to QB\". ASK IF MISSING: check QuickBooks is connected first.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
+    { name: "mark_invoice_paid_xero", description: "Mark an invoice as paid in Xero (only after it's been synced there). Triggers: \"update Xero — [customer] paid\", \"mark the [customer] invoice paid in Xero\". Only use if the invoice is already in Xero. AFTER: \"Xero updated — [customer]'s invoice marked paid.\"", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
     {
       name: "save_memory",
-      description: "Store a fact, preference or pattern worth remembering about this business for all future conversations. Use when the user tells you their standard rates, preferred suppliers, how they work, or anything they say should be remembered.",
+      description: "Store a fact, preference, or pattern about this business for all future conversations. Triggers: \"remember that [fact]\", \"don't forget [fact]\", or when user corrects you about a standing fact. Good things to save: trades, regions worked, default rates, supplier preferences, customer quirks. AFTER: \"Got it — I'll remember that.\" Don't over-use for one-off facts.",
       input_schema: { type: "object", properties: { content: { type: "string", description: "The fact to remember as a clear statement. E.g. 'Standard call-out rate is £65/hour'" }, category: { type: "string", enum: ["business_fact", "preference", "customer_note", "pattern", "correction"] } }, required: ["content"] },
     },
   ];
@@ -5906,29 +5891,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           setLastAction({ type: "job", label: `Note added — ${input.customer}`, view: "Jobs" });
           return `Note added to ${input.customer}'s job: "${input.note.slice(0, 60)}${input.note.length > 60 ? "..." : ""}"`;
         }
-        case "create_purchase_order": {
-          const poItems = (input.items || []).map(i => ({ description: i.description, qty: i.qty || 1, unit_price: i.unit_price || 0, unit: "unit", total: (i.qty || 1) * (i.unit_price || 0) }));
-          const total = poItems.reduce((s, i) => s + i.total, 0);
-          const poNum = `PO-${Date.now().toString().slice(-4)}`;
-          const { data: po, error: poErr } = await supabase.from("purchase_orders").insert({ user_id: user?.id, po_number: poNum, supplier: input.supplier, job_ref: input.job_ref || "", status: "sent", total, created_at: new Date().toISOString() }).select().single();
-          if (poErr) return `Failed to create purchase order: ${poErr.message}`;
-          if (po && poItems.length > 0) await supabase.from("purchase_order_items").insert(poItems.map(i => ({ ...i, po_id: po.id })));
-          // Auto-create materials from PO items so they appear in Materials tab
-          if (poItems.length > 0) {
-            const newMats = poItems.map(i => ({
-              item: i.description,
-              qty: i.qty,
-              unitPrice: i.unit_price,
-              supplier: input.supplier,
-              job: input.job_ref || "",
-              status: "to_order",
-              vatEnabled: false,
-            }));
-            setMaterials(prev => [...(prev || []), ...newMats]);
-          }
-          setLastAction({ type: "po", label: `${poNum} — ${input.supplier}`, view: "Purchase Orders" });
-          return `Purchase order ${poNum} created for ${input.supplier}${input.job_ref ? ` (job: ${input.job_ref})` : ""}${total > 0 ? ` — total ${fmtCurrency(total)}` : ""}. ${poItems.length} item${poItems.length !== 1 ? "s" : ""} also added to Materials.`;
-        }
         case "update_stock": {
           const { data: stockItems } = await supabase.from("stock_items").select("*").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (!stockItems?.length) return `Couldn't find stock item "${input.name}". Check the Stock tab.`;
@@ -6149,7 +6111,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }).select().single();
           if (error) return `Failed to add certificate: ${error.message}`;
           pendingWidgetRef.current = { type: "compliance_cert", data: { ...data, customer: jc[0].customer, job_title: jc[0].title || jc[0].type } };
-          return `${input.doc_type} certificate added to ${jc[0].customer}'s job card.`;
+          return `${input.doc_type} certificate logged against ${jc[0].customer}'s job${input.doc_number ? ` (ref ${input.doc_number})` : ""}${input.expiry_date ? `, expires ${input.expiry_date}` : ""}. If you need the signed PDF with test results, open the Certificates tab on the job card.`;
         }
         case "add_variation_order": {
           const { job: jcMatch, error: voErr } = await findJob(input.customer, input.job_title, "add this variation to");
@@ -6257,12 +6219,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const reportData = { label, totalRevenue, outstanding, paidCount: paidInvoices.length, unpaidCount: unpaidInvoices.length, jobsCount: jobsInPeriod.length, matCost, grossProfit: totalRevenue - matCost, topCustomers: Object.entries(paidInvoices.reduce((acc,i) => { acc[i.customer]=(acc[i.customer]||0)+(parseFloat(i.amount)||0); return acc; }, {})).sort((a,b)=>b[1]-a[1]).slice(0,5) };
           pendingWidgetRef.current = { type: "report", data: reportData };
           return `Here's your ${label.toLowerCase()} report:`;
-        }
-        case "list_purchase_orders": {
-          const { data } = await supabase.from("purchase_orders").select("*").eq("user_id", user?.id).order("created_at", { ascending: false }).limit(20);
-          if (!data?.length) return "No purchase orders found.";
-          pendingWidgetRef.current = { type: "po_list", data };
-          return `Here are your recent purchase orders:`;
         }
         case "list_reminders": {
           const { data } = await supabase.from("reminders").select("*").eq("user_id", user?.id).eq("done", false).order("fire_at", { ascending: true }).limit(20);
@@ -6742,12 +6698,6 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           await supabase.from("expenses").delete().eq("id", found[0].id);
           return `Expense "${found[0].description}" deleted.`;
         }
-        case "delete_purchase_order": {
-          const { data: found } = await supabase.from("purchase_orders").select("id,po_number,supplier").eq("user_id", user?.id).or(`po_number.ilike.%${input.po_number || ""}%,supplier.ilike.%${input.supplier || ""}%`).limit(1);
-          if (!found?.length) return `Purchase order not found.`;
-          await supabase.from("purchase_orders").delete().eq("id", found[0].id);
-          return `Purchase order ${found[0].po_number} (${found[0].supplier}) deleted.`;
-        }
         case "delete_cis_statement": {
           const { data: found } = await supabase.from("cis_statements").select("id,contractor_name,tax_month").eq("user_id", user?.id).ilike("contractor_name", `%${input.contractor_name || ""}%`).order("tax_month", { ascending: false }).limit(1);
           if (!found?.length) return `CIS statement not found.`;
@@ -7194,12 +7144,57 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- ACT IMMEDIATELY — do not ask confirmation questions before using tools. If you have enough info, just do it. Only ask if something critical is genuinely missing (e.g. no customer name at all).\n"
   + "- NEVER repeat a question you have already asked in the same conversation. If the user has moved on, drop it.\n"
   + "- Do not repeat the SAME action with the SAME data. If mileage from A to B on today's date is already in the session log, do not log it again. But DO log a different route (C to D) — that is a new trip.\n"
-  + "- When actioning a new request, only call tools needed for THAT request. Do not bundle in previous unrelated actions from earlier in the conversation.\n"
-  + "- Ask follow-up questions naturally. If someone says create an invoice, ask who it is for if you do not know.\n"
+  + "- When actioning a new request, only call tools needed for THAT request. Do not bundle in previous unrelated actions from earlier in the conversation — but DO call multiple tools in a single response if the current request contains multiple actions (see MULTI-ACTION REQUESTS).\n"
+  + "\n"
+  + "YOU ARE A PERSONAL ASSISTANT ON THE PHONE.\n"
+  + "The tradesperson is calling you from a van, a loft, a building site. They speak in fragments. Your job is to understand quickly, fill the gaps, and get the action done.\n"
+  + "A real PA does not say \"not found\" and hang up. A real PA says: \"I can't see a Smith invoice — did you mean Smithson, or shall I create one?\" ALWAYS move the conversation forward.\n"
+  + "\n"
+  + "PA CORE PRINCIPLES:\n"
+  + "1. ACT ON WHAT YOU HAVE. If you have enough to do the job, do it. Don't check in before acting when the intent is obvious. \"Log 20 miles to the Patel job\" → just log it.\n"
+  + "2. ASK ONLY FOR WHAT'S CRITICAL, ONE THING AT A TIME. Never ask for a checklist of fields. Ask the single most important missing piece, let them answer, then move on. \"What's the cert number?\" — not \"What's the cert number, issue date, expiry date, and any notes?\"\n"
+  + "3. FILL IN SENSIBLE DEFAULTS SILENTLY. Date not given → today. No unit on a time entry → hours. No VAT stated → use their brand setting. Tell them what you assumed, briefly.\n"
+  + "4. NEVER SAY \"NOT FOUND\" AND STOP. If you can't find something, offer a next step: \"I can't see a Smith job — want me to create one?\", \"No expense matches that — here are the most recent 3, which one?\", \"No customer called Patel — did you mean Patterson, or shall I add a new one?\"\n"
+  + "5. WHEN AMBIGUOUS, LIST AND ASK. \"Patel has 3 jobs — kitchen, bathroom, loft — which one?\" Don't pick the wrong one silently.\n"
+  + "6. CONFIRM BEFORE DESTRUCTIVE ACTIONS. Deletes and cancellations need a quick \"Delete the Smith £450 invoice — yes?\" before acting. Everything else, just do it.\n"
+  + "7. AFTER AN ACTION, SUMMARISE AND OFFER NEXT STEP. \"Done. Logged 20 miles to Patel. Want me to add the parking?\" \"Cert recorded. Open the Certificates tab when you're back at the desk to finish the PDF.\"\n"
+  + "8. BE WARM BUT FAST. \"On it.\" \"Got that.\" \"Done — anything else?\" Not verbose. Not robotic. A good PA's voice is the target.\n"
+  + "9. MATCH THEIR LANGUAGE. If they say \"subbie\" don't respond with \"subcontractor.\" If they say \"pop to Plumb Centre\" don't respond with \"supplier run.\" Mirror back.\n"
+  + "10. REMEMBER WHAT YOU JUST DID. Within a conversation, don't re-ask info you already have. \"Log 5 more miles\" after just logging a Patel trip means the same job unless they say otherwise.\n"
+  + "\n"
+  + "MULTI-ACTION REQUESTS — THIS IS WHAT A REAL PA DOES:\n"
+  + "A tradesperson on the phone will often rattle off several things at once: \"Right, invoice Patel £900 for the kitchen, mark the Smith job as done, log 4 hours on the Wilson boiler and remind me to chase Thompson tomorrow.\" A real PA writes a short list, then starts actioning them in order at their desk. YOU DO THE SAME.\n"
+  + "- CALL MULTIPLE TOOLS IN THE SAME RESPONSE when a user packs several actions into one message. Don't do them one at a time across multiple turns — that wastes everyone's time.\n"
+  + "- Parse the request into a list of actions, then emit one tool call per action, back-to-back. The system handles them all in sequence.\n"
+  + "- Tool calls can be mixed types. You can log an expense, create an invoice, add a reminder and delete a job all in the same response.\n"
+  + "- ONLY ASK if critical info is missing for any specific action. For the others that ARE complete, DO them — don't block the whole batch on one missing field. Example: \"Invoice Patel £900 and log some miles\" → invoice Patel straight away, then ask \"How many miles, and where to?\"\n"
+  + "- SUMMARISE AT THE END, DON'T NARRATE EACH STEP. After executing the batch, one clean summary: \"Done. Invoiced Patel £900, marked Smith complete, logged 4hr on Wilson, reminder set for Thompson tomorrow 9am. Anything else?\"\n"
+  + "- Don't be afraid of 5, 7, 10 tools in one turn. If they asked for it, do it.\n"
+  + "- Respect dependencies: if one action feeds into the next (e.g. \"create a customer for Tim Jones and book him in for Tuesday\"), call them in the right order — create_customer first, then create_job referencing the new customer.\n"
+  + "- One exception: DESTRUCTIVE actions in a batch still need confirmation. \"Delete the Smith invoice and log 20 miles\" → log the miles straight away, but ask \"Delete the Smith £450 invoice — you sure?\" before deleting.\n"
+  + "\n"
+  + "CONVERSATIONAL RECOVERY PATTERNS:\n"
+  + "- Customer not found: \"No customer called [name] — did you mean [closest match]? Or shall I add them as a new customer?\"\n"
+  + "- Job not found: \"I can't see a job for [customer]. Want me to create one?\"\n"
+  + "- Multiple matches: \"[Customer] has [N] jobs on the go — [list]. Which one?\"\n"
+  + "- Invoice/quote not found by amount: \"No invoice matches £[X]. The closest ones are [list]. Which one did you mean?\"\n"
+  + "- Tool fails: \"That didn't go through — [plain English reason]. Want me to try [alternative]?\"\n"
+  + "- User cancels mid-flow: \"No problem, dropped it. Anything else?\"\n"
+  + "\n"
+  + "SENSIBLE DEFAULTS (don't ask, just apply):\n"
+  + "- Dates: if unstated → today. \"Tomorrow\" → tomorrow's date. \"Next Tuesday\" → next Tuesday. \"Next month\" → 1st of next month.\n"
+  + "- Invoice/quote due dates: 14 days unless their brand setting says otherwise.\n"
+  + "- CIS certificate expiry: 12 months from issue.\n"
+  + "- VAT: whatever their brand setting is. Never invent 20%.\n"
+  + "- Mileage rate: 45p/mile (HMRC standard) unless they override.\n"
+  + "- Subcontractor CIS rate: 20% (registered) unless stated.\n"
+  + "- Labour type: hourly unless \"day rate\" or \"price work\" is said.\n"
+  + "\n"
+  + "- Ask follow-up questions naturally. Prefer one short question over a list of fields.\n"
   + "- Use £ not $. Keep replies short and punchy.\n"
   + "\nTOOLS YOU CAN USE:\n"
-  + "CREATE: create_job (scheduled), create_job_card, create_invoice, create_quote, create_invoice_from_job, log_enquiry, set_reminder, create_material, create_customer, create_purchase_order, add_stock_item, log_expense, log_cis_statement, add_subcontractor, log_subcontractor_payment, add_compliance_cert (CP12/EICR/PAT etc), add_variation_order, log_daywork, send_review_request, add_stage_payment\n"
-  + "FIND/SHOW INLINE: find_invoice, find_quote, find_job_card (always shows full card), list_invoices, list_jobs, list_materials, find_material_receipt, list_schedule, get_job_full (use this when user asks for detail on a job), list_expenses, list_cis_statements, list_subcontractors, list_purchase_orders, list_reminders, list_enquiries, list_customers, list_mileage, list_stock, list_rams, get_report, list_inbox_actions (show pending email actions with email snippet for review)\n"
+  + "CREATE: create_job (scheduled), create_job_card, create_invoice, create_quote, create_invoice_from_job, log_enquiry, set_reminder, create_material, create_customer, add_stock_item, log_expense, log_cis_statement, add_subcontractor, log_subcontractor_payment, add_compliance_cert (CP12/EICR/PAT etc), add_variation_order, log_daywork, send_review_request, add_stage_payment\n"
+  + "FIND/SHOW INLINE: find_invoice, find_quote, find_job_card (always shows full card), list_invoices, list_jobs, list_materials, find_material_receipt, list_schedule, get_job_full (use this when user asks for detail on a job), list_expenses, list_cis_statements, list_subcontractors, list_reminders, list_enquiries, list_customers, list_mileage, list_stock, list_rams, get_report, list_inbox_actions (show pending email actions with email snippet for review)\n"
   + "UPDATE BRAND: update_brand (use during onboarding or when user wants to update business details)\n"
   + "DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material (use count param to delete multiple — count:3 deletes 3, count:999 deletes all matching)\n"
   + "- update_material_status updates ALL items with that name — one call updates all duplicates at once.\n"
@@ -7232,7 +7227,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- DAYWORK: 'log daywork for [customer], X hours at £Y/hr' → log_daywork\n"
   + "- VARIATION: 'add a variation for [customer], [description], £X' → add_variation_order\n"
   + "- STAGE PAYMENTS: 'set up stage payments for [customer]' → add_stage_payment (defaults to 30/40/30 if no stages given)\n"
-  + "- COMPLIANCE: 'add CP12/EICR/PAT to [customer] job, cert number X, expires Y' → add_compliance_cert\n"
+  + "- COMPLIANCE CERTIFICATES — follow through, do not give up early:\n"
+  + "  * If user says 'create a certificate' or 'issue a cert' WITHOUT a type, ask: 'Which certificate? Gas Safety (CP12), EICR, PAT, Pressure Test, Oil Safety, MCS, or something else?' Then proceed.\n"
+  + "  * If type is given but no customer/job, ask which job it's for. If you can see recent jobs, list 2-3 options.\n"
+  + "  * If cert number not given, ask: 'What\'s the certificate number?'\n"
+  + "  * If expiry date not given on a dated cert (CP12, EICR, Pressure, Oil), offer the standard: 'Should I set expiry to 12 months from today?' — wait for confirmation before setting.\n"
+  + "  * Default issued_date to today if not stated. Don\'t ask.\n"
+  + "  * After successfully logging, tell the user: 'Logged against [customer] job. If you need the signed PDF with test results, open the Certificates tab on the job card to finish.'\n"
+  + "  * Examples that should FULLY succeed in one call: 'Add CP12 for Patel job, number GS123, expires March 2027' → call add_compliance_cert with all fields populated.\n"
+  + "  * Examples needing ONE follow-up: 'Create me a certificate' → ask which type. 'Issue an EICR for Smith' → ask for cert number and expiry.\n"
   + "- STOCK IN: 'received 20 [item]' or 'add 10 to stock' → update_stock (positive)\n"
   + "- STOCK OUT: 'used 5 [item]' or 'took 3 from stock' → update_stock (negative)\n"
   + "- REMINDER: 'remind me to [X] at 9am tomorrow' → set_reminder with iso_time for specific times, minutes_from_now only for 'in X minutes'\n"
@@ -7317,84 +7320,141 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         return acc;
       }, []);
 
-      const res = await fetch("/api/claude", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          // Structured system: stable block cached, volatile block sent fresh.
-          // Server wraps stable block with cache_control:ephemeral before
-          // forwarding to Anthropic.
-          system: [
-            { type: "text", text: SYSTEM_STABLE, cache: true },
-            { type: "text", text: SYSTEM_VOLATILE },
-          ],
-          tools: TOOLS,
-          messages: apiMessages,
-        }),
-      });
+      // ═══════════════════════════════════════════════════════════════
+      // AGENTIC LOOP — iterate while Claude keeps calling tools.
+      // Each iteration:
+      //   1. Call /api/claude with current message history
+      //   2. Execute every tool_use block in the response
+      //   3. If stop_reason === "tool_use", append assistant message + tool_results
+      //      and loop. Otherwise we're done.
+      // Safeguards:
+      //   - MAX_AGENTIC_ITERATIONS prevents runaway loops
+      //   - Each iteration counts against the conversation cap
+      //   - Aggregated text/widgets across all iterations presented to user
+      // ═══════════════════════════════════════════════════════════════
+      const MAX_AGENTIC_ITERATIONS = 5;
+      const ACTION_TOOLS = ["log_mileage","log_time","create_material","create_job_card","create_job",
+        "create_invoice","create_customer","log_expense","log_cis_statement","add_subcontractor",
+        "log_subcontractor_payment","add_compliance_cert","add_variation_order","log_daywork","add_stage_payment",
+        "update_material_status","update_material","delete_material","add_job_note","assign_material_to_job",
+        "add_worker","assign_worker_to_job","log_worker_time","add_worker_document"];
 
-      const data = await res.json();
+      // Working copy of messages sent to Claude — we mutate this across iterations
+      // We use the raw API-shape messages (role + content) since intermediate
+      // assistant turns need to preserve tool_use blocks verbatim.
+      let workingMessages = apiMessages.slice();
+      let allReplyText = "";
+      const allToolResults = [];
+      const allWidgets = [];
+      let iteration = 0;
+      let data = null;
+      let loopError = null;
 
-      // Surface API errors clearly
-      if (data.error) {
-        console.error("API error:", data.error);
-        setMessages(prev => [...prev, { role: "assistant", content: `API Error: ${data.error.message || JSON.stringify(data.error)}` }]);
-        setLoading(false);
-        return;
-      }
+      while (iteration < MAX_AGENTIC_ITERATIONS) {
+        iteration += 1;
 
-      if (!data.content || data.content.length === 0) {
-        console.error("Empty response:", data);
-        setMessages(prev => [...prev, { role: "assistant", content: `No response received. Stop reason: ${data.stop_reason || "unknown"}` }]);
-        setLoading(false);
-        return;
-      }
+        const res = await fetch("/api/claude", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-6",
+            max_tokens: 1000,
+            system: [
+              { type: "text", text: SYSTEM_STABLE, cache: true },
+              { type: "text", text: SYSTEM_VOLATILE },
+            ],
+            tools: TOOLS,
+            messages: workingMessages,
+          }),
+        });
 
-      let replyText = "";
-      const toolResults = [];
-      const allWidgets = []; // collect every widget set during multi-tool execution
+        data = await res.json();
 
-      for (const block of data.content) {
-        if (block.type === "text") {
-          replyText += block.text;
-        } else if (block.type === "tool_use") {
-          pendingWidgetRef.current = null; // clear before each tool so we can detect if it sets one
-          const result = await executeTool(block.name, block.input);
-          if (result) toolResults.push(result);
-          // Track completed actions so system prompt can tell Claude what's been done
-          const ACTION_TOOLS = ["log_mileage","log_time","create_material","create_job_card","create_job",
-            "create_invoice","create_customer","log_expense","log_cis_statement","add_subcontractor",
-            "log_subcontractor_payment","add_compliance_cert","add_variation_order","log_daywork","add_stage_payment",
-            "update_material_status","update_material","delete_material","add_job_note","assign_material_to_job",
-            "add_worker","assign_worker_to_job","log_worker_time","add_worker_document"];
-          if (result && ACTION_TOOLS.includes(block.name)) {
-            sessionActionsRef.current = [...sessionActionsRef.current.slice(-9), `${block.name}(${JSON.stringify(block.input).slice(0,60)})`];
-          }
-          if (pendingWidgetRef.current) {
-            allWidgets.push(pendingWidgetRef.current);
+        // Surface API errors clearly
+        if (data.error) {
+          console.error("API error (iter " + iteration + "):", data.error);
+          loopError = `API Error: ${data.error.message || JSON.stringify(data.error)}`;
+          break;
+        }
+
+        if (!data.content || data.content.length === 0) {
+          console.error("Empty response (iter " + iteration + "):", data);
+          loopError = `No response received. Stop reason: ${data.stop_reason || "unknown"}`;
+          break;
+        }
+
+        // Collect text and execute tools in this iteration
+        const iterToolUseBlocks = []; // need to keep these to echo back to Claude
+        const iterToolResults = [];   // tool_result blocks to send back
+
+        for (const block of data.content) {
+          if (block.type === "text") {
+            if (block.text) allReplyText += (allReplyText ? " " : "") + block.text;
+          } else if (block.type === "tool_use") {
+            iterToolUseBlocks.push(block);
             pendingWidgetRef.current = null;
+            const result = await executeTool(block.name, block.input);
+            if (result) allToolResults.push(result);
+            if (result && ACTION_TOOLS.includes(block.name)) {
+              sessionActionsRef.current = [...sessionActionsRef.current.slice(-9), `${block.name}(${JSON.stringify(block.input).slice(0,60)})`];
+            }
+            if (pendingWidgetRef.current) {
+              allWidgets.push(pendingWidgetRef.current);
+              pendingWidgetRef.current = null;
+            }
+            // Build a tool_result block to send back to Claude next iteration.
+            // Keep it short — Claude only needs to know success/fail and any key info.
+            iterToolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: result || "Done.",
+            });
           }
+        }
+
+        // If stop_reason is NOT tool_use, we're done — Claude returned a final text response.
+        if (data.stop_reason !== "tool_use") {
+          break;
+        }
+
+        // Otherwise, prepare for next iteration:
+        // 1. Append the assistant's response (with tool_use blocks) to the conversation
+        // 2. Append a user message containing the tool_result blocks
+        workingMessages = [
+          ...workingMessages,
+          { role: "assistant", content: data.content },
+          { role: "user", content: iterToolResults },
+        ];
+
+        // If this iteration made no tool calls at all, something's wrong — break out
+        if (iterToolUseBlocks.length === 0) {
+          break;
         }
       }
 
-      // Combine Claude text + tool results — but avoid duplicating if Claude's text
-      // already says the same thing as the tool result (common with list_ tools)
-      const toolResultText = toolResults.join(" ").trim();
+      // Handle loop errors
+      if (loopError) {
+        setMessages(prev => [...prev, { role: "assistant", content: loopError }]);
+        setLoading(false);
+        return;
+      }
+
+      // Hit iteration limit without natural end? Log it but still show what we have
+      if (iteration >= MAX_AGENTIC_ITERATIONS && data?.stop_reason === "tool_use") {
+        console.warn("Agentic loop hit max iterations (" + MAX_AGENTIC_ITERATIONS + ")");
+      }
+
+      // Combine Claude text + tool results — but avoid duplicating
+      const toolResultText = allToolResults.join(" ").trim();
       let finalReply;
-      if (replyText.trim() && toolResultText) {
-        // Only suppress tool result if it's genuinely identical to Claude's text
-        // Use a strict check: first 8 words of tool result already in reply text
-        const replyLower = replyText.trim().toLowerCase();
+      if (allReplyText.trim() && toolResultText) {
+        const replyLower = allReplyText.trim().toLowerCase();
         const toolLower = toolResultText.toLowerCase();
         const firstToolWords = toolLower.split(" ").slice(0, 8).join(" ");
         const strictDuplicate = firstToolWords.length > 15 && replyLower.includes(firstToolWords);
-        finalReply = strictDuplicate ? replyText.trim() : [replyText.trim(), toolResultText].join(" ").trim();
+        finalReply = strictDuplicate ? allReplyText.trim() : [allReplyText.trim(), toolResultText].join(" ").trim();
       } else {
-        finalReply = (replyText.trim() || toolResultText || "Done.").trim();
+        finalReply = (allReplyText.trim() || toolResultText || "Done.").trim();
       }
 
       // For widget display: prefer the last list/data widget; fall back to last action widget
@@ -18126,7 +18186,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
 
 const NAV_GROUPS = [
   { id: "work",  label: "Work",   icon: "📋", views: ["AI Assistant", "Dashboard", "Schedule", "Enquiries", "Jobs", "Customers"] },
-  { id: "money", label: "Money",  icon: "£",  views: ["Invoices", "Quotes", "Payments", "Expenses", "CIS", "Reports", "Purchase Orders"] },
+  { id: "money", label: "Money",  icon: "£",  views: ["Invoices", "Quotes", "Payments", "Expenses", "CIS", "Reports"] },
   { id: "people",label: "People", icon: "👷", views: ["Subcontractors", "Reviews"] },
   { id: "site",  label: "Site",   icon: "🏗", views: ["Materials", "Stock", "Mileage", "RAMS", "Documents"] },
   { id: "admin", label: "Admin",  icon: "⚙️", views: ["Inbox", "Reminders", "Settings"] },
@@ -19308,7 +19368,6 @@ export default function App() {
         {view === "Documents" && <DocumentsTab user={user} customers={customers} />}
         {view === "Reviews" && <ReviewsTab user={user} brand={brand} customers={customers} />}
         {view === "Stock" && <StockTab user={user} />}
-        {view === "Purchase Orders" && <PurchaseOrdersTab user={user} brand={brand} />}
         {view === "RAMS" && <RAMSTab user={user} brand={brand} />}
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} openAssistantSetup={() => setAssistantSetupOpen(true)} assistantName={assistantName} assistantWakeWords={assistantWakeWords} userCommandsCount={userCommands.length} usageData={usageData} usageCaps={usageCaps} /></ErrorBoundary>}
       </main>
