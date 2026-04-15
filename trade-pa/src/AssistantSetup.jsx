@@ -26,11 +26,13 @@
 
 import React, { useEffect, useState } from "react";
 
+// Theme tokens — uses CSS variables set by App.jsx so AssistantSetup follows
+// the global light/dark theme. Accent colours stay fixed (brand colours).
 const T = {
-  bg: "#0f0f0f", surface: "#1a1a1a", surfaceHigh: "#242424",
-  border: "#2a2a2a", amber: "#f59e0b", amberDim: "#92400e",
+  bg: "var(--c-bg)", surface: "var(--c-surface)", surfaceHigh: "var(--c-surfaceHigh)",
+  border: "var(--c-border)", amber: "#f59e0b", amberDim: "#92400e",
   green: "#10b981", red: "#ef4444", blue: "#3b82f6",
-  muted: "#6b7280", text: "#e5e5e5", textDim: "#9ca3af",
+  muted: "var(--c-muted)", text: "var(--c-text)", textDim: "var(--c-textDim)",
   font: "'DM Mono','Courier New',monospace",
 };
 
