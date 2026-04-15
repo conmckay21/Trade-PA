@@ -483,10 +483,15 @@ const ARTICLES = [
     category: "getting-started",
     summary: "How the tabs and categories are organised.",
     steps: [
-      "Top row: logo (tap to go home), bell for reminders, ? for help, Out to log out.",
-      "Middle row: category pills (Work, Admin, etc.) — tap to switch group.",
+      "Top row: TP logo (tap to go home), bell for reminders, ? for help, 💬 to send feedback, 👤 to edit your AI Assistant, Out to log out.",
+      "Middle row: category pills — Work, Accounts, People, Site, Admin. Tap to switch group.",
       "Bottom row: tabs within the active category. Swipe sideways for more.",
       "Tap the TP logo any time to jump back to the AI Assistant home.",
+      "On a desktop browser (not phone), the categories appear as a left-hand sidebar instead of pills.",
+    ],
+    tips: [
+      "The 💬 button is for reporting bugs, suggesting improvements or sharing ideas — we read everything.",
+      "Accounts holds all your money stuff: Invoices, Quotes, Payments, Expenses, CIS, Reports.",
     ],
   },
 
@@ -674,12 +679,14 @@ const ARTICLES = [
     summary: "Materials and labour pull through automatically. Add a Stripe link to get paid faster.",
     steps: [
       "Open the job, tap Invoice.",
+      "For repeat customers, use the \"Pick existing customer\" dropdown above the form to auto-fill name, email and address.",
       "Check the line items — materials and labour are already there.",
       "Add anything extra (call-out fee, parking, etc).",
       "Tap Send. Customer gets it by email with a pay-now link.",
     ],
     tips: [
       "Send the same day. Invoices sent within 24 hours get paid roughly twice as fast.",
+      "The customer picker also works on Quotes — same dropdown, same auto-fill.",
     ],
     related: ["take-payment", "xero-sync"],
   },
@@ -771,6 +778,25 @@ const ARTICLES = [
   },
 
   // ─── Troubleshooting ────────────────────────────────────────────────────
+  {
+    slug: "send-feedback",
+    title: "Found a bug? Got an idea? Tell us",
+    category: "troubleshooting",
+    summary: "Send us a bug report, improvement suggestion or new feature idea — with an optional screenshot. We read every one.",
+    steps: [
+      "Tap the 💬 icon in the top header (between ? and 👤). Or go to Settings → Send Feedback.",
+      "Pick the type: 🐛 Bug for something broken, 💡 Improvement for something that could work better, ✨ Idea for new features.",
+      "Describe what happened. Be specific — what you tried, what you expected, what actually occurred.",
+      "Optionally attach a screenshot — tap \"Choose file\" or paste an image with Ctrl+V.",
+      "Hit Send. We get an email with everything you typed plus context about what page you were on.",
+    ],
+    tips: [
+      "Screenshots help massively for bugs — they let us see exactly what you saw.",
+      "We automatically include the page you're on, your device and browser, so we don't need to ask.",
+      "Hit Reply to our email if we get back to you — your feedback comes with your email as the reply-to address.",
+      "If the feedback button isn't working for some reason, you can email thetradepa@gmail.com directly.",
+    ],
+  },
   {
     slug: "voice-not-working",
     title: "Voice fill not working?",
@@ -904,15 +930,19 @@ const ARTICLES = [
     slug: "reminders",
     title: "Use reminders so nothing slips",
     category: "customers-jobs",
-    summary: "Tap the bell, set a reminder, get pinged at the right time.",
+    summary: "Tap the bell, set a reminder, get pinged at the right time. Reminders stay in your list until you confirm them done.",
     steps: [
       "Tap the bell icon (top of every screen).",
       "Tap Add — type or voice the reminder.",
       "Set a date/time.",
       "When it's due, the bell flashes and you get a push notification.",
+      "The reminder stays in your Upcoming list as Overdue (red bar) until you mark it done.",
+      "Tap Done ✓ once you've actually followed through. Tap ✕ to delete it entirely.",
     ],
     tips: [
       "The AI can also set reminders for you — \"Remind me to chase the Patel invoice on Monday\".",
+      "Overdue reminders deliberately don't auto-disappear — that way you've always got a list of things you haven't followed through on yet.",
+      "All your completed reminders are kept in the Completed section as a history.",
     ],
   },
 
@@ -1247,6 +1277,23 @@ const ARTICLES = [
   },
 
   // ─── Settings & team ────────────────────────────────────────────────────
+  {
+    slug: "appearance",
+    title: "Light, dark, or auto — choose how Trade PA looks",
+    category: "settings",
+    summary: "Pick a theme that suits where you're working. Bright sunlight outside? Light mode. Evening in the van? Dark mode.",
+    steps: [
+      "Tap Settings.",
+      "Scroll to the Appearance section (just under Your Plan).",
+      "Pick Auto, Light, or Dark.",
+    ],
+    tips: [
+      "Auto follows your phone's system setting — switches automatically when your phone does.",
+      "Light mode is much easier to read in bright outdoor sunlight on site.",
+      "Dark mode is gentler on the eyes in low light — vans, evenings, lofts.",
+      "Your choice is remembered across sessions and devices.",
+    ],
+  },
   {
     slug: "brand-setup",
     title: "Set up your business brand",
