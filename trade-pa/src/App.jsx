@@ -18413,7 +18413,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
 
 const NAV_GROUPS = [
   { id: "work",  label: "Work",   icon: "📋", views: ["AI Assistant", "Dashboard", "Schedule", "Enquiries", "Jobs", "Customers"] },
-  { id: "money", label: "Money",  icon: "£",  views: ["Invoices", "Quotes", "Payments", "Expenses", "CIS", "Reports"] },
+  { id: "money", label: "Accounts",  icon: "£",  views: ["Invoices", "Quotes", "Payments", "Expenses", "CIS", "Reports"] },
   { id: "people",label: "People", icon: "👷", views: ["Subcontractors", "Reviews"] },
   { id: "site",  label: "Site",   icon: "🏗", views: ["Materials", "Stock", "Mileage", "RAMS", "Documents"] },
   { id: "admin", label: "Admin",  icon: "⚙️", views: ["Inbox", "Reminders", "Settings"] },
@@ -19528,7 +19528,7 @@ function AppInner() {
             )}
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
             <button onClick={() => { setHelpSlug(null); setHelpOpen(true); }} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Help & how-to">?</button>
-            <button onClick={() => setAssistantSetupOpen(true)} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Assistant settings">⚙</button>
+            <button onClick={() => setAssistantSetupOpen(true)} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Edit your AI Assistant">🎙</button>
             <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
           </div>
         </div>
