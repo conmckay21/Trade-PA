@@ -659,12 +659,125 @@ function useWhisper(onTranscript, onSilence) {
   return { recording, transcribing, toggle, startRecording, stopRecording };
 }
 
+// ─── Theme-aware colour palette ─────────────────────────────────────
+// Theme-aware tokens (bg/surface/text/border) use CSS variables that
+// are updated when the theme changes — see ThemeProvider below.
+// Accent colours (amber/green/red/blue) stay as hex literals because
+// they're brand colours and don't change between light/dark modes,
+// and several places concat alpha suffixes (e.g. C.amber + "44") which
+// would break with CSS variables.
 const C = {
-  bg: "#0f0f0f", surface: "#1a1a1a", surfaceHigh: "#242424",
-  border: "#2a2a2a", amber: "#f59e0b", amberDim: "#92400e",
-  green: "#10b981", red: "#ef4444", blue: "#3b82f6", purple: "#8b5cf6",
-  muted: "#6b7280", text: "#e5e5e5", textDim: "#9ca3af",
+  // Theme-aware (resolved at render time via CSS variables)
+  bg: "var(--c-bg)",
+  surface: "var(--c-surface)",
+  surfaceHigh: "var(--c-surfaceHigh)",
+  border: "var(--c-border)",
+  text: "var(--c-text)",
+  textDim: "var(--c-textDim)",
+  muted: "var(--c-muted)",
+  // Accent colours — fixed across themes, support alpha-suffix concat
+  amber: "#f59e0b",
+  amberDim: "#92400e",
+  green: "#10b981",
+  red: "#ef4444",
+  blue: "#3b82f6",
+  purple: "#8b5cf6",
 };
+
+// Palette definitions — applied to CSS variables on theme change.
+// DARK is the existing palette but with greys pushed lighter for
+// outdoor sunlight readability (muted: 2.8:1 -> 8.2:1 contrast).
+const DARK_PALETTE = {
+  bg: "#0f0f0f",
+  surface: "#1a1a1a",
+  surfaceHigh: "#242424",
+  border: "#2a2a2a",
+  text: "#f5f5f5",        // was #e5e5e5
+  textDim: "#d1d5db",     // was #9ca3af
+  muted: "#b8bcc4",       // was #6b7280 — much more readable
+};
+
+// LIGHT palette designed for outdoor visibility, not just inverted.
+// Off-white background reduces glare; deep greys for hierarchy.
+const LIGHT_PALETTE = {
+  bg: "#fafafa",
+  surface: "#ffffff",
+  surfaceHigh: "#f3f4f6",
+  border: "#d1d5db",
+  text: "#0f0f0f",
+  textDim: "#374151",     // dark grey - 11.2:1 contrast on light bg
+  muted: "#4b5563",       // mid-dark grey - 7.5:1 contrast on light bg
+};
+
+// Apply a palette to the document root via CSS variables.
+// Called by ThemeProvider on mount + whenever theme changes.
+function applyPalette(palette) {
+  const root = document.documentElement;
+  Object.entries(palette).forEach(([key, value]) => {
+    root.style.setProperty(`--c-${key}`, value);
+  });
+  // Set color-scheme so browser scrollbars / form controls match
+  root.style.colorScheme = palette === LIGHT_PALETTE ? "light" : "dark";
+}
+
+// Apply dark palette immediately on module load so first paint is correct.
+// (ThemeProvider will override based on user preference once mounted.)
+if (typeof document !== "undefined") {
+  applyPalette(DARK_PALETTE);
+}
+
+// ─── Theme context ──────────────────────────────────────────────────
+const ThemeContext = React.createContext({
+  theme: "auto",       // "auto" | "light" | "dark"
+  resolvedTheme: "dark", // "light" | "dark" — the actual theme being shown
+  setTheme: () => {},
+});
+
+function ThemeProvider({ children }) {
+  // Load saved preference, default to "auto" (follow system)
+  const [theme, setThemeRaw] = useState(() => {
+    try {
+      return localStorage.getItem("trade-pa-theme") || "auto";
+    } catch { return "auto"; }
+  });
+  // Track system preference for "auto" mode
+  const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
+    try {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    } catch { return true; }
+  });
+
+  // Resolved theme = actual theme to display
+  const resolvedTheme = theme === "auto" ? (systemPrefersDark ? "dark" : "light") : theme;
+
+  // Listen for system preference changes (user toggles OS dark mode)
+  useEffect(() => {
+    try {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      const handler = (e) => setSystemPrefersDark(e.matches);
+      mq.addEventListener("change", handler);
+      return () => mq.removeEventListener("change", handler);
+    } catch {}
+  }, []);
+
+  // Apply palette whenever resolved theme changes
+  useEffect(() => {
+    applyPalette(resolvedTheme === "light" ? LIGHT_PALETTE : DARK_PALETTE);
+  }, [resolvedTheme]);
+
+  const setTheme = (t) => {
+    setThemeRaw(t);
+    try { localStorage.setItem("trade-pa-theme", t); } catch {}
+  };
+
+  return (
+    <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+const useTheme = () => React.useContext(ThemeContext);
 
 const S = {
   app: { fontFamily: "'DM Mono','Courier New',monospace", background: C.bg, minHeight: "-webkit-fill-available", color: C.text, width: "100%", overflowX: "hidden" },
@@ -1620,6 +1733,7 @@ function CertificationsCard({ brand, setBrand }) {
 }
 
 function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit, openAssistantSetup, assistantName, assistantWakeWords, userCommandsCount, usageData, usageCaps }) {
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
@@ -1795,6 +1909,55 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
             Need more than 5 users? Upgrade to <strong style={{ color: C.amber }}>Pro (£129/mo)</strong> for up to 10 users.
             <br/><a href="mailto:hello@tradespa.co.uk" style={{ color: C.amber }}>Contact us to upgrade →</a>
+          </div>
+        )}
+      </div>
+
+      {/* Appearance */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>Appearance</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
+          Choose how Trade PA looks. Light mode is easier to read in bright sunlight on site. Auto follows your phone's setting.
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {[
+            { k: "auto", label: "Auto", icon: "🌓", sub: "Follows phone" },
+            { k: "light", label: "Light", icon: "☀️", sub: "Bright / outdoor" },
+            { k: "dark", label: "Dark", icon: "🌙", sub: "Low light / van" },
+          ].map(opt => {
+            const active = theme === opt.k;
+            return (
+              <button
+                key={opt.k}
+                onClick={() => setTheme(opt.k)}
+                style={{
+                  flex: 1,
+                  padding: "14px 8px",
+                  borderRadius: 10,
+                  border: `2px solid ${active ? C.amber : C.border}`,
+                  background: active ? "rgba(245,158,11,0.12)" : C.surfaceHigh,
+                  color: active ? C.amber : C.text,
+                  cursor: "pointer",
+                  fontFamily: "'DM Mono',monospace",
+                  fontWeight: active ? 700 : 500,
+                  fontSize: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 4,
+                  transition: "all 0.15s",
+                }}
+              >
+                <span style={{ fontSize: 20 }}>{opt.icon}</span>
+                <span>{opt.label}</span>
+                <span style={{ fontSize: 10, color: C.muted, fontWeight: 400 }}>{opt.sub}</span>
+              </button>
+            );
+          })}
+        </div>
+        {theme === "auto" && (
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 10, textAlign: "center" }}>
+            Currently showing: <strong style={{ color: C.text }}>{resolvedTheme}</strong> mode
           </div>
         )}
       </div>
@@ -9318,8 +9481,8 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
         </div>
       )}
 
-      {showInvoiceModal && <InvoiceModal brand={brand} invoices={safeInvoices} user={user} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...(prev || [])]); setShowInvoiceModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
-      {showQuoteModal && <QuoteModal brand={brand} invoices={safeInvoices} user={user} onClose={() => setShowQuoteModal(false)} onSent={(q) => { setInvoices(prev => [q, ...(prev || [])]); setShowQuoteModal(false); setDocType("quotes"); }} />}
+      {showInvoiceModal && <InvoiceModal brand={brand} invoices={safeInvoices} user={user} customers={customers} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...(prev || [])]); setShowInvoiceModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
+      {showQuoteModal && <QuoteModal brand={brand} invoices={safeInvoices} user={user} customers={customers} onClose={() => setShowQuoteModal(false)} onSent={(q) => { setInvoices(prev => [q, ...(prev || [])]); setShowQuoteModal(false); setDocType("quotes"); }} />}
     </div>
   );
 }
@@ -9574,7 +9737,7 @@ function LineItemsBuilder({ form, setForm, accentColor, isQuote }) {
 }
 
 // ─── Invoice Modal ────────────────────────────────────────────────────────────
-function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user }) {
+function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user, customers = [] }) {
   const [form, setForm] = useState(() => initialData ? {
     customer: initialData.customer || "",
     email: initialData.email || "",
@@ -9708,6 +9871,24 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user }) {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {customers && customers.length > 0 && !isEditing && (
+                  <div>
+                    <label style={S.label}>Pick existing customer (optional)</label>
+                    <select
+                      style={S.input}
+                      value=""
+                      onChange={e => {
+                        const c = customers.find(x => x.id === e.target.value);
+                        if (c) setForm(f => ({ ...f, customer: c.name || "", email: c.email || "", address: c.address || "" }));
+                      }}
+                    >
+                      <option value="">— New customer / type below —</option>
+                      {[...customers].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}{c.email ? ` · ${c.email}` : ""}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div style={S.grid2}>
                   {[
                     { k: "customer", l: "Customer Name", p: "e.g. James Oliver" },
@@ -9896,7 +10077,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user }) {
 }
 
 // ─── Quote Modal ──────────────────────────────────────────────────────────────
-function QuoteModal({ brand, onClose, onSent, initialData, invoices, user }) {
+function QuoteModal({ brand, onClose, onSent, initialData, invoices, user, customers = [] }) {
   const [form, setForm] = useState(() => initialData ? {
     customer: initialData.customer || "",
     email: initialData.email || "",
@@ -10009,6 +10190,24 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user }) {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {customers && customers.length > 0 && !isEditing && (
+                  <div>
+                    <label style={S.label}>Pick existing customer (optional)</label>
+                    <select
+                      style={S.input}
+                      value=""
+                      onChange={e => {
+                        const c = customers.find(x => x.id === e.target.value);
+                        if (c) setForm(f => ({ ...f, customer: c.name || "", email: c.email || "", address: c.address || "" }));
+                      }}
+                    >
+                      <option value="">— New customer / type below —</option>
+                      {[...customers].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}{c.email ? ` · ${c.email}` : ""}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div style={S.grid2}>
                   {[
                     { k: "customer", l: "Customer Name", p: "e.g. James Oliver" },
@@ -10373,7 +10572,7 @@ Rules:
         </div>
       )}
       {notifStatus === "denied" && (
-        <div style={{ ...S.card, borderColor: C.muted + "44", display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ ...S.card, borderColor: "rgba(128,128,140,0.27)", display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ fontSize: 20 }}>⚠️</div>
           <div style={{ flex: 1, fontSize: 12, color: C.muted }}>Browser notifications are blocked. Reminders will show in-app only. Allow notifications in your browser settings to get push alerts.</div>
         </div>
@@ -11052,8 +11251,8 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
         </div>
       )}
 
-      {showModal && <InvoiceModal brand={brand} invoices={invoices} user={user} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
-      {editingInvoice && <InvoiceModal brand={brand} invoices={invoices} user={user} initialData={editingInvoice} onClose={() => setEditingInvoice(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingInvoice.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingInvoice(null); }} />}
+      {showModal && <InvoiceModal brand={brand} invoices={invoices} user={user} customers={customers} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
+      {editingInvoice && <InvoiceModal brand={brand} invoices={invoices} user={user} customers={customers} initialData={editingInvoice} onClose={() => setEditingInvoice(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingInvoice.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingInvoice(null); }} />}
     </div>
   );
 }
@@ -11218,8 +11417,8 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
         </div>
       )}
 
-      {showModal && <QuoteModal brand={brand} invoices={invoices} user={user} onClose={() => setShowModal(false)} onSent={q => { setInvoices(prev => [q, ...(prev || [])]); setShowModal(false); }} />}
-      {editingQuote && <QuoteModal brand={brand} invoices={invoices} user={user} initialData={editingQuote} onClose={() => setEditingQuote(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingQuote.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingQuote(null); }} />}
+      {showModal && <QuoteModal brand={brand} invoices={invoices} user={user} customers={customers} onClose={() => setShowModal(false)} onSent={q => { setInvoices(prev => [q, ...(prev || [])]); setShowModal(false); }} />}
+      {editingQuote && <QuoteModal brand={brand} invoices={invoices} user={user} customers={customers} initialData={editingQuote} onClose={() => setEditingQuote(null)} onSent={updated => { setInvoices(prev => (prev || []).map(i => i.id === editingQuote.id ? { ...i, ...updated } : i)); setSelected(updated); setEditingQuote(null); }} />}
     </div>
   );
 }
@@ -14183,7 +14382,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
                           </div>
                         </div>
                       ))}
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: C.border + "44" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "rgba(60,60,68,0.27)" }}>
                         <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>📊</div>
                         <div style={{ flex: 1, fontSize: 12, fontWeight: 700 }}>Gross Profit</div>
                         <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 14, fontWeight: 700, color: profitColor }}>
@@ -15542,7 +15741,7 @@ ${generateReportHTML()}
                 <div style={{ display: "flex", height: 24, borderRadius: 6, overflow: "hidden", gap: 2 }}>
                   {(quotedEnquiries.length + wonEnquiries.length) > 0 && <div style={{ flex: quotedEnquiries.length + wonEnquiries.length, background: C.blue, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 700 }}>{quotedEnquiries.length + wonEnquiries.length} Quoted</div>}
                   {pendingEnquiries.length > 0 && <div style={{ flex: pendingEnquiries.length, background: C.amber, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", fontWeight: 700 }}>{pendingEnquiries.length} Pending</div>}
-                  {lostEnquiries.length > 0 && <div style={{ flex: lostEnquiries.length, background: C.muted + "44", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: C.muted, fontWeight: 700 }}>{lostEnquiries.length} Lost</div>}
+                  {lostEnquiries.length > 0 && <div style={{ flex: lostEnquiries.length, background: "rgba(128,128,140,0.27)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: C.muted, fontWeight: 700 }}>{lostEnquiries.length} Lost</div>}
                 </div>
               </div>
             )}
@@ -18315,7 +18514,7 @@ function ActiveCallScreen({ callerName, callerNumber, direction, startTime, mute
   );
 }
 
-export default function App() {
+function AppInner() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
@@ -19391,5 +19590,13 @@ export default function App() {
         }}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppInner />
+    </ThemeProvider>
   );
 }
