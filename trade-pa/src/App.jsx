@@ -1777,6 +1777,12 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
   };
   const [xeroConnected, setXeroConnected] = useState(false);
   const [qbConnected, setQbConnected] = useState(false);
+  // Hoisted out of nested IIFEs in the Business drill-in (React error #310 fix):
+  // hooks must be called in the same order every render regardless of subview,
+  // so these cannot live inside an IIFE inside a conditionally-rendered branch.
+  const [reviewLinksOpen, setReviewLinksOpen] = useState(false);
+  const [vatChecking, setVatChecking] = useState(false);
+  const [vatError, setVatError] = useState("");
   const logoRef = useRef();
   const set = (k) => (e) => setBrand(b => ({ ...b, [k]: e.target.value }));
 
@@ -2381,7 +2387,34 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       {/* ─── DRILL-IN CONTENT — each section conditionally renders by subview ─── */}
       {subview && (<>
 
-      {subview === "branding" && (
+      {subview === "branding" && (<>
+      {/* Preview Invoice quick action — moved here from the old Save Changes bar */}
+      <button
+        onClick={() => setPreview(true)}
+        style={{
+          background: C.surfaceHigh,
+          border: `1px solid ${C.border}`,
+          borderRadius: 10,
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          cursor: "pointer",
+          width: "100%",
+          color: C.text,
+          fontFamily: "'DM Sans', sans-serif",
+          marginBottom: 2,
+        }}
+      >
+        <div style={{ textAlign: "left" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em" }}>Preview an invoice</div>
+          <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>See how your branding looks on a real invoice</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
       <div style={S.grid2}>
         {/* Logo upload */}
         <div style={S.card}>
@@ -2425,36 +2458,120 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         </div>
       </div>
-      )}
+      </>)}
 
-      {subview === "plan" && (
-      <div style={S.card}>
-        <div style={S.sectionTitle}>Your Plan</div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: C.surfaceHigh, borderRadius: 10, marginBottom: 10 }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, textTransform: "capitalize" }}>Trade PA {planTier}</div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-              {planTier === "solo" ? "1 user" : planTier === "team" ? "Up to 5 users" : "Up to 10 users"}
+      {subview === "plan" && (<>
+      {/* Plan hero — big, clear at-a-glance status */}
+      <div style={{
+        background: `linear-gradient(135deg, ${planTier === "pro" ? `${C.blue}14` : planTier === "team" ? `${C.green}14` : `${C.amber}14`}, transparent)`,
+        border: `1px solid ${planTier === "pro" ? `${C.blue}40` : planTier === "team" ? `${C.green}40` : `${C.amber}40`}`,
+        borderRadius: 14,
+        padding: 18,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              color: C.muted,
+              letterSpacing: "0.12em",
+              fontWeight: 700,
+              marginBottom: 4,
+            }}>CURRENT PLAN</div>
+            <div style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: 22,
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              color: C.text,
+              lineHeight: 1.1,
+            }}>Trade PA {planTier === "pro" ? "Pro" : planTier === "team" ? "Team" : "Solo"}</div>
+            <div style={{ fontSize: 12, color: C.textDim, marginTop: 3 }}>
+              {planTier === "solo" ? "1 user · £29/mo" : planTier === "team" ? "Up to 5 users · £89/mo" : "Up to 10 users · £129/mo"}
             </div>
           </div>
-          <div style={S.badge(planTier === "pro" ? C.blue : planTier === "team" ? C.green : C.amber)}>
-            {planTier === "pro" ? "PRO" : planTier === "team" ? "TEAM" : "SOLO"}
-          </div>
+          <span style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.1em",
+            color: planTier === "pro" ? C.blue : planTier === "team" ? C.green : C.amber,
+            background: `${planTier === "pro" ? C.blue : planTier === "team" ? C.green : C.amber}1a`,
+            border: `1px solid ${planTier === "pro" ? C.blue : planTier === "team" ? C.green : C.amber}40`,
+            padding: "4px 10px",
+            borderRadius: 6,
+            flexShrink: 0,
+          }}>{planTier === "pro" ? "PRO" : planTier === "team" ? "TEAM" : "SOLO"}</span>
         </div>
-        {planTier === "solo" && (
-          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-            Need to add team members? Upgrade to <strong style={{ color: C.amber }}>Team (£89/mo)</strong> for up to 5 users or <strong style={{ color: C.amber }}>Pro (£129/mo)</strong> for up to 10 users.
-            <br/><a href="mailto:hello@tradespa.co.uk" style={{ color: C.amber }}>Contact us to upgrade →</a>
-          </div>
-        )}
-        {planTier === "team" && (
-          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-            Need more than 5 users? Upgrade to <strong style={{ color: C.amber }}>Pro (£129/mo)</strong> for up to 10 users.
-            <br/><a href="mailto:hello@tradespa.co.uk" style={{ color: C.amber }}>Contact us to upgrade →</a>
-          </div>
-        )}
       </div>
+
+      {/* Upgrade CTA row — only for plans below Pro */}
+      {planTier !== "pro" && (
+        <a
+          href="mailto:hello@tradespa.co.uk?subject=Trade%20PA%20upgrade%20request"
+          style={{
+            background: C.surfaceHigh,
+            border: `1px solid ${C.border}`,
+            borderRadius: 12,
+            padding: "12px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            textDecoration: "none",
+            color: C.text,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: 14,
+              fontWeight: 700,
+              letterSpacing: "-0.01em",
+              color: C.amber,
+            }}>Upgrade plan →</div>
+            <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>
+              {planTier === "solo"
+                ? "Team (£89/mo · 5 users) or Pro (£129/mo · 10 users)"
+                : "Pro — £129/mo · up to 10 users"}
+            </div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 5l7 7-7 7" />
+          </svg>
+        </a>
       )}
+
+      {/* Manage subscription row — placeholder until Stripe customer portal is wired */}
+      <div style={{
+        background: C.surfaceHigh,
+        border: `1px solid ${C.border}`,
+        borderRadius: 12,
+        padding: "12px 14px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>Manage subscription</div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>Email us to change payment details or cancel</div>
+        </div>
+        <a href="mailto:hello@tradespa.co.uk?subject=Trade%20PA%20subscription" style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 10,
+          color: C.amber,
+          letterSpacing: "0.08em",
+          fontWeight: 700,
+          textDecoration: "none",
+          textTransform: "uppercase",
+          flexShrink: 0,
+        }}>Email</a>
+      </div>
+      </>)}
 
       {subview === "branding" && (
       <div style={S.card}>
@@ -2525,7 +2642,6 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
           {/* Review & Profile Links — collapsible */}
           {(() => {
-            const [open, setOpen] = React.useState(false);
             const reviewFields = [
               { k: "googleReviewUrl", l: "Google Review", icon: "🔍" },
               { k: "reviewUrlCheckatrade", l: "Checkatrade", icon: "🏠" },
@@ -2538,7 +2654,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             const filledCount = reviewFields.filter(f => brand[f.k]).length;
             return (
               <div>
-                <div onClick={() => setOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, cursor: "pointer", userSelect: "none" }}>
+                <div onClick={() => setReviewLinksOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, cursor: "pointer", userSelect: "none" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 14 }}>🔗</span>
                     <div>
@@ -2546,9 +2662,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                       <div style={{ fontSize: 11, color: C.muted }}>{filledCount > 0 ? `${filledCount} link${filledCount !== 1 ? "s" : ""} added` : "Add your review platform links"}</div>
                     </div>
                   </div>
-                  <span style={{ color: C.muted, fontSize: 16, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▾</span>
+                  <span style={{ color: C.muted, fontSize: 16, transform: reviewLinksOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▾</span>
                 </div>
-                {open && (
+                {reviewLinksOpen && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10, padding: "12px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                     {reviewFields.map(({ k, l, icon }) => (
                       <div key={k}>
@@ -2570,8 +2686,6 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
           {/* VAT Number — with live verification */}
           {(() => {
-            const [vatChecking, setVatChecking] = React.useState(false);
-            const [vatError, setVatError] = React.useState("");
             const vatVerif = brand.registrationVerifications?.vatNumber;
             const exempt = isExemptAccount(user?.email);
             const isVerified = exempt || vatVerif?.verified;
@@ -3060,38 +3174,62 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         {(() => {
           const convUsed = usageData?.conversations_used || 0;
           const convCap = usageCaps?.convos || 500;
-          const convPct = convCap === Infinity ? 0 : Math.min(1, convUsed / convCap);
+          const convUnlimited = convCap === Infinity;
+          const convPct = convUnlimited ? 0 : Math.min(1, convUsed / convCap);
           const hfUsed = Math.round((usageData?.handsfree_seconds_used || 0) / 60);
           const hfCap = usageCaps?.hf_hours === Infinity ? Infinity : (usageCaps?.hf_hours || 5) * 60;
-          const hfPct = hfCap === Infinity ? 0 : Math.min(1, hfUsed / hfCap);
-          const barBg = C.surfaceHigh;
-          const barStyle = (pct) => ({
-            height: 8, borderRadius: 4, background: barBg, overflow: "hidden", marginTop: 6, marginBottom: 14,
+          const hfUnlimited = hfCap === Infinity;
+          const hfPct = hfUnlimited ? 0 : Math.min(1, hfUsed / hfCap);
+          const barStyle = () => ({
+            height: 8, borderRadius: 4, background: C.surfaceHigh, overflow: "hidden", marginTop: 6, marginBottom: 14,
           });
           const fillStyle = (pct) => ({
             height: "100%", borderRadius: 4, width: (pct * 100) + "%",
             background: pct >= 1 ? "#ef4444" : pct >= 0.8 ? C.amber : C.green,
             transition: "width 0.3s ease",
           });
+          // Unlimited pill (mockup-style) used when a cap is Infinity — no dead grey bar
+          const unlimitedPill = (
+            <span style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              color: C.green,
+              background: `${C.green}1a`,
+              border: `1px solid ${C.green}40`,
+              padding: "3px 8px",
+              borderRadius: 4,
+            }}>UNLIMITED</span>
+          );
+          // Row renderer — unlimited plans skip the progress bar entirely
+          const renderRow = (label, usedText, unlimited, pct) => (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, marginBottom: unlimited ? 14 : 0 }}>
+                <span style={{ color: C.text, fontWeight: 600 }}>{label}</span>
+                {unlimited ? unlimitedPill : (
+                  <span style={{ color: pct >= 0.8 ? C.amber : C.muted, fontFamily: "'DM Mono',monospace" }}>
+                    {usedText}
+                  </span>
+                )}
+              </div>
+              {!unlimited && <div style={barStyle()}><div style={fillStyle(pct)} /></div>}
+            </>
+          );
           return (<>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-              <span style={{ color: C.text, fontWeight: 600 }}>AI Conversations</span>
-              <span style={{ color: convPct >= 0.8 ? C.amber : C.muted, fontFamily: "'DM Mono',monospace" }}>
-                {convCap === Infinity ? `${convUsed} used (unlimited)` : `${convUsed} / ${convCap}`}
-              </span>
-            </div>
-            <div style={barStyle(convPct)}><div style={fillStyle(convPct)} /></div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-              <span style={{ color: C.text, fontWeight: 600 }}>Hands-free time</span>
-              <span style={{ color: hfPct >= 0.8 ? C.amber : C.muted, fontFamily: "'DM Mono',monospace" }}>
-                {hfCap === Infinity ? `${hfUsed} min used (unlimited)` : `${hfUsed} / ${hfCap} min`}
-              </span>
-            </div>
-            <div style={barStyle(hfPct)}><div style={fillStyle(hfPct)} /></div>
-
-            <div style={{ fontSize: 11, color: C.muted, textAlign: "center" }}>
-              {planTier === "solo" ? "Solo plan" : planTier === "team" ? "Team plan" : "Pro plan"} — resets 1st of each month
+            {renderRow("AI Conversations", `${convUsed} / ${convCap}`, convUnlimited, convPct)}
+            {renderRow("Hands-free time",  `${hfUsed} / ${hfCap} min`, hfUnlimited,   hfPct)}
+            <div style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              color: C.muted,
+              letterSpacing: "0.1em",
+              textAlign: "center",
+              paddingTop: 10,
+              borderTop: `1px solid ${C.border}`,
+              fontWeight: 600,
+            }}>
+              {planTier === "solo" ? "SOLO PLAN" : planTier === "team" ? "TEAM PLAN" : "PRO PLAN"} · RESETS 1ST OF EACH MONTH
             </div>
           </>);
         })()}
@@ -3238,59 +3376,187 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       </div>
       )}
 
-      {subview === "help" && (
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginTop: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: C.muted, marginBottom: 10 }}>SEND FEEDBACK</div>
-        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12, lineHeight: 1.5 }}>
-          Spotted a bug? Got an idea? Want something to work better? We read everything and reply where useful.
+      {subview === "help" && (<>
+      {/* Send feedback row — opens the existing feedback modal */}
+      <button
+        onClick={openFeedback}
+        style={{
+          background: C.surfaceHigh,
+          border: `1px solid ${C.border}`,
+          borderRadius: 12,
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          cursor: "pointer",
+          width: "100%",
+          textAlign: "left",
+          color: C.text,
+          fontFamily: "'DM Sans', sans-serif",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>Send feedback</div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>Report a bug, suggest an idea, or tell us what's working</div>
         </div>
-        <button
-          onClick={openFeedback}
-          style={{ ...S.btn("ghost"), width: "100%", justifyContent: "center" }}
-        >
-          💬 Send Feedback (Bug · Improvement · Idea)
-        </button>
-      </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      {/* Email support row */}
+      <a
+        href="mailto:hello@tradespa.co.uk?subject=Trade%20PA%20support"
+        style={{
+          background: C.surfaceHigh,
+          border: `1px solid ${C.border}`,
+          borderRadius: 12,
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          textDecoration: "none",
+          color: C.text,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>Email us</div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2, fontFamily: "'DM Mono', monospace" }}>hello@tradespa.co.uk</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 5l7 7-7 7" />
+        </svg>
+      </a>
+
+      {/* Visit website row */}
+      <a
+        href="https://tradespa.co.uk"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          background: C.surfaceHigh,
+          border: `1px solid ${C.border}`,
+          borderRadius: 12,
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          textDecoration: "none",
+          color: C.text,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>Visit website</div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2, fontFamily: "'DM Mono', monospace" }}>tradespa.co.uk</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 17L17 7M17 7H9M17 7V15" />
+        </svg>
+      </a>
+      </>)}
+
+      {subview === "diagnostics" && (<>
+      {/* Generate report row — slim tappable, state changes during loading */}
+      <button
+        onClick={generateReport}
+        disabled={reportLoading}
+        style={{
+          background: C.surfaceHigh,
+          border: `1px solid ${C.border}`,
+          borderRadius: 12,
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          cursor: reportLoading ? "wait" : "pointer",
+          width: "100%",
+          textAlign: "left",
+          color: C.text,
+          fontFamily: "'DM Sans', sans-serif",
+          opacity: reportLoading ? 0.65 : 1,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>
+            {reportLoading ? "Generating report…" : "Generate error report"}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>
+            Last 30 days of errors, PA mistakes, voice failures
+            {brand?.email && <span style={{ color: C.amber }}> · emails to {brand.email}</span>}
+          </div>
+        </div>
+        {reportLoading ? (
+          <div style={{ fontSize: 14, color: C.amber }}>⏳</div>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 5l7 7-7 7" />
+          </svg>
+        )}
+      </button>
+
+      {/* Error state */}
+      {reportError && (
+        <div style={{
+          background: `${C.red}14`,
+          border: `1px solid ${C.red}40`,
+          borderRadius: 10,
+          padding: "10px 14px",
+          fontSize: 12,
+          color: C.red,
+        }}>{reportError}</div>
       )}
 
-      {subview === "diagnostics" && (
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginTop: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: C.muted, marginBottom: 10 }}>SYSTEM HEALTH</div>
-        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12, lineHeight: 1.5 }}>
-          The app silently logs errors, PA mistakes, and voice failures in the background. Generate a report to send to your developer for fixes.
-          {brand?.email && <span style={{ color: C.amber }}> Will also email to {brand.email}.</span>}
-        </div>
-        <button
-          onClick={generateReport}
-          disabled={reportLoading}
-          style={{ ...S.btn("ghost"), width: "100%", justifyContent: "center", opacity: reportLoading ? 0.6 : 1 }}
-        >
-          {reportLoading ? "⏳ Generating..." : "📋 Generate Error Report (Last 30 Days)"}
-        </button>
-        {reportError && <div style={{ marginTop: 10, fontSize: 12, color: C.red }}>{reportError}</div>}
-        {reportText && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>
-                {reportText.startsWith("No errors") ? "✓ No issues found" : "📋 Report ready"}
-              </div>
-              <button
-                onClick={() => { navigator.clipboard.writeText(reportText); }}
-                style={{ ...S.btn("ghost"), fontSize: 10, padding: "4px 10px" }}
-              >Copy</button>
+      {/* Report ready panel */}
+      {reportText && (
+        <div style={{
+          background: C.surfaceHigh,
+          border: `1px solid ${reportText.startsWith("No errors") ? `${C.green}33` : C.border}`,
+          borderRadius: 12,
+          padding: 14,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              color: reportText.startsWith("No errors") ? C.green : C.amber,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+            }}>
+              {reportText.startsWith("No errors") ? "✓ NO ISSUES FOUND" : "📋 REPORT READY"}
             </div>
-            <textarea
-              readOnly
-              value={reportText}
-              style={{ ...S.input, fontSize: 11, height: 180, resize: "vertical", fontFamily: "monospace", opacity: 0.8 }}
-            />
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-              Copy this report and paste it into a Claude session. Say: <span style={{ color: C.amber }}>"Fix these issues in my Trade PA App.jsx"</span>
-            </div>
+            <button
+              onClick={() => { navigator.clipboard.writeText(reportText); showToast("Copied to clipboard", "READY TO PASTE"); }}
+              style={{
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 10,
+                letterSpacing: "0.08em",
+                fontWeight: 700,
+                color: C.amber,
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                textTransform: "uppercase",
+              }}
+            >Copy</button>
           </div>
-        )}
-      </div>
+          <textarea
+            readOnly
+            value={reportText}
+            style={{ ...S.input, fontSize: 11, height: 180, resize: "vertical", fontFamily: "monospace", opacity: 0.8 }}
+          />
+          {!reportText.startsWith("No errors") && (
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
+              Paste this into a Claude session with: <span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>"Fix these issues in my Trade PA App.jsx"</span>
+            </div>
+          )}
+        </div>
       )}
+      </>)}
 
       {/* Preview Modal */}
       {preview && (
