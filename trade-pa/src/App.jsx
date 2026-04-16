@@ -796,14 +796,14 @@ const S = {
   nav: { display: "flex", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", flexShrink: 0 },
   navBtn: (a) => ({ padding: "6px 8px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 10, fontFamily: "'DM Mono',monospace", fontWeight: a ? 700 : 400, letterSpacing: "0.04em", background: a ? C.amber : "transparent", color: a ? "#000" : C.textDim, transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }),
   main: { flex: 1, padding: "12px", maxWidth: 600, width: "100%", margin: "0 auto", boxSizing: "border-box", overflowX: "hidden" },
-  card: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, minWidth: 0, boxSizing: "border-box" },
+  card: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, minWidth: 0, boxSizing: "border-box" },
   grid2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 },
   grid3: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 },
   grid4: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 },
   sectionTitle: { fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: 14 },
   badge: (color) => ({ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", background: color + "22", color, border: `1px solid ${color}44`, whiteSpace: "nowrap" }),
-  pill: (color, active) => ({ padding: "6px 12px", borderRadius: 6, border: `1px solid ${active ? color : C.border}`, background: active ? color + "22" : C.surfaceHigh, color: active ? color : C.textDim, cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600 }),
-  btn: (v = "primary", dis = false) => ({ padding: "8px 14px", borderRadius: 6, border: v === "ghost" ? `1px solid ${C.border}` : "none", cursor: dis ? "not-allowed" : "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600, letterSpacing: "0.04em", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 6, background: dis ? C.surfaceHigh : v === "primary" ? C.amber : v === "stripe" ? "#635bff" : v === "danger" ? C.red : v === "green" ? C.green : C.surfaceHigh, color: dis ? C.muted : v === "primary" ? "#000" : v === "green" ? "#000" : C.text, opacity: dis ? 0.6 : 1, transition: "all 0.15s", flexShrink: 0 }),
+  pill: (color, active) => ({ padding: "6px 12px", borderRadius: 10, border: `1px solid ${active ? color : C.border}`, background: active ? color + "22" : C.surfaceHigh, color: active ? color : C.textDim, cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600 }),
+  btn: (v = "primary", dis = false) => ({ padding: "8px 14px", borderRadius: 10, border: v === "ghost" ? `1px solid ${C.border}` : "none", cursor: dis ? "not-allowed" : "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600, letterSpacing: "0.04em", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 6, background: dis ? C.surfaceHigh : v === "primary" ? C.amber : v === "stripe" ? "#635bff" : v === "danger" ? C.red : v === "green" ? C.green : C.surfaceHigh, color: dis ? C.muted : v === "primary" ? "#000" : v === "green" ? "#000" : C.text, opacity: dis ? 0.6 : 1, transition: "all 0.15s", flexShrink: 0 }),
   input: { width: "100%", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", color: C.text, fontSize: 13, fontFamily: "'DM Mono',monospace", outline: "none", boxSizing: "border-box" },
   label: { fontSize: 11, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6, display: "block" },
   row: { display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: `1px solid ${C.border}`, minWidth: 0, overflow: "hidden" },
@@ -4276,8 +4276,9 @@ function isSameDay(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function Schedule({ jobs, setJobs }) {
+function Schedule({ jobs, setJobs, customers, setContextHint }) {
   const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedDayIdx, setSelectedDayIdx] = useState(null); // null = auto-select today
   const [showAddJob, setShowAddJob] = useState(false);
   const [addJobDate, setAddJobDate] = useState(null);
   const [selectedJob, setSelectedJob] = useState(null);
@@ -4294,7 +4295,23 @@ function Schedule({ jobs, setJobs }) {
   });
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const jobsForDay = (day) => jobs.filter(j => j.dateObj && isSameDay(new Date(j.dateObj), day));
+  const jobsForDay = (day) => jobs.filter(j => j.dateObj && isSameDay(new Date(j.dateObj), day)).sort((a, b) => new Date(a.dateObj) - new Date(b.dateObj));
+
+  // Auto-select today if this week, otherwise Monday
+  const activeIdx = selectedDayIdx !== null ? selectedDayIdx : weekDays.findIndex(d => isSameDay(d, today));
+  const activeDay = weekDays[activeIdx >= 0 ? activeIdx : 0];
+  const dayJobs = jobsForDay(activeDay);
+
+  // Context hint
+  useEffect(() => {
+    if (!setContextHint) return;
+    const todayJobs = jobs.filter(j => j.dateObj && isSameDay(new Date(j.dateObj), today));
+    const nextJob = todayJobs.sort((a, b) => new Date(a.dateObj) - new Date(b.dateObj))[0];
+    const bits = [`Schedule: ${todayJobs.length} job${todayJobs.length === 1 ? "" : "s"} today`];
+    if (nextJob) bits.push(`next: ${nextJob.customer} at ${new Date(nextJob.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`);
+    setContextHint(bits.join(" · "));
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [jobs, setContextHint]);
 
   const weekLabel = () => {
     const end = new Date(weekStart); end.setDate(end.getDate() + 6);
@@ -4346,115 +4363,142 @@ function Schedule({ jobs, setJobs }) {
     setSelectedJob(null);
   };
 
-  const allWeekJobs = jobs.filter(j => {
-    if (!j.dateObj) return false;
-    const d = new Date(j.dateObj); d.setHours(0,0,0,0);
-    return weekDays.some(wd => isSameDay(wd, d));
-  }).sort((a, b) => new Date(a.dateObj) - new Date(b.dateObj));
+  const dayLabel = (day) => {
+    if (isSameDay(day, today)) return "Today";
+    const tmrw = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
+    if (isSameDay(day, tmrw)) return "Tomorrow";
+    return day.toLocaleDateString("en-GB", { weekday: "long" });
+  };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Week nav */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingBottom: 80 }}>
+      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => setWeekOffset(o => o - 1)} style={{ ...S.btn("ghost"), padding: "6px 12px" }}>← Prev</button>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>{weekLabel()}</div>
-          <button onClick={() => setWeekOffset(o => o + 1)} style={{ ...S.btn("ghost"), padding: "6px 12px" }}>Next →</button>
-          {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} style={{ ...S.btn("ghost"), padding: "6px 10px", fontSize: 11 }}>Today</button>}
-        </div>
-        <button style={S.btn("primary")} onClick={() => openAdd(weekDays[0])}>+ Add Job</button>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Schedule</div>
+        <button style={S.btn("primary")} onClick={() => openAdd(activeDay)}>+ Add Job</button>
       </div>
 
-      {/* Calendar grid — 7 days, jobs show name + time only, tap to see detail */}
-      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 8, minWidth: 560 }}>
+      {/* Week nav — compact strip */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button onClick={() => { setWeekOffset(o => o - 1); setSelectedDayIdx(null); }} aria-label="Previous week" style={{ background: "none", border: "none", color: C.text, cursor: "pointer", padding: 4, display: "grid", placeItems: "center" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+
+        <div style={{ flex: 1, display: "flex", gap: 2, justifyContent: "space-between" }}>
           {weekDays.map((day, i) => {
-            const dayJobs = jobsForDay(day);
             const isToday = isSameDay(day, today);
+            const isActive = i === (activeIdx >= 0 ? activeIdx : 0);
+            const hasJobs = jobsForDay(day).length > 0;
             const isWeekend = day.getDay() === 0 || day.getDay() === 6;
             return (
-              <div key={i} style={{ ...S.card, padding: 10, borderColor: isToday ? C.amber + "66" : C.border, background: isToday ? C.amber + "08" : isWeekend ? C.surfaceHigh : C.surface }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: isToday ? C.amber : isWeekend ? C.blue : C.muted, textTransform: "uppercase" }}>
-                    {day.toLocaleDateString("en-GB", { weekday: "short" })} {day.getDate()}
-                  </div>
-                  <button onClick={() => openAdd(day)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 2px" }}>+</button>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {dayJobs.length === 0 && <div style={{ fontSize: 9, color: C.border, fontStyle: "italic" }}>Free</div>}
-                  {dayJobs.map(job => (
-                    <div
-                      key={job.id}
-                      onClick={() => setSelectedJob(job)}
-                      style={{ padding: "5px 7px", background: C.surfaceHigh, borderRadius: 5, borderLeft: `2px solid ${statusColor[job.status] || C.muted}`, cursor: "pointer", transition: "opacity 0.15s" }}
-                      title="Tap for details"
-                    >
-                      {/* Calendar card — name and time ONLY */}
-                      <div style={{ fontSize: 10, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {job.customer.split(" ")[0]} {job.customer.split(" ").slice(-1)[0]}
-                      </div>
-                      <div style={{ fontSize: 9, color: C.muted, marginTop: 1 }}>
-                        {job.dateObj ? new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div
+                key={i}
+                onClick={() => setSelectedDayIdx(i)}
+                style={{
+                  flex: 1, textAlign: "center", padding: "6px 2px", borderRadius: 10,
+                  cursor: "pointer", transition: "all 0.15s",
+                  background: isActive ? (isToday ? C.amber : C.surfaceHigh) : "transparent",
+                  border: isActive ? `1px solid ${isToday ? C.amber : C.border}` : "1px solid transparent",
+                  opacity: isWeekend && !isActive ? 0.5 : 1,
+                }}
+              >
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", color: isActive && isToday ? "#000" : C.muted }}>{day.toLocaleDateString("en-GB", { weekday: "short" }).toUpperCase()}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: isActive && isToday ? "#000" : C.text, marginTop: 1 }}>{day.getDate()}</div>
+                {hasJobs && <div style={{ width: 5, height: 5, borderRadius: "50%", background: isActive && isToday ? "#000" : C.green, margin: "3px auto 0" }} />}
               </div>
             );
           })}
         </div>
+
+        <button onClick={() => { setWeekOffset(o => o + 1); setSelectedDayIdx(null); }} aria-label="Next week" style={{ background: "none", border: "none", color: C.text, cursor: "pointer", padding: 4, display: "grid", placeItems: "center" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
       </div>
 
-      {/* Jobs list this week — name and address, tap for detail */}
-      <div style={S.card}>
-        <div style={S.sectionTitle}>Jobs This Week ({allWeekJobs.length})</div>
-        {allWeekJobs.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No jobs this week. Hit + to add one.</div>}
-        {allWeekJobs.map(job => (
-          <div key={job.id} onClick={() => setSelectedJob(job)} style={{ ...S.row, cursor: "pointer" }}>
-            <div style={{ width: 4, height: 44, borderRadius: 2, background: statusColor[job.status] || C.muted, flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{job.customer}</div>
-              <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.address || "No address"}</div>
-            </div>
-            <div style={{ fontSize: 11, color: C.textDim, marginRight: 12, flexShrink: 0 }}>
-              {job.dateObj ? new Date(job.dateObj).toLocaleDateString("en-GB", { weekday: "short", day: "numeric" }) : ""}<br />
-              <span style={{ fontSize: 10 }}>{job.dateObj ? new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
-            </div>
-            <div style={S.badge(statusColor[job.status] || C.muted)}>{statusLabel[job.status] || job.status}</div>
-            <div style={{ fontSize: 11, color: C.muted, marginLeft: 12 }}>→</div>
-          </div>
-        ))}
+      {/* Week label + Today button */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono',monospace" }}>{weekLabel()}</div>
+        {weekOffset !== 0 && <button onClick={() => { setWeekOffset(0); setSelectedDayIdx(null); }} style={{ ...S.btn("ghost"), fontSize: 10, padding: "4px 10px" }}>Today</button>}
       </div>
+
+      {/* Selected day — header */}
+      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: C.muted, textTransform: "uppercase" }}>
+        {dayLabel(activeDay)} — {activeDay.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+      </div>
+
+      {/* Day jobs list */}
+      {dayJobs.length === 0 ? (
+        <div onClick={() => openAdd(activeDay)} style={{ background: C.surfaceHigh, border: `2px dashed ${C.border}`, borderRadius: 12, padding: "32px 20px", textAlign: "center", cursor: "pointer" }}>
+          <div style={{ fontSize: 14, color: C.muted, marginBottom: 4 }}>No jobs {dayLabel(activeDay).toLowerCase()}</div>
+          <div style={{ fontSize: 11, color: C.textDim }}>Tap to add one, or say "Hey Trade PA, book a job"</div>
+        </div>
+      ) : dayJobs.map(job => (
+        <div
+          key={job.id}
+          onClick={() => setSelectedJob(job)}
+          style={{
+            background: C.surface, border: `1px solid ${C.border}`, borderRadius: 0,
+            borderLeft: `3px solid ${statusColor[job.status] || C.muted}`,
+            padding: "12px 14px", cursor: "pointer",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{job.customer}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                {job.type}{job.address ? ` · ${job.address}` : ""}
+              </div>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>
+                {job.dateObj ? new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}
+              </div>
+              <div style={S.badge(statusColor[job.status] || C.muted)}>{statusLabel[job.status] || job.status}</div>
+            </div>
+          </div>
+          {job.value > 0 && <div style={{ fontSize: 11, color: C.green, fontFamily: "'DM Mono',monospace", marginTop: 4 }}>{fmtAmount(job.value)}</div>}
+        </div>
+      ))}
 
       {/* ── Job Detail Modal ── */}
       {selectedJob && !editingJob && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelectedJob(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>{selectedJob.customer}</div>
-                <div style={S.badge(statusColor[selectedJob.status] || C.muted)}>{statusLabel[selectedJob.status] || selectedJob.status}</div>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, padding: 0, overflow: "hidden" }}>
+            {/* Modal header bar */}
+            <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => setSelectedJob(null)} aria-label="Close" style={{ background: "none", border: "none", color: C.text, cursor: "pointer", padding: 4, display: "grid", placeItems: "center" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: C.muted, letterSpacing: "0.06em" }}>{selectedJob.type || "JOB"}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedJob.customer}</div>
               </div>
-              <button onClick={() => setSelectedJob(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>×</button>
+              <div style={S.badge(statusColor[selectedJob.status] || C.muted)}>{statusLabel[selectedJob.status] || selectedJob.status}</div>
             </div>
 
-            {/* Details grid */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-              {[
-                { label: "Job Type", value: selectedJob.type },
-                { label: "Date & Time", value: selectedJob.dateObj ? new Date(selectedJob.dateObj).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " at " + new Date(selectedJob.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : selectedJob.date },
-                { label: "Address", value: selectedJob.address || "Not set" },
-                { label: "Value", value: selectedJob.value > 0 ? `${fmtAmount(selectedJob.value)}` : "Not set" },
-              ].map(({ label, value }) => (
-                <div key={label} style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 13, color: C.text }}>{value}</div>
+            {/* Details */}
+            <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div style={{ padding: "10px 12px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Date</div>
+                  <div style={{ fontSize: 13 }}>{selectedJob.dateObj ? new Date(selectedJob.dateObj).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : selectedJob.date}</div>
                 </div>
-              ))}
-
-              {/* Notes */}
-              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ padding: "10px 12px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Time</div>
+                  <div style={{ fontSize: 13 }}>{selectedJob.dateObj ? new Date(selectedJob.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}</div>
+                </div>
+              </div>
+              <div style={{ padding: "10px 12px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Address</div>
+                <div style={{ fontSize: 13, color: selectedJob.address ? C.text : C.muted }}>{selectedJob.address || "Not set"}</div>
+              </div>
+              {selectedJob.value > 0 && (
+                <div style={{ padding: "10px 12px", background: C.surfaceHigh, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Value</div>
+                  <div style={{ fontSize: 13 }}>{fmtAmount(selectedJob.value)}</div>
+                </div>
+              )}
+              <div style={{ padding: "10px 12px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Notes</div>
                 <div style={{ fontSize: 13, color: selectedJob.notes ? C.text : C.muted, fontStyle: selectedJob.notes ? "normal" : "italic" }}>
                   {selectedJob.notes || "No notes added"}
@@ -4462,17 +4506,17 @@ function Schedule({ jobs, setJobs }) {
               </div>
             </div>
 
-            {/* Action buttons */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {/* Actions — in a footer bar */}
+            <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}`, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button style={S.btn("primary")} onClick={() => {
                 setEditingJob(selectedJob);
                 setForm({ customer: selectedJob.customer, address: selectedJob.address || "", type: selectedJob.type, time: selectedJob.dateObj ? new Date(selectedJob.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }).replace(":", ":") : "09:00", value: selectedJob.value || "", status: selectedJob.status, notes: selectedJob.notes || "" });
-              }}>Edit Job</button>
+              }}>Edit</button>
               {selectedJob.status !== "confirmed" && (
-                <button style={S.btn("green")} onClick={() => { setJobs(prev => prev.map(j => j.id === selectedJob.id ? { ...j, status: "confirmed" } : j)); setSelectedJob(null); }}>Mark Confirmed</button>
+                <button style={S.btn("green")} onClick={() => { setJobs(prev => prev.map(j => j.id === selectedJob.id ? { ...j, status: "confirmed" } : j)); setSelectedJob(null); }}>Confirm</button>
               )}
               {selectedJob.address && (
-                <a href={`https://maps.google.com/?q=${encodeURIComponent(selectedJob.address)}`} target="_blank" rel="noreferrer" style={{ ...S.btn("ghost"), textDecoration: "none" }}>📍 Directions</a>
+                <a href={`https://maps.google.com/?q=${encodeURIComponent(selectedJob.address)}`} target="_blank" rel="noreferrer" style={{ ...S.btn("ghost"), textDecoration: "none" }}>Directions</a>
               )}
               <button style={{ ...S.btn("ghost"), color: C.red, marginLeft: "auto" }} onClick={() => deleteJob(selectedJob.id)}>Delete</button>
             </div>
@@ -4483,15 +4527,15 @@ function Schedule({ jobs, setJobs }) {
       {/* ── Edit Job Modal ── */}
       {editingJob && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Job</div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="customer (full name), address (property address), type (job type e.g. Boiler Service), value (£ amount), notes (any details)" />
-                <button onClick={() => setEditingJob(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
-              </div>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16, borderRadius: 14, padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => setEditingJob(null)} aria-label="Close" style={{ background: "none", border: "none", color: C.text, cursor: "pointer", padding: 4, display: "grid", placeItems: "center" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <div style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>Edit Job</div>
+              <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="customer (full name), address (property address), type (job type e.g. Boiler Service), value (£ amount), notes (any details)" />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
               {[
                 { k: "customer", l: "Customer Name", p: "e.g. John Smith" },
                 { k: "address", l: "Address", p: "e.g. 5 High Street, Guildford" },
@@ -4515,7 +4559,9 @@ function Schedule({ jobs, setJobs }) {
                   ))}
                 </div>
               </div>
-              <button style={S.btn("primary", !form.customer || !form.type)} disabled={!form.customer || !form.type} onClick={saveEdit}>Save Changes →</button>
+            </div>
+            <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}` }}>
+              <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center" }} disabled={!form.customer || !form.type} onClick={saveEdit}>Save Changes</button>
             </div>
           </div>
         </div>
@@ -4524,15 +4570,18 @@ function Schedule({ jobs, setJobs }) {
       {/* ── Add Job Modal ── */}
       {showAddJob && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Job — {addJobDate?.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="customer (full name), address (property address), type (job type e.g. Boiler Service), value (£ amount), notes (any details)" />
-                <button onClick={() => setShowAddJob(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+          <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16, borderRadius: 14, padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => setShowAddJob(false)} aria-label="Close" style={{ background: "none", border: "none", color: C.text, cursor: "pointer", padding: 4, display: "grid", placeItems: "center" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: C.muted, letterSpacing: "0.06em" }}>{addJobDate?.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>Add Job</div>
               </div>
+              <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="customer (full name), address (property address), type (job type e.g. Boiler Service), value (£ amount), notes (any details)" />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
               {[
                 { k: "customer", l: "Customer Name", p: "e.g. John Smith" },
                 { k: "address", l: "Address", p: "e.g. 5 High Street, Guildford" },
@@ -4560,7 +4609,9 @@ function Schedule({ jobs, setJobs }) {
                   ))}
                 </div>
               </div>
-              <button style={S.btn("primary", !form.customer || !form.type)} disabled={!form.customer || !form.type} onClick={saveJob}>Save Job →</button>
+            </div>
+            <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}` }}>
+              <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center" }} disabled={!form.customer || !form.type} onClick={saveJob}>Save Job</button>
             </div>
           </div>
         </div>
@@ -4667,7 +4718,7 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, us
   );
 }
 
-function Materials({ materials, setMaterials, user }) {
+function Materials({ materials, setMaterials, user, setContextHint }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showSuppliers, setShowSuppliers] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
@@ -4692,6 +4743,15 @@ function Materials({ materials, setMaterials, user }) {
   };
   const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "", notes: "" });
   const [filterJob, setFilterJob] = useState("all");
+
+  useEffect(() => {
+    if (!setContextHint) return;
+    const toOrder = (materials || []).filter(m => m.status === "to_order").length;
+    const bits = [`Materials: ${(materials || []).length} items`];
+    if (toOrder) bits.push(`${toOrder} to order`);
+    setContextHint(bits.join(" · "));
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [materials, setContextHint]);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
 
@@ -11272,7 +11332,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
-function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
+function Payments({ brand, invoices, setInvoices, customers, user, sendPush, setContextHint }) {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [docType, setDocType] = useState("invoices");
@@ -11291,6 +11351,14 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
   const acceptedQuotes = allQuotes.filter(q => q.status === "accepted");
   const pendingQuotes = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
   const declinedQuotes = allQuotes.filter(q => q.status === "declined");
+
+  // Context hint for floating mic
+  useEffect(() => {
+    if (!setContextHint) return;
+    const total = outstandingInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
+    setContextHint(`Payments: ${outstandingInvoices.length} outstanding · £${Math.round(total).toLocaleString()}`);
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [outstandingInvoices.length, setContextHint]);
 
   const updateStatus = (id, status) => {
     const inv = (invoices || []).find(i => i.id === id);
@@ -13542,6 +13610,7 @@ function Customers({ customers, setCustomers, customerContacts, setCustomerConta
   }, [selected, setContextHint]);
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
+
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", notes: "", isCompany: false });
   // Draft contacts for the Add Customer flow when isCompany=true.
   // Each draft: { tempId, name, role, phone, email, isPrimary, isBilling }
@@ -15837,7 +15906,7 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
 }
 
 // ─── Quotes View ──────────────────────────────────────────────────────────────
-function QuotesView({ brand, invoices, setInvoices, setView, customers, customerContacts, user }) {
+function QuotesView({ brand, invoices, setInvoices, setView, customers, customerContacts, user, setContextHint }) {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingQuote, setEditingQuote] = useState(null);
@@ -15845,6 +15914,15 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all"); // all | pending | accepted | declined
   const [sortMode, setSortMode] = useState("recent"); // recent | value | customer
+
+  useEffect(() => {
+    if (!setContextHint) return;
+    const quotes = (invoices || []).filter(i => i.isQuote);
+    const pending = quotes.filter(q => q.status !== "accepted" && q.status !== "declined").length;
+    const val = quotes.reduce((s, q) => s + parseFloat(q.grossAmount || q.amount || 0), 0);
+    setContextHint(`Quotes: ${quotes.length} total · ${pending} pending · £${Math.round(val).toLocaleString()} pipeline`);
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [invoices, setContextHint]);
 
   // Canonical pill map — amber discipline (blue for open, green for won, red for lost)
   const QUOTE_PILL = {
@@ -17039,9 +17117,9 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
   function fromName(from) { if (!from) return "Unknown"; const m = from.match(/^(.+?)\s*</); return m ? m[1].replace(/"/g, "") : from.split("@")[0]; }
 
   const IS = {
-    card: { background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 10, padding: 16, marginBottom: 12 },
-    btn: (v) => ({ padding: "7px 14px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", border: v === "ghost" ? `1px solid ${IC.border}` : "none", fontFamily: "'DM Mono',monospace", background: v === "approve" ? IC.green : v === "amber" ? IC.amber : v === "red" ? "#7f1d1d" : v === "ghost" ? "transparent" : IC.bg3, color: v === "approve" ? "#fff" : v === "amber" ? "#000" : v === "red" ? IC.red : IC.text }),
-    tab: (a) => ({ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11, fontWeight: a ? 700 : 400, fontFamily: "'DM Mono',monospace", background: a ? IC.amber : "transparent", color: a ? "#000" : IC.muted }),
+    card: { background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 12, padding: 16, marginBottom: 12 },
+    btn: (v) => ({ padding: "7px 14px", borderRadius: 10, fontSize: 11, fontWeight: 600, cursor: "pointer", border: v === "ghost" ? `1px solid ${IC.border}` : "none", fontFamily: "'DM Mono',monospace", background: v === "approve" ? IC.green : v === "amber" ? IC.amber : v === "red" ? "#7f1d1d" : v === "ghost" ? "transparent" : IC.bg3, color: v === "approve" ? "#fff" : v === "amber" ? "#000" : v === "red" ? IC.red : IC.text }),
+    tab: (a) => ({ padding: "6px 14px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 11, fontWeight: a ? 700 : 400, fontFamily: "'DM Mono',monospace", background: a ? IC.amber : "transparent", color: a ? "#000" : IC.muted }),
     input: { width: "100%", padding: "7px 10px", borderRadius: 6, border: `1px solid ${IC.border}`, background: IC.bg3, color: IC.text, fontSize: 12, marginBottom: 8, boxSizing: "border-box", fontFamily: "'DM Mono',monospace" },
   };
 
@@ -17403,11 +17481,22 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
 }
 
 // ─── Enquiries Tab ────────────────────────────────────────────────────────────
-function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoices, setInvoices, brand, user, setView }) {
+function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoices, setInvoices, brand, user, setView, setContextHint }) {
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", source: "Phone", msg: "", urgent: false });
   const [filter, setFilter] = useState("all");
+
+  useEffect(() => {
+    if (!setContextHint) return;
+    const newCount = (enquiries || []).filter(e => !e.status || e.status === "new").length;
+    const urgCount = (enquiries || []).filter(e => e.urgent).length;
+    const bits = [`Enquiries: ${(enquiries || []).length} total`];
+    if (newCount) bits.push(`${newCount} new`);
+    if (urgCount) bits.push(`${urgCount} urgent`);
+    setContextHint(bits.join(" · "));
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [enquiries, setContextHint]);
 
   const SOURCES = ["Phone", "Email", "Website", "Referral", "Returning", "Other"];
 
@@ -19961,12 +20050,19 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
 
 const MILEAGE_RATE = 0.45; // HMRC approved mileage rate
 
-function ExpensesTab({ user }) {
+function ExpensesTab({ user, setContextHint }) {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ exp_type: "mileage", description: "", amount: "", miles: "", exp_date: new Date().toISOString().slice(0,10) });
   const [filterMonth, setFilterMonth] = useState("all");
+
+  useEffect(() => {
+    if (!setContextHint) return;
+    const total = expenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+    setContextHint(`Expenses: ${expenses.length} records · £${Math.round(total).toLocaleString()} total`);
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [expenses, setContextHint]);
   const [search, setSearch] = useState("");
   const receiptRef = useRef();
   const [receiptData, setReceiptData] = useState(null);
@@ -20166,10 +20262,17 @@ function ExpensesTab({ user }) {
 }
 
 // ─── CIS Statements Tab ───────────────────────────────────────────────────────
-function CISStatementsTab({ user }) {
+function CISStatementsTab({ user, setContextHint }) {
   const [statements, setStatements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+
+  useEffect(() => {
+    if (!setContextHint) return;
+    const totalDed = statements.reduce((s, st) => s + parseFloat(st.deduction || 0), 0);
+    setContextHint(`CIS: ${statements.length} statements · £${Math.round(totalDed).toLocaleString()} deductions`);
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [statements, setContextHint]);
   const [form, setForm] = useState({ contractor_name: "", tax_month: new Date().toISOString().slice(0,7), gross_amount: "", deduction_amount: "", notes: "" });
   const [search, setSearch] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
@@ -21156,10 +21259,17 @@ function AssignToJobModal({ user, onAssign, onClose, currentJobId }) {
 }
 
 // ─── MILEAGE TRACKING ────────────────────────────────────────────────────────
-function MileageTab({ user }) {
+function MileageTab({ user, setContextHint }) {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+
+  useEffect(() => {
+    if (!setContextHint) return;
+    const totalMiles = trips.reduce((s, t) => s + parseFloat(t.miles || 0), 0);
+    setContextHint(`Mileage: ${trips.length} trips · ${Math.round(totalMiles)} miles`);
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [trips, setContextHint]);
   const [form, setForm] = useState({ date: new Date().toISOString().split("T")[0], from: "", to: "", miles: "", job: "", purpose: "" });
   const [yearMiles, setYearMiles] = useState(0);
   const [search, setSearch] = useState("");
@@ -22361,12 +22471,18 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
   );
 }
 // ─── DOCUMENT STORAGE ────────────────────────────────────────────────────────
-function DocumentsTab({ user, customers }) {
+function DocumentsTab({ user, customers, setContextHint }) {
   const [docs, setDocs] = useState([]);
   const [jobCards, setJobCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [filter, setFilter] = useState("all");
+
+  useEffect(() => {
+    if (!setContextHint) return;
+    setContextHint(`Documents: ${docs.length} files`);
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [docs, setContextHint]);
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState("recent"); // recent | name | size
   const fileRef = useRef();
@@ -22545,7 +22661,7 @@ function DocumentsTab({ user, customers }) {
   );
 }
 // ─── CUSTOMER REVIEWS ────────────────────────────────────────────────────────
-function ReviewsTab({ user, brand, customers }) {
+function ReviewsTab({ user, brand, customers, setContextHint }) {
   const [requests, setRequests] = useState([]);
   const [completedJobs, setCompletedJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22553,6 +22669,17 @@ function ReviewsTab({ user, brand, customers }) {
   const [showSendModal, setShowSendModal] = useState(null); // job object
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
   const [search, setSearch] = useState("");
+
+  // Context hint for floating mic
+  useEffect(() => {
+    if (!setContextHint) return;
+    const sent = requests.length;
+    const pending = completedJobs.filter(j => !j.reviewSent).length;
+    const bits = [`Reviews: ${sent} sent`];
+    if (pending) bits.push(`${pending} jobs awaiting review request`);
+    setContextHint(bits.join(" · "));
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [requests, completedJobs, setContextHint]);
 
   const PLATFORMS = [
     { id: "google", label: "Google", icon: "🔍", urlKey: "reviewUrlGoogle", color: "#4285F4" },
@@ -22778,13 +22905,22 @@ function ReviewsTab({ user, brand, customers }) {
   );
 }
 // ─── STOCK INVENTORY ─────────────────────────────────────────────────────────
-function StockTab({ user }) {
+function StockTab({ user, setContextHint }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all"); // all | low
+
+  useEffect(() => {
+    if (!setContextHint) return;
+    const low = items.filter(i => i.qty <= (i.reorder_level || 0)).length;
+    const bits = [`Stock: ${items.length} items`];
+    if (low) bits.push(`${low} low`);
+    setContextHint(bits.join(" · "));
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [items, setContextHint]);
   const [sortMode, setSortMode] = useState("name"); // name | quantity | value
   const [form, setForm] = useState({ name: "", sku: "", quantity: "", unit: "unit", reorder_level: "", unit_cost: "", location: "" });
 
@@ -25925,25 +26061,25 @@ function AppInner() {
         {view === "DiaryHub" && <DiaryHub setView={setView} jobs={jobs} reminders={reminders} />}
         {view === "AccountsHub" && <AccountsHub setView={setView} invoices={invoices} />}
         {view === "PeopleHub" && <PeopleHub setView={setView} customers={customers} enquiries={enquiries} />}
-        {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
-        {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} />}
+        {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} setContextHint={setContextHint} />}
+        {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} setContextHint={setContextHint} />}
         {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} setContextHint={setContextHint} />}
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} customerContacts={customerContacts} setCustomerContacts={setCustomerContacts} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} setContextHint={setContextHint} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}
-        {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} customerContacts={customerContacts} />}
-        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
-        {view === "Expenses" && <ExpensesTab user={user} />}
-        {view === "CIS" && <CISStatementsTab user={user} />}
+        {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}
+        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} setContextHint={setContextHint} />}
+        {view === "Expenses" && <ExpensesTab user={user} setContextHint={setContextHint} />}
+        {view === "CIS" && <CISStatementsTab user={user} setContextHint={setContextHint} />}
         <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
-        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
+        {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} setContextHint={setContextHint} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} setContextHint={setContextHint} />}
         {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} brand={brand} user={user} setContextHint={setContextHint} />}
-        {view === "Mileage" && <MileageTab user={user} />}
+        {view === "Mileage" && <MileageTab user={user} setContextHint={setContextHint} />}
         {view === "Subcontractors" && <SubcontractorsTab user={user} brand={brand} setContextHint={setContextHint} />}
-        {view === "Documents" && <DocumentsTab user={user} customers={customers} />}
-        {view === "Reviews" && <ReviewsTab user={user} brand={brand} customers={customers} />}
-        {view === "Stock" && <StockTab user={user} />}
+        {view === "Documents" && <DocumentsTab user={user} customers={customers} setContextHint={setContextHint} />}
+        {view === "Reviews" && <ReviewsTab user={user} brand={brand} customers={customers} setContextHint={setContextHint} />}
+        {view === "Stock" && <StockTab user={user} setContextHint={setContextHint} />}
         {view === "RAMS" && <RAMSTab user={user} brand={brand} setContextHint={setContextHint} />}
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} openAssistantSetup={() => setAssistantSetupOpen(true)} openFeedback={() => setFeedbackOpen(true)} assistantName={assistantName} assistantWakeWords={assistantWakeWords} userCommandsCount={userCommands.length} usageData={usageData} usageCaps={usageCaps} /></ErrorBoundary>}
         </div>
