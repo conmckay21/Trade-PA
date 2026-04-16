@@ -22357,6 +22357,288 @@ function ActiveCallScreen({ callerName, callerNumber, direction, startTime, mute
 // 5-tab bottom navigation per the new Home-centric design:
 // Home · Jobs · Diary · Money · People
 // Each bottom tab maps to an existing internal view until Session C consolidates.
+// ─── HubPage — reusable hub layout for Session C (Pattern A navigation) ────
+// Takes a title, optional sub, and an array of rows. Each row has icon, name,
+// meta (status text), optional tint ("urgent" | "warn" | default), and onClick.
+function HubPage({ title, sub, rows }) {
+  const iconTint = {
+    urgent: { bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.3)", color: C.red },
+    warn:   { bg: `${C.amber}1a`, border: `${C.amber}40`, color: C.amber },
+    ok:     { bg: `${C.green}1a`, border: `${C.green}40`, color: C.green },
+  };
+  const metaColor = { urgent: C.red, warn: C.amber, ok: C.green };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Page header */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 4 }}>
+        <div style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 10,
+          color: C.amber,
+          letterSpacing: "0.14em",
+          fontWeight: 700,
+          textTransform: "uppercase",
+          marginBottom: 2,
+        }}>{title}</div>
+        <div style={{
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: 24,
+          fontWeight: 700,
+          letterSpacing: "-0.02em",
+          color: C.text,
+          lineHeight: 1.1,
+        }}>{title}</div>
+        {sub && <div style={{ fontSize: 12, color: C.textDim, marginTop: 2 }}>{sub}</div>}
+      </div>
+
+      {/* Rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {rows.map((row, i) => {
+          const tint = row.tint ? iconTint[row.tint] : null;
+          return (
+            <div
+              key={i}
+              onClick={row.onClick}
+              style={{
+                background: C.surfaceHigh,
+                border: `1px solid ${C.border}`,
+                borderRadius: 14,
+                padding: 12,
+                display: "grid",
+                gridTemplateColumns: "40px 1fr auto",
+                gap: 12,
+                alignItems: "center",
+                cursor: "pointer",
+                transition: "background 150ms ease",
+              }}
+            >
+              {/* Icon */}
+              <div style={{
+                width: 40, height: 40,
+                borderRadius: 10,
+                background: tint ? tint.bg : C.surface,
+                border: `1px solid ${tint ? tint.border : C.border}`,
+                color: tint ? tint.color : C.textDim,
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+              }}>
+                <div style={{ width: 20, height: 20 }}>{row.icon}</div>
+              </div>
+              {/* Body */}
+              <div style={{ minWidth: 0 }}>
+                <div style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  letterSpacing: "-0.01em",
+                  color: C.text,
+                  marginBottom: 3,
+                }}>{row.name}</div>
+                <div style={{
+                  fontSize: 11.5,
+                  color: row.tint ? metaColor[row.tint] : C.textDim,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>{row.meta}</div>
+              </div>
+              {/* Chevron */}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── JobsHub — Jobs bottom-tab landing ──────────────────────────────────────
+function JobsHub({ setView, jobs, enquiries, materials }) {
+  const newEnquiries = (enquiries || []).filter(e => !e.status || e.status === "new");
+  const activeJobs = (jobs || []).filter(j => j.status !== "complete" && j.status !== "completed");
+  return (
+    <HubPage
+      title="Jobs"
+      sub="Work in progress and the paperwork behind it"
+      rows={[
+        {
+          name: "Jobs",
+          meta: activeJobs.length > 0 ? `${activeJobs.length} active job${activeJobs.length === 1 ? "" : "s"}` : "No active jobs",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /></svg>,
+          onClick: () => setView("Jobs"),
+        },
+        {
+          name: "Enquiries",
+          meta: newEnquiries.length > 0 ? `${newEnquiries.length} new enquir${newEnquiries.length === 1 ? "y" : "ies"}` : "No new enquiries",
+          tint: newEnquiries.length > 0 ? "warn" : null,
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
+          onClick: () => setView("Enquiries"),
+        },
+        {
+          name: "Materials",
+          meta: (materials || []).length > 0 ? `${materials.length} item${materials.length === 1 ? "" : "s"} logged` : "No materials logged",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
+          onClick: () => setView("Materials"),
+        },
+        {
+          name: "Stock",
+          meta: "Van and site inventory",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>,
+          onClick: () => setView("Stock"),
+        },
+        {
+          name: "RAMS",
+          meta: "Risk assessment and method statements",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
+          onClick: () => setView("RAMS"),
+        },
+        {
+          name: "Documents",
+          meta: "Certificates, reports, shared files",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+          onClick: () => setView("Documents"),
+        },
+      ]}
+    />
+  );
+}
+
+// ─── DiaryHub — Diary bottom-tab landing ────────────────────────────────────
+function DiaryHub({ setView, jobs, reminders }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayJobs = (jobs || []).filter(j => j.dateObj && isSameDay(new Date(j.dateObj), today));
+  const upcomingReminders = (reminders || []).filter(r => !r.done && !r.dismissed);
+  return (
+    <HubPage
+      title="Diary"
+      sub="Schedule, reminders, and what's coming up"
+      rows={[
+        {
+          name: "Schedule",
+          meta: todayJobs.length > 0 ? `${todayJobs.length} job${todayJobs.length === 1 ? "" : "s"} today` : "Nothing scheduled today",
+          tint: todayJobs.length > 0 ? "warn" : null,
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 11h18" /></svg>,
+          onClick: () => setView("Schedule"),
+        },
+        {
+          name: "Reminders",
+          meta: upcomingReminders.length > 0 ? `${upcomingReminders.length} pending` : "Nothing pending",
+          tint: upcomingReminders.length > 0 ? "warn" : null,
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
+          onClick: () => setView("Reminders"),
+        },
+      ]}
+    />
+  );
+}
+
+// ─── AccountsHub — Accounts bottom-tab landing ──────────────────────────────
+function AccountsHub({ setView, invoices }) {
+  const allInvoices = (invoices || []).filter(i => !i.isQuote);
+  const allQuotes = (invoices || []).filter(i => i.isQuote);
+  const overdue = allInvoices.filter(i => i.status === "overdue" || i.status === "due");
+  const overdueValue = overdue.reduce((s, i) => s + (i.amount || 0), 0);
+  const outstanding = allInvoices.filter(i => i.status !== "paid");
+  return (
+    <HubPage
+      title="Accounts"
+      sub="Money in, money out, and HMRC-ready records"
+      rows={[
+        {
+          name: "Invoices",
+          meta: overdueValue > 0
+            ? `${fmtAmount(overdueValue)} overdue · ${outstanding.length} outstanding`
+            : outstanding.length > 0
+              ? `${outstanding.length} outstanding`
+              : "All paid up",
+          tint: overdueValue > 0 ? "urgent" : outstanding.length > 0 ? "warn" : "ok",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+          onClick: () => setView("Invoices"),
+        },
+        {
+          name: "Quotes",
+          meta: allQuotes.length > 0 ? `${allQuotes.length} quote${allQuotes.length === 1 ? "" : "s"}` : "No quotes",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12h6m-3-3v6m9-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+          onClick: () => setView("Quotes"),
+        },
+        {
+          name: "Payments",
+          meta: "Stripe and bank transfers",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 10h.01M18 14h.01" /></svg>,
+          onClick: () => setView("Payments"),
+        },
+        {
+          name: "Expenses",
+          meta: "Receipts, tools, materials spend",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+          onClick: () => setView("Expenses"),
+        },
+        {
+          name: "Mileage",
+          meta: "HMRC-rate tracking, auto-calculated",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></svg>,
+          onClick: () => setView("Mileage"),
+        },
+        {
+          name: "CIS",
+          meta: "Construction industry scheme statements",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
+          onClick: () => setView("CIS"),
+        },
+        {
+          name: "Reports",
+          meta: "P&L, income, expenses summaries",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
+          onClick: () => setView("Reports"),
+        },
+      ]}
+    />
+  );
+}
+
+// ─── PeopleHub — People bottom-tab landing ──────────────────────────────────
+function PeopleHub({ setView, customers, enquiries }) {
+  const customerCount = (customers || []).length;
+  const newEnquiryCount = (enquiries || []).filter(e => !e.status || e.status === "new").length;
+  return (
+    <HubPage
+      title="People"
+      sub="Customers, team, and the inbox"
+      rows={[
+        {
+          name: "Customers",
+          meta: customerCount > 0 ? `${customerCount} customer${customerCount === 1 ? "" : "s"}` : "No customers yet",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M5 21c0-3.87 3.13-7 7-7s7 3.13 7 7" /></svg>,
+          onClick: () => setView("Customers"),
+        },
+        {
+          name: "Inbox",
+          meta: newEnquiryCount > 0 ? `${newEnquiryCount} new message${newEnquiryCount === 1 ? "" : "s"}` : "No new messages",
+          tint: newEnquiryCount > 0 ? "warn" : null,
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" /></svg>,
+          onClick: () => setView("Inbox"),
+        },
+        {
+          name: "Subcontractors",
+          meta: "Your go-to people for overflow work",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a3 3 0 015.36-1.857M17 4a3 3 0 100 6 3 3 0 000-6zM12 12a4 4 0 100-8 4 4 0 000 8zM7 4a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+          onClick: () => setView("Subcontractors"),
+        },
+        {
+          name: "Reviews",
+          meta: "Google, Checkatrade, Trustpilot feedback",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>,
+          onClick: () => setView("Reviews"),
+        },
+      ]}
+    />
+  );
+}
+
 function BottomTabBar({ view, setView, isDesktopBrowser }) {
   if (isDesktopBrowser) return null; // desktop has side nav; skip bottom bar entirely
 
@@ -22378,8 +22660,8 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
     {
       id: "Jobs",
       label: "Jobs",
-      view: "Jobs",
-      activeOn: ["Jobs", "Enquiries", "Materials", "RAMS", "Documents"],
+      view: "JobsHub",
+      activeOn: ["JobsHub", "Jobs", "Enquiries", "Materials", "Stock", "RAMS", "Documents"],
       icon: (active) => (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
@@ -22390,8 +22672,8 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
     {
       id: "Diary",
       label: "Diary",
-      view: "Schedule",
-      activeOn: ["Schedule", "Reminders"],
+      view: "DiaryHub",
+      activeOn: ["DiaryHub", "Schedule", "Reminders"],
       icon: (active) => (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="5" width="18" height="16" rx="2" />
@@ -22402,8 +22684,8 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
     {
       id: "Accounts",
       label: "Accounts",
-      view: "Invoices",
-      activeOn: ["Invoices", "Quotes", "Payments", "Expenses", "Mileage", "CIS", "Reports"],
+      view: "AccountsHub",
+      activeOn: ["AccountsHub", "Invoices", "Quotes", "Payments", "Expenses", "Mileage", "CIS", "Reports"],
       icon: (active) => (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="6" width="20" height="12" rx="2" />
@@ -22415,8 +22697,8 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
     {
       id: "People",
       label: "People",
-      view: "Customers",
-      activeOn: ["Customers", "Subcontractors", "Reviews", "Inbox"],
+      view: "PeopleHub",
+      activeOn: ["PeopleHub", "Customers", "Subcontractors", "Reviews", "Inbox"],
       icon: (active) => (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="8" r="4" />
@@ -22564,6 +22846,7 @@ function AppInner() {
   const [micBlocked, setMicBlocked] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [helpSlug, setHelpSlug] = useState(null);
 
   // ── Fair-use caps: usage tracking ─────────────────────────────
@@ -23553,72 +23836,266 @@ function AppInner() {
         img{max-width:100%;}
       `}</style>
       <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100, width: "100%" }}>
-        {/* Top row — logo and right icons */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", paddingTop: "max(12px, env(safe-area-inset-top, 12px))", height: "calc(48px + env(safe-area-inset-top, 0px))", boxSizing: "border-box" }}>
-          <div style={{ ...S.logo, cursor: "pointer" }} onClick={() => setView("AI Assistant")}>
-            <div style={S.logoIcon}>TP</div>
-            TRADE PA
+        {/* New simplified header — Session C + mockup-faithful: brand + bell + avatar only */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", paddingTop: "max(12px, env(safe-area-inset-top, 12px))", height: "calc(54px + env(safe-area-inset-top, 0px))", boxSizing: "border-box", position: "relative" }}>
+          {/* Brand — tap returns to Home (Dashboard) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }} onClick={() => setView("Dashboard")}>
+            <div style={{
+              width: 30, height: 30,
+              background: C.amber,
+              color: "#000",
+              borderRadius: 8,
+              display: "grid", placeItems: "center",
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 12, fontWeight: 900,
+            }}>TP</div>
+            <div style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 12, fontWeight: 700,
+              letterSpacing: "0.14em",
+              color: C.text,
+            }}>TRADE PA</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div onClick={() => setView("Reminders")} style={{ position: "relative", cursor: "pointer", padding: "4px 6px" }}>
-              <span style={{ fontSize: 18, display: "block", animation: bellFlash ? "bellPulse 0.4s ease 3" : "none" }}>🔔</span>
-              {alertCount > 0 && <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.red, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{alertCount}</div>}
-              {alertCount === 0 && upcomingCount > 0 && <div style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: C.amber, borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{upcomingCount}</div>}
-            </div>
-            {members.length > 1 && (
-              <div onClick={() => setView("Settings")} style={{ fontSize: 10, color: C.muted, background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "2px 8px", cursor: "pointer" }}>
-                👥 {members.length}
-              </div>
-            )}
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
-            <button onClick={() => { setHelpSlug(null); setHelpOpen(true); }} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Help & how-to">?</button>
-            <button onClick={() => setFeedbackOpen(true)} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Send feedback — bug, idea or improvement">💬</button>
-            <button onClick={() => setAssistantSetupOpen(true)} style={{ ...S.btn("ghost"), fontSize: 13, padding: "4px 10px", color: C.amber, fontWeight: 700 }} title="Edit your AI Assistant">👤</button>
-            <button onClick={handleLogout} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.muted }}>Out</button>
-          </div>
-        </div>
-        {/* Category pills — hidden on desktop browser (rail nav replaces) */}
-        {!isDesktopBrowser && (<>
-        <div style={{ display: "flex", gap: 4, padding: "0 12px 5px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-          {NAV_GROUPS.map(g => {
-            const active = activeCategory === g.id;
-            return (
-              <button key={g.id} onClick={() => {
-                setActiveCategory(g.id);
-                const allowed = g.views.filter(v => {
-                  if (userRole !== "owner" && v === "Settings") return false;
-                  const myMember = members.find(m => m.user_id === user?.id);
-                  const perms = myMember?.permissions;
-                  return !perms || perms[v] !== false;
-                });
-                if (allowed.length && !allowed.includes(view)) setView(allowed[0]);
-              }} style={{
-                flexShrink: 0, padding: "4px 12px", borderRadius: 20,
-                border: `1px solid ${active ? C.amber : C.border}`,
-                background: active ? C.amber : "transparent",
-                color: active ? "#000" : C.muted,
-                fontSize: 11, fontWeight: active ? 700 : 400, cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 4,
-              }}>
-                <span>{g.icon}</span>{g.label}
-              </button>
-            );
-          })}
-        </div>
-        {/* Sub-tabs for active category */}
-        <div className="nav-scroll" style={{ display: "flex", overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "0 12px 8px", gap: 2, scrollbarWidth: "none" }}>
-          {(NAV_GROUPS.find(g => g.id === activeCategory)?.views || []).filter(v => {
-            if (userRole !== "owner" && v === "Settings") return false;
-            const myMember = members.find(m => m.user_id === user?.id);
-            const perms = myMember?.permissions;
-            return !perms || perms[v] !== false;
-          }).map(v => (
-            <button key={v} onClick={() => setView(v)} style={{ ...S.navBtn(view === v), flexShrink: 0 }}>
-              {v === "AI Assistant" ? "🏠 Home" : v}
+          {/* Right: bell + avatar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {/* Notification bell with count */}
+            <button
+              onClick={() => setView("Reminders")}
+              aria-label="Reminders"
+              style={{
+                position: "relative",
+                width: 36, height: 36,
+                background: "transparent",
+                border: "none",
+                borderRadius: 10,
+                color: C.textDim,
+                cursor: "pointer",
+                display: "grid", placeItems: "center",
+              }}
+            >
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: bellFlash ? "bellPulse 0.4s ease 3" : "none" }}>
+                <path d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              {(alertCount > 0 || upcomingCount > 0) && (
+                <div style={{
+                  position: "absolute",
+                  top: 2, right: 2,
+                  minWidth: 18, height: 18,
+                  padding: "0 5px",
+                  background: alertCount > 0 ? C.red : C.amber,
+                  color: alertCount > 0 ? "#fff" : "#000",
+                  borderRadius: 9,
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10, fontWeight: 700,
+                  display: "grid", placeItems: "center",
+                  border: `2px solid ${C.surface}`,
+                }}>{alertCount > 0 ? alertCount : upcomingCount}</div>
+              )}
             </button>
-          ))}
+            {/* Avatar button — opens dropdown menu */}
+            <button
+              onClick={() => setAvatarMenuOpen(v => !v)}
+              aria-label="Account menu"
+              aria-expanded={avatarMenuOpen}
+              style={{
+                position: "relative",
+                width: 34, height: 34,
+                borderRadius: "50%",
+                background: `linear-gradient(135deg, ${C.amber}, #B45309)`,
+                color: "#000",
+                border: "none",
+                display: "grid", placeItems: "center",
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: 13, fontWeight: 700,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              {(brand?.email || user?.email || "?")[0].toUpperCase()}
+              <span style={{
+                position: "absolute",
+                bottom: -2, right: -2,
+                width: 10, height: 10,
+                background: C.green,
+                borderRadius: "50%",
+                border: `2px solid ${C.surface}`,
+              }} />
+            </button>
+          </div>
+
+          {/* Avatar dropdown menu — overlay, click-outside dismisses */}
+          {avatarMenuOpen && (
+            <>
+              {/* Transparent click-catcher to dismiss on outside-click */}
+              <div
+                onClick={() => setAvatarMenuOpen(false)}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: 199,
+                  background: "transparent",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% - 4px)",
+                  right: 14,
+                  width: 240,
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 12,
+                  boxShadow: "0 20px 50px -10px rgba(0,0,0,0.7), 0 0 40px -10px rgba(245,158,11,0.12)",
+                  padding: 6,
+                  zIndex: 200,
+                }}
+                role="menu"
+              >
+                {/* User header */}
+                <div style={{ padding: "10px 10px 10px", borderBottom: `1px solid ${C.border}`, marginBottom: 4 }}>
+                  <div style={{
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: 13, fontWeight: 700,
+                    color: C.text,
+                    letterSpacing: "-0.01em",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>{brand?.tradingName || companyName || "Account"}</div>
+                  <div style={{
+                    fontSize: 11,
+                    color: C.textDim,
+                    marginTop: 2,
+                    fontFamily: "'DM Mono', monospace",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>{brand?.email || user?.email || ""}</div>
+                </div>
+
+                {/* Settings */}
+                <button
+                  onClick={() => { setAvatarMenuOpen(false); setView("Settings"); }}
+                  role="menuitem"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "18px 1fr 12px",
+                    gap: 10,
+                    alignItems: "center",
+                    width: "100%",
+                    padding: 10,
+                    borderRadius: 8,
+                    background: "transparent",
+                    border: "none",
+                    color: C.text,
+                    fontSize: 13, fontWeight: 500,
+                    fontFamily: "'DM Sans', sans-serif",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" style={{ color: C.textDim }}>
+                    <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>Settings</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" style={{ color: C.textFaint || C.muted }}>
+                    <path d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
+                {/* AI Assistant config */}
+                <button
+                  onClick={() => { setAvatarMenuOpen(false); setAssistantSetupOpen(true); }}
+                  role="menuitem"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "18px 1fr 12px",
+                    gap: 10,
+                    alignItems: "center",
+                    width: "100%",
+                    padding: 10,
+                    borderRadius: 8,
+                    background: "transparent",
+                    border: "none",
+                    color: C.text,
+                    fontSize: 13, fontWeight: 500,
+                    fontFamily: "'DM Sans', sans-serif",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" style={{ color: C.textDim }}>
+                    <path d="M19 11a7 7 0 01-14 0M12 18v4M8 22h8M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3z" />
+                  </svg>
+                  <span>AI Assistant config</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" style={{ color: C.textFaint || C.muted }}>
+                    <path d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
+                {/* Help & feedback */}
+                <button
+                  onClick={() => { setAvatarMenuOpen(false); setHelpSlug(null); setHelpOpen(true); }}
+                  role="menuitem"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "18px 1fr 12px",
+                    gap: 10,
+                    alignItems: "center",
+                    width: "100%",
+                    padding: 10,
+                    borderRadius: 8,
+                    background: "transparent",
+                    border: "none",
+                    color: C.text,
+                    fontSize: 13, fontWeight: 500,
+                    fontFamily: "'DM Sans', sans-serif",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" style={{ color: C.textDim }}>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01" />
+                  </svg>
+                  <span>Help & feedback</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" style={{ color: C.textFaint || C.muted }}>
+                    <path d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
+                {/* Divider */}
+                <div style={{ height: 1, background: C.border, margin: "4px 6px" }} />
+
+                {/* Sign out */}
+                <button
+                  onClick={() => { setAvatarMenuOpen(false); handleLogout(); }}
+                  role="menuitem"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "18px 1fr",
+                    gap: 10,
+                    alignItems: "center",
+                    width: "100%",
+                    padding: 10,
+                    borderRadius: 8,
+                    background: "transparent",
+                    border: "none",
+                    color: C.red,
+                    fontSize: 13, fontWeight: 500,
+                    fontFamily: "'DM Sans', sans-serif",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                    <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span>Sign out</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
-        </>)}
+        {/* Top tab bar (category pills + sub-tabs) — KILLED on mobile.
+            Desktop browser still uses its side-nav below (unchanged). */}
       </header>
       <div style={isDesktopBrowser ? { display: "flex", alignItems: "flex-start", width: "100%" } : {}}>
         {isDesktopBrowser && (
@@ -23682,6 +24159,10 @@ function AppInner() {
           return null;
         })()}
         {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} onScanReceipt={handleScanReceipt} />}
+        {view === "JobsHub" && <JobsHub setView={setView} jobs={jobs} enquiries={enquiries} materials={materials} />}
+        {view === "DiaryHub" && <DiaryHub setView={setView} jobs={jobs} reminders={reminders} />}
+        {view === "AccountsHub" && <AccountsHub setView={setView} invoices={invoices} />}
+        {view === "PeopleHub" && <PeopleHub setView={setView} customers={customers} enquiries={enquiries} />}
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} />}
         {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
