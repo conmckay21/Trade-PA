@@ -11270,12 +11270,63 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
       {/* Edit Modal */}
       {selected && editing && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 310, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Customer</div>
-              <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+          <div style={{
+            maxWidth: 440,
+            width: "100%",
+            marginBottom: 16,
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 14,
+            overflow: "hidden",
+            boxShadow: `0 0 0 1px rgba(255,255,255,0.02), 0 24px 48px -12px rgba(0,0,0,0.6), 0 0 80px -20px ${C.amber}1a`,
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: "20px 20px 16px",
+              borderBottom: `1px solid ${C.border}66`,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
+            }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.14em",
+                  color: C.amber,
+                  fontWeight: 500,
+                }}>Customers</div>
+                <div style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 22,
+                  fontWeight: 700,
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1.1,
+                  color: C.text,
+                }}>Edit customer</div>
+              </div>
+              <button
+                onClick={() => setEditing(false)}
+                aria-label="Close"
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${C.border}`,
+                  color: C.textDim,
+                  width: 32, height: 32,
+                  borderRadius: 10,
+                  display: "grid", placeItems: "center",
+                  cursor: "pointer",
+                  fontSize: 18, lineHeight: 1, padding: 0,
+                  flexShrink: 0,
+                }}
+              >×</button>
             </div>
-            <CustomerForm form={form} set={set} onSave={save} onCancel={() => setEditing(false)} />
+            {/* Body */}
+            <div style={{ padding: 20 }}>
+              <CustomerForm form={form} set={set} onSave={save} onCancel={() => setEditing(false)} />
+            </div>
           </div>
         </div>
       )}
@@ -11283,15 +11334,92 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
       {/* Add Modal */}
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div style={{ ...S.card, maxWidth: 440, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Add Customer</div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <VoiceFillButton form={form} setForm={f => Object.keys(f).forEach(k => set(k)({ target: { value: f[k] } }))} fieldDescriptions="name (full name), phone (phone number), email (email address), address (full address), notes (any extra details)" />
-                <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+          <div style={{
+            maxWidth: 440,
+            width: "100%",
+            marginBottom: 16,
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 14,
+            overflow: "hidden",
+            boxShadow: `0 0 0 1px rgba(255,255,255,0.02), 0 24px 48px -12px rgba(0,0,0,0.6), 0 0 80px -20px ${C.amber}1a`,
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: "20px 20px 16px",
+              borderBottom: `1px solid ${C.border}66`,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
+            }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.14em",
+                  color: C.amber,
+                  fontWeight: 500,
+                }}>Customers</div>
+                <div style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 22,
+                  fontWeight: 700,
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1.1,
+                  color: C.text,
+                }}>New customer</div>
               </div>
+              <button
+                onClick={() => setShowAdd(false)}
+                aria-label="Close"
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${C.border}`,
+                  color: C.textDim,
+                  width: 32, height: 32,
+                  borderRadius: 10,
+                  display: "grid", placeItems: "center",
+                  cursor: "pointer",
+                  fontSize: 18, lineHeight: 1, padding: 0,
+                  flexShrink: 0,
+                }}
+              >×</button>
             </div>
-            <CustomerForm form={form} set={set} onSave={save} onCancel={() => setShowAdd(false)} />
+            {/* Voice-fill banner — wraps existing VoiceFillButton logic in mockup chrome */}
+            <div style={{
+              margin: "16px 20px 0",
+              padding: "12px 14px",
+              background: `${C.amber}1a`,
+              border: `1px solid ${C.amber}4d`,
+              borderRadius: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: C.text,
+                  marginBottom: 2,
+                }}>Dictate the whole customer</div>
+                <div style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  color: C.textDim,
+                }}>Tap and speak — I'll fill every field</div>
+              </div>
+              <VoiceFillButton form={form} setForm={f => Object.keys(f).forEach(k => set(k)({ target: { value: f[k] } }))} fieldDescriptions="name (full name), phone (phone number), email (email address), address (full address), notes (any extra details)" />
+            </div>
+            {/* Body */}
+            <div style={{ padding: 20 }}>
+              <CustomerForm form={form} set={set} onSave={save} onCancel={() => setShowAdd(false)} />
+            </div>
           </div>
         </div>
       )}
@@ -11302,11 +11430,18 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
 function CustomerForm({ form, set, onSave, onCancel }) {
   // Per-field mic state: { [fieldKey]: "idle" | "listening" | "populated" }
   const [micStates, setMicStates] = React.useState({});
-
-  // Per-field MediaRecorder + chunks (keyed by field so concurrent captures
-  // can't collide — though only one mic should be listening at a time)
   const recRef = React.useRef({});
   const chunksRef = React.useRef({});
+
+  // Inject pulse keyframes once for the listening dot animation
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (document.getElementById("tradepa-pulse-kf")) return;
+    const s = document.createElement("style");
+    s.id = "tradepa-pulse-kf";
+    s.textContent = `@keyframes tradepa-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.4); } }`;
+    document.head.appendChild(s);
+  }, []);
 
   // Field-specific normalisation prompt for Claude
   const normalisePrompt = (fieldKey, rawTranscript) => {
@@ -11337,7 +11472,6 @@ function CustomerForm({ form, set, onSave, onCancel }) {
       mr.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         try {
-          // 1. Transcribe audio → raw text
           const blob = new Blob(chunksRef.current[fieldKey], { type: "audio/webm" });
           const audioBase64 = await new Promise(resolve => {
             const reader = new FileReader();
@@ -11354,8 +11488,6 @@ function CustomerForm({ form, set, onSave, onCancel }) {
             setMicStates(s => ({ ...s, [fieldKey]: "idle" }));
             return;
           }
-
-          // 2. Normalise via Claude → field-appropriate format
           const claudeRes = await fetch("/api/claude", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -11367,12 +11499,8 @@ function CustomerForm({ form, set, onSave, onCancel }) {
           });
           const data = await claudeRes.json();
           const normalised = (data.content?.[0]?.text || text).trim();
-
-          // 3. Set the field via the existing set() pattern
-          // (matches how the parent's VoiceFillButton populates fields)
           set(fieldKey)({ target: { value: normalised } });
           setMicStates(s => ({ ...s, [fieldKey]: "populated" }));
-          // Revert to idle after 2s so the green state isn't permanent
           setTimeout(() => {
             setMicStates(s => ({ ...s, [fieldKey]: "idle" }));
           }, 2000);
@@ -11400,7 +11528,6 @@ function CustomerForm({ form, set, onSave, onCancel }) {
     }
   };
 
-  // Cancel with confirmation if form has content
   const hasAnyValue = !!(form.name || form.phone || form.address || form.email || form.notes);
   const handleCancel = () => {
     if (hasAnyValue && !window.confirm("Discard customer details?")) return;
@@ -11415,30 +11542,91 @@ function CustomerForm({ form, set, onSave, onCancel }) {
     { k: "email",   l: "Email Address", p: "e.g. john@email.com",                   inputMode: "email" },
   ];
 
-  // State-dependent input border (amber for listening, green for populated).
-  // Clones S.input without mutating it — safe to reuse elsewhere.
+  // ─── Mockup-aesthetic styles (theme-aware via C palette) ──────────────
+  const labelRowStyle = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "0 2px",
+    marginBottom: 8,
+    minHeight: 16,
+  };
+  const labelStyle = {
+    fontFamily: "'DM Mono', monospace",
+    fontSize: 10,
+    textTransform: "uppercase",
+    letterSpacing: "0.14em",
+    color: C.textDim,
+    fontWeight: 500,
+  };
+  const inputBase = {
+    width: "100%",
+    background: C.surfaceHigh,
+    border: `1px solid ${C.border}`,
+    borderRadius: 10,
+    color: C.text,
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: 15,
+    padding: "13px 14px",
+    transition: "border-color 180ms ease, box-shadow 180ms ease",
+    outline: "none",
+    boxSizing: "border-box",
+  };
   const inputStyleFor = (state) => {
     if (state === "listening") {
-      return { ...S.input, borderColor: C.amber, boxShadow: `0 0 0 2px ${C.amber}22` };
+      return { ...inputBase, borderColor: C.amber, boxShadow: `0 0 0 3px ${C.amber}1a` };
     }
     if (state === "populated") {
-      return { ...S.input, borderColor: C.green + "88" };
+      return { ...inputBase, borderColor: `${C.green}66` };
     }
-    return S.input;
+    return inputBase;
   };
-
-  // Label suffix showing listening / populated state inline
-  const renderStateBadge = (state) => {
+  const stateBadge = (state) => {
     if (state === "listening") {
       return (
-        <span style={{ color: C.amber, fontWeight: 700, textTransform: "none", letterSpacing: 0, marginLeft: 8, fontSize: 10 }}>
-          ● listening
+        <span style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 9,
+          textTransform: "uppercase",
+          letterSpacing: "0.10em",
+          fontWeight: 600,
+          padding: "3px 7px",
+          borderRadius: 4,
+          color: C.amber,
+          background: `${C.amber}1a`,
+          border: `1px solid ${C.amber}4d`,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+          lineHeight: 1,
+        }}>
+          <span style={{
+            display: "inline-block",
+            width: 5,
+            height: 5,
+            borderRadius: "50%",
+            background: C.amber,
+            animation: "tradepa-pulse 1.2s ease-in-out infinite",
+          }} />
+          listening
         </span>
       );
     }
     if (state === "populated") {
       return (
-        <span style={{ color: C.green, fontWeight: 700, textTransform: "none", letterSpacing: 0, marginLeft: 8, fontSize: 10 }}>
+        <span style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 9,
+          textTransform: "uppercase",
+          letterSpacing: "0.10em",
+          fontWeight: 600,
+          padding: "3px 7px",
+          borderRadius: 4,
+          color: C.green,
+          background: `${C.green}1f`,
+          border: `1px solid ${C.green}4d`,
+          lineHeight: 1,
+        }}>
           ✓ filled
         </span>
       );
@@ -11447,16 +11635,19 @@ function CustomerForm({ form, set, onSave, onCancel }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       {fields.map(({ k, l, p, required, inputMode }) => {
         const state = micStates[k] || "idle";
         return (
-          <div key={k}>
-            <label style={S.label}>
-              {l}{required && <span style={{ color: C.red }}> *</span>}
-              {renderStateBadge(state)}
-            </label>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div key={k} style={{ display: "flex", flexDirection: "column" }}>
+            <div style={labelRowStyle}>
+              <span style={labelStyle}>
+                {l}
+                {required && <span style={{ color: C.amber, marginLeft: 4 }}>*</span>}
+              </span>
+              {stateBadge(state)}
+            </div>
+            <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <input
                   style={inputStyleFor(state)}
@@ -11476,16 +11667,16 @@ function CustomerForm({ form, set, onSave, onCancel }) {
         );
       })}
 
-      {/* Notes — textarea treated specially (mic aligned to top) */}
-      <div>
-        <label style={S.label}>
-          Notes
-          {renderStateBadge(micStates.notes || "idle")}
-        </label>
+      {/* Notes — textarea, mic aligned to top */}
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <div style={labelRowStyle}>
+          <span style={labelStyle}>Notes</span>
+          {stateBadge(micStates.notes || "idle")}
+        </div>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <textarea
-              style={{ ...inputStyleFor(micStates.notes || "idle"), resize: "vertical", minHeight: 72 }}
+              style={{ ...inputStyleFor(micStates.notes || "idle"), resize: "vertical", minHeight: 80, fontFamily: "'DM Sans', sans-serif" }}
               placeholder="e.g. Prefers morning appointments, gate code 1234..."
               value={form.notes || ""}
               onChange={set("notes")}
@@ -11499,9 +11690,59 @@ function CustomerForm({ form, set, onSave, onCancel }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button style={S.btn("primary", !form.name)} disabled={!form.name} onClick={onSave}>Save →</button>
-        <button style={S.btn("ghost")} onClick={handleCancel}>Cancel</button>
+      {/* Action row — anchored to modal bottom via negative margins */}
+      {/* (parent modal body has padding: 20, so -20 negative margins extend the row edge-to-edge) */}
+      <div style={{
+        display: "flex",
+        gap: 10,
+        marginTop: 4,
+        marginLeft: -20,
+        marginRight: -20,
+        marginBottom: -20,
+        padding: "16px 20px 20px",
+        borderTop: `1px solid ${C.border}66`,
+        background: C.surface,
+      }}>
+        <button
+          onClick={handleCancel}
+          style={{
+            flex: 1,
+            height: 48,
+            borderRadius: 10,
+            background: "transparent",
+            border: `1px solid ${C.border}`,
+            color: C.textDim,
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: "pointer",
+            transition: "all 150ms ease",
+            outline: "none",
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onSave}
+          disabled={!form.name}
+          style={{
+            flex: 1,
+            height: 48,
+            borderRadius: 10,
+            background: !form.name ? C.surfaceHigh : C.amber,
+            border: "none",
+            color: !form.name ? C.muted : "#000",
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: !form.name ? "not-allowed" : "pointer",
+            opacity: !form.name ? 0.6 : 1,
+            transition: "all 150ms ease",
+            outline: "none",
+          }}
+        >
+          Save customer →
+        </button>
       </div>
     </div>
   );
