@@ -286,17 +286,28 @@ export default function AssistantSetup({
         </div>
 
         {/* Progress segments + step label */}
-        <div style={{ padding: "10px 16px 0", display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ padding: "10px 16px 6px", display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ display: "flex", gap: 3 }}>
             {["name", "wake", "commands"].map((s, i) => (
               <div key={s} onClick={() => setStep(s)} style={{
-                flex: 1, height: 3, borderRadius: 2, cursor: "pointer",
+                flex: 1, height: 4, borderRadius: 2, cursor: "pointer",
                 background: (s === "name" || (s === "wake" && step !== "name") || (s === "commands" && step === "commands")) ? T.amber : (T.border),
               }} />
             ))}
           </div>
-          <div style={{ fontFamily: T.font, fontSize: 10, color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            {step === "name" ? "Name & personality" : step === "wake" ? "Wake words" : "Custom commands"}
+          <div style={{ display: "flex", gap: 4 }}>
+            {[
+              ["name", "Name"],
+              ["wake", "Wake words"],
+              ["commands", "Commands"],
+            ].map(([s, label]) => (
+              <button key={s} onClick={() => setStep(s)} style={{
+                flex: 1, background: "none", border: "none", cursor: "pointer",
+                fontFamily: T.font, fontSize: 10, letterSpacing: "0.04em",
+                color: step === s ? T.amber : T.muted,
+                fontWeight: step === s ? 700 : 500, padding: "2px 0",
+              }}>{label}</button>
+            ))}
           </div>
         </div>
 
@@ -347,21 +358,18 @@ export default function AssistantSetup({
           display: "flex", justifyContent: "space-between",
           gap: 8, flexShrink: 0,
         }}>
-          {mode === "onboard" && step !== "commands" ? (
-            <>
-              <button onClick={onClose} style={ghostBtn}>Cancel</button>
-              <button
-                onClick={() => setStep(step === "name" ? "wake" : "commands")}
-                style={primaryBtn}
-              >Next — {step === "name" ? "Wake words" : "Commands"}</button>
-            </>
+          <button onClick={step === "name" ? onClose : () => setStep(step === "commands" ? "wake" : "name")} style={ghostBtn}>
+            {step === "name" ? "Cancel" : "← Back"}
+          </button>
+          {step === "commands" ? (
+            <button onClick={saveAll} disabled={saving} style={{ ...primaryBtn, background: T.green, color: "#fff", opacity: saving ? 0.6 : 1 }}>
+              {saving ? "Saving..." : "Save & close"}
+            </button>
           ) : (
-            <>
-              <button onClick={onClose} style={ghostBtn}>Cancel</button>
-              <button onClick={saveAll} disabled={saving} style={{ ...primaryBtn, background: T.green, color: "#fff", opacity: saving ? 0.6 : 1 }}>
-                {saving ? "Saving..." : "Save & close"}
-              </button>
-            </>
+            <button
+              onClick={() => setStep(step === "name" ? "wake" : "commands")}
+              style={primaryBtn}
+            >Next — {step === "name" ? "Wake words" : "Commands"}</button>
           )}
         </div>
       </div>
