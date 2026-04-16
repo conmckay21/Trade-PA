@@ -9371,7 +9371,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   const isHome = messages.length === 0 && !loading;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 180px)", minHeight: 400, gap: 12, overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 160px)", minHeight: 400, gap: 12, overflow: "hidden" }}>
 
       {/* ── HOME SCREEN ─────────────────────────────────────────────────── */}
       {isHome && (() => {
@@ -9393,7 +9393,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `£${Math.round(v).toLocaleString()}`;
         };
         return (
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 8 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 100 }}>
 
           {/* Greeting */}
           <div style={{ paddingTop: 4 }}>
@@ -9616,7 +9616,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           )}
 
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0" }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0 100px" }}>
             {messages.map((m, i) => (
               <div key={i}>
                 <div style={S.aiMsg(m.role)}>
@@ -10549,22 +10549,36 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         </>
       )}
 
-      {/* ── INPUT BAR — always visible ──────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0, paddingTop: 4, background: "transparent" }}>
+      {/* ── INPUT BAR — fixed above bottom nav, never scrolls ───────────── */}
+      <div style={{
+        position: "fixed",
+        bottom: "calc(52px + env(safe-area-inset-bottom, 0px))",
+        left: 0,
+        right: 0,
+        padding: "10px 12px 10px",
+        background: "rgba(10,10,10,0.96)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        borderTop: `1px solid ${C.border}`,
+        zIndex: 90,
+        display: "flex",
+        gap: 8,
+        alignItems: "flex-end",
+      }}>
         <textarea
-          style={{ ...S.input, flex: 1, minHeight: 60, maxHeight: 140, resize: "none", fontSize: 14, padding: "12px 14px" }}
+          style={{ ...S.input, flex: 1, minHeight: 46, maxHeight: 120, resize: "none", fontSize: 14, padding: "11px 14px" }}
           placeholder={isHome ? "Ask Trade PA anything..." : "Type here, or tap 🎙 to speak..."}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-          rows={3}
+          rows={2}
         />
         <button
           onClick={() => { unlockAudio(); recording ? stopRecording() : startRecording(true); }}
           disabled={transcribing}
-          style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${recording ? C.red : C.border}`, background: recording ? C.red + "22" : C.surfaceHigh, color: recording ? C.red : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-        >{transcribing ? "⏳" : recording ? "⏹ Stop" : "🎙"}</button>
-        <button onClick={() => { unlockAudio(); send(input); }} style={{ ...S.btn("primary"), padding: "10px 16px" }} disabled={loading || !input.trim()}>Send</button>
+          style={{ padding: "10px 12px", borderRadius: 10, border: `1px solid ${recording ? C.red : C.border}`, background: recording ? C.red + "22" : C.surfaceHigh, color: recording ? C.red : C.muted, fontSize: 13, fontFamily: "'DM Mono',monospace", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+        >{transcribing ? "⏳" : recording ? "⏹" : "🎙"}</button>
+        <button onClick={() => { unlockAudio(); send(input); }} style={{ ...S.btn("primary"), padding: "11px 16px", flexShrink: 0 }} disabled={loading || !input.trim()}>Send</button>
       </div>
     </div>
   );
