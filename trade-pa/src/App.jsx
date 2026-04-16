@@ -3816,7 +3816,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt, v
         padding: "24px 0 16px",
         gap: 14,
       }}>
-        <div style={{ position: "relative", width: 120, height: 120 }}>
+        <div style={{ position: "relative", width: 144, height: 144 }}>
           {/* Pulse ring */}
           <div style={{
             position: "absolute",
@@ -3831,8 +3831,8 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt, v
             aria-label="Tap to speak"
             style={{
               position: "relative",
-              width: 120,
-              height: 120,
+              width: 144,
+              height: 144,
               borderRadius: "50%",
               background: `linear-gradient(180deg, ${C.amber}, #d97706)`,
               border: `3px solid ${C.amber}80`,
@@ -3844,7 +3844,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt, v
               padding: 0,
             }}
           >
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
               <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" />
             </svg>
@@ -22762,15 +22762,15 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
         WebkitBackdropFilter: "blur(16px)",
         borderTop: `1px solid ${C.border}`,
         // Stabilises bar height when iOS keyboard opens and env(safe-area-inset-bottom)
-        // briefly collapses to 0 — the max() ensures a minimum ~10px always, so the
-        // bar doesn't "shrink" mid-interaction.
-        paddingBottom: "max(10px, env(safe-area-inset-bottom, 10px))",
+        // briefly collapses to 0 — the max() ensures a minimum ~6px always, so the
+        // bar doesn't "shrink" mid-interaction. Reduced from 10→6 for tighter visual.
+        paddingBottom: "max(4px, env(safe-area-inset-bottom, 4px))",
       }}
     >
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(5, 1fr)",
-          height: 64,
+          height: 44,
           maxWidth: 520,
           margin: "0 auto",
         }}>
@@ -22790,10 +22790,10 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
                   flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 4,
+                  gap: 2,
                   color: active ? C.amber : C.textDim,
                   fontFamily: "'DM Sans', sans-serif",
-                  padding: "6px 4px",
+                  padding: "2px 4px",
                   transition: "color 150ms ease",
                   position: "relative",
                 }}
@@ -22811,7 +22811,7 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
                     background: C.amber,
                   }} />
                 )}
-                <div style={{ width: 22, height: 22 }}>{tab.icon(active)}</div>
+                <div style={{ width: 20, height: 20 }}>{tab.icon(active)}</div>
                 <div style={{
                   fontSize: 10,
                   fontWeight: active ? 700 : 500,
@@ -22854,7 +22854,7 @@ function AppInner() {
     const params = new URLSearchParams(window.location.search);
     if (params.has('xero') || params.has('qb')) return "Settings";
     if (params.has('email_connected') || params.has('email_error')) return "Inbox";
-    return "AI Assistant";
+    return "Dashboard";
   });
   const [activeCategory, setActiveCategory] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -24179,7 +24179,7 @@ function AppInner() {
             })}
           </nav>
         )}
-      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, paddingBottom: isDesktopBrowser ? undefined : "calc(74px + env(safe-area-inset-bottom, 0px))", ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
+      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, paddingBottom: isDesktopBrowser ? undefined : "calc(48px + env(safe-area-inset-bottom, 0px))", ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
         <div style={isDesktopBrowser ? { maxWidth: 720, margin: "0 auto", width: "100%" } : { display: "contents" }}>
         {(() => {
           // Guard — redirect member to Dashboard if they're on a tab they can't access
