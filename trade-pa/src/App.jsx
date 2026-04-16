@@ -1293,6 +1293,96 @@ function PDFOverlay({ html, onClose }) {
   );
 }
 
+// ─── Detail Page (Phase 4) ────────────────────────────────────────────────────
+// Unified full-screen wrapper for detail views (Job, Invoice, and any future
+// detail surface). Replaces the old "centred card on dimmed backdrop" modal
+// pattern per the audit: opaque background, back button top-left in the
+// easy-reach zone, no list bleed-through, ESC to close.
+// API:
+//   title       — main heading (required)
+//   subtitle    — eyebrow line (optional)
+//   onBack      — close/back handler (required)
+//   rightHeader — optional React node shown right of the header (e.g. Edit btn)
+//   maxWidth    — optional numeric cap on content column (default: full width)
+//   heroStrip   — optional node rendered immediately below the app bar, inside
+//                 the scroll container — good for status-pill rows, summary
+//                 bands, or warning banners that want full-width background.
+function DetailPage({ title, subtitle, onBack, rightHeader, maxWidth, heroStrip, children }) {
+  // ESC closes — matches desktop/tablet expectation
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onBack && onBack(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onBack]);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0,
+      zIndex: 300,
+      background: C.bg,
+      display: "flex", flexDirection: "column",
+      overflow: "hidden",
+    }}>
+      {/* App bar — back chevron top-left, title centred by flex, optional right slot */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "8px 12px",
+        paddingTop: "max(10px, env(safe-area-inset-top, 10px))",
+        background: C.surface,
+        borderBottom: `1px solid ${C.border}`,
+        flexShrink: 0,
+      }}>
+        <button
+          onClick={onBack}
+          aria-label="Back"
+          style={{
+            width: 40, height: 40, flexShrink: 0,
+            display: "grid", placeItems: "center",
+            background: "transparent", border: "none",
+            color: C.text, cursor: "pointer",
+            borderRadius: 8, padding: 0,
+          }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {subtitle && (
+            <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {subtitle}
+            </div>
+          )}
+          {title && (
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {title}
+            </div>
+          )}
+        </div>
+        {rightHeader && <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>{rightHeader}</div>}
+      </div>
+
+      {/* Optional hero strip (full width, under app bar, inside scroll container) */}
+      {heroStrip && (
+        <div style={{ flexShrink: 0 }}>{heroStrip}</div>
+      )}
+
+      {/* Scrollable content column */}
+      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{
+          maxWidth: maxWidth || 640,
+          margin: "0 auto",
+          width: "100%",
+          padding: "14px 12px 28px",
+          boxSizing: "border-box",
+        }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Invoice Preview ──────────────────────────────────────────────────────────
 function InvoicePreview({ brand, invoice }) {
   const inv = invoice || { id: "INV-042", customer: "John Smith", address: "5 High Street\nGuildford GU1 3AA", desc: "Annual boiler service\nFlue check and clean\nPressure test", amount: 120, date: new Date().toLocaleDateString("en-GB"), due: "30 days", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false };
@@ -15387,21 +15477,19 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
         </div>
       )}
 
-      {/* Detail modal */}
+      {/* Detail page — Phase 4 */}
       {selected && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelected(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Invoice · {selected.id}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{selected.customer}</div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "paid" ? C.green : C.amber }}>{fmtAmount(selected.amount)}</div>
-                  <span style={S.badge(statusColor[selected.status] || C.muted)}>{statusLabel[selected.status] || selected.status}</span>
-                </div>
-              </div>
-              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 24 }}>×</button>
-            </div>
+        <DetailPage
+          title={selected.customer}
+          subtitle={`Invoice · ${selected.id}`}
+          onBack={() => setSelected(null)}
+          maxWidth={480}
+        >
+          {/* Amount + status hero */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 18 }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: selected.status === "paid" ? C.green : C.text, letterSpacing: "-0.01em" }}>{fmtAmount(selected.amount)}</div>
+            <span style={S.badge(statusColor[selected.status] || C.muted)}>{statusLabel[selected.status] || selected.status}</span>
+          </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
               {selected.address && (
@@ -15479,8 +15567,7 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
                     .then(r => r.json()).then(d => alert(d.error ? `QuickBooks: ${d.error}` : "✓ Invoice sent to QuickBooks")).catch(() => alert("QuickBooks not connected — check Settings"));
                 }}>QB Invoice</button>
             </div>
-          </div>
-        </div>
+        </DetailPage>
       )}
 
       {showModal && <InvoiceModal brand={brand} invoices={invoices} user={user} customers={customers} onClose={() => setShowModal(false)} onSent={inv => { setInvoices(prev => [inv, ...(prev || [])]); setShowModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
@@ -18545,30 +18632,30 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
         </React.Fragment>
       ))}
 
-      {/* Job detail modal */}
+      {/* Detail page — Phase 4 */}
       {selected && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 12, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16, display: "flex", flexDirection: "column", padding: 0, overflow: "hidden" }}>
-            {/* Modal header */}
-            <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 700 }}>{selected.title || selected.type || "Job"}</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{selected.customer}{selected.address ? ` · ${selected.address}` : ""}</div>
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => { setEditForm({ title: selected.title || "", customer: selected.customer || "", address: selected.address || "", type: selected.type || "", status: selected.status || "enquiry", value: selected.value || "", po_number: selected.po_number || "", notes: selected.notes || "", annual_service: selected.annual_service || false }); setEditingJob(true); }}>Edit</button>
-                  <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>×</button>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                <span style={S.badge(statusColor[selected.status] || C.muted)}>{(selected.status || "").replace("_"," ")}</span>
-                {selected.value > 0 && <span style={S.badge(C.amber)}>£{selected.value}</span>}
-                {selected.po_number && <span style={S.badge(C.blue)}>PO: {selected.po_number}</span>}
-                {selected.annual_service && <span style={{ color: C.green, fontSize: 11 }}>🔄 Annual</span>}
-                {selected.customer_signature && <span style={{ color: C.green, fontSize: 11 }}>✓ Signed off</span>}
-              </div>
+        <DetailPage
+          title={selected.title || selected.type || "Job"}
+          subtitle="Job"
+          onBack={() => setSelected(null)}
+          maxWidth={520}
+          rightHeader={
+            <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => { setEditForm({ title: selected.title || "", customer: selected.customer || "", address: selected.address || "", type: selected.type || "", status: selected.status || "enquiry", value: selected.value || "", po_number: selected.po_number || "", notes: selected.notes || "", annual_service: selected.annual_service || false }); setEditingJob(true); }}>Edit</button>
+          }
+        >
+          {/* Customer + address + status/value/PO pills hero */}
+          <div style={{ marginBottom: 14 }}>
+            {(selected.customer || selected.address) && (
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>{selected.customer}{selected.address ? ` · ${selected.address}` : ""}</div>
+            )}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span style={S.badge(statusColor[selected.status] || C.muted)}>{(selected.status || "").replace("_"," ")}</span>
+              {selected.value > 0 && <span style={S.badge(C.amber)}>£{selected.value}</span>}
+              {selected.po_number && <span style={S.badge(C.blue)}>PO: {selected.po_number}</span>}
+              {selected.annual_service && <span style={{ color: C.green, fontSize: 11 }}>🔄 Annual</span>}
+              {selected.customer_signature && <span style={{ color: C.green, fontSize: 11 }}>✓ Signed off</span>}
             </div>
+          </div>
 
             {/* Geofence live status banner */}
             {geoJobId === selected.id && geoState !== "idle" && (
@@ -19236,8 +19323,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
               )}
               <button style={{ ...S.btn("ghost"), fontSize: 11, color: C.red, marginLeft: "auto" }} onClick={() => deleteJob(selected.id)}>Delete</button>
             </div>
-          </div>
-        </div>
+        </DetailPage>
       )}
 
       {/* Edit job modal */}
