@@ -129,38 +129,33 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
       >
         {/* Header */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
+          display: "flex", alignItems: "center", gap: 10,
           padding: "12px 16px", borderBottom: `1px solid ${T.border}`,
-          background: T.surfaceHigh, flexShrink: 0,
+          flexShrink: 0,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {activeArticle && (
-              <button
-                onClick={() => setActiveSlug(null)}
-                style={{
-                  background: "transparent", border: "none",
-                  color: T.amber, cursor: "pointer",
-                  fontSize: 11, fontFamily: T.font, fontWeight: 600,
-                  padding: "4px 6px", letterSpacing: "0.04em",
-                }}
-              >← BACK</button>
-            )}
-            <div style={{
-              fontSize: 12, fontWeight: 700, color: T.amber,
-              letterSpacing: "0.08em", textTransform: "uppercase",
+          {activeArticle ? (
+            <button onClick={() => setActiveSlug(null)} aria-label="Back" style={{
+              background: "transparent", border: "none", color: T.text,
+              cursor: "pointer", padding: 4, display: "grid", placeItems: "center",
             }}>
-              {activeArticle ? "How-to" : "Help Centre"}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+          ) : (
+            <button onClick={onClose} aria-label="Close" style={{
+              background: "transparent", border: "none", color: T.text,
+              cursor: "pointer", padding: 4, display: "grid", placeItems: "center",
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          )}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: T.font, fontSize: 10, color: T.muted, letterSpacing: "0.06em" }}>
+              {activeArticle ? (CATEGORIES.find(c => c.id === activeArticle.category)?.label || "HELP").toUpperCase() : "TRADE PA"}
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 1 }}>
+              {activeArticle ? activeArticle.title : "Help centre"}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              background: "transparent", border: "none",
-              color: T.muted, cursor: "pointer",
-              fontSize: 22, lineHeight: 1, padding: "0 4px",
-            }}
-          >×</button>
         </div>
 
         {/* Body — scrolls */}
@@ -179,14 +174,13 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
         {/* Footer */}
         {!activeArticle && (
           <div style={{
-            padding: "10px 16px",
+            padding: "8px 16px",
             borderTop: `1px solid ${T.border}`,
-            background: T.surfaceHigh,
             fontSize: 10, color: T.muted,
             display: "flex", alignItems: "center", justifyContent: "center",
-            letterSpacing: "0.04em", flexShrink: 0,
+            letterSpacing: "0.04em", flexShrink: 0, fontFamily: T.font,
           }}>
-            STUCK? EMAIL SUPPORT@TRADESPA.CO.UK
+            Trade PA · hello@tradespa.co.uk
           </div>
         )}
       </div>
@@ -195,105 +189,223 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
 }
 
 // ─── Browse view ────────────────────────────────────────────────────────────
-function BrowseView({ query, setQuery, activeCategory, setActiveCategory, filteredArticles, onSelect }) {
-  return (
-    <div style={{ padding: 16 }}>
-      {/* Search input */}
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search — e.g. mileage, RAMS, voice"
-        style={{
-          width: "100%", boxSizing: "border-box",
-          background: T.surfaceHigh, border: `1px solid ${T.border}`,
-          borderRadius: 8, padding: "10px 12px",
-          color: T.text,
-          fontSize: 16,  // 16px prevents iOS Safari auto-zoom on focus
-          fontFamily: T.font, outline: "none",
-        }}
-      />
+const POPULAR_SEARCHES = ["mileage", "voice", "invoice", "RAMS", "hands-free"];
+const VOICE_COMMANDS = [
+  { phrase: '"Hey Trade PA"', desc: "Wake word" },
+  { phrase: '"Book a job for Monday"', desc: "Create job" },
+  { phrase: '"Invoice John £200"', desc: "New invoice" },
+  { phrase: '"Log 12 miles to site"', desc: "Mileage" },
+  { phrase: '"What\'s my schedule?"', desc: "Check diary" },
+];
 
-      {/* Category pills */}
-      {!query && (
+function BrowseView({ query, setQuery, activeCategory, setActiveCategory, filteredArticles, onSelect }) {
+  const gettingStarted = ARTICLES.filter(a => a.category === "getting-started").slice(0, 3);
+  const showHero = !query && !activeCategory;
+
+  return (
+    <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Search input */}
+      <div>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search help..."
+          style={{
+            width: "100%", boxSizing: "border-box",
+            background: T.surfaceHigh, border: `1px solid ${T.border}`,
+            borderRadius: 10, padding: "10px 12px",
+            color: T.text,
+            fontSize: 16,
+            fontFamily: T.font, outline: "none",
+          }}
+        />
+        {/* Popular search pills */}
+        {!query && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
+            {POPULAR_SEARCHES.map(term => (
+              <button key={term} onClick={() => setQuery(term)} style={{
+                padding: "4px 10px", borderRadius: 12,
+                background: T.surfaceHigh, border: `1px solid ${T.border}`,
+                color: T.textDim, fontSize: 10, fontFamily: T.font,
+                cursor: "pointer", letterSpacing: "0.02em",
+              }}>{term}</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Voice commands quick-reference — always visible when not searching */}
+      {showHero && (
         <div style={{
-          display: "flex", flexWrap: "wrap", gap: 6,
-          marginTop: 12, marginBottom: 4,
+          background: T.amber + "0a", border: `1px solid ${T.amber}33`,
+          borderRadius: 12, padding: "12px 14px",
         }}>
-          <CategoryPill label="All" active={activeCategory === null} onClick={() => setActiveCategory(null)} />
-          {CATEGORIES.map(c => (
-            <CategoryPill
-              key={c.id}
-              label={c.label} icon={c.icon}
-              active={activeCategory === c.id}
-              onClick={() => setActiveCategory(activeCategory === c.id ? null : c.id)}
-            />
-          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T.amber, letterSpacing: "0.06em", fontFamily: T.font }}>VOICE COMMANDS</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {VOICE_COMMANDS.map((vc, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11 }}>
+                <span style={{ color: T.amber, fontFamily: T.font }}>{vc.phrase}</span>
+                <span style={{ color: T.muted, fontSize: 10 }}>{vc.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* "Start here" hero section — only on home, not filtering */}
+      {showHero && gettingStarted.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, letterSpacing: "0.06em", marginBottom: 8, fontFamily: T.font }}>START HERE</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {gettingStarted.map((a, idx) => (
+              <div key={a.slug} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                  background: idx === 0 ? T.amber : T.surfaceHigh,
+                  border: `1px solid ${idx === 0 ? T.amber : T.border}`,
+                  color: idx === 0 ? "#000" : T.muted,
+                  display: "grid", placeItems: "center",
+                  fontSize: 10, fontWeight: 700,
+                }}>{idx + 1}</div>
+                <button
+                  onClick={() => onSelect(a.slug)}
+                  style={{
+                    flex: 1, background: T.surfaceHigh, border: `1px solid ${T.border}`,
+                    borderRadius: 12, padding: "10px 12px",
+                    cursor: "pointer", textAlign: "left", fontFamily: T.font, color: T.text,
+                    display: "flex", alignItems: "center", gap: 8,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{a.title}</div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginTop: 1 }}>{a.summary}</div>
+                  </div>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Category pills — collapsed to 5 intent groups */}
+      {!query && (
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, letterSpacing: "0.06em", marginBottom: 8, fontFamily: T.font }}>BROWSE BY TOPIC</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            <CategoryPill label="All" active={activeCategory === null} onClick={() => setActiveCategory(null)} />
+            {CATEGORIES.map(c => (
+              <CategoryPill
+                key={c.id}
+                label={c.label}
+                active={activeCategory === c.id}
+                onClick={() => setActiveCategory(activeCategory === c.id ? null : c.id)}
+              />
+            ))}
+          </div>
         </div>
       )}
 
       {/* Article list */}
-      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-        {filteredArticles.length === 0 ? (
-          <div style={{
-            padding: "32px 16px", textAlign: "center",
-            color: T.muted, fontSize: 12,
-          }}>
-            No articles match. Try another word.
-          </div>
-        ) : filteredArticles.map(a => {
-          const cat = CATEGORIES.find(c => c.id === a.category);
-          return (
+      {(query || activeCategory) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {filteredArticles.length === 0 ? (
+            <div style={{
+              padding: "32px 16px", textAlign: "center",
+              color: T.muted, fontSize: 12,
+            }}>
+              No articles match. Try another word.
+            </div>
+          ) : filteredArticles.map(a => (
             <button
               key={a.slug}
               onClick={() => onSelect(a.slug)}
               style={{
                 background: T.surfaceHigh,
                 border: `1px solid ${T.border}`,
-                borderRadius: 8, padding: 12,
+                borderRadius: 12, padding: 12,
                 cursor: "pointer", textAlign: "left",
-                display: "flex", gap: 10, alignItems: "flex-start",
+                display: "flex", gap: 10, alignItems: "center",
                 fontFamily: T.font, color: T.text,
-                width: "100%", maxWidth: "100%",
-                boxSizing: "border-box", minWidth: 0,
+                width: "100%", boxSizing: "border-box", minWidth: 0,
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.amber; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.border; }}
             >
-              <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{cat?.icon || "📘"}</span>
+              <div style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: T.surfaceHigh, border: `1px solid ${T.border}`,
+                display: "grid", placeItems: "center", flexShrink: 0,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                  <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+                </svg>
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4, wordBreak: "break-word" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 3, wordBreak: "break-word" }}>
                   {a.title}
                 </div>
                 <div style={{ fontSize: 11, color: T.textDim, lineHeight: 1.5, wordBreak: "break-word" }}>
                   {a.summary}
                 </div>
               </div>
-              <span style={{ color: T.amber, fontSize: 14, flexShrink: 0 }}>›</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
             </button>
-          );
-        })}
+          ))}
+        </div>
+      )}
+
+      {/* "Still stuck?" contact card */}
+      <div style={{
+        background: T.surfaceHigh, border: `1px solid ${T.border}`,
+        borderRadius: 12, padding: 14,
+        display: "flex", flexDirection: "column", gap: 10, marginTop: 4,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: "50%",
+            background: T.surface, border: `1px solid ${T.border}`,
+            display: "grid", placeItems: "center", flexShrink: 0,
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Still stuck?</div>
+            <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>We usually reply within a few hours</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <a href="mailto:hello@tradespa.co.uk?subject=Trade%20PA%20help" style={{
+            flex: 1, padding: "8px", borderRadius: 10,
+            border: `1px solid ${T.border}`, background: "transparent",
+            color: T.text, fontSize: 11, fontFamily: T.font, fontWeight: 600,
+            textAlign: "center", textDecoration: "none", cursor: "pointer",
+          }}>Email us</a>
+        </div>
       </div>
     </div>
   );
 }
 
-function CategoryPill({ label, icon, active, onClick }) {
+function CategoryPill({ label, active, onClick }) {
   return (
     <button
       onClick={onClick}
       style={{
-        flexShrink: 0, padding: "4px 10px", borderRadius: 16,
+        flexShrink: 0, padding: "5px 12px", borderRadius: 14,
         border: `1px solid ${active ? T.amber : T.border}`,
         background: active ? T.amber : "transparent",
         color: active ? "#000" : T.muted,
         fontSize: 10, fontFamily: T.font,
         fontWeight: active ? 700 : 500,
         cursor: "pointer", letterSpacing: "0.04em",
-        display: "inline-flex", alignItems: "center", gap: 4,
       }}
     >
-      {icon && <span>{icon}</span>}{label}
+      {label}
     </button>
   );
 }
@@ -312,10 +424,9 @@ function ArticleView({ article, onSelect }) {
         <div style={{
           fontSize: 10, color: T.muted,
           letterSpacing: "0.08em", textTransform: "uppercase",
-          marginBottom: 10,
-          display: "flex", alignItems: "center", gap: 4,
+          marginBottom: 10, fontFamily: T.font,
         }}>
-          <span>{cat.icon}</span>{cat.label}
+          {cat.label}
         </div>
       )}
 
@@ -354,11 +465,11 @@ function ArticleView({ article, onSelect }) {
 
       {/* Voice prompts */}
       {article.voicePrompts?.length > 0 && (
-        <Section title="🎙️  TRY SAYING">
+        <Section title="TRY SAYING">
           <div style={{
             background: T.amber + "0c",
             border: `1px solid ${T.amber}33`,
-            borderRadius: 8, padding: 12,
+            borderRadius: 10, padding: 12,
             display: "flex", flexDirection: "column", gap: 8,
           }}>
             {article.voicePrompts.map((vp, i) => (
@@ -379,7 +490,7 @@ function ArticleView({ article, onSelect }) {
           <div style={{
             background: T.surfaceHigh,
             border: `1px solid ${T.border}`,
-            borderRadius: 8, padding: 12,
+            borderRadius: 10, padding: 12,
             display: "flex", flexDirection: "column", gap: 6,
           }}>
             {article.tips.map((t, i) => (
@@ -431,19 +542,12 @@ function Section({ title, children }) {
 // ============================================================================
 
 const CATEGORIES = [
-  { id: "getting-started", label: "Getting started",   icon: "🚀" },
-  { id: "customers-jobs",  label: "Customers & jobs",  icon: "📋" },
-  { id: "materials-pos",   label: "Materials & POs",   icon: "🧰" },
-  { id: "labour-mileage",  label: "Labour & mileage",  icon: "⏱️" },
-  { id: "voice-ai",        label: "Voice & AI",        icon: "🎙️" },
-  { id: "invoicing",       label: "Invoicing & paid",  icon: "💷" },
-  { id: "calls-messages",  label: "Calls & messages",  icon: "📞" },
-  { id: "compliance",      label: "RAMS & compliance", icon: "🦺" },
-  { id: "stock",           label: "Stock & van",       icon: "🚐" },
-  { id: "accounts",        label: "Accountant & Xero", icon: "📊" },
-  { id: "reports-data",    label: "Reports & insights", icon: "📈" },
-  { id: "settings",        label: "Settings & team",   icon: "⚙️" },
-  { id: "troubleshooting", label: "Troubleshooting",   icon: "🛠️" },
+  { id: "getting-started", label: "Getting started" },
+  { id: "getting-work-done", label: "Getting work done" },
+  { id: "getting-paid", label: "Getting paid" },
+  { id: "voice-ai", label: "Voice & AI" },
+  { id: "site-compliance", label: "Site & compliance" },
+  { id: "troubleshooting", label: "Troubleshooting" },
 ];
 
 const ARTICLES = [
@@ -499,7 +603,7 @@ const ARTICLES = [
   {
     slug: "add-customer",
     title: "Add a customer (by voice)",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "Get a customer in the system in under 10 seconds.",
     steps: [
       "Tap the Customers tab.",
@@ -517,7 +621,7 @@ const ARTICLES = [
   {
     slug: "create-job",
     title: "Create a job",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "One job card holds materials, labour, photos, notes and the invoice.",
     steps: [
       "Tap Jobs, then Add.",
@@ -533,7 +637,7 @@ const ARTICLES = [
   {
     slug: "enquiries",
     title: "Turn an enquiry into a job",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "Capture leads, then convert them when they become real work.",
     steps: [
       "Tap Enquiries to see incoming leads (manual or via the AI from messages/emails).",
@@ -547,7 +651,7 @@ const ARTICLES = [
   {
     slug: "add-materials",
     title: "Add materials to a job",
-    category: "materials-pos",
+    category: "getting-work-done",
     summary: "Voice-fill at the merchant so nothing falls off the invoice.",
     steps: [
       "Open the job card.",
@@ -564,7 +668,7 @@ const ARTICLES = [
   {
     slug: "raise-po",
     title: "Raise a Purchase Order (and the hidden trick)",
-    category: "materials-pos",
+    category: "getting-work-done",
     summary: "A PO automatically creates the matching materials entries on the job.",
     steps: [
       "Open the job. Tap Purchase Orders → New PO.",
@@ -582,7 +686,7 @@ const ARTICLES = [
   {
     slug: "log-labour",
     title: "Log labour to a job",
-    category: "labour-mileage",
+    category: "getting-work-done",
     summary: "Days, hours, worker, type. Auto-totals to the invoice.",
     steps: [
       "Open the job. Tap Labour → Add.",
@@ -597,7 +701,7 @@ const ARTICLES = [
   {
     slug: "log-mileage",
     title: "Log mileage by voice",
-    category: "labour-mileage",
+    category: "getting-work-done",
     summary: "Claim every mile you drive. Voice-log from the driveway.",
     steps: [
       "Open the Mileage tab.",
@@ -675,7 +779,7 @@ const ARTICLES = [
   {
     slug: "send-invoice",
     title: "Send your first invoice",
-    category: "invoicing",
+    category: "getting-paid",
     summary: "Materials and labour pull through automatically. Add a Stripe link to get paid faster.",
     steps: [
       "Open the job, tap Invoice.",
@@ -693,7 +797,7 @@ const ARTICLES = [
   {
     slug: "take-payment",
     title: "Take card payment via Stripe",
-    category: "invoicing",
+    category: "getting-paid",
     summary: "Customer taps the link in your invoice email, pays by card. Money in days.",
     steps: [
       "Make sure Stripe is connected in Settings.",
@@ -705,7 +809,7 @@ const ARTICLES = [
   {
     slug: "quotes-to-invoices",
     title: "Convert a quote to an invoice",
-    category: "invoicing",
+    category: "getting-paid",
     summary: "When the customer says yes, one tap turns the quote into the invoice.",
     steps: [
       "Open Quotes, find the accepted quote.",
@@ -719,7 +823,7 @@ const ARTICLES = [
   {
     slug: "rams",
     title: "Build a RAMS in three minutes",
-    category: "compliance",
+    category: "site-compliance",
     summary: "Voice-fill on Steps 1 and 5 turns the worst job of the week into a quick one.",
     steps: [
       "Open the job, tap RAMS → New.",
@@ -736,7 +840,7 @@ const ARTICLES = [
   {
     slug: "subcontractors",
     title: "Add and pay subcontractors",
-    category: "compliance",
+    category: "site-compliance",
     summary: "Track subbies, their rates, insurance, and CIS payments in one place.",
     steps: [
       "Tap Subcontractors.",
@@ -750,7 +854,7 @@ const ARTICLES = [
   {
     slug: "stock",
     title: "Track van stock",
-    category: "stock",
+    category: "getting-work-done",
     summary: "Know what is on the van before you head to the merchant.",
     steps: [
       "Tap the Stock tab.",
@@ -764,7 +868,7 @@ const ARTICLES = [
   {
     slug: "xero-sync",
     title: "Push invoices and bills to Xero",
-    category: "accounts",
+    category: "getting-paid",
     summary: "Invoices and supplier bills auto-sync. Your accountant gets clean books.",
     steps: [
       "Connect Xero in Settings → Integrations.",
@@ -873,7 +977,7 @@ const ARTICLES = [
   {
     slug: "schedule-view",
     title: "See your week on the Schedule",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "Calendar view of every job, colour-coded by status.",
     steps: [
       "Tap Schedule under the Work category.",
@@ -886,7 +990,7 @@ const ARTICLES = [
   {
     slug: "add-photos",
     title: "Add photos to a job",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "Before/after evidence ready if a customer queries the bill.",
     steps: [
       "Open the job card.",
@@ -901,7 +1005,7 @@ const ARTICLES = [
   {
     slug: "job-notes",
     title: "Add notes to a job",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "The 'why' of every decision, captured as it happens.",
     steps: [
       "Open the job card.",
@@ -916,7 +1020,7 @@ const ARTICLES = [
   {
     slug: "job-card-overview",
     title: "What's on a Job Card",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "One card per job — materials, labour, photos, notes, RAMS, invoice.",
     steps: [
       "Open Jobs → tap any job.",
@@ -929,7 +1033,7 @@ const ARTICLES = [
   {
     slug: "reminders",
     title: "Use reminders so nothing slips",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "Tap the bell, set a reminder, get pinged at the right time. Reminders stay in your list until you confirm them done.",
     steps: [
       "Tap the bell icon (top of every screen).",
@@ -950,7 +1054,7 @@ const ARTICLES = [
   {
     slug: "scan-receipt",
     title: "Scan a receipt with AI",
-    category: "materials-pos",
+    category: "getting-work-done",
     summary: "Photograph a merchant receipt — the AI extracts items and adds them to a job.",
     steps: [
       "Open the AI Assistant.",
@@ -967,7 +1071,7 @@ const ARTICLES = [
   {
     slug: "purchase-orders-tab",
     title: "Manage all Purchase Orders in one place",
-    category: "materials-pos",
+    category: "getting-work-done",
     summary: "The PO tab shows every order across every job.",
     steps: [
       "Tap Purchase Orders.",
@@ -982,7 +1086,7 @@ const ARTICLES = [
   {
     slug: "add-worker",
     title: "Add a worker to your team",
-    category: "labour-mileage",
+    category: "getting-work-done",
     summary: "Workers (employees) are separate from subcontractors — track day rates and docs.",
     steps: [
       "Tap Subcontractors → + Add Worker / Sub.",
@@ -995,7 +1099,7 @@ const ARTICLES = [
   {
     slug: "daywork-sheets",
     title: "Use daywork sheets for ad-hoc work",
-    category: "labour-mileage",
+    category: "getting-work-done",
     summary: "Capture extra time/materials outside the original quote.",
     steps: [
       "Open the job → Daywork Sheet → New.",
@@ -1010,7 +1114,7 @@ const ARTICLES = [
   {
     slug: "mileage-auto",
     title: "Auto-calculate mileage between two postcodes",
-    category: "labour-mileage",
+    category: "getting-work-done",
     summary: "Don't know how far it was? Trade PA works it out for you.",
     steps: [
       "Open Mileage → Add.",
@@ -1026,7 +1130,7 @@ const ARTICLES = [
   {
     slug: "cis-statements",
     title: "Generate a CIS statement for a sub",
-    category: "labour-mileage",
+    category: "getting-work-done",
     summary: "Auto-calculated from sub payments — one tap to produce, one tap to send.",
     steps: [
       "Tap CIS (under Admin).",
@@ -1075,7 +1179,7 @@ const ARTICLES = [
   {
     slug: "variation-orders",
     title: "Raise a Variation Order (VO)",
-    category: "invoicing",
+    category: "getting-paid",
     summary: "Formal record of scope change — protects you if the customer pushes back.",
     steps: [
       "Open the job → Variation Orders → New.",
@@ -1090,7 +1194,7 @@ const ARTICLES = [
   {
     slug: "chase-overdue",
     title: "Chase an overdue invoice",
-    category: "invoicing",
+    category: "getting-paid",
     summary: "Trade PA flags overdue invoices automatically — chase from the same screen.",
     steps: [
       "Tap Invoices → filter by Overdue.",
@@ -1105,7 +1209,7 @@ const ARTICLES = [
   {
     slug: "expenses",
     title: "Track business expenses",
-    category: "invoicing",
+    category: "getting-paid",
     summary: "Log fuel, parking, tools, anything — for the year-end accounts.",
     steps: [
       "Tap Expenses (under Admin).",
@@ -1120,7 +1224,7 @@ const ARTICLES = [
   {
     slug: "business-phone",
     title: "Activate your business phone number",
-    category: "calls-messages",
+    category: "voice-ai",
     summary: "Get a Twilio business number so customers don't have your personal mobile.",
     steps: [
       "Tap Settings → Business Phone.",
@@ -1135,7 +1239,7 @@ const ARTICLES = [
   {
     slug: "make-call",
     title: "Make a call to a customer",
-    category: "calls-messages",
+    category: "voice-ai",
     summary: "Tap the customer's number — call goes out from your business number.",
     steps: [
       "Open the customer (Customers tab or job card).",
@@ -1148,7 +1252,7 @@ const ARTICLES = [
   {
     slug: "receive-call",
     title: "Receive an incoming call",
-    category: "calls-messages",
+    category: "voice-ai",
     summary: "Customer calls your business number — Trade PA rings inside the app.",
     steps: [
       "Make sure the app is open (or has notifications on if installed).",
@@ -1161,7 +1265,7 @@ const ARTICLES = [
   {
     slug: "send-sms",
     title: "Send an SMS to a customer",
-    category: "calls-messages",
+    category: "voice-ai",
     summary: "Quick text from your business number, logged against the customer.",
     steps: [
       "Open the customer or job.",
@@ -1173,7 +1277,7 @@ const ARTICLES = [
   {
     slug: "inbox",
     title: "Inbox — emails and messages from customers",
-    category: "calls-messages",
+    category: "voice-ai",
     summary: "Connected email and SMS in one stream — the AI can sort and reply.",
     steps: [
       "Tap Inbox under Admin.",
@@ -1190,7 +1294,7 @@ const ARTICLES = [
   {
     slug: "trade-certificates",
     title: "Issue trade certificates (Gas Safe, NICEIC, OFTEC, etc.)",
-    category: "compliance",
+    category: "site-compliance",
     summary: "Pre-filled with your registration numbers — issue from the job in minutes.",
     steps: [
       "Set your trade types and registration numbers in Settings → Brand & Compliance.",
@@ -1206,7 +1310,7 @@ const ARTICLES = [
   {
     slug: "compliance-docs",
     title: "Store insurance, qualifications and other compliance docs",
-    category: "compliance",
+    category: "site-compliance",
     summary: "One vault for all your compliance — easy to send when a contractor asks.",
     steps: [
       "Tap Documents (under Admin).",
@@ -1218,7 +1322,7 @@ const ARTICLES = [
   {
     slug: "worker-docs",
     title: "Store worker / subcontractor documents",
-    category: "compliance",
+    category: "site-compliance",
     summary: "Insurance, CSCS cards, qualifications — all on the worker's profile.",
     steps: [
       "Open Subcontractors → tap the worker.",
@@ -1233,7 +1337,7 @@ const ARTICLES = [
   {
     slug: "quickbooks-sync",
     title: "Connect QuickBooks instead of Xero",
-    category: "accounts",
+    category: "getting-paid",
     summary: "Same auto-sync, just for QuickBooks users.",
     steps: [
       "Tap Settings → Integrations → QuickBooks.",
@@ -1248,7 +1352,7 @@ const ARTICLES = [
   {
     slug: "reports-overview",
     title: "Generate business reports",
-    category: "reports-data",
+    category: "getting-paid",
     summary: "Income, expenses, job profitability, mileage — all exportable.",
     steps: [
       "Tap Reports under Admin.",
@@ -1263,7 +1367,7 @@ const ARTICLES = [
   {
     slug: "reviews-requests",
     title: "Ask happy customers for a review",
-    category: "reports-data",
+    category: "getting-paid",
     summary: "One-tap review request — Google, Facebook, Trustpilot.",
     steps: [
       "After job complete, open the customer.",
@@ -1280,7 +1384,7 @@ const ARTICLES = [
   {
     slug: "appearance",
     title: "Light, dark, or auto — choose how Trade PA looks",
-    category: "settings",
+    category: "troubleshooting",
     summary: "Pick a theme that suits where you're working. Bright sunlight outside? Light mode. Evening in the van? Dark mode.",
     steps: [
       "Tap Settings.",
@@ -1297,7 +1401,7 @@ const ARTICLES = [
   {
     slug: "brand-setup",
     title: "Set up your business brand",
-    category: "settings",
+    category: "troubleshooting",
     summary: "Logo, trading name, contact details — appears on every invoice and certificate.",
     steps: [
       "Tap Settings → Brand.",
@@ -1312,7 +1416,7 @@ const ARTICLES = [
   {
     slug: "team-members",
     title: "Invite team members",
-    category: "settings",
+    category: "troubleshooting",
     summary: "Add staff or office help — set per-tab permissions for each.",
     steps: [
       "Tap Settings → Team.",
@@ -1327,7 +1431,7 @@ const ARTICLES = [
   {
     slug: "subscription",
     title: "Manage your Trade PA subscription",
-    category: "settings",
+    category: "troubleshooting",
     summary: "View your plan, upgrade or downgrade, manage billing.",
     steps: [
       "Tap Settings → Subscription.",
@@ -1339,7 +1443,7 @@ const ARTICLES = [
   {
     slug: "documents-tab",
     title: "Documents tab — what goes where",
-    category: "settings",
+    category: "troubleshooting",
     summary: "Central place for any document not tied to a specific job.",
     steps: [
       "Tap Documents under Admin.",
@@ -1382,7 +1486,7 @@ const ARTICLES = [
   {
     slug: "job-profit",
     title: "See the profit on a job",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "Materials + labour + mileage rolled up against the invoice — live profit view per job.",
     steps: [
       "Open any job card.",
@@ -1399,7 +1503,7 @@ const ARTICLES = [
   {
     slug: "job-plans",
     title: "Upload drawings and plans to a job",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "Keep architect drawings, floor plans and sketches with the job — always to hand on site.",
     steps: [
       "Open the job, tap the Plans tab.",
@@ -1436,7 +1540,7 @@ const ARTICLES = [
   {
     slug: "price-work",
     title: "Price work — quick job costing",
-    category: "customers-jobs",
+    category: "getting-work-done",
     summary: "Rough out a price for a job before you turn it into a quote.",
     steps: [
       "Open the job, tap Price Work.",
