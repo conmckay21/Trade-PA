@@ -11377,23 +11377,18 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
         </div>
       )}
 
-      {/* ── Detail Modal ── */}
+      {/* Detail page — Phase 4 */}
       {selected && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelected(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                  {selected.isQuote ? "Quote" : "Invoice"} · {selected.id}
-                </div>
-                <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{selected.customer}</div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "paid" ? C.green : selected.isQuote ? C.blue : C.amber }}>{fmtAmount(selected.amount)}</div>
-                  <span style={S.badge(statusColor[selected.status] || C.muted)}>{statusLabel[selected.status] || selected.status}</span>
-                </div>
-              </div>
-              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 24 }}>×</button>
+        <DetailPage
+          title={selected.customer}
+          subtitle={`${selected.isQuote ? "Quote" : "Invoice"} · ${selected.id}`}
+          onBack={() => setSelected(null)}
+          maxWidth={480}
+        >
+            {/* Amount + status hero */}
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 18, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 26, fontWeight: 700, color: selected.status === "paid" ? C.green : C.text, letterSpacing: "-0.01em" }}>{fmtAmount(selected.amount)}</div>
+              <span style={S.badge(statusColor[selected.status] || C.muted)}>{statusLabel[selected.status] || selected.status}</span>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
@@ -11468,8 +11463,7 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush }) {
                   }}>QB Invoice</button>
               </div>
             )}
-          </div>
-        </div>
+        </DetailPage>
       )}
 
       {showInvoiceModal && <InvoiceModal brand={brand} invoices={safeInvoices} user={user} customers={customers} onClose={() => setShowInvoiceModal(false)} onSent={(inv) => { setInvoices(prev => [inv, ...(prev || [])]); setShowInvoiceModal(false); syncInvoiceToAccounting(user?.id, inv); }} />}
@@ -15760,11 +15754,49 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
   const [showModal, setShowModal] = useState(false);
   const [editingQuote, setEditingQuote] = useState(null);
   const [sendingId, setSendingId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all"); // all | pending | accepted | declined
+  const [sortMode, setSortMode] = useState("recent"); // recent | value | customer
+
+  // Canonical pill map — amber discipline (blue for open, green for won, red for lost)
+  const QUOTE_PILL = {
+    accepted: { bg: C.green, label: "Accepted" },
+    declined: { bg: C.red, label: "Declined" },
+    sent: { bg: C.blue, label: "Sent" },
+    draft: { bg: C.muted, label: "Draft" },
+  };
+  const pillFor = (q) => {
+    if (q.status === "accepted") return QUOTE_PILL.accepted;
+    if (q.status === "declined") return QUOTE_PILL.declined;
+    if (q.status === "draft") return QUOTE_PILL.draft;
+    return QUOTE_PILL.sent;
+  };
 
   const allQuotes = (invoices || []).filter(i => i.isQuote);
   const pending = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
   const accepted = allQuotes.filter(q => q.status === "accepted");
   const declined = allQuotes.filter(q => q.status === "declined");
+
+  // Search + filter + sort
+  const qLower = search.trim().toLowerCase();
+  const filteredQuotes = allQuotes.filter(q => {
+    if (filter === "pending" && (q.status === "accepted" || q.status === "declined")) return false;
+    if (filter === "accepted" && q.status !== "accepted") return false;
+    if (filter === "declined" && q.status !== "declined") return false;
+    if (!qLower) return true;
+    return (q.customer || "").toLowerCase().includes(qLower)
+        || (q.id || "").toLowerCase().includes(qLower)
+        || (q.address || "").toLowerCase().includes(qLower)
+        || (q.type || "").toLowerCase().includes(qLower);
+  });
+  const sortedQuotes = [...filteredQuotes].sort((a, b) => {
+    if (sortMode === "value") return (b.amount || 0) - (a.amount || 0);
+    if (sortMode === "customer") return (a.customer || "").localeCompare(b.customer || "");
+    // recent — use updated_at/created_at
+    const at = a.updated_at || a.created_at || 0;
+    const bt = b.updated_at || b.created_at || 0;
+    return new Date(bt) - new Date(at);
+  });
 
   const updateStatus = (id, status) => {
     setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status } : i));
@@ -15804,6 +15836,26 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
     setSelected(null);
   };
 
+  const FilterChip = ({ id, label, count, color }) => (
+    <button
+      onClick={() => setFilter(id)}
+      style={{
+        padding: "6px 12px", borderRadius: 16, fontSize: 12, fontWeight: 600,
+        background: filter === id ? (color || C.text) : "transparent",
+        color: filter === id ? (color === C.text ? C.bg : "#fff") : C.textDim,
+        border: `1px solid ${filter === id ? (color || C.text) : C.border}`,
+        cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+      }}
+    >
+      {label} {count != null && <span style={{ opacity: 0.7, marginLeft: 4 }}>{count}</span>}
+    </button>
+  );
+
+  const nextSort = () => {
+    setSortMode(m => m === "recent" ? "value" : m === "value" ? "customer" : "recent");
+  };
+  const sortLabel = sortMode === "recent" ? "Recent" : sortMode === "value" ? "Value" : "Customer";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -15835,83 +15887,108 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
         </div>
       </div>
 
-      {/* All quotes */}
+      {/* Search */}
+      {allQuotes.length > 0 && (
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search customer, ID, address…"
+          style={{ ...S.input, fontSize: 13 }}
+        />
+      )}
+
+      {/* Filter + sort chips */}
+      {allQuotes.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <FilterChip id="all" label="All" count={allQuotes.length} />
+          <FilterChip id="pending" label="Pending" count={pending.length} color={C.blue} />
+          <FilterChip id="accepted" label="Accepted" count={accepted.length} color={C.green} />
+          <FilterChip id="declined" label="Declined" count={declined.length} color={C.red} />
+          <button onClick={nextSort} style={{
+            marginLeft: "auto", padding: "6px 12px", borderRadius: 16,
+            fontSize: 12, fontWeight: 600, background: "transparent",
+            color: C.muted, border: `1px solid ${C.border}`, cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}>↕ {sortLabel}</button>
+        </div>
+      )}
+
+      {/* List */}
       <div style={S.card}>
-        <div style={S.sectionTitle}>All Quotes ({allQuotes.length})</div>
-        {allQuotes.length === 0
-          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No quotes yet — tap + New Quote or ask the AI Assistant.</div>
-          : allQuotes.map(q => (
+        {allQuotes.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No quotes yet — tap + New Quote or ask the AI Assistant.</div>
+        ) : sortedQuotes.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "24px 8px" }}>
+            {search ? `No quotes match "${search}".` : `No ${filter === "pending" ? "pending" : filter === "accepted" ? "accepted" : "declined"} quotes.`}
+          </div>
+        ) : sortedQuotes.map(q => {
+          const pill = pillFor(q);
+          return (
             <div key={q.id} onClick={() => setSelected(q)} style={{ ...S.row, cursor: "pointer" }}>
-              <div style={{ width: 4, height: 44, borderRadius: 2, background: q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue, flexShrink: 0 }} />
+              <div style={{ width: 4, height: 44, borderRadius: 2, background: pill.bg, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
                 <div style={{ fontSize: 10, color: C.muted }}>{q.address || q.id} · {q.due}</div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>{fmtAmount(q.amount)}</div>
-              <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
-                {q.status === "accepted" ? "Accepted" : q.status === "declined" ? "Declined" : "Sent"}
-              </div>
+              <div style={{ ...S.badge(pill.bg), marginRight: 8, flexShrink: 0 }}>{pill.label}</div>
               <button onClick={e => { e.stopPropagation(); sendDocumentEmail(q, brand, customers, user?.id, setSendingId, customerContacts); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.blue, flexShrink: 0 }} disabled={sendingId === q.id}>{sendingId === q.id ? "..." : "✉"}</button>
               <button onClick={e => { e.stopPropagation(); convertToInvoice(q); }} style={{ ...S.btn("primary"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>→ Invoice</button>
               <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
             </div>
-          ))
-        }
+          );
+        })}
       </div>
 
-      {/* Detail modal */}
+      {/* Detail page — Phase 4 */}
       {selected && !editingQuote && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelected(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 11, color: C.blue, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Quote · {selected.id}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{selected.customer}</div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: selected.status === "accepted" ? C.green : C.blue }}>{fmtAmount(selected.amount)}</div>
-                  <span style={S.badge(selected.status === "accepted" ? C.green : selected.status === "declined" ? C.red : C.blue)}>
-                    {selected.status === "accepted" ? "Accepted" : selected.status === "declined" ? "Declined" : "Sent"}
-                  </span>
-                </div>
-              </div>
-              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 24 }}>×</button>
+        <DetailPage
+          title={selected.customer}
+          subtitle={`Quote · ${selected.id}`}
+          onBack={() => setSelected(null)}
+          maxWidth={480}
+        >
+          {/* Amount + status hero */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 26, fontWeight: 700, color: selected.status === "accepted" ? C.green : C.text, letterSpacing: "-0.01em" }}>{fmtAmount(selected.amount)}</div>
+            <span style={S.badge(pillFor(selected).bg)}>{pillFor(selected).label}</span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+            <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Line Items</div>
+              <LineItemsDisplay inv={selected} />
             </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Line Items</div>
-                <LineItemsDisplay inv={selected} />
-              </div>
-              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Valid For</div>
-                <div style={{ fontSize: 13 }}>{selected.due}</div>
-              </div>
-              {selected.jobRef && (
-                <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Job Reference</div>
-                  <div style={{ fontSize: 13 }}>{selected.jobRef}</div>
-                </div>
-              )}
+            <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Valid For</div>
+              <div style={{ fontSize: 13 }}>{selected.due}</div>
             </div>
-
-            <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "14px", fontSize: 15, marginBottom: 10 }}
-              onClick={() => convertToInvoice(selected)}>→ Convert to Invoice</button>
-
-            {selected.status !== "accepted" && selected.status !== "declined" && (
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.green }} onClick={() => updateStatus(selected.id, "accepted")}>✓ Mark Accepted</button>
-                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.red }} onClick={() => updateStatus(selected.id, "declined")}>✗ Mark Declined</button>
+            {selected.jobRef && (
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Job Reference</div>
+                <div style={{ fontSize: 13 }}>{selected.jobRef}</div>
               </div>
             )}
-
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingQuote(selected)}>✏️ Edit</button>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.blue }} onClick={() => sendDocumentEmail(selected, brand, customers, user?.id, setSendingId, customerContacts)} disabled={sendingId === selected?.id}>{sendingId === selected?.id ? "Sending..." : "✉ Send"}</button>
-              <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteQuote(selected.id)}>Delete</button>
-            </div>
           </div>
-        </div>
+
+          <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "14px", fontSize: 15, marginBottom: 10 }}
+            onClick={() => convertToInvoice(selected)}>→ Convert to Invoice</button>
+
+          {selected.status !== "accepted" && selected.status !== "declined" && (
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.green }} onClick={() => updateStatus(selected.id, "accepted")}>✓ Mark Accepted</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.red }} onClick={() => updateStatus(selected.id, "declined")}>✗ Mark Declined</button>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingQuote(selected)}>✏️ Edit</button>
+            <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
+            <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.blue }} onClick={() => sendDocumentEmail(selected, brand, customers, user?.id, setSendingId, customerContacts)} disabled={sendingId === selected?.id}>{sendingId === selected?.id ? "Sending..." : "✉ Send"}</button>
+            <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteQuote(selected.id)}>Delete</button>
+          </div>
+        </DetailPage>
       )}
 
       {showModal && <QuoteModal brand={brand} invoices={invoices} user={user} customers={customers} onClose={() => setShowModal(false)} onSent={q => { setInvoices(prev => [q, ...(prev || [])]); setShowModal(false); }} />}
@@ -20803,6 +20880,8 @@ function MileageTab({ user }) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ date: new Date().toISOString().split("T")[0], from: "", to: "", miles: "", job: "", purpose: "" });
   const [yearMiles, setYearMiles] = useState(0);
+  const [search, setSearch] = useState("");
+  const [sortMode, setSortMode] = useState("date"); // date | miles | value
 
   const taxYearStart = () => {
     const now = new Date();
@@ -20842,6 +20921,22 @@ function MileageTab({ user }) {
 
   const yearValue = calcValue(yearMiles);
 
+  // Search + sort
+  const sLower = search.trim().toLowerCase();
+  const visibleTrips = trips.filter(t => {
+    if (!sLower) return true;
+    return (t.from_location || "").toLowerCase().includes(sLower)
+        || (t.to_location || "").toLowerCase().includes(sLower)
+        || (t.purpose || "").toLowerCase().includes(sLower)
+        || (t.job_ref || "").toLowerCase().includes(sLower);
+  }).sort((a, b) => {
+    if (sortMode === "miles") return parseFloat(b.miles || 0) - parseFloat(a.miles || 0);
+    if (sortMode === "value") return parseFloat(b.value || 0) - parseFloat(a.value || 0);
+    return new Date(b.date) - new Date(a.date);
+  });
+  const nextSort = () => setSortMode(m => m === "date" ? "miles" : m === "miles" ? "value" : "date");
+  const sortLabel = sortMode === "date" ? "Recent" : sortMode === "miles" ? "Miles" : "Value";
+
   const exportPDF = () => {
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Mileage Log</title><style>body{font-family:Arial,sans-serif;padding:32px;font-size:12px}h1{font-size:20px;margin-bottom:4px}.meta{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;padding:8px;text-align:left;font-size:10px;text-transform:uppercase;border-bottom:2px solid #e5e7eb}td{padding:8px;border-bottom:1px solid #f3f4f6}tr.tot td{font-weight:700;background:#fef9f0}</style></head><body><h1>Mileage Log</h1><div class="meta">Tax Year · ${yearMiles.toFixed(1)} miles · ${fmtCurrency(yearValue)} claimable at HMRC rates</div><table><thead><tr><th>Date</th><th>From</th><th>To</th><th>Miles</th><th>Purpose / Job</th><th>Value</th></tr></thead><tbody>${trips.map(t=>`<tr><td>${new Date(t.date).toLocaleDateString("en-GB")}</td><td>${t.from_location||"—"}</td><td>${t.to_location||"—"}</td><td>${t.miles}</td><td>${t.purpose||t.job_ref||"—"}</td><td>${fmtCurrency((t.value||0))}</td></tr>`).join("")}<tr class="tot"><td colspan="3"><b>Total (Tax Year)</b></td><td>${yearMiles.toFixed(1)}</td><td></td><td>${fmtCurrency(yearValue)}</td></tr></tbody></table><p style="margin-top:20px;font-size:11px;color:#888">HMRC mileage rate: 45p/mile for first 10,000 miles · 25p/mile thereafter</p></body></html>`;
     window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
@@ -20870,11 +20965,35 @@ function MileageTab({ user }) {
         💡 HMRC allows 45p/mile for your first 10,000 business miles each tax year, then 25p/mile. Export this log for your self-assessment.
       </div>
 
+      {/* Search + sort */}
+      {trips.length > 0 && (
+        <>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search from, to, purpose…"
+            style={{ ...S.input, fontSize: 13 }}
+          />
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div style={{ fontSize: 11, color: C.muted }}>{visibleTrips.length} of {trips.length} trip{trips.length === 1 ? "" : "s"}</div>
+            <button onClick={nextSort} style={{
+              marginLeft: "auto", padding: "6px 12px", borderRadius: 16,
+              fontSize: 12, fontWeight: 600, background: "transparent",
+              color: C.muted, border: `1px solid ${C.border}`, cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}>↕ {sortLabel}</button>
+          </div>
+        </>
+      )}
+
       {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : trips.length === 0 ? (
         <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No trips logged yet — tap + Add Trip</div>
-      ) : trips.map(t => (
+      ) : visibleTrips.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>No trips match "{search}".</div>
+      ) : visibleTrips.map(t => (
         <div key={t.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 4, height: 40, borderRadius: 2, background: C.amber, flexShrink: 0 }} />
+          <div style={{ width: 4, height: 40, borderRadius: 2, background: C.muted, flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>{t.from_location || "Trip"}{t.to_location ? ` → ${t.to_location}` : ""}</div>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{new Date(t.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{(t.purpose || t.job_ref) ? ` · ${t.purpose || t.job_ref}` : ""}</div>
