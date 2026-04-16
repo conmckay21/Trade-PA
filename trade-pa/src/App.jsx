@@ -21326,7 +21326,7 @@ function MileageTab({ user }) {
   );
 }
 // ─── SUBCONTRACTOR CIS MANAGEMENT ────────────────────────────────────────────
-function SubcontractorsTab({ user, brand }) {
+function SubcontractorsTab({ user, brand, setContextHint }) {
   const [subs, setSubs] = useState([]);
   const [payments, setPayments] = useState([]);
   const [workers, setWorkers] = useState([]);
@@ -21342,6 +21342,9 @@ function SubcontractorsTab({ user, brand }) {
   const [subScanImage, setSubScanImage] = useState(null);
   const subScanFileRef = React.useRef(null);
   const subScanUploadRef = React.useRef(null);
+  // Phase 3: search for workers + payments
+  const [workerSearch, setWorkerSearch] = useState("");
+  const [paymentSearch, setPaymentSearch] = useState("");
 
   const handleSubInvoiceScan = async (file) => {
     if (!file) return;
@@ -21421,6 +21424,17 @@ function SubcontractorsTab({ user, brand }) {
     setWorkerDocs(wd || []);
     setLoading(false);
   };
+
+  // Phase 5b: rich context hint for the floating mic
+  useEffect(() => {
+    if (!setContextHint) return;
+    const outstanding = payments.filter(p => !p.paid).reduce((s, p) => s + parseFloat(p.net || 0), 0);
+    const dueCount = payments.filter(p => !p.paid).length;
+    const bits = [`Subcontractors: ${workers.length} workers · ${subs.length} subs · ${payments.length} payments`];
+    if (dueCount > 0) bits.push(`${dueCount} due totalling £${outstanding.toFixed(0)}`);
+    setContextHint(bits.join(" · "));
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [workers.length, subs.length, payments, setContextHint]);
 
   const saveSub = async () => {
     if (!subForm.name) return;
@@ -21705,14 +21719,33 @@ function SubcontractorsTab({ user, brand }) {
       )}
 
       {/* Workers Section */}
-      {workers.length > 0 && (
+      {workers.length > 0 && (() => {
+        const wq = workerSearch.trim().toLowerCase();
+        const visibleWorkers = wq ? workers.filter(w =>
+          (w.name || "").toLowerCase().includes(wq)
+          || (w.role || "").toLowerCase().includes(wq)
+          || (w.type || "").toLowerCase().includes(wq)
+          || (w.utr || "").includes(wq)
+        ) : workers;
+        return (
         <div style={{ ...S.card }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 700 }}>Workers</div>
             <button onClick={() => setView("add_worker")} style={{ ...S.btn("ghost"), fontSize: 11 }}>+ Add</button>
           </div>
+          {workers.length > 3 && (
+            <input
+              type="text"
+              value={workerSearch}
+              onChange={e => setWorkerSearch(e.target.value)}
+              placeholder="Search workers…"
+              style={{ ...S.input, fontSize: 12, marginBottom: 10 }}
+            />
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {workers.map(w => {
+            {visibleWorkers.length === 0 ? (
+              <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 12 }}>No workers match "{workerSearch}".</div>
+            ) : visibleWorkers.map(w => {
               const wDocs = workerDocs.filter(d => d.worker_id === w.id);
               const today = new Date().toISOString().slice(0,10);
               const expiredDocs = wDocs.filter(d => d.expiry_date && d.expiry_date < today);
@@ -21760,7 +21793,8 @@ function SubcontractorsTab({ user, brand }) {
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {workers.length === 0 && !loading && (
         <div onClick={() => setView("add_worker")} style={{ background: C.surfaceHigh, border: `2px dashed ${C.border}`, borderRadius: 10, padding: 20, textAlign: "center", cursor: "pointer" }}>
@@ -21823,7 +21857,27 @@ function SubcontractorsTab({ user, brand }) {
             <button onClick={() => setFilterPaid("due")} style={S.pill(C.red, filterPaid === "due")}>Due</button>
             <button onClick={() => setFilterPaid("paid")} style={S.pill(C.green, filterPaid === "paid")}>Paid</button>
           </div>
-          {filteredPayments.map(p => {
+          {payments.length > 5 && (
+            <input
+              type="text"
+              value={paymentSearch}
+              onChange={e => setPaymentSearch(e.target.value)}
+              placeholder="Search payments…"
+              style={{ ...S.input, fontSize: 12, marginBottom: 10 }}
+            />
+          )}
+          {(() => {
+            const pq = paymentSearch.trim().toLowerCase();
+            const visible = pq ? filteredPayments.filter(p => {
+              const sub = subs.find(s => s.id === p.subcontractor_id);
+              return (sub?.name || "").toLowerCase().includes(pq)
+                || (p.description || "").toLowerCase().includes(pq)
+                || (p.invoice_number || "").toLowerCase().includes(pq)
+                || (p.job_ref || "").toLowerCase().includes(pq);
+            }) : filteredPayments;
+            return visible.length === 0
+              ? <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 12 }}>{pq ? `No payments match "${paymentSearch}".` : "No payments match this filter."}</div>
+              : visible.map(p => {
             const sub = subs.find(s => s.id === p.subcontractor_id);
             return (
               <div key={p.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}`, borderLeft: p.paid ? `3px solid ${C.green}` : `3px solid ${C.red}`, paddingLeft: 10, marginLeft: -10 }}>
@@ -21860,7 +21914,7 @@ function SubcontractorsTab({ user, brand }) {
                 </div>
               </div>
             );
-          })}
+          }); })()}
         </div>
       )}
 
@@ -25886,7 +25940,7 @@ function AppInner() {
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} setContextHint={setContextHint} />}
         {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} brand={brand} user={user} setContextHint={setContextHint} />}
         {view === "Mileage" && <MileageTab user={user} />}
-        {view === "Subcontractors" && <SubcontractorsTab user={user} brand={brand} />}
+        {view === "Subcontractors" && <SubcontractorsTab user={user} brand={brand} setContextHint={setContextHint} />}
         {view === "Documents" && <DocumentsTab user={user} customers={customers} />}
         {view === "Reviews" && <ReviewsTab user={user} brand={brand} customers={customers} />}
         {view === "Stock" && <StockTab user={user} />}
