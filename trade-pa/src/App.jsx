@@ -1408,7 +1408,7 @@ function FloatingMicButton({ visible, handsFree, onTap }) {
         color: "#000",
         display: "grid", placeItems: "center",
         cursor: "pointer",
-        zIndex: 250,
+        zIndex: 320,
         padding: 0,
         transition: "transform 0.15s, box-shadow 0.15s",
       }}
@@ -15359,8 +15359,24 @@ ${isQuote ? `<p>This quote is valid for 30 days. Please get in touch to proceed 
   }
 }
 
-function InvoicesView({ brand, invoices, setInvoices, user, customers, customerContacts }) {
+function InvoicesView({ brand, invoices, setInvoices, user, customers, customerContacts, setContextHint }) {
   const [selected, setSelected] = useState(null);
+
+  // Phase 5b: publish context hint when an invoice is open.
+  useEffect(() => {
+    if (!setContextHint) return;
+    if (selected) {
+      const bits = [];
+      bits.push("Invoice " + (selected.id || ""));
+      if (selected.customer) bits.push(selected.customer);
+      if (selected.amount) bits.push("£" + selected.amount);
+      if (selected.status) bits.push(selected.status);
+      setContextHint(bits.filter(Boolean).join(" · "));
+    } else {
+      setContextHint(null);
+    }
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [selected, setContextHint]);
   const [showModal, setShowModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [sendingId, setSendingId] = useState(null);
@@ -18158,11 +18174,30 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
 }
 
 // ─── Jobs Tab ─────────────────────────────────────────────────────────────────
-function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
+function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setContextHint }) {
   const supabase = window._supabase;
   const [jobs, setJobCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+
+  // Phase 5b: publish a context hint when a job is selected so the floating
+  // mic can pass a record-scoped context into the AI overlay.  Clears on
+  // close + on component unmount (tab switch).
+  useEffect(() => {
+    if (!setContextHint) return;
+    if (selected) {
+      const bits = [];
+      bits.push("Job: " + (selected.title || selected.type || "Untitled"));
+      if (selected.customer) bits.push(selected.customer);
+      if (selected.address) bits.push(selected.address);
+      if (selected.status) bits.push(selected.status.replace("_", " "));
+      if (selected.value > 0) bits.push("£" + selected.value);
+      setContextHint(bits.join(" · "));
+    } else {
+      setContextHint(null);
+    }
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [selected, setContextHint]);
   const [tab, setTab] = useState("notes");
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", scope_of_work: "", annual_service: false });
@@ -23936,6 +23971,10 @@ function AppInner() {
   // Set by FloatingMicButton (below) and unset by the overlay close/back.
   const [aiOverlay, setAiOverlay] = useState(null);
 
+  // Phase 5b: context hint set by detail pages (JobsTab, InvoicesView) when a
+  // record is selected. FloatingMicButton uses this for a richer context string.
+  const [contextHint, setContextHint] = useState(null);
+
   // ── Fair-use caps: usage tracking ─────────────────────────────
   const currentMonth = new Date().toISOString().slice(0, 7); // "2026-04"
   const [usageData, setUsageData] = useState({ conversations_used: 0, handsfree_seconds_used: 0 });
@@ -25252,9 +25291,9 @@ function AppInner() {
         {view === "PeopleHub" && <PeopleHub setView={setView} customers={customers} enquiries={enquiries} />}
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} />}
-        {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
+        {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} setContextHint={setContextHint} />}
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} customerContacts={customerContacts} setCustomerContacts={setCustomerContacts} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} />}
-        {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} customerContacts={customerContacts} />}
+        {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}
         {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} customerContacts={customerContacts} />}
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
@@ -25278,7 +25317,7 @@ function AppInner() {
       <FloatingMicButton
         visible={view !== "AI Assistant" && !aiOverlay}
         handsFree={aiHandsFree}
-        onTap={() => setAiOverlay({ context: `Viewing: ${view}` })}
+        onTap={() => setAiOverlay({ context: contextHint || `Viewing: ${view}` })}
       />
       <HelpCentre open={helpOpen} openSlug={helpSlug} onClose={() => { setHelpOpen(false); setHelpSlug(null); }} />
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} user={user} brand={brand} currentView={view} />
