@@ -5501,6 +5501,27 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const [sessionData, setSessionData] = useState({});
   const [expiryAlerts, setExpiryAlerts] = useState([]);
 
+  // Phase 5-Pass B: AI-suggested inbox actions, surfaced on home.
+  const [pendingInboxActions, setPendingInboxActions] = useState([]);
+  const [processingInboxAction, setProcessingInboxAction] = useState({});
+
+  // Fetch pending inbox actions (called on mount + after approve/reject + on window event)
+  const loadPendingInboxActions = React.useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch(`/api/email/actions?userId=${user.id}&status=pending`);
+      const data = await res.json();
+      setPendingInboxActions(data.actions || []);
+    } catch (e) { /* silent — home surface is best-effort */ }
+  }, [user?.id]);
+
+  React.useEffect(() => {
+    loadPendingInboxActions();
+    const h = () => loadPendingInboxActions();
+    window.addEventListener("trade-pa-inbox-refreshed", h);
+    return () => window.removeEventListener("trade-pa-inbox-refreshed", h);
+  }, [loadPendingInboxActions]);
+
   // Check for expiring worker documents on load
   React.useEffect(() => {
     if (!user?.id) return;
@@ -9834,6 +9855,55 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           </div>
 
+          {/* Pass B: Overnight actions — AI has been watching the inbox while you were away.
+              Tap routes to Inbox Actions for the full approve/dismiss flow (we keep the
+              approval side-effects — create job, send reply, etc. — in one place). */}
+          {pendingInboxActions.length > 0 && (() => {
+            const iconFor = (t) => ({ create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", update_job: "🔧", add_materials: "🔧", save_customer: "👤", accept_quote: "🤝", add_cis_statement: "🏗" }[t] || "⚡");
+            const tintFor = (t) => ({ create_job: C.green, create_enquiry: C.blue, mark_invoice_paid: C.green, accept_quote: C.green, add_materials: C.muted, add_cis_statement: C.blue, save_customer: "#8b5cf6", update_job: C.amber }[t] || C.amber);
+            const URG = { create_job: 5, accept_quote: 5, create_enquiry: 4, mark_invoice_paid: 3, save_customer: 2, update_job: 2, add_materials: 1, add_cis_statement: 1 };
+            const sorted = [...pendingInboxActions].sort((a, b) => (URG[b.action_type] || 1) - (URG[a.action_type] || 1));
+            const top = sorted.slice(0, 2);
+            const more = sorted.length - top.length;
+            const n = pendingInboxActions.length;
+            return (
+              <div
+                onClick={() => setView("Inbox")}
+                style={{
+                  background: `linear-gradient(135deg, ${C.amber}11, ${C.amber}05)`,
+                  border: `1px solid ${C.amber}55`,
+                  borderRadius: 14, padding: "14px 14px 12px",
+                  cursor: "pointer",
+                  display: "flex", flexDirection: "column", gap: 10,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.amber + "22", border: `1px solid ${C.amber}66`, display: "grid", placeItems: "center", fontSize: 16, flexShrink: 0 }}>🔔</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>
+                      I spotted {n} thing{n === 1 ? "" : "s"} overnight
+                    </div>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: C.muted, letterSpacing: "0.04em", marginTop: 2 }}>
+                      Tap to review and approve →
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 44 }}>
+                  {top.map(a => (
+                    <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.textDim, minWidth: 0 }}>
+                      <span style={{ fontSize: 14, flexShrink: 0 }}>{iconFor(a.action_type)}</span>
+                      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.action_description}</span>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: tintFor(a.action_type), flexShrink: 0 }} />
+                    </div>
+                  ))}
+                  {more > 0 && (
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: C.muted, letterSpacing: "0.04em" }}>+ {more} more</div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* 3 stat cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
             <div onClick={() => setView("Schedule")} style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 11px", cursor: "pointer" }}>
@@ -9847,9 +9917,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, marginTop: 2 }}>{overdueInvoices.length} {overdueInvoices.length === 1 ? "invoice" : "invoices"}</div>
             </div>
             <div onClick={() => setView("Inbox")} style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 11px", cursor: "pointer" }}>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>INBOX</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: newEnquiries.length > 0 ? C.amber : C.text, letterSpacing: "-0.02em", marginTop: 4 }}>{newEnquiries.length}</div>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, marginTop: 2 }}>{newEnquiries.length === 1 ? "new enquiry" : "new enquiries"}</div>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>INBOX ACTIONS</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: pendingInboxActions.length > 0 ? C.amber : C.text, letterSpacing: "-0.02em", marginTop: 4 }}>{pendingInboxActions.length}</div>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, marginTop: 2 }}>{pendingInboxActions.length === 1 ? "pending" : "pending"}</div>
             </div>
           </div>
 
@@ -16297,7 +16367,7 @@ function CompanyForm({ form, set, draftContacts, setDraftContacts, onSave, onCan
 }
 
 // ─── InboxView (AI Email Agent) ───────────────────────────────────────────────
-function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, setLastAction }) {
+function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, setLastAction, setContextHint }) {
   // Theme-aware: bg/text/border tokens use the same CSS variables as global C,
   // so the Inbox tab follows light/dark mode. Accent colours stay as hex literals.
   const IC = { amber: C.amber, amberLight: "#fef3c766", green: C.green, red: C.red, blue: C.blue, muted: C.muted, border: C.border, bg2: C.surface, bg3: C.surfaceHigh, text: C.text };
@@ -16310,6 +16380,9 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
   const [tab, setTab] = useState("pending");
   const [disconnecting, setDisconnecting] = useState(false);
   const [feedbackAction, setFeedbackAction] = useState(null); // action awaiting dismiss reason
+  // Phase 5b: filter + search for the Pending actions list
+  const [actionFilter, setActionFilter] = useState("all"); // all | customer | money | admin
+  const [actionSearch, setActionSearch] = useState("");
 
   const DISMISS_REASONS = [
     { id: "wrong_type", label: "Wrong action type" },
@@ -16347,6 +16420,30 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
   const [checking, setChecking] = useState(false);
 
   useEffect(() => { if (user) { checkConnection(); loadActions(); } }, [user]);
+
+  // Phase 5b: publish rich context hint when there are pending actions — the
+  // floating mic + "Hey Trade PA" will pick this up and hand the AI a picture
+  // of what's actually waiting for review.
+  useEffect(() => {
+    if (!setContextHint) return;
+    if (pendingActions.length === 0) {
+      setContextHint("Inbox Actions: all caught up");
+    } else {
+      const top = pendingActions.slice(0, 5).map(a => `${a.action_type?.replace(/_/g, " ") || "action"} from ${fromName(a.email_from)}`);
+      const extra = pendingActions.length > 5 ? ` (+${pendingActions.length - 5} more)` : "";
+      setContextHint(`Inbox Actions: ${pendingActions.length} pending — ${top.join(", ")}${extra}`);
+    }
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [pendingActions, setContextHint]);
+
+  // Urgency scoring — higher = more important. Used for sort order on the pending list.
+  // Customer-facing actions beat money actions beat admin actions.
+  const URGENCY = { create_job: 5, accept_quote: 5, create_enquiry: 4, mark_invoice_paid: 3, save_customer: 2, update_job: 2, add_materials: 1, add_cis_statement: 1 };
+  const urgencyOf = (a) => URGENCY[a.action_type] || 1;
+  const CATEGORY = { create_job: "customer", accept_quote: "customer", create_enquiry: "customer", save_customer: "customer",
+                     mark_invoice_paid: "money",
+                     add_materials: "admin", add_cis_statement: "admin", update_job: "admin" };
+  const categoryOf = (a) => CATEGORY[a.action_type] || "admin";
 
   async function checkConnection() {
     try {
@@ -16460,6 +16557,8 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
       setRecentActions(prev => [{ ...action, status: "approved" }, ...prev]);
       // Update AI context with what was learned from this approval
       await updateAIContext(action);
+      // Notify other surfaces (AI home card, etc.) that pending list changed
+      window.dispatchEvent(new CustomEvent("trade-pa-inbox-refreshed"));
     } catch (e) { console.error(e); }
     setProcessing(p => ({ ...p, [action.id]: false }));
   }
@@ -16484,6 +16583,8 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
       });
       await fetch("/api/email/actions/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
       setPendingActions(prev => prev.filter(a => a.id !== action.id));
+      // Notify other surfaces that pending list changed
+      window.dispatchEvent(new CustomEvent("trade-pa-inbox-refreshed"));
     } catch (e) { console.error(e); }
     setProcessing(p => ({ ...p, [action.id]: false }));
   }
@@ -17018,21 +17119,73 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
       )}
 
       {/* ── AI Actions tab ── */}
-      {tab === "pending" && (
+      {tab === "pending" && (() => {
+        // Filter + search + urgency sort (in render scope so it recomputes on each render)
+        const aLower = actionSearch.trim().toLowerCase();
+        const visibleActions = pendingActions.filter(a => {
+          if (actionFilter !== "all" && categoryOf(a) !== actionFilter) return false;
+          if (!aLower) return true;
+          return (a.action_description || "").toLowerCase().includes(aLower)
+              || (a.email_from || "").toLowerCase().includes(aLower)
+              || (a.email_subject || "").toLowerCase().includes(aLower)
+              || (a.email_snippet || "").toLowerCase().includes(aLower);
+        }).sort((a, b) => {
+          const u = urgencyOf(b) - urgencyOf(a);
+          if (u !== 0) return u;
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        });
+        const custCount = pendingActions.filter(a => categoryOf(a) === "customer").length;
+        const moneyCount = pendingActions.filter(a => categoryOf(a) === "money").length;
+        const adminCount = pendingActions.filter(a => categoryOf(a) === "admin").length;
+
+        const chipStyle = (active, tint) => ({
+          padding: "5px 11px", borderRadius: 14, fontSize: 10, fontWeight: 700,
+          background: active ? (tint || IC.text) : "transparent",
+          color: active ? "#000" : IC.muted,
+          border: `1px solid ${active ? (tint || IC.text) : IC.border}`,
+          cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+          fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em",
+        });
+
+        return (
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
             <div style={{ fontSize: 11, color: IC.muted }}>Claude reviews your inbox every hour and suggests actions for your approval.</div>
             <button style={IS.btn("amber")} onClick={runEmailCheck} disabled={checking}>
               {checking ? "⏳ Checking..." : "↻ Check Now"}
             </button>
           </div>
+
+          {/* Search + filter chips — visible only when there are pending actions */}
+          {pendingActions.length > 0 && (
+            <>
+              <input
+                type="text"
+                value={actionSearch}
+                onChange={e => setActionSearch(e.target.value)}
+                placeholder="Search actions, senders, subjects…"
+                style={IS.input}
+              />
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                <button onClick={() => setActionFilter("all")} style={chipStyle(actionFilter === "all")}>All {pendingActions.length}</button>
+                <button onClick={() => setActionFilter("customer")} style={chipStyle(actionFilter === "customer", IC.green)}>Customer {custCount}</button>
+                <button onClick={() => setActionFilter("money")} style={chipStyle(actionFilter === "money", IC.blue)}>Money {moneyCount}</button>
+                <button onClick={() => setActionFilter("admin")} style={chipStyle(actionFilter === "admin", IC.muted)}>Admin {adminCount}</button>
+              </div>
+            </>
+          )}
+
           {pendingActions.length === 0 ? (
             <div style={{ ...IS.card, textAlign: "center", padding: 40 }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>✓</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: IC.text, marginBottom: 6 }}>All caught up</div>
               <div style={{ fontSize: 12, color: IC.muted, lineHeight: 1.6 }}>No pending actions. Claude will check your inbox again on the next hour and suggest actions for any new emails.</div>
             </div>
-          ) : pendingActions.map(action => (
+          ) : visibleActions.length === 0 ? (
+            <div style={{ ...IS.card, textAlign: "center", padding: 24, color: IC.muted, fontSize: 12 }}>
+              {actionSearch ? `No actions match "${actionSearch}".` : `No ${actionFilter} actions right now.`}
+            </div>
+          ) : visibleActions.map(action => (
             <div key={action.id} style={{ ...IS.card, borderLeft: `3px solid ${actionColor(action.action_type)}` }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
                 <div style={{ fontSize: 22, flexShrink: 0 }}>{actionIcon(action.action_type)}</div>
@@ -17051,7 +17204,8 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
             </div>
           ))}
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Inbox tab ── */}
       {tab === "inbox" && (
@@ -19795,6 +19949,7 @@ function ExpensesTab({ user }) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ exp_type: "mileage", description: "", amount: "", miles: "", exp_date: new Date().toISOString().slice(0,10) });
   const [filterMonth, setFilterMonth] = useState("all");
+  const [search, setSearch] = useState("");
   const receiptRef = useRef();
   const [receiptData, setReceiptData] = useState(null);
 
@@ -19838,7 +19993,13 @@ function ExpensesTab({ user }) {
   };
 
   const months = [...new Set(expenses.map(e => e.exp_date?.slice(0,7)))].sort().reverse();
-  const filtered = filterMonth === "all" ? expenses : expenses.filter(e => e.exp_date?.startsWith(filterMonth));
+  const monthFiltered = filterMonth === "all" ? expenses : expenses.filter(e => e.exp_date?.startsWith(filterMonth));
+  // Search applies on top of month filter
+  const sLower = search.trim().toLowerCase();
+  const filtered = !sLower ? monthFiltered : monthFiltered.filter(e =>
+    (e.description || "").toLowerCase().includes(sLower)
+    || (e.exp_type || "").toLowerCase().includes(sLower)
+  );
   const totalFiltered = filtered.reduce((s, e) => s + (e.amount || 0), 0);
   const totalMileage = filtered.filter(e => e.exp_type === "mileage").reduce((s, e) => s + (e.miles || 0), 0);
 
@@ -19853,6 +20014,15 @@ function ExpensesTab({ user }) {
     { value: "other", label: "📋 Other" },
   ];
 
+  // Canonical filter-chip style (amber discipline — chips are neutral, not amber)
+  const chipStyle = (active) => ({
+    padding: "6px 12px", borderRadius: 16, fontSize: 12, fontWeight: 600,
+    background: active ? C.text : "transparent",
+    color: active ? C.bg : C.textDim,
+    border: `1px solid ${active ? C.text : C.border}`,
+    cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+  });
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -19863,7 +20033,7 @@ function ExpensesTab({ user }) {
       {/* Summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 10 }}>
         {[
-          { l: "Total Expenses", v: `${fmtCurrency(filtered.reduce((s,e) => s + (e.amount||0), 0))}`, c: C.amber },
+          { l: "Total Expenses", v: `${fmtCurrency(filtered.reduce((s,e) => s + (e.amount||0), 0))}`, c: C.text },
           { l: "Mileage", v: `${totalMileage.toFixed(0)} miles`, c: C.blue },
           { l: "Mileage Value", v: `${fmtCurrency((totalMileage * MILEAGE_RATE))}`, c: C.green },
           { l: "This period", v: filtered.length + " entries", c: C.muted },
@@ -19875,12 +20045,23 @@ function ExpensesTab({ user }) {
         ))}
       </div>
 
-      {/* Month filter */}
+      {/* Search */}
+      {expenses.length > 0 && (
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search description or type…"
+          style={{ ...S.input, fontSize: 13 }}
+        />
+      )}
+
+      {/* Month filter — canonical chip style */}
       {months.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <button onClick={() => setFilterMonth("all")} style={S.pill(C.amber, filterMonth === "all")}>All time</button>
+          <button onClick={() => setFilterMonth("all")} style={chipStyle(filterMonth === "all")}>All time</button>
           {months.slice(0, 6).map(m => (
-            <button key={m} onClick={() => setFilterMonth(m)} style={S.pill(C.amber, filterMonth === m)}>
+            <button key={m} onClick={() => setFilterMonth(m)} style={chipStyle(filterMonth === m)}>
               {new Date(m + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
             </button>
           ))}
@@ -19891,7 +20072,8 @@ function ExpensesTab({ user }) {
       <div style={S.card}>
         <div style={S.sectionTitle}>Expense Log ({filtered.length})</div>
         {loading && <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>}
-        {!loading && filtered.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No expenses logged yet.</div>}
+        {!loading && expenses.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No expenses logged yet.</div>}
+        {!loading && expenses.length > 0 && filtered.length === 0 && <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "16px 8px" }}>{search ? `No expenses match "${search}".` : "No expenses this period."}</div>}
         {filtered.map(e => (
           <div key={e.id} style={S.row}>
             <div style={{ fontSize: 18, flexShrink: 0 }}>{EXP_TYPES.find(t => t.value === e.exp_type)?.label?.split(" ")[0] || "📋"}</div>
@@ -19903,7 +20085,7 @@ function ExpensesTab({ user }) {
                 {e.miles ? ` · ${e.miles} miles` : ""}
               </div>
             </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, flexShrink: 0 }}>£{Number(e.amount).toFixed(2)}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text, flexShrink: 0 }}>£{Number(e.amount).toFixed(2)}</div>
             {e.receipt_data && <div style={{ fontSize: 16, marginLeft: 6 }} title="Receipt attached">🧾</div>}
           </div>
         ))}
@@ -19971,6 +20153,8 @@ function CISStatementsTab({ user }) {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ contractor_name: "", tax_month: new Date().toISOString().slice(0,7), gross_amount: "", deduction_amount: "", notes: "" });
+  const [search, setSearch] = useState("");
+  const [yearFilter, setYearFilter] = useState("all");
 
   useEffect(() => { loadStatements(); }, [user]);
 
@@ -20001,9 +20185,25 @@ function CISStatementsTab({ user }) {
     }
   }
 
-  const totalGross = statements.reduce((s, st) => s + (st.gross_amount || 0), 0);
-  const totalDeducted = statements.reduce((s, st) => s + (st.deduction_amount || 0), 0);
-  const totalNet = statements.reduce((s, st) => s + (st.net_amount || 0), 0);
+  const years = [...new Set(statements.map(s => s.tax_month?.slice(0,4)).filter(Boolean))].sort().reverse();
+  const sLower = search.trim().toLowerCase();
+  const visibleStatements = statements.filter(st => {
+    if (yearFilter !== "all" && !st.tax_month?.startsWith(yearFilter)) return false;
+    if (!sLower) return true;
+    return (st.contractor_name || "").toLowerCase().includes(sLower)
+        || (st.notes || "").toLowerCase().includes(sLower);
+  });
+  const totalGross = visibleStatements.reduce((s, st) => s + (st.gross_amount || 0), 0);
+  const totalDeducted = visibleStatements.reduce((s, st) => s + (st.deduction_amount || 0), 0);
+  const totalNet = visibleStatements.reduce((s, st) => s + (st.net_amount || 0), 0);
+
+  const chipStyle = (active) => ({
+    padding: "6px 12px", borderRadius: 16, fontSize: 12, fontWeight: 600,
+    background: active ? C.text : "transparent",
+    color: active ? C.bg : C.textDim,
+    border: `1px solid ${active ? C.text : C.border}`,
+    cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -20027,11 +20227,32 @@ function CISStatementsTab({ user }) {
         ))}
       </div>
 
+      {statements.length > 0 && (
+        <>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search contractor or note…"
+            style={{ ...S.input, fontSize: 13 }}
+          />
+          {years.length > 1 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button onClick={() => setYearFilter("all")} style={chipStyle(yearFilter === "all")}>All years</button>
+              {years.map(y => (
+                <button key={y} onClick={() => setYearFilter(y)} style={chipStyle(yearFilter === y)}>{y}</button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
       <div style={S.card}>
-        <div style={S.sectionTitle}>Statements ({statements.length})</div>
+        <div style={S.sectionTitle}>Statements ({visibleStatements.length})</div>
         {loading && <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>}
         {!loading && statements.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No statements logged yet.</div>}
-        {statements.map(s => (
+        {!loading && statements.length > 0 && visibleStatements.length === 0 && <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "12px 8px" }}>{search ? `No statements match "${search}".` : `No statements in ${yearFilter}.`}</div>}
+        {visibleStatements.map(s => (
           <div key={s.id} style={S.row}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -22032,6 +22253,7 @@ function DocumentsTab({ user, customers }) {
   const [uploading, setUploading] = useState(false);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [sortMode, setSortMode] = useState("recent"); // recent | name | size
   const fileRef = useRef();
 
   const CATEGORIES = ["Insurance", "Certifications", "Risk Assessments", "COSHH", "Job Documents", "Customer Documents", "Contracts", "Other"];
@@ -22097,7 +22319,13 @@ function DocumentsTab({ user, customers }) {
   const filtered = docs.filter(d =>
     (filter === "all" || d.category === filter) &&
     (!search || d.name?.toLowerCase().includes(search.toLowerCase()))
-  );
+  ).sort((a, b) => {
+    if (sortMode === "name") return (a.name || "").localeCompare(b.name || "");
+    if (sortMode === "size") return (b.file_size || 0) - (a.file_size || 0);
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+  const nextSort = () => setSortMode(m => m === "recent" ? "name" : m === "name" ? "size" : "recent");
+  const sortLabel = sortMode === "recent" ? "Recent" : sortMode === "name" ? "Name" : "Size";
 
   const [showUpload, setShowUpload] = useState(false);
   const [uploadForm, setUploadForm] = useState({ category: "Other", job_id: "", customer_id: "" });
@@ -22123,18 +22351,25 @@ function DocumentsTab({ user, customers }) {
         ))}
       </div>
 
-      {/* Search + filter */}
-      <div style={{ display: "flex", gap: 8 }}>
-        <input style={{ ...S.input, flex: 1 }} placeholder="Search documents..." value={search} onChange={e => setSearch(e.target.value)} />
+      {/* Search + filter + sort */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input style={{ ...S.input, flex: 1, minWidth: 180 }} placeholder="Search documents..." value={search} onChange={e => setSearch(e.target.value)} />
         <select style={{ ...S.input, width: "auto" }} value={filter} onChange={e => setFilter(e.target.value)}>
-          <option value="all">All</option>
+          <option value="all">All categories</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        <button onClick={nextSort} style={{
+          padding: "6px 12px", borderRadius: 16,
+          fontSize: 12, fontWeight: 600, background: "transparent",
+          color: C.muted, border: `1px solid ${C.border}`, cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}>↕ {sortLabel}</button>
       </div>
 
       {/* Category sections */}
       {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> :
-        filtered.length === 0 ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No documents found</div> :
+        docs.length === 0 ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No documents uploaded yet — tap ⬆ Upload to add your first.</div> :
+        filtered.length === 0 ? <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>{search ? `No documents match "${search}".` : `No documents in ${filter}.`}</div> :
         filtered.map(doc => (
           <div key={doc.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ fontSize: 28, flexShrink: 0 }}>{fileIcon(doc.type)}</div>
@@ -22202,6 +22437,7 @@ function ReviewsTab({ user, brand, customers }) {
   const [sending, setSending] = useState(null);
   const [showSendModal, setShowSendModal] = useState(null); // job object
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [search, setSearch] = useState("");
 
   const PLATFORMS = [
     { id: "google", label: "Google", icon: "🔍", urlKey: "reviewUrlGoogle", color: "#4285F4" },
@@ -22274,12 +22510,28 @@ function ReviewsTab({ user, brand, customers }) {
   };
 
   const sentCount = requests.length;
-  const pendingJobs = completedJobs.filter(j => !j.reviewSent);
+  const sLower = search.trim().toLowerCase();
+  const pendingJobs = completedJobs.filter(j => !j.reviewSent).filter(j => !sLower
+    || (j.customer || "").toLowerCase().includes(sLower)
+    || (j.type || "").toLowerCase().includes(sLower));
+  const filteredRequests = requests.filter(r => !sLower
+    || (r.customer || "").toLowerCase().includes(sLower)
+    || (r.email || "").toLowerCase().includes(sLower));
   const hasAnyPlatform = activePlatforms.length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
       <div style={{ fontSize: 18, fontWeight: 700 }}>Customer Reviews</div>
+
+      {(completedJobs.length > 0 || requests.length > 0) && (
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search customer or email…"
+          style={{ ...S.input, fontSize: 13 }}
+        />
+      )}
 
       {/* Platform setup status */}
       <div style={{ ...S.card }}>
@@ -22324,7 +22576,7 @@ function ReviewsTab({ user, brand, customers }) {
         <div style={S.card}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Completed Jobs — Send Review Request</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pendingJobs.slice(0, 15).map(j => {
+            {pendingJobs.map(j => {
               const cust = (customers || []).find(c => c.name?.toLowerCase() === j.customer?.toLowerCase());
               const hasEmail = !!(cust?.email || j.email);
               return (
@@ -22353,7 +22605,9 @@ function ReviewsTab({ user, brand, customers }) {
       {requests.length > 0 && (
         <div style={S.card}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Sent History</div>
-          {requests.map(r => (
+          {filteredRequests.length === 0 ? (
+            <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "12px 8px" }}>No history matches "{search}".</div>
+          ) : filteredRequests.map(r => (
             <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.border}` }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{r.customer}</div>
@@ -22415,6 +22669,8 @@ function StockTab({ user }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all"); // all | low
+  const [sortMode, setSortMode] = useState("name"); // name | quantity | value
   const [form, setForm] = useState({ name: "", sku: "", quantity: "", unit: "unit", reorder_level: "", unit_cost: "", location: "" });
 
   const UNITS = ["unit", "m", "m²", "m³", "length", "sheet", "box", "bag", "roll", "litre", "kg"];
@@ -22460,9 +22716,26 @@ function StockTab({ user }) {
     setForm({ name: item.name, sku: item.sku || "", quantity: String(item.quantity || 0), unit: item.unit || "unit", reorder_level: String(item.reorder_level || ""), unit_cost: String(item.unit_cost || ""), location: item.location || "" });
   };
 
-  const filtered = items.filter(i => !search || i.name?.toLowerCase().includes(search.toLowerCase()) || i.sku?.toLowerCase().includes(search.toLowerCase()));
+  const sLower = search.trim().toLowerCase();
+  const searched = items.filter(i => !sLower || i.name?.toLowerCase().includes(sLower) || i.sku?.toLowerCase().includes(sLower));
   const lowStock = items.filter(i => i.reorder_level > 0 && parseFloat(i.quantity || 0) <= parseFloat(i.reorder_level || 0));
+  const lowStockIds = new Set(lowStock.map(i => i.id));
+  const filtered = (filter === "low" ? searched.filter(i => lowStockIds.has(i.id)) : searched).sort((a, b) => {
+    if (sortMode === "quantity") return parseFloat(b.quantity || 0) - parseFloat(a.quantity || 0);
+    if (sortMode === "value") return (parseFloat(b.quantity || 0) * parseFloat(b.unit_cost || 0)) - (parseFloat(a.quantity || 0) * parseFloat(a.unit_cost || 0));
+    return (a.name || "").localeCompare(b.name || "");
+  });
   const totalValue = items.reduce((s, i) => s + parseFloat(i.quantity || 0) * parseFloat(i.unit_cost || 0), 0);
+
+  const chipStyle = (active, color) => ({
+    padding: "6px 12px", borderRadius: 16, fontSize: 12, fontWeight: 600,
+    background: active ? (color || C.text) : "transparent",
+    color: active ? (color === C.text ? C.bg : "#fff") : C.textDim,
+    border: `1px solid ${active ? (color || C.text) : C.border}`,
+    cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+  });
+  const nextSort = () => setSortMode(m => m === "name" ? "quantity" : m === "quantity" ? "value" : "name");
+  const sortLabel = sortMode === "name" ? "Name" : sortMode === "quantity" ? "Quantity" : "Value";
 
   const FormModal = ({ title, onClose }) => (
     <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={onClose}>
@@ -22527,8 +22800,23 @@ function StockTab({ user }) {
 
       <input style={S.input} placeholder="Search stock..." value={search} onChange={e => setSearch(e.target.value)} />
 
-      {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : filtered.length === 0 ? (
+      {items.length > 0 && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <button onClick={() => setFilter("all")} style={chipStyle(filter === "all")}>All {items.length}</button>
+          <button onClick={() => setFilter("low")} style={chipStyle(filter === "low", C.red)}>Low stock {lowStock.length}</button>
+          <button onClick={nextSort} style={{
+            marginLeft: "auto", padding: "6px 12px", borderRadius: 16,
+            fontSize: 12, fontWeight: 600, background: "transparent",
+            color: C.muted, border: `1px solid ${C.border}`, cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}>↕ {sortLabel}</button>
+        </div>
+      )}
+
+      {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : items.length === 0 ? (
         <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No stock items yet</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>{search ? `No stock matches "${search}".` : filter === "low" ? "No items below reorder level — all stocked up." : "No items."}</div>
       ) : filtered.map(item => {
         const isLow = item.reorder_level > 0 && parseFloat(item.quantity || 0) <= parseFloat(item.reorder_level || 0);
         return (
@@ -23866,8 +24154,8 @@ function PeopleHub({ setView, customers, enquiries }) {
           onClick: () => setView("Customers"),
         },
         {
-          name: "Inbox",
-          meta: newEnquiryCount > 0 ? `${newEnquiryCount} new message${newEnquiryCount === 1 ? "" : "s"}` : "No new messages",
+          name: "Inbox Actions",
+          meta: newEnquiryCount > 0 ? `${newEnquiryCount} new message${newEnquiryCount === 1 ? "" : "s"}` : "AI suggests actions from email",
           tint: newEnquiryCount > 0 ? "warn" : null,
           icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" /></svg>,
           onClick: () => setView("Inbox"),
@@ -25436,7 +25724,7 @@ function AppInner() {
         <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
-        {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
+        {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} setContextHint={setContextHint} />}
         {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} brand={brand} user={user} />}
         {view === "Mileage" && <MileageTab user={user} />}
         {view === "Subcontractors" && <SubcontractorsTab user={user} brand={brand} />}
