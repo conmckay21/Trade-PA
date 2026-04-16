@@ -11566,7 +11566,7 @@ function CustomerForm({ form, set, onSave, onCancel }) {
     borderRadius: 10,
     color: C.text,
     fontFamily: "'DM Sans', sans-serif",
-    fontSize: 15,
+    fontSize: 16, // 16px minimum prevents iOS Safari auto-zoom on focus (under 16px triggers it)
     padding: "13px 14px",
     transition: "border-color 180ms ease, box-shadow 180ms ease",
     outline: "none",
