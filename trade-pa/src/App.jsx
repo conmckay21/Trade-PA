@@ -5504,6 +5504,9 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   // Phase 5-Pass B: AI-suggested inbox actions, surfaced on home.
   const [pendingInboxActions, setPendingInboxActions] = useState([]);
   const [processingInboxAction, setProcessingInboxAction] = useState({});
+  // Session-scoped dismiss — user can hide the overnight card until next app open.
+  // Stat tile count stays visible either way.
+  const [inboxCardDismissed, setInboxCardDismissed] = useState(false);
 
   // Fetch pending inbox actions (called on mount + after approve/reject + on window event)
   const loadPendingInboxActions = React.useCallback(async () => {
@@ -9855,10 +9858,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           </div>
 
-          {/* Pass B: Overnight actions — AI has been watching the inbox while you were away.
-              Tap routes to Inbox Actions for the full approve/dismiss flow (we keep the
-              approval side-effects — create job, send reply, etc. — in one place). */}
-          {pendingInboxActions.length > 0 && (() => {
+          {/* Pass B: Inbox Actions home card — AI has been watching the inbox
+              and these actions are waiting for review. Session-dismissable via
+              × (count stays on the stat tile either way). Tap the body to route
+              to Inbox Actions for the full approve/dismiss flow. */}
+          {pendingInboxActions.length > 0 && !inboxCardDismissed && (() => {
             const iconFor = (t) => ({ create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", update_job: "🔧", add_materials: "🔧", save_customer: "👤", accept_quote: "🤝", add_cis_statement: "🏗" }[t] || "⚡");
             const tintFor = (t) => ({ create_job: C.green, create_enquiry: C.blue, mark_invoice_paid: C.green, accept_quote: C.green, add_materials: C.muted, add_cis_statement: C.blue, save_customer: "#8b5cf6", update_job: C.amber }[t] || C.amber);
             const URG = { create_job: 5, accept_quote: 5, create_enquiry: 4, mark_invoice_paid: 3, save_customer: 2, update_job: 2, add_materials: 1, add_cis_statement: 1 };
@@ -9868,27 +9872,41 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             const n = pendingInboxActions.length;
             return (
               <div
-                onClick={() => setView("Inbox")}
                 style={{
                   background: `linear-gradient(135deg, ${C.amber}11, ${C.amber}05)`,
                   border: `1px solid ${C.amber}55`,
                   borderRadius: 14, padding: "14px 14px 12px",
-                  cursor: "pointer",
                   display: "flex", flexDirection: "column", gap: 10,
+                  position: "relative",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {/* Session-dismiss × — top-right */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setInboxCardDismissed(true); }}
+                  aria-label="Hide until next app open"
+                  title="Hide until next app open"
+                  style={{
+                    position: "absolute", top: 8, right: 8,
+                    width: 24, height: 24, borderRadius: "50%",
+                    border: "none", background: "transparent",
+                    color: C.muted, cursor: "pointer",
+                    display: "grid", placeItems: "center", padding: 0,
+                    fontSize: 16, lineHeight: 1,
+                  }}
+                >×</button>
+
+                <div onClick={() => setView("Inbox")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", paddingRight: 24 }}>
                   <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.amber + "22", border: `1px solid ${C.amber}66`, display: "grid", placeItems: "center", fontSize: 16, flexShrink: 0 }}>🔔</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>
-                      I spotted {n} thing{n === 1 ? "" : "s"} overnight
+                      I spotted {n} thing{n === 1 ? "" : "s"} in your inbox
                     </div>
                     <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: C.muted, letterSpacing: "0.04em", marginTop: 2 }}>
                       Tap to review and approve →
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 44 }}>
+                <div onClick={() => setView("Inbox")} style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 44, cursor: "pointer" }}>
                   {top.map(a => (
                     <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.textDim, minWidth: 0 }}>
                       <span style={{ fontSize: 14, flexShrink: 0 }}>{iconFor(a.action_type)}</span>
