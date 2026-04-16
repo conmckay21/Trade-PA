@@ -4441,7 +4441,7 @@ const DEFAULT_SUPPLIERS = [
 
 function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, userId, onAssignJob }) {
   const [expanded, setExpanded] = useState(false);
-  const statusColor = { to_order: C.red, ordered: C.amber, collected: C.green };
+  const statusColor = { to_order: C.red, ordered: C.blue, collected: C.green };
   const statusLabel = { to_order: "To Order", ordered: "Ordered", collected: "Collected" };
 
   const viewReceipt = () => {
@@ -4756,6 +4756,84 @@ Return only JSON, no other text.` },
     setTimeout(() => setSyncMsg(""), 4000);
   };
 
+  // ── Phase 3: list-level controls (search / status filter / sort / grouping)
+  // Job filter (filterJob) above is retained as a secondary dimension.
+  const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("recent");
+
+  // Canonical material pill — amber reserved for actions/warnings per audit.
+  const MAT_PILL = {
+    to_order:  { label: "To Order",  color: C.red   },
+    ordered:   { label: "Ordered",   color: C.blue  },
+    collected: { label: "Collected", color: C.green },
+  };
+
+  // Week bounds — see module-scope utilities
+  const _bounds = weekBounds();
+
+  // Per-material derivations
+  const isToOrder   = (m) => m.status === "to_order";
+  const isOrdered   = (m) => m.status === "ordered";
+  const isCollected = (m) => m.status === "collected";
+  const isUnassigned = (m) => !m.job && !m.job_id;
+  const matTime = (m) => new Date(m.receiptDate || m.created_at || m.dueDate || 0).getTime();
+
+  // Live chip counts — layered on the job-filtered `filtered` so counts reflect
+  // the current job-filter context (if the user has narrowed to one job).
+  const counts = {
+    all:        filtered.length,
+    to_order:   filtered.filter(isToOrder).length,
+    ordered:    filtered.filter(isOrdered).length,
+    collected:  filtered.filter(isCollected).length,
+    unassigned: filtered.filter(isUnassigned).length,
+  };
+
+  // Apply status filter + search on top of the job-filtered set
+  const _q = search.trim().toLowerCase();
+  const filteredMaterials = filtered.filter(m => {
+    if (_q) {
+      const hay = [m.item, m.supplier, m.job, m.notes].filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(_q)) return false;
+    }
+    switch (activeFilter) {
+      case "to_order":   return isToOrder(m);
+      case "ordered":    return isOrdered(m);
+      case "collected":  return isCollected(m);
+      case "unassigned": return isUnassigned(m);
+      default:           return true;
+    }
+  });
+
+  // Sort
+  const sortedMaterials = [...filteredMaterials].sort((a, b) => {
+    switch (sortMode) {
+      case "value":    return (parseFloat(b.unitPrice || 0) * parseFloat(b.qty || 1)) - (parseFloat(a.unitPrice || 0) * parseFloat(a.qty || 1));
+      case "supplier": return (a.supplier || "").localeCompare(b.supplier || "");
+      case "status":   return (a.status || "").localeCompare(b.status || "");
+      default:         return matTime(b) - matTime(a);
+    }
+  });
+
+  // Group by recency (recent sort only)
+  const groupedMaterials = sortMode === "recent"
+    ? groupByRecency(sortedMaterials, matTime, _bounds)
+    : [{ key: "flat", label: null, items: sortedMaterials }];
+
+  // Filtered cost — reflects search + status + job together
+  const filteredCost = sortedMaterials.reduce((s, m) => s + (parseFloat(m.unitPrice) || 0) * (parseFloat(m.qty) || 1), 0);
+
+  const CHIPS = [
+    { id: "all",        label: "All",        urgent: false },
+    { id: "to_order",   label: "To order",   urgent: true  },
+    { id: "ordered",    label: "Ordered",    urgent: false },
+    { id: "collected",  label: "Collected",  urgent: false },
+    { id: "unassigned", label: "Unassigned", urgent: false },
+  ];
+  const SORT_LABELS = { recent: "Recent", value: "By value", supplier: "By supplier", status: "By status" };
+  const SORT_ORDER = ["recent", "value", "supplier", "status"];
+  const nextSort = () => setSortMode(s => SORT_ORDER[(SORT_ORDER.indexOf(s) + 1) % SORT_ORDER.length]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -4916,6 +4994,61 @@ Return only JSON, no other text.` },
         ))}
       </div>
 
+      {/* Phase 3: search + status chips — always visible, persistent */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {/* Search */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.35-4.35" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search materials — item, supplier, job…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: C.text, fontSize: 13, minWidth: 0, fontFamily: "inherit" }}
+          />
+          {search && (
+            <button onClick={() => setSearch("")} aria-label="Clear search" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+          )}
+        </div>
+
+        {/* Status chips */}
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+          {CHIPS.map(chip => {
+            const n = counts[chip.id];
+            const active = activeFilter === chip.id;
+            const muted  = !active && chip.id !== "all" && n === 0;
+            const urgentLive = chip.urgent && n > 0;
+            const accent = urgentLive ? C.red : C.text;
+            return (
+              <button
+                key={chip.id}
+                onClick={() => setActiveFilter(chip.id)}
+                disabled={muted}
+                style={{
+                  flexShrink: 0,
+                  padding: "6px 11px",
+                  borderRadius: 16,
+                  border: `1px solid ${active ? accent : C.border}`,
+                  background: active ? (urgentLive ? C.red + "22" : C.surfaceHigh) : "transparent",
+                  color: active ? accent : (urgentLive ? C.red : C.muted),
+                  fontSize: 12,
+                  fontWeight: active ? 700 : 500,
+                  fontFamily: "'DM Mono', monospace",
+                  cursor: muted ? "default" : "pointer",
+                  opacity: muted ? 0.4 : 1,
+                  whiteSpace: "nowrap",
+                  transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                }}
+              >
+                {chip.label}{n > 0 && <span style={{ marginLeft: 5, fontWeight: 700 }}>{n}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {jobList.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <button onClick={() => setFilterJob("all")} style={S.pill(C.amber, filterJob === "all")}>All Jobs</button>
@@ -4923,18 +5056,50 @@ Return only JSON, no other text.` },
         </div>
       )}
 
-      <div style={S.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={S.sectionTitle}>Material List ({filtered.length})</div>
-          {filterJob !== "all" && totalCost > 0 && (
-            <div style={{ fontSize: 11, color: C.muted }}>
-              Job cost: £{filtered.reduce((s, m) => s + (m.unitPrice || 0) * (m.qty || 1), 0).toFixed(2)}
+      {/* List header strip — count/cost + sort affordance */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingLeft: 2, paddingRight: 2 }}>
+        <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em" }}>
+          {sortedMaterials.length} material{sortedMaterials.length !== 1 ? "s" : ""}
+          {filteredCost > 0 && <> · <span style={{ color: C.text }}>£{filteredCost.toFixed(2)}</span></>}
+        </div>
+        <button
+          onClick={nextSort}
+          aria-label="Change sort"
+          style={{
+            background: "none", border: "none",
+            color: C.muted, fontSize: 11,
+            fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em",
+            cursor: "pointer", padding: "2px 4px",
+          }}
+        >
+          {SORT_LABELS[sortMode]} ↕
+        </button>
+      </div>
+
+      {/* Unified grouped list — each MaterialRow is its own card, no wrapper */}
+      {(materials || []).length === 0 && (
+        <div style={{ ...S.card, textAlign: "center", padding: 32 }}>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>📦</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>No materials yet — tap + Add above, scan a receipt, or ask Trade PA.</div>
+          <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Material</button>
+        </div>
+      )}
+      {(materials || []).length > 0 && sortedMaterials.length === 0 && (
+        <div style={{ ...S.card, textAlign: "center", padding: 22 }}>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
+            No materials match {_q ? <>&ldquo;{search}&rdquo;</> : `"${CHIPS.find(c => c.id === activeFilter)?.label || activeFilter}"`}{filterJob !== "all" ? ` in ${filterJob}` : ""}.
+          </div>
+          <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={() => { setSearch(""); setActiveFilter("all"); setFilterJob("all"); }}>Clear filters</button>
+        </div>
+      )}
+      {groupedMaterials.map(group => (
+        <React.Fragment key={group.key}>
+          {group.label && (
+            <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: C.muted, letterSpacing: "0.14em", fontWeight: 700, paddingLeft: 2, paddingTop: 4 }}>
+              {group.label} · {group.items.length}
             </div>
           )}
-        </div>
-        {filtered.length === 0
-          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials yet — tap + Add Materials above or ask the AI Assistant.</div>
-          : filtered.map((m, rawI) => {
+          {group.items.map(m => {
             const i = (materials || []).indexOf(m);
             return (
               <MaterialRow key={i} m={m} i={i}
@@ -4945,9 +5110,9 @@ Return only JSON, no other text.` },
                 onAssignJob={(idx) => setAssigningMaterialIdx(idx)}
               />
             );
-          })
-        }
-      </div>
+          })}
+        </React.Fragment>
+      ))}
 
       {/* Material edit modal */}
       {editingMaterial && (
