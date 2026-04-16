@@ -14924,6 +14924,118 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
     setSelected(null);
   };
 
+  // ── Phase 3: list-level controls (search / filter / sort / grouping) ───────
+  const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("recent");
+
+  // Canonical invoice pill — amber reserved for actions/warnings per audit.
+  // Routine statuses use muted/blue/red/green only.
+  const INV_PILL = {
+    draft:   { label: "Draft",   color: C.muted },
+    sent:    { label: "Sent",    color: C.blue  },
+    pending: { label: "Pending", color: C.blue  },
+    due:     { label: "Due",     color: C.red   },
+    overdue: { label: "Overdue", color: C.red   },
+    paid:    { label: "Paid",    color: C.green },
+  };
+  const pillFor = (i) => INV_PILL[(i.status || "").toLowerCase()] || { label: (i.status || "—"), color: C.muted };
+
+  // Relative timestamp
+  const relTime = (iso) => {
+    if (!iso) return "";
+    const t = new Date(iso).getTime();
+    if (!t) return "";
+    const diff = Date.now() - t;
+    if (diff < 60000) return "just now";
+    const m = Math.floor(diff / 60000);
+    if (m < 60)  return m + "m ago";
+    const h = Math.floor(m / 60);
+    if (h < 24)  return h + "h ago";
+    const d = Math.floor(h / 24);
+    if (d < 7)   return d + "d ago";
+    const w = Math.floor(d / 7);
+    if (w < 5)   return w + "w ago";
+    const mo = Math.floor(d / 30);
+    if (mo < 12) return mo + "mo ago";
+    return Math.floor(d / 365) + "y ago";
+  };
+
+  // Week-bound calcs (Mon-start week, local time)
+  const _today0 = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+  const _weekStart = (() => { const d = new Date(_today0); const dow = d.getDay() || 7; return _today0 - (dow - 1) * 86400000; })();
+
+  // Per-invoice derivations
+  const isUnpaid  = (i) => (i.status || "").toLowerCase() !== "paid";
+  const isOverdue = (i) => (i.status || "").toLowerCase() === "overdue";
+  const isDraft   = (i) => (i.status || "").toLowerCase() === "draft";
+  const invTime   = (i) => new Date(i.paidDate || i.created_at || i.date || 0).getTime();
+
+  // Live chip counts
+  const counts = {
+    all:     allInvoices.length,
+    unpaid:  allInvoices.filter(isUnpaid).length,
+    overdue: allInvoices.filter(isOverdue).length,
+    paid:    paid.length,
+    draft:   allInvoices.filter(isDraft).length,
+  };
+
+  // Search + filter
+  const _q = search.trim().toLowerCase();
+  const filteredInvoices = allInvoices.filter(i => {
+    if (_q) {
+      const hay = [i.customer, i.address, i.id, i.description, i.job_ref, i.jobRef].filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(_q)) return false;
+    }
+    switch (activeFilter) {
+      case "unpaid":  return isUnpaid(i);
+      case "overdue": return isOverdue(i);
+      case "paid":    return (i.status || "").toLowerCase() === "paid";
+      case "draft":   return isDraft(i);
+      default:        return true;
+    }
+  });
+
+  // Sort
+  const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+    switch (sortMode) {
+      case "value":    return parseFloat(b.amount || 0) - parseFloat(a.amount || 0);
+      case "customer": return (a.customer || "").localeCompare(b.customer || "");
+      case "status":   return (a.status || "").localeCompare(b.status || "");
+      default:         return invTime(b) - invTime(a);
+    }
+  });
+
+  // Group by recency (recent sort only)
+  const groupedInvoices = sortMode === "recent"
+    ? (() => {
+        const today = [], thisWeek = [], earlier = [];
+        for (const i of sortedInvoices) {
+          const t = invTime(i);
+          if (!t)                     earlier.push(i);
+          else if (t >= _today0)      today.push(i);
+          else if (t >= _weekStart)   thisWeek.push(i);
+          else                        earlier.push(i);
+        }
+        return [
+          { key: "today",    label: "TODAY",     items: today    },
+          { key: "thisWeek", label: "THIS WEEK", items: thisWeek },
+          { key: "earlier",  label: "EARLIER",   items: earlier  },
+        ].filter(g => g.items.length > 0);
+      })()
+    : [{ key: "flat", label: null, items: sortedInvoices }];
+
+  const CHIPS = [
+    { id: "all",     label: "All",     urgent: false },
+    { id: "unpaid",  label: "Unpaid",  urgent: true  },
+    { id: "overdue", label: "Overdue", urgent: true  },
+    { id: "paid",    label: "Paid",    urgent: false },
+    { id: "draft",   label: "Draft",   urgent: false },
+  ];
+  const SORT_LABELS = { recent: "Recent", value: "By value", customer: "By customer", status: "By status" };
+  const SORT_ORDER = ["recent", "value", "customer", "status"];
+  const nextSort = () => setSortMode(s => SORT_ORDER[(SORT_ORDER.indexOf(s) + 1) % SORT_ORDER.length]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -14955,46 +15067,126 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
         </div>
       </div>
 
-      {/* Outstanding list */}
-      <div style={S.card}>
-        <div style={S.sectionTitle}>Outstanding ({outstanding.length})</div>
-        {outstanding.length === 0
-          ? <div style={{ fontSize: 12, color: C.green, fontStyle: "italic" }}>All invoices paid — great work!</div>
-          : outstanding.map(inv => (
-            <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
-              <div style={{ width: 4, height: 44, borderRadius: 2, background: inv.status === "overdue" ? C.red : C.amber, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
-                <div style={{ fontSize: 10, color: C.muted }}>{inv.address || inv.id} · {inv.due}</div>
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
-              <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
-              <button onClick={e => { e.stopPropagation(); sendDocumentEmail(inv, brand, customers, user?.id, setSendingId, customerContacts); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.blue, flexShrink: 0 }} disabled={sendingId === inv.id}>{sendingId === inv.id ? "..." : "✉"}</button>
-              <button onClick={e => { e.stopPropagation(); updateStatus(inv.id, "paid"); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green, flexShrink: 0 }}>✓ Paid</button>
-              <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
-            </div>
-          ))
-        }
+      {/* Phase 3: search + filter chips + sort — always visible, persistent */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {/* Search */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.35-4.35" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search invoices — customer, ref, address…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: C.text, fontSize: 13, minWidth: 0, fontFamily: "inherit" }}
+          />
+          {search && (
+            <button onClick={() => setSearch("")} aria-label="Clear search" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+          )}
+        </div>
+
+        {/* Filter chips */}
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+          {CHIPS.map(chip => {
+            const n = counts[chip.id];
+            const active = activeFilter === chip.id;
+            const muted  = !active && chip.id !== "all" && n === 0;
+            const urgentLive = chip.urgent && n > 0;
+            const accent = urgentLive ? C.red : C.text;
+            return (
+              <button
+                key={chip.id}
+                onClick={() => setActiveFilter(chip.id)}
+                disabled={muted}
+                style={{
+                  flexShrink: 0,
+                  padding: "6px 11px",
+                  borderRadius: 16,
+                  border: `1px solid ${active ? accent : C.border}`,
+                  background: active ? (urgentLive ? C.red + "22" : C.surfaceHigh) : "transparent",
+                  color: active ? accent : (urgentLive ? C.red : C.muted),
+                  fontSize: 12,
+                  fontWeight: active ? 700 : 500,
+                  fontFamily: "'DM Mono', monospace",
+                  cursor: muted ? "default" : "pointer",
+                  opacity: muted ? 0.4 : 1,
+                  whiteSpace: "nowrap",
+                  transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                }}
+              >
+                {chip.label}{n > 0 && <span style={{ marginLeft: 5, fontWeight: 700 }}>{n}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sort affordance */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={nextSort}
+            aria-label="Change sort"
+            style={{
+              background: "none", border: "none",
+              color: C.muted, fontSize: 11,
+              fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em",
+              cursor: "pointer", padding: "2px 4px",
+            }}
+          >
+            {SORT_LABELS[sortMode]} ↕
+          </button>
+        </div>
       </div>
 
-      {/* Paid list */}
-      {paid.length > 0 && (
-        <div style={S.card}>
-          <div style={S.sectionTitle}>Paid ({paid.length})</div>
-          {paid.map(inv => (
-            <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
-              <div style={{ width: 4, height: 44, borderRadius: 2, background: C.green, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
-                <div style={{ fontSize: 10, color: C.muted }}>{inv.address || inv.id}</div>
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
-              <div style={S.badge(C.green)}>Paid</div>
-              <div style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>→</div>
-            </div>
-          ))}
+      {/* Unified list — grouped by recency, filtered/sorted by chips+search */}
+      {allInvoices.length > 0 && sortedInvoices.length === 0 && (
+        <div style={{ ...S.card, textAlign: "center", padding: 22 }}>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
+            No invoices match {_q ? <>&ldquo;{search}&rdquo;</> : `"${CHIPS.find(c => c.id === activeFilter)?.label || activeFilter}"`}.
+          </div>
+          <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={() => { setSearch(""); setActiveFilter("all"); }}>Clear filters</button>
         </div>
       )}
+      {groupedInvoices.map(group => (
+        <React.Fragment key={group.key}>
+          {group.label && (
+            <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: C.muted, letterSpacing: "0.14em", fontWeight: 700, paddingLeft: 2, paddingTop: 4 }}>
+              {group.label} · {group.items.length}
+            </div>
+          )}
+          {group.items.map(inv => {
+            const pill = pillFor(inv);
+            const overdue = isOverdue(inv);
+            const paidRow = (inv.status || "").toLowerCase() === "paid";
+            // Stripe follows urgency: overdue → red, paid → green, else pill colour
+            const stripe = overdue ? C.red : paidRow ? C.green : pill.color;
+            return (
+              <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.card, cursor: "pointer", borderLeft: `3px solid ${stripe}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inv.customer || "—"}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inv.id}{inv.address ? ` · ${inv.address}` : ""}</div>
+                    {/* Metadata row */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                      <span style={{ ...S.badge(pill.color), fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.04em" }}>{pill.label}</span>
+                      {inv.due && <span style={{ fontSize: 11, color: overdue ? C.red : C.muted, fontFamily: "'DM Mono', monospace" }}>{inv.due}</span>}
+                      {(inv.created_at || inv.date) && (
+                        <span style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>· {relTime(inv.created_at || inv.date)}</span>
+                      )}
+                      {(inv.job_ref || inv.jobRef) && <span style={{ ...S.badge(C.blue), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>Job: {inv.job_ref || inv.jobRef}</span>}
+                      {inv.cisEnabled && <span style={{ ...S.badge(C.purple), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>CIS</span>}
+                      {inv.vatEnabled && <span style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>VAT</span>}
+                    </div>
+                  </div>
+                  <div style={{ flexShrink: 0, textAlign: "right" }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: paidRow ? C.green : overdue ? C.red : C.text, letterSpacing: "-0.01em" }}>{fmtAmount(inv.amount)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </React.Fragment>
+      ))}
 
       {allInvoices.length === 0 && (
         <div style={{ ...S.card, textAlign: "center", padding: 40 }}>
