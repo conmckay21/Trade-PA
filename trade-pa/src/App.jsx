@@ -3754,7 +3754,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt, v
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
       {/* Animation keyframes for mic pulse */}
       <style>{`
@@ -3813,10 +3813,10 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt, v
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        padding: "24px 0 16px",
-        gap: 14,
+        padding: "32px 0 20px",
+        gap: 16,
       }}>
-        <div style={{ position: "relative", width: 120, height: 120 }}>
+        <div style={{ position: "relative", width: 144, height: 144 }}>
           {/* Pulse ring */}
           <div style={{
             position: "absolute",
@@ -3831,8 +3831,8 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt, v
             aria-label="Tap to speak"
             style={{
               position: "relative",
-              width: 120,
-              height: 120,
+              width: 144,
+              height: 144,
               borderRadius: "50%",
               background: `linear-gradient(180deg, ${C.amber}, #d97706)`,
               border: `3px solid ${C.amber}80`,
@@ -3844,7 +3844,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt, v
               padding: 0,
             }}
           >
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
               <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" />
             </svg>
@@ -22762,12 +22762,6 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
         WebkitBackdropFilter: "blur(16px)",
         borderTop: `1px solid ${C.border}`,
         paddingBottom: 0,
-        // transform:translateY physically shifts the bar down in pixels, bypassing
-        // any iOS safe-area clamping that affects bottom:0 positioning. Pulls the
-        // visible bar content (icons/labels) closer to the physical screen edge
-        // without changing the touch hit area layout. 20px = meets iOS home
-        // indicator guidance while reclaiming the dead space Connor flagged.
-        transform: "translateY(20px)",
       }}
     >
         <div style={{
