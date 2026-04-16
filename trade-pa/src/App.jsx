@@ -3632,131 +3632,414 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ setView, jobs, invoices, enquiries, brand }) {
+function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt }) {
+  // ── Computed data ────────────────────────────────────────────────────────
   const today = new Date(); today.setHours(0,0,0,0);
   const todayJobs = jobs.filter(j => j.dateObj && isSameDay(new Date(j.dateObj), today));
-
   const allInvoices = invoices.filter(i => !i.isQuote);
-  const allQuotes = invoices.filter(i => i.isQuote);
-  const totalInvoiceValue = allInvoices.reduce((s, i) => s + (i.amount || 0), 0);
-  const totalQuoteValue = allQuotes.reduce((s, q) => s + (q.amount || 0), 0);
   const overdueInvoices = allInvoices.filter(i => i.status === "overdue" || i.status === "due");
   const overdueValue = overdueInvoices.reduce((s, i) => s + (i.amount || 0), 0);
   const newEnquiries = (enquiries || []).filter(e => !e.status || e.status === "new");
+  const isEmpty = jobs.length === 0 && invoices.length === 0 && (enquiries || []).length === 0;
+
+  // ── Time-of-day greeting (mockup fix: never empty, defaults to "Good evening" at night) ──
+  const hour = new Date().getHours();
+  const greeting = hour >= 5 && hour < 12 ? "Good morning."
+                 : hour >= 12 && hour < 18 ? "Good afternoon."
+                 : "Good evening.";
+
+  // ── Local state for Session A (Session D will wire to actual hands-free system) ──
+  const [handsFree, setHandsFree] = useState(false);
+  const [textMessage, setTextMessage] = useState("");
+  const fileInputRef = useRef();
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  const goToVoice = () => setView("AI Assistant");
+  const submitText = () => {
+    if (!textMessage.trim()) return;
+    // Session A bridge: persist the typed message in sessionStorage so the AIAssistant
+    // can pick it up. Session D will wire this directly into the AI input.
+    try { sessionStorage.setItem("dashboard-pending-message", textMessage.trim()); } catch {}
+    setTextMessage("");
+    setView("AI Assistant");
+  };
+  const handleScanFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !onScanReceipt) return;
+    onScanReceipt(file);
+    e.target.value = "";
+    // After triggering, navigate to AI Assistant so the user can see the parsed result
+    setView("AI Assistant");
+  };
+
+  // ── Glance widget renderer ───────────────────────────────────────────────
+  const Glance = ({ label, value, sub, valueColor, onClick }) => (
+    <div
+      onClick={onClick}
+      style={{
+        background: C.surfaceHigh,
+        border: `1px solid ${C.border}`,
+        borderRadius: 14,
+        padding: 14,
+        cursor: onClick ? "pointer" : "default",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        minWidth: 0,
+      }}
+    >
+      <div style={{
+        fontFamily: "'DM Mono', monospace",
+        fontSize: 9,
+        color: C.muted,
+        letterSpacing: "0.14em",
+        fontWeight: 700,
+        textTransform: "uppercase",
+      }}>{label}</div>
+      <div>
+        <div style={{
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: 22,
+          fontWeight: 700,
+          letterSpacing: "-0.02em",
+          color: valueColor || C.text,
+          lineHeight: 1.05,
+        }}>{value}</div>
+        <div style={{
+          fontSize: 10.5,
+          color: C.textDim,
+          marginTop: 3,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}>{sub}</div>
+      </div>
+    </div>
+  );
+
+  // ── Quick action button renderer ─────────────────────────────────────────
+  const QuickAction = ({ label, icon, onClick }) => (
+    <button
+      onClick={onClick}
+      style={{
+        background: C.surfaceHigh,
+        border: `1px solid ${C.border}`,
+        borderRadius: 14,
+        padding: "14px 8px",
+        cursor: "pointer",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        color: C.text,
+        fontFamily: "'DM Sans', sans-serif",
+        minHeight: 84,
+      }}
+    >
+      <div style={{ width: 22, height: 22, color: C.amber }}>{icon}</div>
+      <div style={{
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: "-0.005em",
+        textAlign: "center",
+        lineHeight: 1.2,
+      }}>{label}</div>
+    </button>
+  );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {[
-          { label: "Total Quote Value", value: `${fmtCurrency(totalQuoteValue)}`, sub: `${allQuotes.length} quote${allQuotes.length !== 1 ? "s" : ""}`, color: C.blue, onClick: () => setView("Quotes") },
-          { label: "Total Invoice Value", value: `${fmtCurrency(totalInvoiceValue)}`, sub: `${allInvoices.filter(i => i.status !== "paid").length} outstanding`, color: C.amber, onClick: () => setView("Invoices") },
-          { label: "Overdue Invoices", value: `${fmtCurrency(overdueValue)}`, sub: `${overdueInvoices.length} invoice${overdueInvoices.length !== 1 ? "s" : ""} overdue`, color: overdueValue > 0 ? C.red : C.muted, onClick: () => setView("Invoices") },
-          { label: "New Enquiries", value: newEnquiries.length, sub: `${(enquiries || []).filter(e => e.urgent).length} urgent`, color: C.green, onClick: () => setView("Enquiries") },
-        ].map((stat, i) => (
-          <div key={i} style={{ ...S.statCard(stat.color), cursor: "pointer" }} onClick={stat.onClick}>
-            <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>{stat.label}</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value}</div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{stat.sub}</div>
-          </div>
-        ))}
-      </div>
-      <div style={S.grid2}>
-        <div style={S.card}>
-          <div style={S.sectionTitle}>Today's Jobs</div>
-          {todayJobs.length === 0
-            ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No jobs today — add one in Schedule or via the AI Assistant.</div>
-            : todayJobs.map(job => (
-              <div key={job.id} style={S.row}>
-                <div style={{ width: 4, height: 36, borderRadius: 2, background: statusColor[job.status] || C.muted, flexShrink: 0 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{job.customer}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>{job.type} · {new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
-                </div>
-                {job.value > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>{fmtAmount(job.value)}</div>}
-              </div>
-            ))
-          }
-          <div style={{ marginTop: 12 }}><button style={S.btn("ghost")} onClick={() => setView("Schedule")}>View Schedule →</button></div>
-        </div>
-        <div style={S.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={S.sectionTitle}>New Enquiries</div>
-            <button style={S.btn("ghost")} onClick={() => setView("Enquiries")}>Manage →</button>
-          </div>
-          {(enquiries || []).length === 0
-            ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No enquiries yet — log one via the AI Assistant.</div>
-            : (enquiries || []).slice(0, 3).map((e, i) => (
-              <div key={i} style={{ ...S.row, alignItems: "flex-start" }}>
-                <div style={{ width: 4, height: 36, borderRadius: 2, background: e.urgent ? C.red : C.blue, flexShrink: 0, marginTop: 4 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{e.name}</span>
-                    <span style={S.badge(C.muted)}>{e.source}</span>
-                    {e.urgent && <span style={S.badge(C.red)}>Urgent</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.msg}</div>
-                </div>
-                <div style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>{e.time}</div>
-              </div>
-            ))
-          }
-        </div>
-      </div>
-      <div style={S.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={S.sectionTitle}>Invoice Pipeline</div>
-          <button style={S.btn("ghost")} onClick={() => setView("Invoices")}>Manage →</button>
-        </div>
-        {allInvoices.length === 0
-          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No invoices yet — create one in Invoices or via the AI Assistant.</div>
-          : allInvoices.slice(0, 4).map(inv => (
-            <div key={inv.id} style={S.row}>
-              <div style={{ fontSize: 12, color: C.muted, width: 70, flexShrink: 0 }}>{inv.id}</div>
-              <div style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</span></div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 12, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
-              <div style={{ flexShrink: 0, textAlign: "right", marginRight: 10 }}>
-                <div style={S.badge(statusColor[inv.status] || C.muted)}>{statusLabel[inv.status] || inv.status}</div>
-                <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{inv.due}</div>
-              </div>
-              <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }} onClick={() => downloadInvoicePDF(brand, inv)}>⬇ PDF</button>
-            </div>
-          ))
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* Animation keyframes for mic pulse */}
+      <style>{`
+        @keyframes mic-pulse {
+          0% { transform: scale(1); opacity: 0.7; }
+          70% { transform: scale(1.6); opacity: 0; }
+          100% { transform: scale(1.6); opacity: 0; }
         }
+      `}</style>
+
+      {/* Greeting */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 4 }}>
+        <div style={{
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: 26,
+          fontWeight: 700,
+          letterSpacing: "-0.02em",
+          color: C.text,
+          lineHeight: 1.1,
+        }}>{greeting}</div>
+        <div style={{ fontSize: 13, color: C.textDim, lineHeight: 1.4 }}>
+          Tap to talk, or pick an action below.
+        </div>
       </div>
 
-      {allQuotes.length > 0 && (
-        <div style={S.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={S.sectionTitle}>Quotes ({allQuotes.length})</div>
-            <button style={S.btn("ghost")} onClick={() => setView("Quotes")}>Manage →</button>
-          </div>
-          {allQuotes.slice(0, 4).map(q => (
-            <div key={q.id} style={S.row}>
-              <div style={{ fontSize: 12, color: C.blue, width: 70, flexShrink: 0 }}>{q.id}</div>
-              <div style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</span></div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginRight: 12, flexShrink: 0 }}>{fmtAmount(q.amount)}</div>
-              <div style={{ flexShrink: 0, textAlign: "right", marginRight: 10 }}>
-                <div style={S.badge(C.blue)}>Quote</div>
-                <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{q.due}</div>
-              </div>
-              <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }} onClick={() => downloadInvoicePDF(brand, q)}>⬇ PDF</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Glance widgets row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+        <Glance
+          label="Today"
+          value={todayJobs.length}
+          sub={`job${todayJobs.length === 1 ? "" : "s"} scheduled`}
+          onClick={() => setView("Schedule")}
+        />
+        <Glance
+          label="Overdue"
+          value={overdueValue > 0 ? fmtAmount(overdueValue) : "£0"}
+          sub={`${overdueInvoices.length} invoice${overdueInvoices.length === 1 ? "" : "s"}`}
+          valueColor={overdueValue > 0 ? C.red : C.text}
+          onClick={() => setView("Invoices")}
+        />
+        <Glance
+          label="Inbox"
+          value={newEnquiries.length}
+          sub={`new ${newEnquiries.length === 1 ? "enquiry" : "enquiries"}`}
+          valueColor={newEnquiries.length > 0 ? C.amber : C.text}
+          onClick={() => setView("Enquiries")}
+        />
+      </div>
 
-      {jobs.length === 0 && invoices.length === 0 && (enquiries || []).length === 0 && (
-        <div style={{ ...S.card, textAlign: "center", padding: 40, borderColor: C.amber + "44", background: C.amber + "08" }}>
-          <div style={{ fontSize: 36, marginBottom: 16 }}>⚡</div>
-          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Welcome to Trade PA</div>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 24, lineHeight: 1.7 }}>
-            Get started by heading to <strong style={{ color: C.text }}>Settings</strong> to add your business details,<br />
-            then try the <strong style={{ color: C.text }}>AI Assistant</strong> to book your first job.
+      {/* Mic hero */}
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "24px 0 16px",
+        gap: 14,
+      }}>
+        <div style={{ position: "relative", width: 120, height: 120 }}>
+          {/* Pulse ring */}
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "50%",
+            background: `radial-gradient(circle, ${C.amber}40 0%, ${C.amber}00 70%)`,
+            animation: "mic-pulse 2.6s ease-out infinite",
+          }} />
+          {/* Mic button */}
+          <button
+            onClick={goToVoice}
+            aria-label="Tap to speak"
+            style={{
+              position: "relative",
+              width: 120,
+              height: 120,
+              borderRadius: "50%",
+              background: `linear-gradient(180deg, ${C.amber}, #d97706)`,
+              border: `3px solid ${C.amber}80`,
+              boxShadow: `0 12px 40px -8px ${C.amber}80, 0 0 60px -12px ${C.amber}60`,
+              cursor: "pointer",
+              display: "grid",
+              placeItems: "center",
+              color: "#000",
+              padding: 0,
+            }}
+          >
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+              <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" />
+            </svg>
+          </button>
+        </div>
+        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: 14,
+            fontWeight: 600,
+            color: C.text,
+          }}>Tap to speak</div>
+          <div style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: 10,
+            color: C.muted,
+            letterSpacing: "0.1em",
+            textTransform: "lowercase",
+          }}>"hey trade pa"</div>
+        </div>
+      </div>
+
+      {/* Hands-free toggle row */}
+      <div
+        onClick={() => setHandsFree(v => !v)}
+        style={{
+          background: C.surfaceHigh,
+          border: `1px solid ${handsFree ? `${C.amber}40` : C.border}`,
+          borderRadius: 14,
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          cursor: "pointer",
+          transition: "border-color 150ms ease",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+          <div style={{
+            width: 36, height: 36,
+            borderRadius: 10,
+            background: handsFree ? `${C.amber}1f` : C.surface,
+            border: `1px solid ${handsFree ? `${C.amber}40` : C.border}`,
+            color: handsFree ? C.amber : C.textDim,
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+            transition: "all 150ms ease",
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
           </div>
-          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-            <button style={S.btn("primary")} onClick={() => setView("Settings")}>Set up my business →</button>
-            <button style={S.btn("ghost")} onClick={() => setView("AI Assistant")}>Try AI Assistant</button>
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: 14,
+              fontWeight: 600,
+              color: C.text,
+              letterSpacing: "-0.01em",
+            }}>Hands-free: {handsFree ? "On" : "Off"}</div>
+            <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>
+              Auto-listen after each reply
+            </div>
           </div>
+        </div>
+        {/* Switch */}
+        <div style={{
+          width: 44, height: 24,
+          borderRadius: 12,
+          background: handsFree ? C.amber : C.border,
+          position: "relative",
+          flexShrink: 0,
+          transition: "background 150ms ease",
+        }}>
+          <div style={{
+            position: "absolute",
+            top: 2,
+            left: handsFree ? 22 : 2,
+            width: 20, height: 20,
+            borderRadius: "50%",
+            background: "#fff",
+            transition: "left 150ms ease",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+          }} />
+        </div>
+      </div>
+
+      {/* Quick actions */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+        <QuickAction
+          label="New Job"
+          icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22"><path d="M12 4v16m8-8H4" /></svg>}
+          onClick={() => setView("Jobs")}
+        />
+        <QuickAction
+          label="New Quote"
+          icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22"><path d="M9 12h6m-3-3v6m9-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+          onClick={() => setView("Quotes")}
+        />
+        <QuickAction
+          label="Scan Receipt"
+          icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22"><path d="M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
+          onClick={() => fileInputRef.current?.click()}
+        />
+        <QuickAction
+          label="Log Time"
+          icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+          onClick={() => setView("AI Assistant")}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          capture="environment"
+          onChange={handleScanFile}
+          style={{ display: "none" }}
+        />
+      </div>
+
+      {/* Text input bar (equal citizen to voice) */}
+      <div style={{
+        background: C.surfaceHigh,
+        border: `1px solid ${C.border}`,
+        borderRadius: 14,
+        padding: "8px 8px 8px 14px",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      }}>
+        <input
+          type="text"
+          placeholder="Or type a message…"
+          value={textMessage}
+          onChange={e => setTextMessage(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") submitText(); }}
+          style={{
+            flex: 1,
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: C.text,
+            fontSize: 15,
+            fontFamily: "'DM Sans', sans-serif",
+            minWidth: 0,
+            padding: "8px 0",
+          }}
+        />
+        <button
+          onClick={submitText}
+          aria-label="Send"
+          disabled={!textMessage.trim()}
+          style={{
+            width: 36, height: 36,
+            borderRadius: 10,
+            background: textMessage.trim() ? C.amber : C.surface,
+            border: `1px solid ${textMessage.trim() ? C.amber : C.border}`,
+            color: textMessage.trim() ? "#000" : C.textDim,
+            cursor: textMessage.trim() ? "pointer" : "not-allowed",
+            display: "grid",
+            placeItems: "center",
+            transition: "background 120ms ease",
+            flexShrink: 0,
+            padding: 0,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14m0 0l-6-6m6 6l-6 6" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Empty state — shown only on a brand-new account */}
+      {isEmpty && (
+        <div style={{
+          marginTop: 8,
+          background: `${C.amber}08`,
+          border: `1px solid ${C.amber}33`,
+          borderRadius: 14,
+          padding: 20,
+          textAlign: "center",
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 10 }}>⚡</div>
+          <div style={{
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: 15,
+            fontWeight: 700,
+            color: C.text,
+            marginBottom: 6,
+            letterSpacing: "-0.01em",
+          }}>Welcome to Trade PA</div>
+          <div style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5, marginBottom: 14 }}>
+            Tap the mic to talk, or set up your business in Settings first.
+          </div>
+          <button
+            onClick={() => setView("Settings")}
+            style={{
+              ...S.btn("primary"),
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 11,
+              letterSpacing: "0.06em",
+            }}
+          >Set up my business →</button>
         </div>
       )}
     </div>
@@ -23236,7 +23519,7 @@ function AppInner() {
           }
           return null;
         })()}
-        {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} />}
+        {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} onScanReceipt={handleScanReceipt} />}
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} />}
         {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
