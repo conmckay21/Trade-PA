@@ -9425,8 +9425,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           </div>
 
           {/* Mic hero */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "28px 0 12px", gap: 14 }}>
-            <div style={{ position: "relative", width: 132, height: 132 }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "8px 0", gap: 18 }}>
+            <div style={{ position: "relative", width: 170, height: 170 }}>
               {/* Pulse ring (idle only) */}
               {!recording && !transcribing && !loading && !handsFree && (
                 <div style={{
@@ -9442,7 +9442,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 aria-label={recording ? "Stop recording" : "Tap to speak"}
                 style={{
                   position: "relative",
-                  width: 132, height: 132, borderRadius: "50%",
+                  width: 170, height: 170, borderRadius: "50%",
                   background: recording ? C.red : handsFree ? `linear-gradient(180deg, #34d399, ${C.green})` : `linear-gradient(180deg, ${C.amber}, #d97706)`,
                   border: `3px solid ${recording ? C.red + "80" : handsFree ? C.green + "80" : C.amber + "80"}`,
                   boxShadow: recording ? `0 12px 40px -8px ${C.red}80, 0 0 0 16px ${C.red}22`
@@ -9455,9 +9455,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 }}
               >
                 {recording ? (
-                  <div style={{ width: 26, height: 26, background: "#000", borderRadius: 4 }} />
+                  <div style={{ width: 34, height: 34, background: "#000", borderRadius: 5 }} />
                 ) : (
-                  <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
                     <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" />
                   </svg>
@@ -9482,6 +9482,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           </div>
 
+          {/* Bottom cluster — hands-free + quick actions (tighter spacing) */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {/* Hands-free row (only shown when NOT already in hands-free) */}
           {!handsFree && (
             <button
@@ -9568,6 +9570,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               </>);
             })()}
           </div>
+          </div>{/* /bottom cluster */}
 
           {/* Hidden subcontractor scan input (kept for voice tool trigger) */}
           <input ref={homeSubScanRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { homeSubScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
