@@ -9374,131 +9374,214 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 140px)", minHeight: 400, gap: 12, overflow: "hidden" }}>
 
       {/* ── HOME SCREEN ─────────────────────────────────────────────────── */}
-      {isHome && (
+      {isHome && (() => {
+        // Compute Dashboard-style stats from AIAssistant's props
+        const today = new Date(); today.setHours(0,0,0,0);
+        const isSameDayHome = (a, b) => a && b && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+        const todayJobs = (jobs || []).filter(j => j.dateObj && isSameDayHome(new Date(j.dateObj), today));
+        const allInvoices = (invoices || []).filter(i => !i.isQuote);
+        const overdueInvoices = allInvoices.filter(i => i.status === "overdue" || i.status === "due");
+        const overdueValue = overdueInvoices.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+        const newEnquiries = (enquiries || []).filter(e => !e.status || e.status === "new");
+        // New greeting — no name, matches Dashboard mockup
+        const hh = new Date().getHours();
+        const morningGreeting = hh >= 5 && hh < 12 ? "Good morning."
+                              : hh >= 12 && hh < 18 ? "Good afternoon."
+                              : "Good evening.";
+        const fmtStat = (v) => {
+          if (v >= 1000) return `£${(v/1000).toFixed(v >= 10000 ? 0 : 1)}k`;
+          return `£${Math.round(v).toLocaleString()}`;
+        };
+        return (
         <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 8 }}>
 
           {/* Greeting */}
-          <div style={{ paddingTop: 8 }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: C.text, letterSpacing: "-0.02em" }}>
-              {greeting}, {firstName}
+          <div style={{ paddingTop: 4 }}>
+            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", color: C.text, lineHeight: 1.1 }}>
+              {morningGreeting}
             </div>
-            <div style={{ fontSize: 14, color: C.muted, marginTop: 5 }}>How can I help?</div>
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: C.muted, marginTop: 6 }}>
+              Tap to talk, or pick an action below.
+            </div>
           </div>
 
-          {/* Big voice button */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "16px 0 8px" }}>
+          {/* 3 stat cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            <div onClick={() => setView("Schedule")} style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 11px", cursor: "pointer" }}>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>TODAY</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: "-0.02em", marginTop: 4 }}>{todayJobs.length}</div>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, marginTop: 2 }}>{todayJobs.length === 1 ? "job" : "jobs"}</div>
+            </div>
+            <div onClick={() => setView("Invoices")} style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 11px", cursor: "pointer" }}>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>OVERDUE</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: overdueValue > 0 ? C.amber : C.text, letterSpacing: "-0.02em", marginTop: 4 }}>{fmtStat(overdueValue)}</div>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, marginTop: 2 }}>{overdueInvoices.length} {overdueInvoices.length === 1 ? "invoice" : "invoices"}</div>
+            </div>
+            <div onClick={() => setView("Inbox")} style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 11px", cursor: "pointer" }}>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>INBOX</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: newEnquiries.length > 0 ? C.amber : C.text, letterSpacing: "-0.02em", marginTop: 4 }}>{newEnquiries.length}</div>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, marginTop: 2 }}>{newEnquiries.length === 1 ? "new enquiry" : "new enquiries"}</div>
+            </div>
+          </div>
+
+          {/* Mic hero */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "28px 0 12px", gap: 14 }}>
+            <div style={{ position: "relative", width: 132, height: 132 }}>
+              {/* Pulse ring (idle only) */}
+              {!recording && !transcribing && !loading && !handsFree && (
+                <div style={{
+                  position: "absolute", inset: 0, borderRadius: "50%",
+                  background: `radial-gradient(circle, ${C.amber}40 0%, ${C.amber}00 70%)`,
+                  animation: "mic-pulse-home 2.6s ease-out infinite",
+                  pointerEvents: "none",
+                }} />
+              )}
+              <button
+                onClick={() => recording ? stopRecording() : startRecording(true)}
+                disabled={transcribing}
+                aria-label={recording ? "Stop recording" : "Tap to speak"}
+                style={{
+                  position: "relative",
+                  width: 132, height: 132, borderRadius: "50%",
+                  background: recording ? C.red : handsFree ? `linear-gradient(180deg, #34d399, ${C.green})` : `linear-gradient(180deg, ${C.amber}, #d97706)`,
+                  border: `3px solid ${recording ? C.red + "80" : handsFree ? C.green + "80" : C.amber + "80"}`,
+                  boxShadow: recording ? `0 12px 40px -8px ${C.red}80, 0 0 0 16px ${C.red}22`
+                    : handsFree ? `0 12px 40px -8px ${C.green}80, 0 0 0 16px ${C.green}22`
+                    : `0 12px 40px -8px ${C.amber}80, 0 0 60px -12px ${C.amber}60`,
+                  cursor: transcribing ? "default" : "pointer",
+                  display: "grid", placeItems: "center",
+                  color: "#000", padding: 0,
+                  transition: "all 0.25s",
+                }}
+              >
+                {recording ? (
+                  <div style={{ width: 26, height: 26, background: "#000", borderRadius: 4 }} />
+                ) : (
+                  <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                    <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" />
+                  </svg>
+                )}
+              </button>
+            </div>
+            <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: 15, fontWeight: 700,
+                color: recording ? C.red : transcribing ? C.amber : handsFree ? C.green : C.text,
+                transition: "color 0.2s",
+              }}>
+                {transcribing ? "Thinking..." : recording ? "Listening — tap to stop" : handsFree ? "Hands-free ready" : "Tap to speak"}
+              </div>
+              <div style={{
+                fontFamily: "'DM Mono', monospace", fontSize: 10,
+                color: C.muted, letterSpacing: "0.08em",
+              }}>
+                {handsFree ? 'Say "hey trade pa"' : '"hey trade pa"'}
+              </div>
+            </div>
+          </div>
+
+          {/* Hands-free row (only shown when NOT already in hands-free) */}
+          {!handsFree && (
             <button
-              onClick={() => recording ? stopRecording() : startRecording(true)}
-              disabled={transcribing}
+              onClick={toggleHandsFree}
               style={{
-                width: 130, height: 130, borderRadius: "50%",
-                background: recording ? C.red : handsFree ? C.green : C.amber,
-                border: "none", cursor: transcribing ? "default" : "pointer",
-                fontSize: 46, display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: recording
-                  ? `0 0 0 16px ${C.red}22, 0 0 0 32px ${C.red}11`
-                  : handsFree
-                  ? `0 0 0 16px ${C.green}22, 0 0 0 32px ${C.green}0a`
-                  : `0 0 0 16px ${C.amber}18, 0 0 0 32px ${C.amber}08`,
-                transition: "all 0.25s",
-                flexShrink: 0,
+                background: C.surfaceHigh, border: `1px solid ${C.border}`,
+                borderRadius: 12, padding: "12px 14px",
+                display: "flex", alignItems: "center", gap: 12,
+                cursor: "pointer", textAlign: "left",
+                width: "100%",
               }}
             >
-              {transcribing ? "⏳" : recording ? "⏹" : "🎙"}
+              <div style={{
+                width: 34, height: 34, borderRadius: 9,
+                background: C.surface, border: `1px solid ${C.border}`,
+                display: "grid", placeItems: "center",
+                flexShrink: 0,
+              }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, color: C.text }}>Start hands-free</div>
+                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: C.muted, marginTop: 2 }}>One tap, continuous voice mode</div>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
             </button>
-            <div style={{ fontSize: 12, color: recording ? C.green : transcribing ? C.amber : handsFree ? C.green : C.muted, fontWeight: recording || transcribing || handsFree ? 600 : 400, transition: "color 0.2s" }}>
-              {transcribing ? "Thinking..." : recording ? (handsFree ? "Listening..." : "Recording — tap to stop") : handsFree ? "Ready" : "Tap to speak"}
+          )}
+
+          {/* Active hands-free pill */}
+          {handsFree && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 14px",
+              background: C.green + "14", border: `1px solid ${C.green}44`,
+              borderRadius: 12,
+              fontFamily: "'DM Mono', monospace", fontSize: 12, color: C.green,
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, animation: "bellPulse 1.4s ease infinite" }} />
+              <span style={{ fontWeight: 700, letterSpacing: "0.08em" }}>HANDS-FREE ON</span>
+              <span style={{ marginLeft: "auto", color: C.muted, fontWeight: 500 }} onClick={toggleHandsFree}>tap to stop</span>
             </div>
+          )}
+
+          {/* Quick actions — 4 columns */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+            {(() => {
+              const actionStyle = {
+                background: C.surfaceHigh, border: `1px solid ${C.border}`,
+                borderRadius: 11, padding: "12px 6px",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
+                cursor: "pointer", color: C.text,
+              };
+              const iconStyle = { color: C.amber };
+              return (<>
+                <button onClick={() => send("create a new job")} style={actionStyle}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
+                    <path d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span style={{ fontSize: 11, fontWeight: 600 }}>New Job</span>
+                </button>
+                <button onClick={() => send("create a new quote")} style={actionStyle}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 8v8M8 12h8" />
+                  </svg>
+                  <span style={{ fontSize: 11, fontWeight: 600 }}>New Quote</span>
+                </button>
+                <button onClick={() => homeScanRef.current?.click()} style={actionStyle}>
+                  <input ref={homeScanRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { homeScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
+                    <path d="M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <span style={{ fontSize: 11, fontWeight: 600 }}>Receipt</span>
+                </button>
+                <button onClick={() => send("log time on a job")} style={actionStyle}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={iconStyle}>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 8v4l3 2" />
+                  </svg>
+                  <span style={{ fontSize: 11, fontWeight: 600 }}>Log Time</span>
+                </button>
+              </>);
+            })()}
           </div>
 
-          {/* Hands-free toggle — platform aware */}
-          {(() => {
-            const ua = navigator.userAgent.toLowerCase();
-            const isAndroidDevice = ua.indexOf("android") !== -1;
-            const isIosDevice = ua.indexOf("iphone") !== -1 || ua.indexOf("ipad") !== -1 || ua.indexOf("ipod") !== -1;
-            return (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                <button
-                  onClick={toggleHandsFree}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 18px", background: handsFree ? C.green + "22" : C.surfaceHigh, border: `1px solid ${handsFree ? C.green + "66" : C.border}`, borderRadius: 20, color: handsFree ? C.green : C.muted, fontSize: 12, fontWeight: handsFree ? 700 : 400, cursor: "pointer", fontFamily: "'DM Mono',monospace", transition: "all 0.2s" }}>
-                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: handsFree ? C.green : "#444", animation: handsFree ? "bellPulse 2s ease infinite" : "none" }} />
-                  {handsFree
-                    ? (isAndroidDevice
-                        ? (wakeWordListening ? "🎙 Say 'Hey Trade PA'" : "Hands-free on — listening...")
-                        : "Hands-free on — tap mic or speak")
-                    : "Hands-free mode"}
-                </button>
-                {!handsFree && (
-                  <div style={{ fontSize: 10, color: C.muted, textAlign: "center", lineHeight: 1.5 }}>
-                    {isAndroidDevice
-                      ? "Say 'Hey Trade PA' to start · auto-sends on silence"
-                      : isIosDevice
-                      ? "One tap to start · auto-sends · auto-listens after response"
-                      : "Silence detection · auto-sends · loops after response"}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+          {/* Hidden subcontractor scan input (kept for voice tool trigger) */}
+          <input ref={homeSubScanRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { homeSubScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
 
-          {wakeWordListening && !recording && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: C.green + "11", border: `1px solid ${C.green}33`, borderRadius: 8, fontSize: 12, color: C.green }}>
-              <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-                {[0,1,2].map(i => (
-                  <div key={i} style={{ width: 3, background: C.green, borderRadius: 2, animation: `bellPulse 1s ${i * 0.15}s ease infinite`, height: `${8 + i * 4}px` }} />
-                ))}
-              </div>
-              Listening for 'Hey Trade PA'...
-            </div>
-          )}
-          {recording && handsFree && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: C.green + "11", border: `1px solid ${C.green}33`, borderRadius: 8, fontSize: 12, color: C.green }}>
-              <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-                {[0,1,2,3,4].map(i => (
-                  <div key={i} style={{ width: 3, background: C.green, borderRadius: 2, animation: `bellPulse ${0.6 + i * 0.1}s ${i * 0.1}s ease infinite`, height: `${4 + Math.abs(2-i) * 5}px` }} />
-                ))}
-              </div>
-              Listening — will send when you stop speaking
-            </div>
-          )}
-          {recording && !handsFree && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: C.red + "11", border: `1px solid ${C.red}33`, borderRadius: 8, fontSize: 12, color: C.red }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, animation: "bellPulse 1s ease infinite" }} />
-              Recording — tap to stop
-            </div>
-          )}
-          {transcribing && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: C.amber + "11", border: `1px solid ${C.amber}33`, borderRadius: 8, fontSize: 12, color: C.amber }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.amber, animation: "bellPulse 0.8s ease infinite" }} />
-              Transcribing...
-            </div>
-          )}
-
-          {/* Scan buttons + Help */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <input ref={homeSubScanRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { homeSubScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
-            <button onClick={() => homeSubScanRef.current?.click()}
-              style={{ width: "100%", padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 13, cursor: "pointer", textAlign: "left" }}>
-              📄  Scan / Upload Subcontractor Invoice
-            </button>
-            {onScanReceipt && (
-              <div>
-                <input ref={homeScanRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { homeScanReceipt(e.target.files?.[0]); e.target.value = ""; }} />
-                <button onClick={() => homeScanRef.current?.click()}
-                  style={{ width: "100%", padding: "14px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 13, cursor: "pointer", textAlign: "left" }}>
-                  🧾  Scan Material Invoice / Receipt
-                </button>
-              </div>
-            )}
-            <button onClick={startSupport}
-              style={{ width: "100%", padding: "12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, fontSize: 13, cursor: "pointer", textAlign: "left" }}>
-              ❓  Help & Support
-            </button>
-          </div>
-
-          <div style={{ textAlign: "center", color: C.muted, fontSize: 11, paddingBottom: 4 }}>or type below ↓</div>
+          {/* Mic pulse keyframes */}
+          <style>{`
+            @keyframes mic-pulse-home {
+              0% { transform: scale(1); opacity: 0.7; }
+              100% { transform: scale(1.2); opacity: 0; }
+            }
+          `}</style>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── CHAT VIEW ───────────────────────────────────────────────────── */}
       {!isHome && (
@@ -22686,8 +22769,8 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
     {
       id: "Home",
       label: "Home",
-      view: "Dashboard",
-      activeOn: ["Dashboard", "AI Assistant"],
+      view: "AI Assistant",
+      activeOn: ["AI Assistant", "Dashboard"],
       icon: (active) => (
         <svg viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1h-5v-7h-6v7H4a1 1 0 01-1-1V10.5z" />
@@ -22856,7 +22939,7 @@ function AppInner() {
     const params = new URLSearchParams(window.location.search);
     if (params.has('xero') || params.has('qb')) return "Settings";
     if (params.has('email_connected') || params.has('email_error')) return "Inbox";
-    return "Dashboard";
+    return "AI Assistant";
   });
   const [activeCategory, setActiveCategory] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -23879,7 +23962,7 @@ function AppInner() {
         {/* New simplified header — Session C + mockup-faithful: brand + bell + avatar only */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", paddingTop: "max(12px, env(safe-area-inset-top, 12px))", height: "calc(54px + env(safe-area-inset-top, 0px))", boxSizing: "border-box", position: "relative" }}>
           {/* Brand — tap returns to Home (Dashboard) */}
-          <div style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }} onClick={() => setView("Dashboard")}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }} onClick={() => setView("AI Assistant")}>
             <div style={{
               width: 30, height: 30,
               background: C.amber,
@@ -24198,7 +24281,7 @@ function AppInner() {
           }
           return null;
         })()}
-        {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} onScanReceipt={handleScanReceipt} voiceHandle={voiceHandle} handsFree={aiHandsFree} />}
+        {view === "Dashboard" && (() => { setView("AI Assistant"); return null; })()}
         {view === "JobsHub" && <JobsHub setView={setView} jobs={jobs} enquiries={enquiries} materials={materials} />}
         {view === "DiaryHub" && <DiaryHub setView={setView} jobs={jobs} reminders={reminders} />}
         {view === "AccountsHub" && <AccountsHub setView={setView} invoices={invoices} />}
