@@ -9393,7 +9393,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `£${Math.round(v).toLocaleString()}`;
         };
         return (
-        <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 8 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 8 }}>
 
           {/* Greeting */}
           <div style={{ paddingTop: 4 }}>
@@ -9616,7 +9616,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           )}
 
-          <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0" }}>
             {messages.map((m, i) => (
               <div key={i}>
                 <div style={S.aiMsg(m.role)}>
