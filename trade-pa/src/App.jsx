@@ -11547,15 +11547,30 @@ function ImportContacts({ onImport, currentCustomers }) {
 }
 
 // ─── Customers ────────────────────────────────────────────────────────────────
-function Customers({ customers, setCustomers, jobs, invoices, setView, user, makeCall, hasTwilio }) {
+function Customers({ customers, setCustomers, customerContacts, setCustomerContacts, jobs, invoices, setView, user, makeCall, hasTwilio }) {
   const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState(null);
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", notes: "" });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", notes: "", isCompany: false });
+  // Draft contacts for the Add Customer flow when isCompany=true.
+  // Each draft: { tempId, name, role, phone, email, isPrimary, isBilling }
+  const [draftContacts, setDraftContacts] = useState([]);
   const [callLogs, setCallLogs] = useState([]);
   const [customerTab, setCustomerTab] = useState("overview"); // overview | calls
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  // Contacts helpers — both scoped to the current user's data in state
+  const contactsForCustomer = (customerId) =>
+    (customerContacts || []).filter(c => c.customerId === customerId);
+  const primaryContactOf = (customerId) => {
+    const all = contactsForCustomer(customerId);
+    return all.find(c => c.isPrimary) || all[0] || null;
+  };
+  const billingContactOf = (customerId) => {
+    const all = contactsForCustomer(customerId);
+    return all.find(c => c.isBilling) || all.find(c => c.isPrimary) || all[0] || null;
+  };
 
   // Load call logs when customer selected
   useEffect(() => {
@@ -11573,30 +11588,91 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
   const save = () => {
     if (!form.name) return;
     if (editing) {
+      // Edit flow — updates the customer row's convenience fields only.
+      // Contact edits happen via the CONTACTS section in Customer Detail.
       setCustomers(prev => prev.map(c => c.id === selected.id ? { ...c, ...form } : c));
       setSelected({ ...selected, ...form });
       setEditing(false);
     } else {
-      const c = { ...form, id: Date.now() };
-      setCustomers(prev => [...prev, c]);
+      // Add flow. Create customer row with is_company flag, then create contacts.
+      const customerId = Date.now();
+      const isCompany = !!form.isCompany;
+      // For domestic: sync customer.phone/email/address from the single contact details
+      // For company: contacts array carries the real data; customer row gets company name + address only
+      const newCustomer = {
+        id: customerId,
+        name: form.name,
+        phone: isCompany ? "" : (form.phone || ""),
+        email: isCompany ? "" : (form.email || ""),
+        address: form.address || "",
+        notes: form.notes || "",
+        is_company: isCompany,
+      };
+      setCustomers(prev => [...prev, newCustomer]);
+
+      // Build the contacts we need to create
+      let contactsToCreate = [];
+      if (isCompany) {
+        // Drafts from the company editor — must have at least one, first is primary+billing by default
+        contactsToCreate = (draftContacts.length > 0 ? draftContacts : [{ name: "Primary contact", role: "", phone: "", email: "" }])
+          .map((d, i) => ({
+            customerId,
+            name: d.name || "",
+            role: d.role || "",
+            phone: d.phone || "",
+            email: d.email || "",
+            isPrimary: d.isPrimary || i === 0,
+            isBilling: d.isBilling || i === 0,
+          }))
+          .filter(c => c.name.trim());
+      } else {
+        // Domestic: one contact, mirrors the customer's name/phone/email
+        contactsToCreate = [{
+          customerId,
+          name: form.name,
+          role: "",
+          phone: form.phone || "",
+          email: form.email || "",
+          isPrimary: true,
+          isBilling: true,
+        }];
+      }
+      setCustomerContacts(prev => [...prev, ...contactsToCreate]);
+
+      // Reset
       setShowAdd(false);
-      setForm({ name: "", phone: "", email: "", address: "", notes: "" });
+      setForm({ name: "", phone: "", email: "", address: "", notes: "", isCompany: false });
+      setDraftContacts([]);
     }
   };
 
   const del = (id) => { setCustomers(prev => prev.filter(c => c.id !== id)); setSelected(null); };
 
-  const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.email || "").toLowerCase().includes(search.toLowerCase()) ||
-    (c.phone || "").includes(search)
-  );
+  const filtered = customers.filter(c => {
+    const q = search.toLowerCase();
+    if (c.name.toLowerCase().includes(q)) return true;
+    if ((c.email || "").toLowerCase().includes(q)) return true;
+    if ((c.phone || "").includes(search)) return true;
+    // Also search child contacts (for companies with multiple people)
+    const kids = contactsForCustomer(c.id);
+    return kids.some(k =>
+      (k.name || "").toLowerCase().includes(q) ||
+      (k.email || "").toLowerCase().includes(q) ||
+      (k.phone || "").includes(search) ||
+      (k.role || "").toLowerCase().includes(q)
+    );
+  });
 
   const jobsForCustomer = (name) => jobs.filter(j => j.customer?.toLowerCase() === name?.toLowerCase());
   const invoicesForCustomer = (name) => invoices.filter(i => i.customer?.toLowerCase() === name?.toLowerCase());
 
-  // Customers missing both phone and email (drives the meta-line warning)
-  const missingDetailsCount = customers.filter(c => !c.phone && !c.email).length;
+  // missingDetailsCount — a customer counts as "missing details" if no contact has a phone OR an email
+  const customerHasAnyContact = (c) => {
+    if (c.phone || c.email) return true;
+    const kids = contactsForCustomer(c.id);
+    return kids.some(k => k.phone || k.email);
+  };
+  const missingDetailsCount = customers.filter(c => !customerHasAnyContact(c)).length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -11733,9 +11809,16 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
             const cJobs = jobsForCustomer(c.name);
             const cInvoices = invoicesForCustomer(c.name);
             const totalSpend = cInvoices.reduce((s, i) => s + (i.amount || 0), 0);
-            const hasPhone = !!c.phone;
-            const hasEmail = !!c.email;
+            const kids = contactsForCustomer(c.id);
+            const isCo = !!c.is_company;
+            // For presence icons: check the customer row OR any child contact
+            const hasPhone = !!c.phone || kids.some(k => !!k.phone);
+            const hasEmail = !!c.email || kids.some(k => !!k.email);
             const hasAddr = !!c.address;
+            // Sub-line: address for domestic, "Company · N contacts" for company without address
+            const subLine = isCo
+              ? (c.address || `Company · ${kids.length} ${kids.length === 1 ? "contact" : "contacts"}`)
+              : (c.address || "no address");
             return (
               <div
                 key={c.id}
@@ -11784,18 +11867,38 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
-                  }}>{c.name}</div>
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{c.name}</span>
+                    {isCo && (
+                      <span style={{
+                        fontFamily: "'DM Mono', monospace",
+                        fontSize: 9,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        color: C.blue,
+                        background: `${C.blue}1a`,
+                        border: `1px solid ${C.blue}40`,
+                        padding: "2px 5px",
+                        borderRadius: 4,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}>CO</span>
+                    )}
+                  </div>
                   <div style={{
                     fontSize: 11.5,
-                    color: c.address ? C.textDim : C.muted,
-                    fontStyle: c.address ? "normal" : "italic",
+                    color: (isCo || c.address) ? C.textDim : C.muted,
+                    fontStyle: (isCo || c.address) ? "normal" : "italic",
                     lineHeight: 1.3,
                     marginBottom: 6,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
                   }}>
-                    {c.address || "no address"}
+                    {subLine}
                   </div>
                   {/* Contact icons row */}
                   <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -11845,13 +11948,25 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
 
       {/* ─── Customer Detail Modal (mockup-styled) ─────────────────── */}
       {selected && !editing && (() => {
+        const isCo = !!selected.is_company;
+        const contacts = contactsForCustomer(selected.id);
+        const primaryContact = primaryContactOf(selected.id);
+        const billingContact = billingContactOf(selected.id);
         const cJobs = jobsForCustomer(selected.name);
         const cInvoices = invoicesForCustomer(selected.name);
+        // Split jobs and invoices by work state (interpretation B from session plan)
+        const closedJobStatuses = ["complete", "completed", "cancelled", "canceled"];
+        const openJobs = cJobs.filter(j => !closedJobStatuses.includes((j.status || "").toLowerCase()));
+        const doneJobs = cJobs.filter(j => ["complete", "completed"].includes((j.status || "").toLowerCase()));
+        const outstandingInvs = cInvoices.filter(i => (i.status || "").toLowerCase() !== "paid");
+        const paidInvs = cInvoices.filter(i => (i.status || "").toLowerCase() === "paid");
         const lifetime = cInvoices.reduce((s, i) => s + (i.amount || 0), 0);
-        const outstanding = cInvoices
-          .filter(i => i.status !== "paid")
-          .reduce((s, i) => s + (i.amount || 0), 0);
+        const outstanding = outstandingInvs.reduce((s, i) => s + (i.amount || 0), 0);
         const hasOutstanding = outstanding > 0;
+        // Resolve where CTAs route to — billing contact for email, primary for phone
+        const ctaEmail = (billingContact?.email) || selected.email || "";
+        const ctaPhone = (primaryContact?.phone) || selected.phone || "";
+        const ctaFirstName = (primaryContact?.name || selected.name || "").split(" ")[0] || "";
         // Last seen: latest of any invoice/job/call timestamp
         const allDates = [
           ...cInvoices.map(i => i.created_at ? new Date(i.created_at).getTime() : 0),
@@ -11916,7 +12031,7 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                 textTransform: "uppercase",
               }}>Customer</div>
               <button
-                onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
+                onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "", isCompany: !!selected.is_company }); }}
                 aria-label="Edit"
                 style={{
                   background: "transparent", border: "none",
@@ -11959,7 +12074,27 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                   letterSpacing: "-0.02em",
                   lineHeight: 1.15,
                   color: C.text,
-                }}>{selected.name}</div>
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}>
+                  <span>{selected.name}</span>
+                  {isCo && (
+                    <span style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: 9,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                      color: C.blue,
+                      background: `${C.blue}1a`,
+                      border: `1px solid ${C.blue}40`,
+                      padding: "3px 6px",
+                      borderRadius: 4,
+                      fontWeight: 700,
+                    }}>Company · {contacts.length}</span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -12023,7 +12158,7 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
             {/* Scroll content */}
             <div style={{ padding: "0 16px 8px", display: "flex", flexDirection: "column", gap: 14 }}>
 
-              {/* CONTACT section */}
+              {/* CONTACTS section */}
               <div>
                 <div style={{
                   fontFamily: "'DM Mono', monospace",
@@ -12033,53 +12168,253 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                   fontWeight: 700,
                   marginBottom: 6,
                   paddingLeft: 2,
-                }}>CONTACT</div>
+                }}>CONTACT{contacts.length !== 1 ? "S" : ""}{contacts.length > 1 ? ` · ${contacts.length}` : ""}</div>
                 <div style={{
                   background: C.surfaceHigh,
                   border: `1px solid ${C.border}`,
                   borderRadius: 12,
                   overflow: "hidden",
                 }}>
-                  <DetailContactRow
-                    kind="phone"
-                    value={selected.phone}
-                    onTap={selected.phone ? (hasTwilio ? () => makeCall(selected.phone, selected.name) : null) : null}
-                    href={!hasTwilio && selected.phone ? `tel:${selected.phone.replace(/\s/g, "")}` : null}
-                    onAdd={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
-                  />
-                  <DetailContactRow
-                    kind="email"
-                    value={selected.email}
-                    href={selected.email ? `mailto:${selected.email}` : null}
-                    onAdd={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
-                  />
-                  <DetailContactRow
-                    kind="address"
-                    value={selected.address}
-                    onAdd={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
-                  />
+                  {!isCo ? (
+                    // DOMESTIC / SINGLE CONTACT — show phone/email/address rows like before.
+                    // Read from primary contact if present, fall back to customer row.
+                    (() => {
+                      const phoneVal = primaryContact?.phone || selected.phone;
+                      const emailVal = primaryContact?.email || selected.email;
+                      const addrVal = selected.address;
+                      return (
+                        <>
+                          <DetailContactRow
+                            kind="phone"
+                            value={phoneVal}
+                            onTap={phoneVal ? (hasTwilio ? () => makeCall(phoneVal, selected.name) : null) : null}
+                            href={!hasTwilio && phoneVal ? `tel:${phoneVal.replace(/\s/g, "")}` : null}
+                            onAdd={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "", isCompany: !!selected.is_company }); }}
+                          />
+                          <DetailContactRow
+                            kind="email"
+                            value={emailVal}
+                            href={emailVal ? `mailto:${emailVal}` : null}
+                            onAdd={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "", isCompany: !!selected.is_company }); }}
+                          />
+                          <DetailContactRow
+                            kind="address"
+                            value={addrVal}
+                            onAdd={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "", isCompany: !!selected.is_company }); }}
+                          />
+                        </>
+                      );
+                    })()
+                  ) : (
+                    // COMPANY — render each contact as its own row with name + role + quick actions
+                    <>
+                      {contacts.length === 0 && (
+                        <div style={{
+                          padding: "14px 16px",
+                          fontSize: 12,
+                          color: C.muted,
+                          fontStyle: "italic",
+                        }}>No contacts added yet. Tap Edit above to add people at this company.</div>
+                      )}
+                      {contacts.map((ct, idx) => (
+                        <div
+                          key={ct.id || idx}
+                          style={{
+                            padding: "12px 14px",
+                            borderTop: idx > 0 ? `1px solid ${C.border}` : "none",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                          }}
+                        >
+                          {/* Contact initials avatar */}
+                          <div style={{
+                            width: 36, height: 36,
+                            borderRadius: "50%",
+                            background: `linear-gradient(135deg, ${C.amber}33, ${C.amber}1a)`,
+                            border: `1px solid ${C.amber}4d`,
+                            color: C.amber,
+                            fontFamily: "'DM Mono', monospace",
+                            fontWeight: 700,
+                            fontSize: 12,
+                            display: "grid", placeItems: "center",
+                            flexShrink: 0,
+                          }}>
+                            {(ct.name || "?").split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
+                          </div>
+                          {/* Name + role + badges */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontSize: 13.5,
+                              fontWeight: 600,
+                              color: C.text,
+                              letterSpacing: "-0.01em",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              flexWrap: "wrap",
+                            }}>
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{ct.name}</span>
+                              {ct.isPrimary && (
+                                <span style={{
+                                  fontFamily: "'DM Mono', monospace",
+                                  fontSize: 8.5,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.08em",
+                                  color: C.amber,
+                                  background: `${C.amber}1a`,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  fontWeight: 700,
+                                }}>Primary</span>
+                              )}
+                              {ct.isBilling && (
+                                <span style={{
+                                  fontFamily: "'DM Mono', monospace",
+                                  fontSize: 8.5,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.08em",
+                                  color: C.green,
+                                  background: `${C.green}1a`,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  fontWeight: 700,
+                                }}>Billing</span>
+                              )}
+                            </div>
+                            <div style={{
+                              fontSize: 11,
+                              color: C.textDim,
+                              marginTop: 2,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}>
+                              {[ct.role, ct.phone, ct.email].filter(Boolean).join(" · ") || "no details"}
+                            </div>
+                          </div>
+                          {/* Quick actions */}
+                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                            {ct.phone && (
+                              hasTwilio ? (
+                                <button
+                                  onClick={() => makeCall(ct.phone, `${selected.name} · ${ct.name}`)}
+                                  aria-label={`Call ${ct.name}`}
+                                  style={{
+                                    width: 32, height: 32, borderRadius: 8,
+                                    background: `${C.green}1f`,
+                                    border: `1px solid ${C.green}40`,
+                                    color: C.green,
+                                    cursor: "pointer",
+                                    display: "grid", placeItems: "center",
+                                  }}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                  </svg>
+                                </button>
+                              ) : (
+                                <a
+                                  href={`tel:${ct.phone.replace(/\s/g, "")}`}
+                                  aria-label={`Call ${ct.name}`}
+                                  style={{
+                                    width: 32, height: 32, borderRadius: 8,
+                                    background: `${C.green}1f`,
+                                    border: `1px solid ${C.green}40`,
+                                    color: C.green,
+                                    textDecoration: "none",
+                                    display: "grid", placeItems: "center",
+                                  }}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                  </svg>
+                                </a>
+                              )
+                            )}
+                            {ct.email && (
+                              <a
+                                href={`mailto:${ct.email}`}
+                                aria-label={`Email ${ct.name}`}
+                                style={{
+                                  width: 32, height: 32, borderRadius: 8,
+                                  background: `${C.blue}1f`,
+                                  border: `1px solid ${C.blue}40`,
+                                  color: C.blue,
+                                  textDecoration: "none",
+                                  display: "grid", placeItems: "center",
+                                }}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                                  <polyline points="22,6 12,13 2,6" />
+                                </svg>
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {/* Company address shown once at the end if set */}
+                      {selected.address && (
+                        <div style={{
+                          padding: "10px 14px",
+                          borderTop: `1px solid ${C.border}`,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                        }}>
+                          <div style={{
+                            width: 32, height: 32,
+                            borderRadius: 10,
+                            background: `${C.green}1f`,
+                            color: C.green,
+                            display: "grid", placeItems: "center",
+                            flexShrink: 0,
+                          }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                              <circle cx="12" cy="10" r="3" />
+                            </svg>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontFamily: "'DM Mono', monospace",
+                              fontSize: 9,
+                              color: C.muted,
+                              letterSpacing: "0.08em",
+                              marginBottom: 2,
+                            }}>COMPANY ADDRESS</div>
+                            <div style={{ fontSize: 13, color: C.text, lineHeight: 1.25 }}>{selected.address}</div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* INVOICES */}
-              {cInvoices.length > 0 && (
+              {/* OUTSTANDING INVOICES */}
+              {outstandingInvs.length > 0 && (
                 <div>
                   <div style={{
                     fontFamily: "'DM Mono', monospace",
                     fontSize: 10,
-                    color: C.muted,
+                    color: C.red,
                     letterSpacing: "0.14em",
                     fontWeight: 700,
                     marginBottom: 6,
                     paddingLeft: 2,
-                  }}>INVOICES · {cInvoices.length}</div>
+                  }}>OUTSTANDING INVOICES · {outstandingInvs.length}</div>
                   <div style={{
                     background: C.surfaceHigh,
                     border: `1px solid ${C.border}`,
                     borderRadius: 12,
                     overflow: "hidden",
                   }}>
-                    {cInvoices.map((i, idx) => (
+                    {outstandingInvs.map((i, idx) => (
                       <div key={i.id} style={{
                         padding: "11px 14px",
                         borderTop: idx > 0 ? `1px solid ${C.border}` : "none",
@@ -12091,7 +12426,7 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                           <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, letterSpacing: "-0.01em" }}>
                             {i.id}
                           </span>
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: "-0.02em" }}>
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: C.red, letterSpacing: "-0.02em" }}>
                             {fmtAmount(i.amount)}
                           </span>
                         </div>
@@ -12104,8 +12439,8 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                 </div>
               )}
 
-              {/* JOBS */}
-              {cJobs.length > 0 && (
+              {/* PAID INVOICES */}
+              {paidInvs.length > 0 && (
                 <div>
                   <div style={{
                     fontFamily: "'DM Mono', monospace",
@@ -12115,14 +12450,57 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                     fontWeight: 700,
                     marginBottom: 6,
                     paddingLeft: 2,
-                  }}>JOBS · {cJobs.length}</div>
+                  }}>PAID INVOICES · {paidInvs.length}</div>
                   <div style={{
                     background: C.surfaceHigh,
                     border: `1px solid ${C.border}`,
                     borderRadius: 12,
                     overflow: "hidden",
                   }}>
-                    {cJobs.map((j, idx) => (
+                    {paidInvs.map((i, idx) => (
+                      <div key={i.id} style={{
+                        padding: "11px 14px",
+                        borderTop: idx > 0 ? `1px solid ${C.border}` : "none",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: C.textDim, letterSpacing: "-0.01em" }}>
+                            {i.id}
+                          </span>
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: C.textDim, letterSpacing: "-0.02em" }}>
+                            {fmtAmount(i.amount)}
+                          </span>
+                        </div>
+                        <div>
+                          <span style={S.badge(C.green)}>Paid</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* OPEN JOBS */}
+              {openJobs.length > 0 && (
+                <div>
+                  <div style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: 10,
+                    color: C.amber,
+                    letterSpacing: "0.14em",
+                    fontWeight: 700,
+                    marginBottom: 6,
+                    paddingLeft: 2,
+                  }}>OPEN JOBS · {openJobs.length}</div>
+                  <div style={{
+                    background: C.surfaceHigh,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                  }}>
+                    {openJobs.map((j, idx) => (
                       <div key={j.id} style={{
                         padding: "11px 14px",
                         borderTop: idx > 0 ? `1px solid ${C.border}` : "none",
@@ -12140,7 +12518,55 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                             </span>
                           )}
                         </div>
-                        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10.5, color: C.textDim }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          {j.status && <span style={S.badge(statusColor[j.status] || C.muted)}>{statusLabel[j.status] || j.status}</span>}
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10.5, color: C.textDim }}>
+                            {j.dateObj ? new Date(j.dateObj).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : j.date}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* COMPLETED JOBS */}
+              {doneJobs.length > 0 && (
+                <div>
+                  <div style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: 10,
+                    color: C.muted,
+                    letterSpacing: "0.14em",
+                    fontWeight: 700,
+                    marginBottom: 6,
+                    paddingLeft: 2,
+                  }}>COMPLETED JOBS · {doneJobs.length}</div>
+                  <div style={{
+                    background: C.surfaceHigh,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                  }}>
+                    {doneJobs.map((j, idx) => (
+                      <div key={j.id} style={{
+                        padding: "11px 14px",
+                        borderTop: idx > 0 ? `1px solid ${C.border}` : "none",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: C.textDim, letterSpacing: "-0.01em" }}>
+                            {j.type}
+                          </span>
+                          {j.value > 0 && (
+                            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: C.textDim, letterSpacing: "-0.02em" }}>
+                              {fmtAmount(j.value)}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10.5, color: C.muted }}>
                           {j.dateObj ? new Date(j.dateObj).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : j.date}
                         </div>
                       </div>
@@ -12230,7 +12656,7 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                   </div>
                 ) : (
                   <div
-                    onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
+                    onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "", isCompany: !!selected.is_company }); }}
                     style={{
                       background: C.surfaceHigh,
                       border: `1px dashed ${C.border}`,
@@ -12258,9 +12684,9 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
               gap: 8,
               alignItems: "center",
             }}>
-              {hasOutstanding && selected.email ? (
+              {hasOutstanding && ctaEmail ? (
                 <a
-                  href={`mailto:${selected.email}?subject=Payment%20reminder&body=Hi%20${encodeURIComponent(selected.name)}%2C%0A%0AJust%20a%20friendly%20reminder%20about%20the%20%C2%A3${outstanding.toLocaleString()}%20outstanding.%0A%0AThanks!`}
+                  href={`mailto:${ctaEmail}?subject=Payment%20reminder&body=Hi%20${encodeURIComponent(ctaFirstName)}%2C%0A%0AJust%20a%20friendly%20reminder%20about%20the%20%C2%A3${outstanding.toLocaleString()}%20outstanding.%0A%0AThanks!`}
                   style={{
                     flex: 1,
                     background: C.amber,
@@ -12280,10 +12706,10 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                     letterSpacing: "-0.01em",
                   }}
                 >Send chase email →</a>
-              ) : selected.phone ? (
+              ) : ctaPhone ? (
                 hasTwilio ? (
                   <button
-                    onClick={() => makeCall(selected.phone, selected.name)}
+                    onClick={() => makeCall(ctaPhone, selected.name)}
                     style={{
                       flex: 1,
                       background: C.amber, color: "#000",
@@ -12295,10 +12721,10 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                       letterSpacing: "-0.01em",
                     }}
-                  >📞 Call {selected.name.split(" ")[0]}</button>
+                  >📞 Call {ctaFirstName || selected.name.split(" ")[0]}</button>
                 ) : (
                   <a
-                    href={`tel:${selected.phone.replace(/\s/g, "")}`}
+                    href={`tel:${ctaPhone.replace(/\s/g, "")}`}
                     style={{
                       flex: 1,
                       background: C.amber, color: "#000",
@@ -12311,11 +12737,11 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                       textDecoration: "none",
                       letterSpacing: "-0.01em",
                     }}
-                  >📞 Call {selected.name.split(" ")[0]}</a>
+                  >📞 Call {ctaFirstName || selected.name.split(" ")[0]}</a>
                 )
               ) : (
                 <button
-                  onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
+                  onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "", isCompany: !!selected.is_company }); }}
                   style={{
                     flex: 1,
                     background: C.amber, color: "#000",
@@ -12534,7 +12960,72 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
             </div>
             {/* Body */}
             <div style={{ padding: 20 }}>
-              <CustomerForm form={form} set={set} onSave={save} onCancel={() => setShowAdd(false)} />
+              {/* Company toggle — sits above both single-contact and multi-contact paths */}
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 14px",
+                background: form.isCompany ? `${C.blue}12` : C.surfaceHigh,
+                border: `1px solid ${form.isCompany ? `${C.blue}40` : C.border}`,
+                borderRadius: 10,
+                marginBottom: 16,
+                cursor: "pointer",
+                transition: "all 150ms ease",
+              }}
+              onClick={() => setForm(f => ({ ...f, isCompany: !f.isCompany }))}
+              >
+                <div style={{
+                  width: 36, height: 20,
+                  borderRadius: 10,
+                  background: form.isCompany ? C.blue : C.border,
+                  position: "relative",
+                  flexShrink: 0,
+                  transition: "background 150ms ease",
+                }}>
+                  <div style={{
+                    position: "absolute",
+                    top: 2,
+                    left: form.isCompany ? 18 : 2,
+                    width: 16, height: 16,
+                    borderRadius: "50%",
+                    background: "#fff",
+                    transition: "left 150ms ease",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                  }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: C.text,
+                    lineHeight: 1.2,
+                  }}>This is a company</div>
+                  <div style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: 10,
+                    color: C.textDim,
+                    marginTop: 3,
+                    letterSpacing: "0.04em",
+                  }}>
+                    {form.isCompany ? "Add multiple contacts (owner, accounts, site)" : "Single person — the customer is one contact"}
+                  </div>
+                </div>
+              </div>
+
+              {!form.isCompany ? (
+                <CustomerForm form={form} set={set} onSave={save} onCancel={() => setShowAdd(false)} />
+              ) : (
+                <CompanyForm
+                  form={form}
+                  set={set}
+                  draftContacts={draftContacts}
+                  setDraftContacts={setDraftContacts}
+                  onSave={save}
+                  onCancel={() => { setShowAdd(false); setForm({ name: "", phone: "", email: "", address: "", notes: "", isCompany: false }); setDraftContacts([]); }}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -12866,7 +13357,7 @@ function CustomerForm({ form, set, onSave, onCancel }) {
 
 // ─── Invoices View ────────────────────────────────────────────────────────────
 // ─── Send Invoice/Quote by Email ─────────────────────────────────────────────
-async function sendDocumentEmail(doc, brand, customers, userId, setSending) {
+async function sendDocumentEmail(doc, brand, customers, userId, setSending, customerContacts = []) {
   if (!userId) { alert("Please log in first."); return false; }
 
   // Check email connection
@@ -12893,11 +13384,35 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending) {
 
   const provider = conns[0].provider;
 
-  // Look up customer email
+  // Look up customer row
   const customerRecord = (customers || []).find(c =>
     c.name?.toLowerCase() === doc.customer?.toLowerCase()
   );
-  let toEmail = customerRecord?.email || doc.customerEmail || "";
+
+  // Multi-contact-aware email resolution chain:
+  //   1. An explicit billing_contact_id on the invoice (future-proof)
+  //   2. The billing contact for this customer (is_billing=true)
+  //   3. The primary contact for this customer (is_primary=true)
+  //   4. The customer row's email (mirrored from primary at create time)
+  //   5. doc.customerEmail
+  //   6. Prompt the user
+  let toEmail = "";
+  if (customerRecord) {
+    const kids = (customerContacts || []).filter(ct => ct.customerId === customerRecord.id);
+    if (doc.billing_contact_id) {
+      const pinned = kids.find(ct => ct.id === doc.billing_contact_id);
+      if (pinned?.email) toEmail = pinned.email;
+    }
+    if (!toEmail) {
+      const billing = kids.find(ct => ct.isBilling && ct.email);
+      if (billing) toEmail = billing.email;
+    }
+    if (!toEmail) {
+      const primary = kids.find(ct => ct.isPrimary && ct.email);
+      if (primary) toEmail = primary.email;
+    }
+  }
+  if (!toEmail) toEmail = customerRecord?.email || doc.customerEmail || "";
 
   if (!toEmail) {
     toEmail = prompt(`Enter email address for ${doc.customer}:`);
@@ -12952,7 +13467,7 @@ ${isQuote ? `<p>This quote is valid for 30 days. Please get in touch to proceed 
   }
 }
 
-function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
+function InvoicesView({ brand, invoices, setInvoices, user, customers, customerContacts }) {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
@@ -13023,7 +13538,7 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
               <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
-              <button onClick={e => { e.stopPropagation(); sendDocumentEmail(inv, brand, customers, user?.id, setSendingId); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.blue, flexShrink: 0 }} disabled={sendingId === inv.id}>{sendingId === inv.id ? "..." : "✉"}</button>
+              <button onClick={e => { e.stopPropagation(); sendDocumentEmail(inv, brand, customers, user?.id, setSendingId, customerContacts); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.blue, flexShrink: 0 }} disabled={sendingId === inv.id}>{sendingId === inv.id ? "..." : "✉"}</button>
               <button onClick={e => { e.stopPropagation(); updateStatus(inv.id, "paid"); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green, flexShrink: 0 }}>✓ Paid</button>
               <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
             </div>
@@ -13134,7 +13649,7 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
 
             <div style={{ display: "flex", gap: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.blue }} onClick={() => sendDocumentEmail(selected, brand, customers, user?.id, setSendingId)} disabled={sendingId === selected?.id}>{sendingId === selected?.id ? "Sending..." : "✉ Send"}</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.blue }} onClick={() => sendDocumentEmail(selected, brand, customers, user?.id, setSendingId, customerContacts)} disabled={sendingId === selected?.id}>{sendingId === selected?.id ? "Sending..." : "✉ Send"}</button>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingInvoice(selected)}>✏ Edit</button>
               {selected.status === "overdue" && <button style={S.btn("danger")} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteInvoice(selected.id)}>Delete</button>
@@ -13162,7 +13677,7 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers }) {
 }
 
 // ─── Quotes View ──────────────────────────────────────────────────────────────
-function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) {
+function QuotesView({ brand, invoices, setInvoices, setView, customers, customerContacts, user }) {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingQuote, setEditingQuote] = useState(null);
@@ -13258,7 +13773,7 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
               <div style={{ ...S.badge(q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue), marginRight: 8, flexShrink: 0 }}>
                 {q.status === "accepted" ? "Accepted" : q.status === "declined" ? "Declined" : "Sent"}
               </div>
-              <button onClick={e => { e.stopPropagation(); sendDocumentEmail(q, brand, customers, user?.id, setSendingId); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.blue, flexShrink: 0 }} disabled={sendingId === q.id}>{sendingId === q.id ? "..." : "✉"}</button>
+              <button onClick={e => { e.stopPropagation(); sendDocumentEmail(q, brand, customers, user?.id, setSendingId, customerContacts); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.blue, flexShrink: 0 }} disabled={sendingId === q.id}>{sendingId === q.id ? "..." : "✉"}</button>
               <button onClick={e => { e.stopPropagation(); convertToInvoice(q); }} style={{ ...S.btn("primary"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>→ Invoice</button>
               <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
             </div>
@@ -13314,7 +13829,7 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, user }) 
             <div style={{ display: "flex", gap: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingQuote(selected)}>✏️ Edit</button>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
-              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.blue }} onClick={() => sendDocumentEmail(selected, brand, customers, user?.id, setSendingId)} disabled={sendingId === selected?.id}>{sendingId === selected?.id ? "Sending..." : "✉ Send"}</button>
+              <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.blue }} onClick={() => sendDocumentEmail(selected, brand, customers, user?.id, setSendingId, customerContacts)} disabled={sendingId === selected?.id}>{sendingId === selected?.id ? "Sending..." : "✉ Send"}</button>
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteQuote(selected.id)}>Delete</button>
             </div>
           </div>
@@ -13363,6 +13878,265 @@ function LineItemsDisplay({ inv }) {
           {item.amount != null && <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>£{Number(item.amount).toFixed(2)}</span>}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── CompanyForm — company name + address + multi-contact array editor ────────
+// Rendered inside the Add Customer modal when form.isCompany === true.
+// Domestic/single-contact users see CustomerForm instead. Parent holds:
+//   form          — { name: company name, address, notes, isCompany: true, ... }
+//   draftContacts — array of { tempId, name, role, phone, email, isPrimary, isBilling }
+// On save the parent creates 1 customer row + N contact rows transactionally.
+function CompanyForm({ form, set, draftContacts, setDraftContacts, onSave, onCancel }) {
+  // Ensure at least one draft contact exists on mount
+  React.useEffect(() => {
+    if ((draftContacts || []).length === 0) {
+      setDraftContacts([{ tempId: Date.now(), name: "", role: "", phone: "", email: "", isPrimary: true, isBilling: true }]);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const updateContact = (idx, field, value) => {
+    setDraftContacts(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
+  };
+
+  const setPrimary = (idx) => {
+    // Exactly one primary at a time
+    setDraftContacts(prev => prev.map((c, i) => ({ ...c, isPrimary: i === idx })));
+  };
+  const setBilling = (idx) => {
+    // Exactly one billing at a time
+    setDraftContacts(prev => prev.map((c, i) => ({ ...c, isBilling: i === idx })));
+  };
+
+  const addContact = () => {
+    setDraftContacts(prev => [
+      ...prev,
+      { tempId: Date.now() + prev.length, name: "", role: "", phone: "", email: "", isPrimary: false, isBilling: false },
+    ]);
+  };
+
+  const removeContact = (idx) => {
+    setDraftContacts(prev => {
+      const next = prev.filter((_, i) => i !== idx);
+      // Ensure at least one remains; if we removed the primary/billing, reassign to first
+      if (next.length === 0) return prev; // refuse — can't have zero contacts
+      const hasPrimary = next.some(c => c.isPrimary);
+      const hasBilling = next.some(c => c.isBilling);
+      return next.map((c, i) => ({
+        ...c,
+        isPrimary: hasPrimary ? c.isPrimary : i === 0,
+        isBilling: hasBilling ? c.isBilling : i === 0,
+      }));
+    });
+  };
+
+  const validContacts = (draftContacts || []).filter(c => c.name && c.name.trim());
+  const canSave = !!form.name && validContacts.length > 0;
+
+  const inputStyle = {
+    width: "100%",
+    background: C.surfaceHigh,
+    border: `1px solid ${C.border}`,
+    borderRadius: 8,
+    padding: "10px 12px",
+    color: C.text,
+    fontSize: 16,
+    fontFamily: "'DM Sans', sans-serif",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+  const labelStyle = {
+    display: "block",
+    fontFamily: "'DM Mono', monospace",
+    fontSize: 10,
+    color: C.muted,
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
+    fontWeight: 600,
+    marginBottom: 5,
+  };
+
+  const pillToggle = (on, label, onClick, colour) => (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        fontFamily: "'DM Mono', monospace",
+        fontSize: 9,
+        textTransform: "uppercase",
+        letterSpacing: "0.08em",
+        fontWeight: 700,
+        padding: "4px 8px",
+        borderRadius: 5,
+        cursor: "pointer",
+        background: on ? `${colour}26` : "transparent",
+        color: on ? colour : C.muted,
+        border: `1px solid ${on ? `${colour}66` : C.border}`,
+        transition: "all 150ms ease",
+      }}
+    >{on ? "✓ " : ""}{label}</button>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Company name */}
+      <div>
+        <label style={labelStyle}>Company name <span style={{ color: C.red }}>*</span></label>
+        <input
+          style={inputStyle}
+          placeholder="e.g. ABC Construction Ltd"
+          value={form.name || ""}
+          onChange={set("name")}
+        />
+      </div>
+
+      {/* Company address */}
+      <div>
+        <label style={labelStyle}>Company address</label>
+        <input
+          style={inputStyle}
+          placeholder="e.g. 12 Industrial Way, London, EC1A 1BB"
+          value={form.address || ""}
+          onChange={set("address")}
+        />
+      </div>
+
+      {/* Contacts section */}
+      <div style={{ marginTop: 4 }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          marginBottom: 8,
+        }}>
+          <div style={labelStyle}>Contacts · {(draftContacts || []).length}</div>
+          <button
+            type="button"
+            onClick={addContact}
+            style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              fontWeight: 700,
+              color: C.amber,
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >+ Add contact</button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {(draftContacts || []).map((contact, idx) => (
+            <div
+              key={contact.tempId || idx}
+              style={{
+                background: C.surfaceHigh,
+                border: `1px solid ${C.border}`,
+                borderRadius: 10,
+                padding: 12,
+              }}
+            >
+              {/* Row header: # and remove */}
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 10,
+              }}>
+                <div style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10,
+                  color: C.textDim,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  fontWeight: 600,
+                }}>
+                  Contact {idx + 1}
+                </div>
+                {(draftContacts || []).length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeContact(idx)}
+                    aria-label="Remove contact"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: C.red,
+                      cursor: "pointer",
+                      fontSize: 11,
+                      fontFamily: "'DM Mono', monospace",
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      fontWeight: 600,
+                      padding: 0,
+                    }}
+                  >Remove</button>
+                )}
+              </div>
+
+              {/* Name */}
+              <input
+                style={{ ...inputStyle, marginBottom: 8 }}
+                placeholder="Name (e.g. Sarah Smith)"
+                value={contact.name || ""}
+                onChange={e => updateContact(idx, "name", e.target.value)}
+              />
+              {/* Role + Phone grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                <input
+                  style={inputStyle}
+                  placeholder="Role (Accounts, Site…)"
+                  value={contact.role || ""}
+                  onChange={e => updateContact(idx, "role", e.target.value)}
+                />
+                <input
+                  style={inputStyle}
+                  placeholder="Phone"
+                  inputMode="tel"
+                  value={contact.phone || ""}
+                  onChange={e => updateContact(idx, "phone", e.target.value)}
+                />
+              </div>
+              {/* Email */}
+              <input
+                style={{ ...inputStyle, marginBottom: 8 }}
+                placeholder="Email"
+                inputMode="email"
+                value={contact.email || ""}
+                onChange={e => updateContact(idx, "email", e.target.value)}
+              />
+              {/* Primary + Billing toggles */}
+              <div style={{ display: "flex", gap: 6 }}>
+                {pillToggle(!!contact.isPrimary, "Primary", () => setPrimary(idx), C.amber)}
+                {pillToggle(!!contact.isBilling, "Billing", () => setBilling(idx), C.green)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{
+          marginTop: 8,
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 10,
+          color: C.muted,
+          letterSpacing: "0.04em",
+          lineHeight: 1.4,
+        }}>
+          Primary = who you call. Billing = who gets invoices.
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+        <button style={S.btn("primary", !canSave)} disabled={!canSave} onClick={onSave}>
+          Save company →
+        </button>
+        <button style={S.btn("ghost")} onClick={onCancel}>Cancel</button>
+      </div>
     </div>
   );
 }
@@ -20948,6 +21722,7 @@ function AppInner() {
   const [enquiries, setEnquiriesRaw] = useState([]);
   const [materials, setMaterialsRaw] = useState([]);
   const [customers, setCustomersRaw] = useState([]);
+  const [customerContacts, setCustomerContactsRaw] = useState([]);
   const [dbLoading, setDbLoading] = useState(false);
   const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
   const [companyId, setCompanyId] = useState(null);
@@ -21037,12 +21812,13 @@ function AppInner() {
           .eq("company_id", cid);
         if (mem) setMembers(mem);
 
-        const [j, inv, enq, mat, cust] = await Promise.all([
+        const [j, inv, enq, mat, cust, contacts] = await Promise.all([
           supabase.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
           supabase.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
           supabase.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
           supabase.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
           supabase.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
+          supabase.from("customer_contacts").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
         ]);
         if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
         if (inv.data) setInvoicesRaw(inv.data.map(r => ({
@@ -21076,6 +21852,17 @@ function AppInner() {
           receiptImage: m.receipt_image || "", // base64 image stored in Supabase
         })));
         if (cust.data) setCustomersRaw(cust.data);
+        if (contacts.data) setCustomerContactsRaw(contacts.data.map(c => ({
+          id: c.id,
+          customerId: c.customer_id,
+          name: c.name || "",
+          role: c.role || "",
+          phone: c.phone || "",
+          email: c.email || "",
+          notes: c.notes || "",
+          isPrimary: !!c.is_primary,
+          isBilling: !!c.is_billing,
+        })));
       } catch (e) { console.error("DB load error:", e); }
       setDbLoading(false);
     };
@@ -21217,6 +22004,7 @@ function AppInner() {
                 company_id: companyId, user_id: user.id,
                 name: c.name, phone: c.phone || "", email: c.email || "",
                 address: c.address || "", notes: c.notes || "",
+                is_company: !!c.is_company,
               });
             } else {
               const old = prev.find(x => x.id === c.id);
@@ -21224,11 +22012,69 @@ function AppInner() {
                 await supabase.from("customers").update({
                   name: c.name, phone: c.phone || "", email: c.email || "",
                   address: c.address || "", notes: c.notes || "",
+                  is_company: !!c.is_company,
                 }).eq("id", c.id).eq("company_id", companyId);
               }
             }
           }
         } catch (e) { console.error("Customers sync:", e); }
+      })();
+      return next;
+    });
+  };
+
+  // ─── Customer contacts sync wrapper ──────────────────────────────────────
+  // Same diff-and-sync pattern as setCustomers. Each contact belongs to exactly
+  // one customer via customerId. Rows use UUID primary keys so client-side ID
+  // is generated server-side on insert (we rely on Supabase gen_random_uuid).
+  const setCustomerContacts = (updater) => {
+    setCustomerContactsRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!user?.id) return next;
+      (async () => {
+        try {
+          const prevIds = new Set(prev.map(c => c.id).filter(Boolean));
+          const nextIds = new Set(next.map(c => c.id).filter(Boolean));
+          for (const id of prevIds) {
+            if (!nextIds.has(id)) {
+              await supabase.from("customer_contacts").delete().eq("id", id).eq("user_id", user.id);
+            }
+          }
+          for (let idx = 0; idx < next.length; idx++) {
+            const c = next[idx];
+            if (!c.id || !prevIds.has(c.id)) {
+              // New contact — insert and capture the server-assigned UUID back into state
+              const { data: inserted } = await supabase.from("customer_contacts").insert({
+                customer_id: c.customerId,
+                user_id: user.id,
+                company_id: companyId,
+                name: c.name || "",
+                role: c.role || "",
+                phone: c.phone || "",
+                email: c.email || "",
+                notes: c.notes || "",
+                is_primary: !!c.isPrimary,
+                is_billing: !!c.isBilling,
+              }).select().single();
+              if (inserted) {
+                setCustomerContactsRaw(curr => curr.map((x, i) => (i === idx && !x.id) ? { ...x, id: inserted.id } : x));
+              }
+            } else {
+              const old = prev.find(x => x.id === c.id);
+              if (JSON.stringify(old) !== JSON.stringify(c)) {
+                await supabase.from("customer_contacts").update({
+                  name: c.name || "",
+                  role: c.role || "",
+                  phone: c.phone || "",
+                  email: c.email || "",
+                  notes: c.notes || "",
+                  is_primary: !!c.isPrimary,
+                  is_billing: !!c.isBilling,
+                }).eq("id", c.id).eq("user_id", user.id);
+              }
+            }
+          }
+        } catch (e) { console.error("Customer contacts sync:", e); }
       })();
       return next;
     });
@@ -21525,9 +22371,9 @@ function AppInner() {
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} />}
         {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} />}
-        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} />}
-        {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} />}
-        {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} />}
+        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} customerContacts={customerContacts} setCustomerContacts={setCustomerContacts} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} />}
+        {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} customerContacts={customerContacts} />}
+        {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} customerContacts={customerContacts} />}
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
