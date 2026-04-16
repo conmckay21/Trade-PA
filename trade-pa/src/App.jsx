@@ -20329,7 +20329,7 @@ function CISStatementsTab({ user }) {
 }
 
 // ─── Reports Tab ─────────────────────────────────────────────────────────────
-function ReportsTab({ invoices, jobs, materials, customers, enquiries, brand, user }) {
+function ReportsTab({ invoices, jobs, materials, customers, enquiries, brand, user, setContextHint }) {
   const today = new Date();
   const fmtDate = d => d.toISOString().split("T")[0];
 
@@ -20454,6 +20454,23 @@ function ReportsTab({ invoices, jobs, materials, customers, enquiries, brand, us
     { id: "quoteconv", label: "Quote Conversion", icon: "🤝" },
     { id: "enqconv", label: "Enquiry to Quote", icon: "📩" },
   ];
+
+  // Phase 5b: context hint for the floating mic — tells the AI which report
+  // the user is looking at + the period so "Hey Trade PA, how's this month looking?"
+  // gets a grounded answer instead of a guess.
+  useEffect(() => {
+    if (!setContextHint) return;
+    const rpt = reports.find(r => r.id === activeReport);
+    const periodLabel = isCustom
+      ? `${new Date(customFrom).toLocaleDateString("en-GB")} – ${new Date(customTo).toLocaleDateString("en-GB")}`
+      : periods[periodIdx]?.label || "";
+    const bits = [`Reports: ${rpt?.label || activeReport}`, periodLabel];
+    if (activeReport === "pl") bits.push(`revenue ${fmt(totalRevenue)} · profit ${fmt(grossProfit)} · margin ${fmtPct(grossMargin)}`);
+    if (activeReport === "vat") bits.push(`output £${outputVat.toFixed(0)} · input £${inputVat.toFixed(0)} · net £${netVat.toFixed(0)}`);
+    if (activeReport === "outstanding") bits.push(`${outstandingInvoices.length} outstanding totalling ${fmt(totalOutstanding)}`);
+    setContextHint(bits.join(" · "));
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [activeReport, periodIdx, customFrom, customTo, totalRevenue, grossProfit, grossMargin, outputVat, inputVat, netVat, totalOutstanding, outstandingInvoices.length, setContextHint]);
 
   const StatBox = ({ label, value, sub, color }) => (
     <div style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
@@ -20712,13 +20729,35 @@ ${generateReportHTML()}
         )}
       </div>
 
-      {/* Report selector */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {reports.map(r => (
-          <button key={r.id} onClick={() => setActiveReport(r.id)}
-            style={{ ...S.btn(activeReport === r.id ? "primary" : "ghost"), fontSize: 11, padding: "6px 12px" }}>
-            {r.icon} {r.label}
-          </button>
+      {/* Report selector — grouped by category */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {[
+          { label: "Financial", ids: ["pl", "vat", "cis", "outstanding"] },
+          { label: "Performance", ids: ["jobprofit", "quoteconv", "enqconv"] },
+          { label: "Activity", ids: ["customers", "materials", "jobs"] },
+        ].map(group => (
+          <div key={group.label}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, fontFamily: "'DM Mono',monospace", marginBottom: 5 }}>{group.label}</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {group.ids.map(id => {
+                const r = reports.find(x => x.id === id);
+                if (!r) return null;
+                const active = activeReport === id;
+                return (
+                  <button key={id} onClick={() => setActiveReport(id)}
+                    style={{
+                      padding: "6px 12px", borderRadius: 16, fontSize: 11, fontWeight: active ? 700 : 500,
+                      background: active ? C.amber : "transparent",
+                      color: active ? "#000" : C.textDim,
+                      border: `1px solid ${active ? C.amber : C.border}`,
+                      cursor: "pointer", whiteSpace: "nowrap",
+                    }}>
+                    {r.icon} {r.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </div>
 
@@ -20926,15 +20965,19 @@ ${generateReportHTML()}
           </div>
           <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <TableHeader cells={["Job", "Customer", "Type", "Date", "Status"]} />
-            {periodJobs.sort((a, b) => new Date(b.dateObj || b.date) - new Date(a.dateObj || a.date)).map((j, i) => (
+            {periodJobs.sort((a, b) => new Date(b.dateObj || b.date) - new Date(a.dateObj || a.date)).map((j, i) => {
+              const sc = { completed: C.green, confirmed: C.blue, in_progress: C.blue, pending: C.text, cancelled: C.red };
+              const label = (j.status || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              return (
               <TableRow key={i} cells={[
                 j.title || j.type || "Job",
                 j.customer,
                 j.type || "—",
                 j.date ? new Date(j.dateObj || j.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "TBC",
-                j.status
+                <span key="s" style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: sc[j.status] || C.muted, padding: "2px 8px", borderRadius: 4, display: "inline-block" }}>{label}</span>
               ]} />
-            ))}
+              );
+            })}
             {periodJobs.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No jobs in this period</div>}
           </div>
         </div>
@@ -25841,7 +25884,7 @@ function AppInner() {
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} setContextHint={setContextHint} />}
-        {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} brand={brand} user={user} />}
+        {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} brand={brand} user={user} setContextHint={setContextHint} />}
         {view === "Mileage" && <MileageTab user={user} />}
         {view === "Subcontractors" && <SubcontractorsTab user={user} brand={brand} />}
         {view === "Documents" && <DocumentsTab user={user} customers={customers} />}
