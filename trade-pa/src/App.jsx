@@ -3490,7 +3490,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
       {subview === "team" && (
       <div style={S.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
           <div style={S.sectionTitle}>Team Access</div>
           {userRole === "owner" && <TeamInvite companyId={companyId} planTier={planTier} currentMemberCount={members.length} userLimit={userLimit} />}
         </div>
@@ -3762,7 +3762,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       {preview && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }} onClick={() => setPreview(false)}>
           <div onClick={e => e.stopPropagation()} style={{ maxHeight: "90vh", overflowY: "auto", borderRadius: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{ fontSize: 12, color: C.muted, fontFamily: "'DM Mono',monospace" }}>INVOICE PREVIEW</div>
               <button aria-label="Close" onClick={() => setPreview(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
@@ -5068,8 +5068,8 @@ Return only JSON, no other text.` },
       {/* Receipt scanner result modal — fully editable */}
       {showScanner && scanResult && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>Receipt Scanned ✓</div>
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Review and edit before saving</div>
@@ -5317,8 +5317,8 @@ Return only JSON, no other text.` },
       {/* Material edit modal */}
       {editingMaterial && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setEditingMaterial(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Material</div>
               <button aria-label="Close" onClick={() => setEditingMaterial(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
@@ -5369,7 +5369,7 @@ Return only JSON, no other text.` },
       )}
 
       <div style={S.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
           <div style={S.sectionTitle}>Supplier Quick Dial</div>
           <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => setShowSuppliers(true)}>+ Add Supplier</button>
         </div>
@@ -5393,8 +5393,8 @@ Return only JSON, no other text.` },
 
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => { setShowAdd(false); setRows([emptyRow()]); }}>
-          <div style={{ ...S.card, maxWidth: 700, width: "100%", marginBottom: 16 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ ...S.card, maxWidth: 700, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>Add Materials</div>
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Add multiple items at once — one row per material</div>
@@ -5475,8 +5475,8 @@ Return only JSON, no other text.` },
 
       {showSuppliers && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Manage Suppliers</div>
               <button aria-label="Close" onClick={() => { setShowSuppliers(false); setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
@@ -11967,7 +11967,7 @@ function FeedbackModal({ open, onClose, user, brand, currentView }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 400, padding: 16, paddingTop: "max(40px, env(safe-area-inset-top, 40px))", overflowY: "auto" }}>
-      <div style={{ ...S.card, maxWidth: 560, width: "100%" }}>
+      <div style={{ ...S.card, maxWidth: 560, width: "100%", borderRadius: 14, overflow: "hidden" }}>
         {sent ? (
           <div style={{ textAlign: "center", padding: 32 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
@@ -11976,7 +11976,7 @@ function FeedbackModal({ open, onClose, user, brand, currentView }) {
           </div>
         ) : (
           <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{ fontSize: 16, fontWeight: 700 }}>Send Feedback</div>
               <button aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
@@ -12173,7 +12173,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user, cus
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-      <div style={{ ...S.card, maxWidth: 880, width: "100%", marginBottom: 16 }}>
+      <div style={{ ...S.card, maxWidth: 880, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
         {sent ? (
           <div style={{ textAlign: "center", padding: 40 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>{isEditing ? "✅" : "✅"}</div>
@@ -12194,7 +12194,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user, cus
           </div>
         ) : (
           <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>{isEditing ? `Edit Invoice · ${initialData.id}` : "New Invoice"}</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <MicButton form={form} setForm={setForm} accentColor={brand.accentColor} />
@@ -12509,7 +12509,7 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user, custo
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-      <div style={{ ...S.card, maxWidth: 880, width: "100%", marginBottom: 16 }}>
+      <div style={{ ...S.card, maxWidth: 880, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
         {sent ? (
           <div style={{ textAlign: "center", padding: 40 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
@@ -12518,7 +12518,7 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user, custo
           </div>
         ) : (
           <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>{isEditing ? `Edit Quote · ${initialData.id}` : "New Quote"}</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <MicButton form={form} setForm={setForm} accentColor={C.blue} />
@@ -13024,7 +13024,7 @@ Rules:
 
       {/* Upcoming reminders */}
       <div style={S.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
           <div style={S.sectionTitle}>Upcoming ({upcoming.length})</div>
         </div>
         {upcoming.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No upcoming reminders. Set one above.</div>}
@@ -17341,7 +17341,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
                 style={{ background: IC.bg2, width: "100%", maxWidth: 600, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
                 {/* Modal header */}
                 <div style={{ padding: "14px 16px", borderBottom: `1px solid ${IC.border}`, background: IC.bg2, flexShrink: 0 }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", paddingBottom: 10, borderBottom: `1px solid ${C.border}`, marginBottom: 10 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: IC.text, flex: 1, marginRight: 12, lineHeight: 1.3 }}>{selectedThread.subject}</div>
                     <button aria-label="Close" onClick={() => setSelectedThread(null)} style={{ background: "none", border: "none", color: IC.muted, cursor: "pointer", padding: 0, flexShrink: 0 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                   </div>
@@ -17620,8 +17620,8 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
       {/* Add Enquiry Modal */}
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>New Enquiry</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="name (full name), phone (phone number), email (email address), address (address where work is needed), msg (what they want e.g. extension quote, boiler service), source (how they got in touch: Phone/Email/Website/Referral)" />
@@ -17665,8 +17665,8 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
       {/* Detail Modal */}
       {selected && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelected(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{selected.name}</div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -17897,7 +17897,7 @@ function SignaturePad({ onSave, onCancel, title = "Customer Signature" }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 16, fontFamily: "'DM Mono',monospace" }}>
       <div style={{ background: "#fff", borderRadius: 12, padding: 20, maxWidth: 380, width: "100%" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{title}</div>
           <button aria-label="Close" onClick={onCancel} style={{ background: "none", border: "none", cursor: "pointer", color: "#999" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
@@ -19316,7 +19316,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
               {tab === "labour" && (
                 <div>
                   <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 14 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
                       <div style={{ fontSize: 12, fontWeight: 700 }}>Log Labour</div>
                       <VoiceFillButton form={addTime} setForm={setAddTime} fieldDescriptions="labour_type (hourly/day_rate/price_work), hours (number of hours if hourly), days (number of days if day rate), rate (£ per hour or per day), total (fixed £ amount if price work), description (work carried out), worker (who did the work)" />
                     </div>
@@ -19883,7 +19883,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
       {editingJob && selected && (
         <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 16 }}>
           <div style={{ ...S.card, maxWidth: 460, width: "100%", maxHeight: "85vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Job</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={editForm} setForm={setEditForm} fieldDescriptions="title (job title), customer (customer name), address (property address), type (job type e.g. boiler service), status (enquiry/quoted/accepted/in_progress/completed), value (job value in pounds), po_number (PO number), notes (any notes)" />
@@ -19929,7 +19929,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
       {/* Stage Payments Modal */}
       {showStagePayments && selected && (
         <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 500, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setShowStagePayments(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>💰 Stage Payments</div>
               <button aria-label="Close" onClick={() => setShowStagePayments(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
@@ -20226,8 +20226,8 @@ function ExpensesTab({ user, setContextHint }) {
       {/* Add Expense Modal */}
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Expense</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="exp_type (type: mileage/fuel/parking/tools/materials/other), miles (miles as number if mileage), amount (£ amount as number), description (what it was for e.g. trip to Screwfix), exp_date (date in YYYY-MM-DD format)" />
@@ -20421,8 +20421,8 @@ function CISStatementsTab({ user, setContextHint }) {
 
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add CIS Statement</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="contractor_name (main contractor company name), tax_month (month in YYYY-MM format), gross_amount (gross amount as number), deduction_amount (CIS deduction as number), notes (any reference number or notes)" />
@@ -21244,8 +21244,8 @@ function AssignToJobModal({ user, onAssign, onClose, currentJobId }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 400, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>Assign to Job</div>
           <button aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
@@ -21418,8 +21418,8 @@ function MileageTab({ user, setContextHint }) {
 
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setShowAdd(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Log Trip</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="date (YYYY-MM-DD), from (start location e.g. Home), to (destination), miles (number), purpose (e.g. site visit)" />
@@ -21857,7 +21857,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
         ) : workers;
         return (
         <div style={{ ...S.card }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 700 }}>Workers</div>
             <button onClick={() => setView("add_worker")} style={{ ...S.btn("ghost"), fontSize: 11 }}>+ Add</button>
           </div>
@@ -22053,8 +22053,8 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       {/* Add Subcontractor Modal */}
       {view === "add_sub" && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setView("list")}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Subcontractor</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={subForm} setForm={setSubForm} fieldDescriptions="name (full name), company (company name), utr (10-digit UTR number), cis_rate (20 for registered, 30 for unregistered, 0 for gross), email, phone, address (business or home address)" />
@@ -22092,8 +22092,8 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       {/* Add Payment Modal */}
       {view === "add_payment" && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setView("list")}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>Log Payment{subScanResult ? " — Invoice Scanned ✓" : ""}</div>
                 {subScanResult && <div style={{ fontSize: 11, color: C.green, marginTop: 2 }}>Data pre-filled from invoice scan — review and confirm</div>}
@@ -22234,8 +22234,8 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       {/* Add Worker Modal */}
       {view === "add_worker" && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 60, zIndex: 1000 }} onClick={() => setView("list")}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 20, maxHeight: "80vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 20, borderRadius: 14, overflow: "hidden", maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>Add Worker / Subcontractor</div>
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Subcontractors also appear in the CIS payment section</div>
@@ -22294,8 +22294,8 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       {/* Add Document Modal */}
       {view === "add_doc" && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 60, zIndex: 1000 }} onClick={() => setView("list")}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 20, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Certificate / Document</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={docForm} setForm={setDocForm} fieldDescriptions="doc_type (cscs, gas_safe, public_liability, employers_liability, driving_licence, right_to_work, other), doc_number, issued_date (YYYY-MM-DD), expiry_date (YYYY-MM-DD), notes" />
@@ -22343,7 +22343,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       {editingPayment && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "max(60px, env(safe-area-inset-top, 60px)) 16px 20px" }}>
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, maxHeight: "85vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Payment</div>
               <button aria-label="Close" onClick={() => setEditingPayment(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
@@ -22404,7 +22404,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       {editingWorker && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "max(60px, env(safe-area-inset-top, 60px)) 16px 20px" }}>
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, maxHeight: "85vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Worker</div>
               <button aria-label="Close" onClick={() => setEditingWorker(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
@@ -22456,7 +22456,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       {/* ── Delete Confirmations ─────────────────────────────────────── */}
       {deletingPayment && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 360, width: "100%", textAlign: "center" }}>
+          <div style={{ ...S.card, maxWidth: 360, width: "100%", textAlign: "center", borderRadius: 14, overflow: "hidden" }}>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete Payment?</div>
             <div style={{ fontSize: 13, color: C.textDim, marginBottom: 20 }}>
               {subs.find(s => s.id === deletingPayment.subcontractor_id)?.name} · £{parseFloat(deletingPayment.gross||0).toFixed(2)} · {new Date(deletingPayment.date).toLocaleDateString("en-GB")}
@@ -22472,7 +22472,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
 
       {deletingWorker && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 360, width: "100%", textAlign: "center" }}>
+          <div style={{ ...S.card, maxWidth: 360, width: "100%", textAlign: "center", borderRadius: 14, overflow: "hidden" }}>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Delete Worker?</div>
             <div style={{ fontSize: 13, color: C.textDim, marginBottom: 20 }}>
               {deletingWorker.name} · {deletingWorker.role || deletingWorker.type}
@@ -22638,8 +22638,8 @@ function DocumentsTab({ user, customers, setContextHint }) {
       {/* Upload modal */}
       {showUpload && pendingFile && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => { setShowUpload(false); setPendingFile(null); }}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Upload Document</div>
               <button aria-label="Close" onClick={() => { setShowUpload(false); setPendingFile(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
@@ -22889,8 +22889,8 @@ function ReviewsTab({ user, brand, customers, setContextHint }) {
       {/* Send modal — choose platforms */}
       {showSendModal && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setShowSendModal(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Send Review Request</div>
               <button aria-label="Close" onClick={() => setShowSendModal(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
@@ -23008,8 +23008,8 @@ function StockTab({ user, setContextHint }) {
 
   const FormModal = ({ title, onClose }) => (
     <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="name (item name e.g. 22mm copper pipe), sku (stock code), quantity (number in stock), unit (unit e.g. m/unit/box/kg), unit_cost (cost per unit in pounds), reorder_level (alert when below this number), location (where stored e.g. van shelf 2)" />
@@ -23271,8 +23271,8 @@ function PurchaseOrdersTab({ user, brand }) {
       {/* Add PO Modal */}
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setShowAdd(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 600, width: "100%", marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 600, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>New Purchase Order</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="supplier (supplier name), supplier_email (email address), job_ref (which job this is for), notes (any special instructions), expected_delivery (date YYYY-MM-DD)" />
