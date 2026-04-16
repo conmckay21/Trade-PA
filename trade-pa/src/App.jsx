@@ -22764,7 +22764,12 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
         // Stabilises bar height when iOS keyboard opens and env(safe-area-inset-bottom)
         // briefly collapses to 0 — the max() ensures a minimum ~6px always, so the
         // bar doesn't "shrink" mid-interaction. Reduced from 10→6 for tighter visual.
-        paddingBottom: "max(4px, calc(env(safe-area-inset-bottom, 0px) - 18px))",
+        // Set the bar's bottom padding to a flat 4px. The iOS home indicator
+        // area is handled by viewport-fit=cover + the bar being position:fixed
+        // bottom:0. Don't use env(safe-area-inset-bottom) here — it leaves far
+        // too much dead space on iPhone. If the home indicator visually brushes
+        // the labels, that's fine; tap targets are still the labels themselves.
+        paddingBottom: "4px",
       }}
     >
         <div style={{
@@ -24179,7 +24184,7 @@ function AppInner() {
             })}
           </nav>
         )}
-      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, paddingBottom: isDesktopBrowser ? undefined : "calc(56px + env(safe-area-inset-bottom, 0px))", ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
+      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, paddingBottom: isDesktopBrowser ? undefined : "64px", ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
         <div style={isDesktopBrowser ? { maxWidth: 720, margin: "0 auto", width: "100%" } : { display: "contents" }}>
         {(() => {
           // Guard — redirect member to Dashboard if they're on a tab they can't access
