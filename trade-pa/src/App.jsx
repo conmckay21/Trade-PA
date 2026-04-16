@@ -17896,12 +17896,212 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
   const profitIsOk = profitMargin >= 15;
   const profitColor = profitIsGood ? C.green : profitIsOk ? C.amber : C.red;
 
+  // ── Phase 3: list-level controls (search / filter / sort / grouping) ───────
+  const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("recent");
+
+  // Canonical status pill map — amber deliberately reserved for primary
+  // actions/warnings per usability audit; no amber pills used for status.
+  const JOB_PILL = {
+    enquiry:     { label: "Enquiry",     color: C.muted  },
+    quoted:      { label: "Quoted",      color: C.blue   },
+    accepted:    { label: "Accepted",    color: C.purple },
+    in_progress: { label: "In Progress", color: C.blue   },
+    completed:   { label: "Completed",   color: C.green  },
+    on_hold:     { label: "On Hold",     color: C.muted  },
+  };
+
+  // Relative timestamp — "3m ago" / "2h ago" / "3d ago" / "18d ago" / "2mo ago"
+  const relTime = (iso) => {
+    if (!iso) return "";
+    const t = new Date(iso).getTime();
+    if (!t) return "";
+    const diff = Date.now() - t;
+    if (diff < 60000) return "just now";
+    const m = Math.floor(diff / 60000);
+    if (m < 60)  return m + "m ago";
+    const h = Math.floor(m / 60);
+    if (h < 24)  return h + "h ago";
+    const d = Math.floor(h / 24);
+    if (d < 7)   return d + "d ago";
+    const w = Math.floor(d / 7);
+    if (w < 5)   return w + "w ago";
+    const mo = Math.floor(d / 30);
+    if (mo < 12) return mo + "mo ago";
+    return Math.floor(d / 365) + "y ago";
+  };
+
+  // Week-bound calcs (Mon-start week, local time)
+  const _today0 = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+  const _todayEnd = _today0 + 86400000;
+  const _weekStart = (() => { const d = new Date(_today0); const dow = d.getDay() || 7; return _today0 - (dow - 1) * 86400000; })();
+  const _weekEnd = _weekStart + 7 * 86400000;
+
+  // Per-job derivations — "needs invoice", "overdue", "this week"
+  const invoiceFor     = (j) => (invoices || []).find(i => i.id === j.invoice_id);
+  const isInvoiced     = (j) => !!j.invoice_id;
+  const isOverdue      = (j) => { const inv = invoiceFor(j); return !!inv && typeof inv.status === "string" && inv.status.toLowerCase() === "overdue"; };
+  const isNeedsInvoice = (j) => j.status === "completed" && !j.invoice_id;
+  const isThisWeek     = (j) => { const d = j.scheduled_date || j.date || j.created_at; if (!d) return false; const t = new Date(d).getTime(); return t >= _weekStart && t < _weekEnd; };
+  const jobTime        = (j) => new Date(j.updated_at || j.created_at || j.scheduled_date || j.date || 0).getTime();
+
+  // Live filter-chip counts — unfiltered, so counts always reflect reality
+  const counts = {
+    all:           jobs.length,
+    active:        jobs.filter(j => j.status === "accepted" || j.status === "in_progress").length,
+    needs_invoice: jobs.filter(isNeedsInvoice).length,
+    overdue:       jobs.filter(isOverdue).length,
+    this_week:     jobs.filter(isThisWeek).length,
+    quotes:        jobs.filter(j => j.status === "quoted").length,
+    complete:      jobs.filter(j => j.status === "completed").length,
+  };
+
+  // Apply search + filter
+  const _q = search.trim().toLowerCase();
+  const filteredJobs = jobs.filter(j => {
+    if (_q) {
+      const hay = [j.title, j.customer, j.address, j.type, j.po_number, j.id].filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(_q)) return false;
+    }
+    switch (activeFilter) {
+      case "active":        return j.status === "accepted" || j.status === "in_progress";
+      case "needs_invoice": return isNeedsInvoice(j);
+      case "overdue":       return isOverdue(j);
+      case "this_week":     return isThisWeek(j);
+      case "quotes":        return j.status === "quoted";
+      case "complete":      return j.status === "completed";
+      default:              return true;
+    }
+  });
+
+  // Sort
+  const sortedJobs = [...filteredJobs].sort((a, b) => {
+    switch (sortMode) {
+      case "value":    return parseFloat(b.value || 0) - parseFloat(a.value || 0);
+      case "customer": return (a.customer || "").localeCompare(b.customer || "");
+      case "status":   return (a.status || "").localeCompare(b.status || "");
+      default:         return jobTime(b) - jobTime(a);
+    }
+  });
+
+  // Group by recency bucket — only when sorting by recency
+  const groupedJobs = sortMode === "recent"
+    ? (() => {
+        const today = [], thisWeek = [], earlier = [];
+        for (const j of sortedJobs) {
+          const t = jobTime(j);
+          if (t >= _today0)           today.push(j);
+          else if (t >= _weekStart)   thisWeek.push(j);
+          else                        earlier.push(j);
+        }
+        return [
+          { key: "today",    label: "TODAY",     items: today    },
+          { key: "thisWeek", label: "THIS WEEK", items: thisWeek },
+          { key: "earlier",  label: "EARLIER",   items: earlier  },
+        ].filter(g => g.items.length > 0);
+      })()
+    : [{ key: "flat", label: null, items: sortedJobs }];
+
+  // Chip config + sort cycle
+  const CHIPS = [
+    { id: "all",           label: "All",           urgent: false },
+    { id: "active",        label: "Active",        urgent: false },
+    { id: "needs_invoice", label: "Needs invoice", urgent: true  },
+    { id: "overdue",       label: "Overdue",       urgent: true  },
+    { id: "this_week",     label: "This week",     urgent: false },
+    { id: "quotes",        label: "Quotes",        urgent: false },
+    { id: "complete",      label: "Complete",      urgent: false },
+  ];
+  const SORT_LABELS = { recent: "Recent", value: "By value", customer: "By customer", status: "By status" };
+  const SORT_ORDER = ["recent", "value", "customer", "status"];
+  const nextSort = () => setSortMode(s => SORT_ORDER[(SORT_ORDER.indexOf(s) + 1) % SORT_ORDER.length]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 13, color: C.muted }}>{jobs.length} job{jobs.length !== 1 ? "s" : ""}</div>
+      {/* Header — job count + urgency snapshot + Add button */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: C.muted }}>{jobs.length} job{jobs.length !== 1 ? "s" : ""}</div>
+          {counts.needs_invoice > 0 && (
+            <div style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>· {counts.needs_invoice} need{counts.needs_invoice === 1 ? "s" : ""} invoice</div>
+          )}
+          {counts.overdue > 0 && (
+            <div style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>· {counts.overdue} overdue</div>
+          )}
+        </div>
         <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Job</button>
+      </div>
+
+      {/* Phase 3: search + filter chips + sort — always visible, persistent */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {/* Search */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.35-4.35" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search jobs — title, customer, address…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: C.text, fontSize: 13, minWidth: 0, fontFamily: "inherit" }}
+          />
+          {search && (
+            <button onClick={() => setSearch("")} aria-label="Clear search" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+          )}
+        </div>
+
+        {/* Filter chips */}
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+          {CHIPS.map(chip => {
+            const n = counts[chip.id];
+            const active = activeFilter === chip.id;
+            const muted  = !active && chip.id !== "all" && n === 0;
+            const urgentLive = chip.urgent && n > 0;
+            const accent = urgentLive ? C.red : C.text;
+            return (
+              <button
+                key={chip.id}
+                onClick={() => setActiveFilter(chip.id)}
+                disabled={muted}
+                style={{
+                  flexShrink: 0,
+                  padding: "6px 11px",
+                  borderRadius: 16,
+                  border: `1px solid ${active ? accent : C.border}`,
+                  background: active ? (urgentLive ? C.red + "22" : C.surfaceHigh) : "transparent",
+                  color: active ? accent : (urgentLive ? C.red : C.muted),
+                  fontSize: 12,
+                  fontWeight: active ? 700 : 500,
+                  fontFamily: "'DM Mono', monospace",
+                  cursor: muted ? "default" : "pointer",
+                  opacity: muted ? 0.4 : 1,
+                  whiteSpace: "nowrap",
+                  transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                }}
+              >
+                {chip.label}{n > 0 && <span style={{ marginLeft: 5, fontWeight: 700 }}>{n}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sort affordance */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={nextSort}
+            aria-label="Change sort"
+            style={{
+              background: "none", border: "none",
+              color: C.muted, fontSize: 11,
+              fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em",
+              cursor: "pointer", padding: "2px 4px",
+            }}
+          >
+            {SORT_LABELS[sortMode]} ↕
+          </button>
+        </div>
       </div>
 
       {/* Add Job form */}
@@ -17942,31 +18142,60 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
       {!loading && jobs.length === 0 && !showAdd && (
         <div style={{ ...S.card, textAlign: "center", padding: 32 }}>
           <div style={{ fontSize: 24, marginBottom: 8 }}>🔧</div>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>No job cards yet. Convert a quote or create one manually.</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>No job cards yet — convert a quote, ask Trade PA, or create one manually.</div>
           <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add First Job</button>
         </div>
       )}
-      {jobs.map(j => (
-        <div key={j.id} onClick={() => { setSelected(j); setTab("notes"); }} style={{ ...S.card, cursor: "pointer", borderLeft: `3px solid ${statusColor[j.status] || C.muted}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>{j.title || j.type || "Job"}</div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{j.customer}{j.address ? ` · ${j.address}` : ""}</div>
-            </div>
-            <div style={{ textAlign: "right", flexShrink: 0 }}>
-              {j.value > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>{fmtAmount(j.value)}</div>}
-              <div style={S.badge(statusColor[j.status] || C.muted)}>{(j.status || "").replace("_"," ")}</div>
-            </div>
+      {!loading && jobs.length > 0 && sortedJobs.length === 0 && (
+        <div style={{ ...S.card, textAlign: "center", padding: 22 }}>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
+            No jobs match {_q ? <>&ldquo;{search}&rdquo;</> : `"${CHIPS.find(c => c.id === activeFilter)?.label || activeFilter}"`}.
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {j.po_number && <span style={S.badge(C.blue)}>PO: {j.po_number}</span>}
-            {j.annual_service && <span style={{ color: C.green, fontSize: 11 }}>🔄 Annual</span>}
-            {j.customer_signature && <span style={{ color: C.green, fontSize: 11 }}>✓ Signed</span>}
-            {j.invoice_id && <span style={S.badge(C.amber)}>Invoiced</span>}
-            {geoJobId === j.id && geoState === "travelling" && <span style={{ color: C.amber, fontSize: 11 }}>🚗 {geoDistance !== null ? (geoDistance < 1000 ? geoDistance + "m" : (geoDistance/1000).toFixed(1) + "km") : "Travelling"}</span>}
-            {geoJobId === j.id && geoState === "arrived" && <span style={{ color: C.green, fontSize: 11 }}>📍 On site</span>}
-          </div>
+          <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={() => { setSearch(""); setActiveFilter("all"); }}>Clear filters</button>
         </div>
+      )}
+      {!loading && groupedJobs.map(group => (
+        <React.Fragment key={group.key}>
+          {group.label && (
+            <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: C.muted, letterSpacing: "0.14em", fontWeight: 700, paddingLeft: 2, paddingTop: 4 }}>
+              {group.label} · {group.items.length}
+            </div>
+          )}
+          {group.items.map(j => {
+            const pill = JOB_PILL[j.status] || { label: (j.status || "—").replace("_", " "), color: C.muted };
+            const overdue      = isOverdue(j);
+            const invoiced     = isInvoiced(j);
+            const needsInvoice = isNeedsInvoice(j);
+            // Left-edge stripe follows most-urgent derived state, else pill colour
+            const stripe = overdue ? C.red : needsInvoice ? C.red : invoiced ? C.purple : pill.color;
+            return (
+              <div key={j.id} onClick={() => { setSelected(j); setTab("notes"); }} style={{ ...S.card, cursor: "pointer", borderLeft: `3px solid ${stripe}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{j.title || j.type || "Job"}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{j.customer || "—"}{j.address ? ` · ${j.address}` : ""}</div>
+                    {/* Metadata row — pill, derived pills, time, icons */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                      <span style={{ ...S.badge(pill.color), fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.04em" }}>{pill.label}</span>
+                      {overdue && <span style={{ ...S.badge(C.red), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>Overdue</span>}
+                      {invoiced && !overdue && <span style={{ ...S.badge(C.purple), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>Invoiced</span>}
+                      {needsInvoice && !invoiced && <span style={{ ...S.badge(C.red), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>Needs invoice</span>}
+                      {j.po_number && <span style={{ ...S.badge(C.blue), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>PO: {j.po_number}</span>}
+                      <span style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>{relTime(j.updated_at || j.created_at)}</span>
+                      {j.annual_service && <span style={{ color: C.green, fontSize: 11 }}>🔄 Annual</span>}
+                      {j.customer_signature && <span style={{ color: C.green, fontSize: 11 }}>✓ Signed</span>}
+                      {geoJobId === j.id && geoState === "travelling" && <span style={{ color: C.amber, fontSize: 11 }}>🚗 {geoDistance !== null ? (geoDistance < 1000 ? geoDistance + "m" : (geoDistance/1000).toFixed(1) + "km") : "Travelling"}</span>}
+                      {geoJobId === j.id && geoState === "arrived" && <span style={{ color: C.green, fontSize: 11 }}>📍 On site</span>}
+                    </div>
+                  </div>
+                  <div style={{ flexShrink: 0, textAlign: "right" }}>
+                    {j.value > 0 && <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: "-0.01em" }}>{fmtAmount(j.value)}</div>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </React.Fragment>
       ))}
 
       {/* Job detail modal */}
