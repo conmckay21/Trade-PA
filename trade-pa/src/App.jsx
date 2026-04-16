@@ -23229,7 +23229,7 @@ const COSHH_SUBSTANCES = [
   { name: "Bitumen / roofing compound", hazard: "Hot material burns, PAH compounds in fumes", exposure: "Ventilation, cool before applying where possible", ppe: "Heat-resistant gloves, FFP2 mask, safety glasses" },
 ];
 
-function RAMSTab({ user, brand }) {
+function RAMSTab({ user, brand, setContextHint }) {
   const [rams, setRams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [screen, setScreen] = useState("list");
@@ -23237,6 +23237,10 @@ function RAMSTab({ user, brand }) {
   const [selected, setSelected] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  // List controls (Phase 3)
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all"); // all | cdm | linked
+  const [sortMode, setSortMode] = useState("recent"); // recent | title | hazards
 
   const blankForm = () => ({
     title: "", job_ref: "", site_address: "", client_name: "", start_date: "", end_date: "",
@@ -23256,6 +23260,28 @@ function RAMSTab({ user, brand }) {
   const [form, setForm] = useState(blankForm());
 
   useEffect(() => { if (user?.id) load(); }, [user?.id]);
+
+  // Phase 5b: rich context hint for the floating mic. Different payload per
+  // screen so the AI knows what the user is actually doing.
+  useEffect(() => {
+    if (!setContextHint) return;
+    const STEP_NAMES = ["Project Details", "Hazards", "Method Statement", "COSHH", "Welfare & Emergency"];
+    if (screen === "wizard") {
+      const bits = [`RAMS wizard: ${form.title || "New RAMS"}`];
+      bits.push(`step ${step} of 5 — ${STEP_NAMES[step - 1] || ""}`);
+      const hz = (form.selected_hazards?.length || 0) + (form.custom_hazards?.length || 0);
+      const ms = (form.selected_method_steps?.length || 0) + (form.custom_method_steps?.length || 0);
+      const co = (form.coshh_substances?.length || 0) + (form.custom_coshh?.length || 0);
+      if (hz) bits.push(`${hz} hazards selected`);
+      if (ms) bits.push(`${ms} method steps`);
+      if (co) bits.push(`${co} COSHH substances`);
+      if (form.scope) bits.push(`scope: ${form.scope.slice(0, 100)}`);
+      setContextHint(bits.join(" · "));
+    } else {
+      setContextHint(`RAMS Builder: ${rams.length} document${rams.length === 1 ? "" : "s"}`);
+    }
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [screen, step, form.title, form.selected_hazards, form.custom_hazards, form.selected_method_steps, form.custom_method_steps, form.coshh_substances, form.custom_coshh, form.scope, rams.length, setContextHint]);
 
   const load = async () => {
     setLoading(true);
@@ -23478,22 +23504,29 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
   if (screen === "wizard") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 0, paddingBottom: 100 }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-          <button onClick={() => { setScreen("list"); setForm(blankForm()); setStep(1); }} style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontSize: 22, padding: 0 }}>←</button>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{form.title || "New RAMS"}</div>
-            <div style={{ fontSize: 11, color: C.muted }}>Step {step} of {STEPS.length} — {STEPS[step - 1]}</div>
+        {/* Header — chevron + eyebrow "STEP X OF 5" + title (matches DetailPage pattern from Phase 4) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+          <button
+            onClick={() => { setScreen("list"); setForm(blankForm()); setStep(1); setEditingId(null); }}
+            aria-label="Back to RAMS list"
+            style={{ background: "none", border: "none", color: C.text, cursor: "pointer", padding: 4, display: "grid", placeItems: "center", flexShrink: 0 }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: C.muted, letterSpacing: "0.08em", fontWeight: 700 }}>STEP {step} OF {STEPS.length}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{form.title || "New RAMS"}</div>
           </div>
         </div>
 
         {/* Progress bar */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
           {STEPS.map((s, i) => (
             <div key={i} onClick={() => { if (i < step) setStep(i + 1); }}
               style={{ flex: 1, height: 4, borderRadius: 2, background: i < step ? C.amber : C.border, cursor: i < step ? "pointer" : "default", transition: "background 0.2s" }} />
           ))}
         </div>
+        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: C.muted, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase", marginBottom: 16 }}>{STEPS[step - 1]}</div>
 
         {/* Step 1: Project Details */}
         {step === 1 && (
@@ -23552,14 +23585,24 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
                     const riskColors = { Low: C.green, Medium: C.amber, High: C.red, Critical: "#7c3aed" };
                     return (
                       <div key={h.id} onClick={() => setForm(f => ({ ...f, selected_hazards: selected ? f.selected_hazards.filter(x => x !== h.id) : [...f.selected_hazards, h.id] }))}
-                        style={{ display: "flex", gap: 10, padding: "10px 12px", borderRadius: 8, border: `2px solid ${selected ? riskColors[h.risk] : C.border}`, background: selected ? riskColors[h.risk] + "0f" : C.surfaceHigh, cursor: "pointer" }}>
-                        <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${selected ? riskColors[h.risk] : C.border}`, background: selected ? riskColors[h.risk] : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0, marginTop: 1 }}>
+                        style={{
+                          display: "flex",
+                          alignItems: selected ? "flex-start" : "center",
+                          gap: 10,
+                          padding: selected ? "10px 12px" : "7px 10px",
+                          borderRadius: 8,
+                          border: `${selected ? 2 : 1}px solid ${selected ? riskColors[h.risk] : C.border}`,
+                          background: selected ? riskColors[h.risk] + "0f" : C.surfaceHigh,
+                          cursor: "pointer",
+                          transition: "padding 0.15s, border-width 0.15s",
+                        }}>
+                        <div style={{ width: selected ? 20 : 16, height: selected ? 20 : 16, borderRadius: 4, border: `2px solid ${selected ? riskColors[h.risk] : C.border}`, background: selected ? riskColors[h.risk] : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: selected ? 11 : 9, color: "#fff", flexShrink: 0, marginTop: selected ? 1 : 0 }}>
                           {selected ? "✓" : ""}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600 }}>{h.hazard}</div>
-                            <div style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: riskColors[h.risk], padding: "1px 6px", borderRadius: 3 }}>{h.risk}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: selected ? 3 : 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: selected ? 600 : 500, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: selected ? "normal" : "nowrap" }}>{h.hazard}</div>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: riskColors[h.risk], padding: "1px 6px", borderRadius: 3, flexShrink: 0 }}>{h.risk}</div>
                           </div>
                           {selected && <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{h.control}</div>}
                           {selected && <div style={{ fontSize: 11, color: C.amber, marginTop: 3 }}>PPE: {h.ppe}</div>}
@@ -23716,6 +23759,37 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
   }
 
   // ── LIST VIEW ─────────────────────────────────────────────────────────────
+  // Derived list for render
+  const sLower = search.trim().toLowerCase();
+  const listItems = rams.filter(r => {
+    if (filter === "cdm" && !r.cdm_notifiable) return false;
+    if (filter === "linked" && !r.job_id) return false;
+    if (!sLower) return true;
+    return (r.title || "").toLowerCase().includes(sLower)
+        || (r.site_address || "").toLowerCase().includes(sLower)
+        || (r.job_ref || "").toLowerCase().includes(sLower);
+  }).map(r => {
+    const d = typeof r.form_data === "string" ? JSON.parse(r.form_data || "{}") : (r.form_data || {});
+    const hazardCount = (d.selected_hazards || []).length + (d.custom_hazards || []).length;
+    const stepCount = (d.selected_method_steps || []).length + (d.custom_method_steps || []).length;
+    return { ...r, _d: d, _hazardCount: hazardCount, _stepCount: stepCount };
+  }).sort((a, b) => {
+    if (sortMode === "title") return (a.title || "").localeCompare(b.title || "");
+    if (sortMode === "hazards") return b._hazardCount - a._hazardCount;
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+  const cdmCount = rams.filter(r => r.cdm_notifiable).length;
+  const linkedCount = rams.filter(r => r.job_id).length;
+  const chipStyle = (active, tint) => ({
+    padding: "6px 12px", borderRadius: 16, fontSize: 12, fontWeight: 600,
+    background: active ? (tint || C.text) : "transparent",
+    color: active ? (tint === C.text || !tint ? C.bg : "#fff") : C.textDim,
+    border: `1px solid ${active ? (tint || C.text) : C.border}`,
+    cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+  });
+  const nextSort = () => setSortMode(m => m === "recent" ? "title" : m === "title" ? "hazards" : "recent");
+  const sortLabel = sortMode === "recent" ? "Recent" : sortMode === "title" ? "Title" : "Hazards";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -23727,13 +23801,37 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
         Create Risk Assessment & Method Statements for any job. Choose from a library of pre-written hazards and method statement steps, or add your own. Generate a professional branded PDF for client sign-off.
       </div>
 
+      {rams.length > 0 && (
+        <>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search title, site, job ref…"
+            style={{ ...S.input, fontSize: 13 }}
+          />
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            <button onClick={() => setFilter("all")} style={chipStyle(filter === "all")}>All {rams.length}</button>
+            <button onClick={() => setFilter("cdm")} style={chipStyle(filter === "cdm", C.red)}>CDM {cdmCount}</button>
+            <button onClick={() => setFilter("linked")} style={chipStyle(filter === "linked", C.green)}>Linked {linkedCount}</button>
+            <button onClick={nextSort} style={{
+              marginLeft: "auto", padding: "6px 12px", borderRadius: 16,
+              fontSize: 12, fontWeight: 600, background: "transparent",
+              color: C.muted, border: `1px solid ${C.border}`, cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}>↕ {sortLabel}</button>
+          </div>
+        </>
+      )}
+
       {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> :
         rams.length === 0 ? (
           <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 40 }}>No RAMS documents yet — tap + New RAMS to get started</div>
-        ) : rams.map(r => {
-          const d = typeof r.form_data === "string" ? JSON.parse(r.form_data || "{}") : (r.form_data || {});
-          const hazardCount = (d.selected_hazards || []).length + (d.custom_hazards || []).length;
-          const stepCount = (d.selected_method_steps || []).length + (d.custom_method_steps || []).length;
+        ) : listItems.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>
+            {search ? `No RAMS match "${search}".` : filter === "cdm" ? "No CDM notifiable projects." : "No RAMS linked to a job yet."}
+          </div>
+        ) : listItems.map(r => {
           return (
             <div key={r.id} style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px" }}>
@@ -23746,10 +23844,10 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
                   <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
                     {new Date(r.created_at).toLocaleDateString("en-GB")}
                     {r.job_ref && ` · ${r.job_ref}`}
-                    {hazardCount > 0 && ` · ${hazardCount} hazards`}
-                    {stepCount > 0 && ` · ${stepCount} steps`}
+                    {r._hazardCount > 0 && ` · ${r._hazardCount} hazards`}
+                    {r._stepCount > 0 && ` · ${r._stepCount} steps`}
                   </div>
-                  {r.job_id && <div style={{ fontSize: 11, color: C.green, marginTop: 2 }}>🔗 {r.job_ref || "Linked to job"}</div>}
+                  {r.job_id && <div style={{ fontSize: 11, color: C.green, marginTop: 2 }}>🔗 Linked to: {r.job_ref || "Job"}</div>}
                 </div>
               </div>
               <div style={{ borderTop: `1px solid ${C.border}`, display: "flex", gap: 1 }}>
@@ -23757,7 +23855,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
                 <button onClick={() => startEdit(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}` }}>✏ Edit</button>
                 <button onClick={() => duplicateRAMS(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}` }}>📋 Copy</button>
                 <button onClick={() => setAssigningRams(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}`, color: r.job_id ? C.green : C.muted }}>🔗 {r.job_id ? "Linked" : "Job"}</button>
-                <button onClick={() => del(r.id)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", color: C.red }}>Delete</button>
+                <button onClick={() => del(r.id)} aria-label="Delete" style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 16, borderRadius: 0, border: "none", color: C.red, padding: "6px 0" }}>×</button>
               </div>
             </div>
           );
@@ -25749,7 +25847,7 @@ function AppInner() {
         {view === "Documents" && <DocumentsTab user={user} customers={customers} />}
         {view === "Reviews" && <ReviewsTab user={user} brand={brand} customers={customers} />}
         {view === "Stock" && <StockTab user={user} />}
-        {view === "RAMS" && <RAMSTab user={user} brand={brand} />}
+        {view === "RAMS" && <RAMSTab user={user} brand={brand} setContextHint={setContextHint} />}
         {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} openAssistantSetup={() => setAssistantSetupOpen(true)} openFeedback={() => setFeedbackOpen(true)} assistantName={assistantName} assistantWakeWords={assistantWakeWords} userCommandsCount={userCommands.length} usageData={usageData} usageCaps={usageCaps} /></ErrorBoundary>}
         </div>
       </main>
