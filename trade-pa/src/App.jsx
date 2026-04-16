@@ -1383,6 +1383,56 @@ function DetailPage({ title, subtitle, onBack, rightHeader, maxWidth, heroStrip,
   );
 }
 
+// ─── Floating Mic (Phase 5a) ──────────────────────────────────────────────────
+// Persistent voice affordance, bottom-right, on every non-AI screen. Tap routes
+// the user to the AI Assistant overlay sheet with the current screen's context
+// injected into the system prompt. Hidden when the user is already on the AI
+// Assistant view (redundant there — the hero mic is the entry point).
+// Colour hints at hands-free state: amber when inactive, green when HF is on.
+function FloatingMicButton({ visible, handsFree, onTap }) {
+  if (!visible) return null;
+  const tint = handsFree ? C.green : C.amber;
+  return (
+    <button
+      onClick={onTap}
+      aria-label="Talk to Trade PA"
+      style={{
+        position: "fixed",
+        right: 16,
+        bottom: "calc(84px + env(safe-area-inset-bottom, 0px))",
+        width: 52, height: 52,
+        borderRadius: "50%",
+        background: `linear-gradient(180deg, ${tint === C.green ? "#34d399" : "#fbbf24"}, ${tint})`,
+        border: `2px solid ${tint}cc`,
+        boxShadow: `0 8px 24px -6px ${tint}80, 0 0 0 10px ${tint}15`,
+        color: "#000",
+        display: "grid", placeItems: "center",
+        cursor: "pointer",
+        zIndex: 250,
+        padding: 0,
+        transition: "transform 0.15s, box-shadow 0.15s",
+      }}
+      onMouseDown={e => e.currentTarget.style.transform = "scale(0.94)"}
+      onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+      onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+    >
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+        <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" />
+      </svg>
+      {handsFree && (
+        <div style={{
+          position: "absolute", top: -2, right: -2,
+          width: 12, height: 12, borderRadius: "50%",
+          background: C.green,
+          border: `2px solid ${C.bg}`,
+          animation: "bellPulse 1.4s ease infinite",
+        }} />
+      )}
+    </button>
+  );
+}
+
 // ─── Invoice Preview ──────────────────────────────────────────────────────────
 function InvoicePreview({ brand, invoice }) {
   const inv = invoice || { id: "INV-042", customer: "John Smith", address: "5 High Street\nGuildford GU1 3AA", desc: "Annual boiler service\nFlue check and clean\nPressure test", amount: 120, date: new Date().toLocaleDateString("en-GB"), due: "30 days", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false };
@@ -5430,7 +5480,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 500, hf_hours: 5 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 500, hf_hours: 5 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -9019,7 +9069,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     + "- Enquiries: " + ((enquiries||[]).length === 0 ? "none" : (enquiries||[]).map(e=>e.name).join(", ")) + "\n"
     + "- Current RAMS session: " + (ramsSession ? "YES - step " + ramsSession.step : "none") + "\n"
     + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
-    + (sessionActionsRef.current.length ? "\n\nACTIONS ALREADY COMPLETED THIS SESSION (do NOT repeat these):\n" + sessionActionsRef.current.map(a => "- " + a).join("\n") + "\n" : "");
+    + (sessionActionsRef.current.length ? "\n\nACTIONS ALREADY COMPLETED THIS SESSION (do NOT repeat these):\n" + sessionActionsRef.current.map(a => "- " + a).join("\n") + "\n" : "")
+    + (overlayContext ? `\n\nCURRENT SCREEN CONTEXT (user invoked you from a specific screen — act on THIS record first unless they say otherwise):\n${overlayContext}\n` : "");
 
 
   // Auto-trigger onboarding for new users — placed here so isNewUser and send are both defined
@@ -9693,7 +9744,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     send("I need help with the app");
   };
 
-  const isHome = messages.length === 0 && !loading;
+  const isHome = messages.length === 0 && !loading && !overlayContext;
 
   // Phase 2: unified voice state — 'idle' | 'listening' | 'transcribing' | 'thinking' | 'speaking'.
   // Derived (not stored) so it can't drift from the underlying flags. Priority: speaking >
@@ -9715,8 +9766,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   };
   const vt = voiceTokens[voiceState];
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 200px)", minHeight: 400, gap: 12, overflow: "hidden" }}>
+  // Phase 5a: height token — 100% inside overlay sheet, full-page calc otherwise
+  const _pageHeight = overlayContext ? "100%" : "calc(100dvh - 200px)";
+  const _pageMinHeight = overlayContext ? 0 : 400;
+
+  // Inner content — shared between page mode and overlay mode
+  const _pageContent = (
+    <div style={{ display: "flex", flexDirection: "column", height: _pageHeight, minHeight: _pageMinHeight, gap: 12, overflow: "hidden" }}>
 
       {/* Phase 2: unified keyframes — available in both home and chat views */}
       <style>{`
@@ -11035,6 +11091,96 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       </div>
     </div>
   );
+
+  // Phase 5a: overlay mode — render content inside a bottom-sheet shell when
+  // overlayContext is set. Hands-free bumps the sheet taller (90% vs 80%).
+  if (overlayContext) {
+    const sheetHeight = handsFree ? "90vh" : "82vh";
+    return (
+      <div
+        onClick={onCloseOverlay}
+        style={{
+          position: "fixed", inset: 0,
+          background: "#000c",
+          zIndex: 350,
+          display: "flex", flexDirection: "column", justifyContent: "flex-end",
+          animation: "pa-overlay-fade 0.2s ease-out",
+        }}
+      >
+        <style>{`
+          @keyframes pa-overlay-fade { from { opacity: 0; } to { opacity: 1; } }
+          @keyframes pa-sheet-up   { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        `}</style>
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            background: C.bg,
+            borderTopLeftRadius: 18, borderTopRightRadius: 18,
+            height: sheetHeight,
+            display: "flex", flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 -12px 48px rgba(0,0,0,0.4)",
+            animation: "pa-sheet-up 0.26s cubic-bezier(0.25, 0.8, 0.25, 1)",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          }}
+        >
+          {/* Drag handle */}
+          <div style={{ display: "flex", justifyContent: "center", paddingTop: 8, paddingBottom: 4, flexShrink: 0 }}>
+            <div style={{ width: 40, height: 4, borderRadius: 2, background: C.border }} />
+          </div>
+
+          {/* Sheet header: close · context · open-full-chat */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "6px 12px 10px",
+            borderBottom: `1px solid ${C.border}`,
+            flexShrink: 0,
+          }}>
+            <button
+              onClick={onCloseOverlay}
+              aria-label="Close"
+              style={{
+                width: 36, height: 36, flexShrink: 0,
+                display: "grid", placeItems: "center",
+                background: "transparent", border: "none",
+                color: C.text, cursor: "pointer", padding: 0,
+                borderRadius: 8,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 1 }}>Trade PA</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{overlayContext}</div>
+            </div>
+            <button
+              onClick={() => { if (onCloseOverlay) onCloseOverlay(); setView("AI Assistant"); }}
+              style={{
+                flexShrink: 0, padding: "5px 10px",
+                background: "transparent",
+                border: `1px solid ${C.border}`,
+                borderRadius: 14,
+                color: C.muted, fontSize: 11,
+                fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em",
+                cursor: "pointer",
+              }}
+            >
+              Open full chat ↗
+            </button>
+          </div>
+
+          {/* Content column — reuses the full page content (chat view, mic hero, input bar) */}
+          <div style={{ flex: 1, overflow: "hidden", padding: "10px 12px 12px" }}>
+            {_pageContent}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return _pageContent;
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
@@ -23786,6 +23932,10 @@ function AppInner() {
   const [aiHandsFree, setAiHandsFree] = useState(false);
   const [helpSlug, setHelpSlug] = useState(null);
 
+  // Phase 5a: AI overlay — null when closed, or { context: "Viewing: …" } when open.
+  // Set by FloatingMicButton (below) and unset by the overlay close/back.
+  const [aiOverlay, setAiOverlay] = useState(null);
+
   // ── Fair-use caps: usage tracking ─────────────────────────────
   const currentMonth = new Date().toISOString().slice(0, 7); // "2026-04"
   const [usageData, setUsageData] = useState({ conversations_used: 0, handsfree_seconds_used: 0 });
@@ -25109,7 +25259,7 @@ function AppInner() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
-        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} /></div>
+        <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
@@ -25125,6 +25275,11 @@ function AppInner() {
       </main>
       </div>
       <BottomTabBar view={view} setView={setView} isDesktopBrowser={isDesktopBrowser} />
+      <FloatingMicButton
+        visible={view !== "AI Assistant" && !aiOverlay}
+        handsFree={aiHandsFree}
+        onTap={() => setAiOverlay({ context: `Viewing: ${view}` })}
+      />
       <HelpCentre open={helpOpen} openSlug={helpSlug} onClose={() => { setHelpOpen(false); setHelpSlug(null); }} />
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} user={user} brand={brand} currentView={view} />
       <AssistantSetup
