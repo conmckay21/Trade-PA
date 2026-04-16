@@ -1837,19 +1837,551 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
   const ACCENT_PRESETS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#0ea5e9", "#1a1a1a"];
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>Branding & Settings</div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>These details appear on every invoice and customer communication.</div>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button style={S.btn("ghost")} onClick={() => setPreview(true)}>Preview Invoice →</button>
-          <button style={S.btn(saved ? "green" : "primary")} onClick={save}>{saved ? "✓ Saved" : "Save Changes"}</button>
-        </div>
-      </div>
+  // ─── New navigation architecture (mockup-faithful redesign) ────────────────
+  // subview: null = landing page; otherwise a category id from CATEGORIES below.
+  const [subview, setSubview] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [toast, setToast] = useState(null); // { text, sub } | null
+  const toastTimerRef = useRef(null);
 
+  const showToast = (text, sub = "SAVED AUTOMATICALLY") => {
+    setToast({ text, sub });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2400);
+  };
+
+  // Fire toast on brand changes — debounced 2s after the last edit, matching the
+  // existing brand→Supabase sync timing so the toast appears when the save lands.
+  // Skip the first render so we don't flash a toast on initial load.
+  const lastBrandRef = useRef(null);
+  const brandToastTimerRef = useRef(null);
+  useEffect(() => {
+    // Skip very first render (no prior brand to compare against)
+    if (lastBrandRef.current === null) {
+      lastBrandRef.current = brand;
+      return;
+    }
+    if (lastBrandRef.current === brand) return; // identity check, no change
+    lastBrandRef.current = brand;
+    // Debounce so rapid keystrokes only trigger one toast
+    if (brandToastTimerRef.current) clearTimeout(brandToastTimerRef.current);
+    brandToastTimerRef.current = setTimeout(() => {
+      showToast("Saved");
+    }, 2100); // slightly after the existing 2s Supabase sync
+  }, [brand]);
+
+  // Computed status pills for each category (shown on the landing cards)
+  const tradeCount = (brand.tradeTypes || []).length;
+  const integrationsConnected = [xeroConnected, qbConnected].filter(Boolean).length;
+  const memberCount = (members || []).length;
+
+  // Categories config — drives the landing page rendering and drill-in routing
+  const CATEGORIES = [
+    {
+      id: "ai-assistant",
+      group: "YOUR PA",
+      name: "AI Assistant",
+      sub: "Name · wake words · personality · commands",
+      featured: true,
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-14 0M12 18v4M8 22h8M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3z" />
+        </svg>
+      ),
+      iconTint: "amber",
+      status: { text: assistantName || "Trade PA", color: "amber" },
+    },
+    {
+      id: "phone-calls",
+      group: "YOUR PA",
+      name: "Phone & Calls",
+      sub: "Business number · recording · transcription",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+        </svg>
+      ),
+      iconTint: "amber",
+      status: { text: "● Active", color: "green" },
+    },
+    {
+      id: "business",
+      group: "BUSINESS",
+      name: "Business profile",
+      sub: "Trading name · address · VAT · UTR",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11m4-11v11m8-11v11m4-11v11" />
+        </svg>
+      ),
+      iconTint: "blue",
+    },
+    {
+      id: "invoices",
+      group: "BUSINESS",
+      name: "Invoices & payments",
+      sub: "Bank · terms · reference format · footer",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.66 0-3 .9-3 2s1.34 2 3 2 3 .9 3 2-1.34 2-3 2m0-8c1.11 0 2.08.4 2.6 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.4-2.6-1" />
+        </svg>
+      ),
+      iconTint: "blue",
+    },
+    {
+      id: "branding",
+      group: "BUSINESS",
+      name: "Branding",
+      sub: "Logo · colour · appearance",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+        </svg>
+      ),
+      iconTint: "purple",
+    },
+    {
+      id: "compliance",
+      group: "BUSINESS",
+      name: "Compliance & trade",
+      sub: "Gas Safe · NICEIC · certifications · numbering",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      ),
+      iconTint: "green",
+      status: tradeCount > 0 ? { text: `${tradeCount} trade${tradeCount === 1 ? "" : "s"}`, color: "amber" } : null,
+    },
+    {
+      id: "notifications",
+      group: "WORKFLOW",
+      name: "Notifications",
+      sub: "Evening briefing · reminders · alerts",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+      ),
+      iconTint: "neutral",
+      status: brand.eveningBriefing ? { text: "● On", color: "green" } : null,
+    },
+    {
+      id: "team",
+      group: "WORKFLOW",
+      name: "Team",
+      sub: "Workspace · members · permissions",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a3 3 0 015.36-1.857M17 4a3 3 0 00-3 3c0 1.66 1.34 3 3 3s3-1.34 3-3-1.34-3-3-3zM12 12a4 4 0 100-8 4 4 0 000 8zM7 4a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+      iconTint: "neutral",
+      status: { text: `${memberCount} member${memberCount === 1 ? "" : "s"}` },
+    },
+    {
+      id: "integrations",
+      group: "WORKFLOW",
+      name: "Integrations",
+      sub: "Xero · QuickBooks · Stripe · more",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      ),
+      iconTint: "neutral",
+      status: integrationsConnected > 0 ? { text: `${integrationsConnected} connected`, color: "green" } : null,
+    },
+    {
+      id: "plan",
+      group: "ACCOUNT",
+      name: "Plan & billing",
+      sub: "Pro · unlimited · manage subscription",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M21 12c0 1.66-4 3-9 3s-9-1.34-9-3m18 0V5c0-1.66-4-3-9-3S3 3.34 3 5v7m18 0v7c0 1.66-4 3-9 3s-9-1.34-9-3v-7" />
+        </svg>
+      ),
+      iconTint: "neutral",
+      status: { text: planTier === "pro" ? "PRO" : planTier === "team" ? "TEAM" : "SOLO", color: "amber" },
+    },
+    {
+      id: "help",
+      group: "ACCOUNT",
+      name: "Help & feedback",
+      sub: "Report a bug · suggest an idea · contact",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01" />
+        </svg>
+      ),
+      iconTint: "neutral",
+    },
+    {
+      id: "diagnostics",
+      group: "ACCOUNT",
+      name: "Diagnostics",
+      sub: "Error reports · system health",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 17H7A5 5 0 017 7h2m6 10h2a5 5 0 000-10h-2m-7 5h10" />
+        </svg>
+      ),
+      iconTint: "neutral",
+    },
+  ];
+
+  // Tints for category icons (mockup uses several tones)
+  const TINTS = {
+    amber: { bg: `${C.amber}1f`, color: C.amber, border: `${C.amber}40` },
+    green: { bg: `${C.green}1f`, color: C.green, border: `${C.green}40` },
+    blue:  { bg: `${C.blue}1f`,  color: C.blue,  border: `${C.blue}40`  },
+    purple:{ bg: "rgba(167,139,250,0.18)", color: "#a78bfa", border: "rgba(167,139,250,0.3)" },
+    neutral:{ bg: C.surfaceHigh, color: C.textDim, border: C.border },
+  };
+
+  // Status pill colour map
+  const STATUS_COLOURS = {
+    green: C.green,
+    amber: C.amber,
+    red: C.red,
+    blue: C.blue,
+  };
+
+  // Filter categories by search query (matches name OR sub-line)
+  const q = searchQuery.toLowerCase();
+  const filteredCategories = q
+    ? CATEGORIES.filter(c => c.name.toLowerCase().includes(q) || c.sub.toLowerCase().includes(q))
+    : CATEGORIES;
+
+  // Group for landing-page rendering — preserves group order from CATEGORIES array
+  const groups = (() => {
+    const g = {};
+    const order = [];
+    for (const c of filteredCategories) {
+      if (!g[c.group]) { g[c.group] = []; order.push(c.group); }
+      g[c.group].push(c);
+    }
+    return order.map(name => ({ name, items: g[name] }));
+  })();
+
+  const activeCategory = subview ? CATEGORIES.find(c => c.id === subview) : null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "relative" }}>
+
+      {/* ─── LANDING PAGE ─────────────────────────────────────────────────── */}
+      {!subview && (
+        <>
+          {/* Page header */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              textTransform: "uppercase",
+              letterSpacing: "0.14em",
+              color: C.amber,
+              fontWeight: 500,
+            }}>Settings</div>
+            <div style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: 24,
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              color: C.text,
+              lineHeight: 1.1,
+            }}>Settings</div>
+          </div>
+
+          {/* Search bar */}
+          <div style={{
+            background: C.surfaceHigh,
+            border: `1px solid ${C.border}`,
+            borderRadius: 12,
+            padding: "10px 12px",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
+            <input
+              placeholder="Search settings…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: C.text,
+                fontSize: 16,
+                fontFamily: "'DM Sans', sans-serif",
+                minWidth: 0,
+              }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: C.textDim,
+                  cursor: "pointer",
+                  padding: 4,
+                  display: "grid",
+                  placeItems: "center",
+                  fontSize: 16,
+                }}
+              >×</button>
+            )}
+          </div>
+
+          {/* Category groups */}
+          {groups.length === 0 ? (
+            <div style={{
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 14,
+              padding: 24,
+              textAlign: "center",
+              color: C.textDim,
+              fontSize: 14,
+            }}>No settings match "{searchQuery}".</div>
+          ) : (
+            groups.map(group => (
+              <div key={group.name} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10,
+                  color: C.muted,
+                  letterSpacing: "0.14em",
+                  fontWeight: 700,
+                  paddingLeft: 4,
+                  marginBottom: 2,
+                }}>{group.name}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {group.items.map(cat => {
+                    const tint = TINTS[cat.iconTint || "neutral"] || TINTS.neutral;
+                    const isFeatured = !!cat.featured;
+                    return (
+                      <div
+                        key={cat.id}
+                        onClick={() => setSubview(cat.id)}
+                        style={{
+                          background: isFeatured ? `linear-gradient(135deg, ${C.amber}10, ${C.amber}04)` : C.surfaceHigh,
+                          border: `1px solid ${isFeatured ? `${C.amber}40` : C.border}`,
+                          borderRadius: 14,
+                          padding: 12,
+                          cursor: "pointer",
+                          display: "grid",
+                          gridTemplateColumns: "40px 1fr auto",
+                          gap: 12,
+                          alignItems: "center",
+                          transition: "background 150ms ease",
+                        }}
+                      >
+                        {/* Icon */}
+                        <div style={{
+                          width: 40, height: 40,
+                          borderRadius: 10,
+                          background: tint.bg,
+                          border: `1px solid ${tint.border}`,
+                          color: tint.color,
+                          display: "grid",
+                          placeItems: "center",
+                          flexShrink: 0,
+                        }}>
+                          <div style={{ width: 20, height: 20 }}>{cat.icon}</div>
+                        </div>
+                        {/* Body */}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{
+                            fontFamily: "'DM Sans', sans-serif",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: C.text,
+                            lineHeight: 1.2,
+                            marginBottom: 3,
+                            letterSpacing: "-0.01em",
+                          }}>{cat.name}</div>
+                          <div style={{
+                            fontSize: 11.5,
+                            color: C.textDim,
+                            lineHeight: 1.3,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}>{cat.sub}</div>
+                        </div>
+                        {/* Right column */}
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          flexShrink: 0,
+                        }}>
+                          {cat.status && (
+                            <span style={{
+                              fontFamily: "'DM Mono', monospace",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: "0.06em",
+                              color: cat.status.color ? STATUS_COLOURS[cat.status.color] || C.textDim : C.textDim,
+                            }}>{cat.status.text}</span>
+                          )}
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+
+          {/* Footer */}
+          <div style={{
+            marginTop: 18,
+            padding: "16px 4px 4px",
+            borderTop: `1px solid ${C.border}`,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+          }}>
+            <div style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              color: C.muted,
+              letterSpacing: "0.06em",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
+            }}>v1.8.2 · {brand?.email || user?.email || ""}</div>
+            <button
+              onClick={async () => {
+                if (!window.confirm("Sign out of Trade PA?")) return;
+                try { await supabase.auth.signOut(); window.location.reload(); }
+                catch (e) { alert("Sign out failed: " + e.message); }
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: C.red,
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                padding: "6px 0",
+                flexShrink: 0,
+              }}
+            >Sign out</button>
+          </div>
+        </>
+      )}
+
+      {/* ─── DRILL-IN: app bar + intro hero, then existing content ────────── */}
+      {subview && (
+        <>
+          {/* App bar */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "4px 0 8px",
+            marginBottom: 4,
+          }}>
+            <button
+              onClick={() => setSubview(null)}
+              aria-label="Back to settings"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: C.text,
+                cursor: "pointer",
+                padding: 6,
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              color: C.muted,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              fontWeight: 600,
+            }}>SETTINGS / {(activeCategory?.name || "").toUpperCase()}</div>
+            <div style={{ width: 32 }} />
+          </div>
+
+          {/* Intro hero */}
+          {activeCategory && (() => {
+            const tint = TINTS[activeCategory.iconTint || "neutral"] || TINTS.neutral;
+            return (
+              <div style={{
+                background: `linear-gradient(135deg, ${tint.bg}, transparent)`,
+                border: `1px solid ${tint.border}`,
+                borderRadius: 14,
+                padding: 16,
+                display: "flex",
+                gap: 14,
+                alignItems: "center",
+                marginBottom: 6,
+              }}>
+                <div style={{
+                  width: 44, height: 44,
+                  borderRadius: 12,
+                  background: tint.bg,
+                  border: `1px solid ${tint.border}`,
+                  color: tint.color,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}>
+                  <div style={{ width: 22, height: 22 }}>{activeCategory.icon}</div>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: C.text,
+                    letterSpacing: "-0.01em",
+                    lineHeight: 1.15,
+                    marginBottom: 3,
+                  }}>{activeCategory.name}</div>
+                  <div style={{
+                    fontSize: 12,
+                    color: C.textDim,
+                    lineHeight: 1.4,
+                  }}>{activeCategory.sub}</div>
+                </div>
+              </div>
+            );
+          })()}
+        </>
+      )}
+
+      {/* ─── DRILL-IN CONTENT — each section conditionally renders by subview ─── */}
+      {subview && (<>
+
+      {subview === "branding" && (
       <div style={S.grid2}>
         {/* Logo upload */}
         <div style={S.card}>
@@ -1893,8 +2425,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         </div>
       </div>
+      )}
 
-      {/* Business Info */}
+      {subview === "plan" && (
       <div style={S.card}>
         <div style={S.sectionTitle}>Your Plan</div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: C.surfaceHigh, borderRadius: 10, marginBottom: 10 }}>
@@ -1921,8 +2454,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         )}
       </div>
+      )}
 
-      {/* Appearance */}
+      {subview === "branding" && (
       <div style={S.card}>
         <div style={S.sectionTitle}>Appearance</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
@@ -1970,8 +2504,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         )}
       </div>
+      )}
 
-      {/* Business Info */}
+      {subview === "business" && (
       <div style={S.card}>
         <div style={S.sectionTitle}>Business Information</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -2120,8 +2655,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         </div>
       </div>
+      )}
 
-      {/* Payment + Invoice Settings */}
+      {subview === "invoices" && (
       <div style={S.grid2}>
         <div style={S.card}>
           <div style={S.sectionTitle}>Bank Details (shown on invoice)</div>
@@ -2224,11 +2760,13 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         </div>
       </div>
+      )}
 
-      {/* Certifications */}
+      {subview === "compliance" && (<>
       <CertificationsCard brand={brand} setBrand={setBrand} />
+      </>)}
 
-      {/* Accounting Integrations */}
+      {subview === "integrations" && (
       <div style={S.card}>
         <div style={S.sectionTitle}>Accounting Integrations</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>
@@ -2275,8 +2813,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           }
         </div>
       </div>
+      )}
 
-      {/* Trade Registrations */}
+      {subview === "compliance" && (<>
       <div style={S.card}>
         <div style={S.sectionTitle}>🏗 Trade Registrations</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
@@ -2485,8 +3024,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         </div>
       </div>
+      </>)}
 
-      {/* Assistant — name, wake words, custom commands */}
+      {subview === "ai-assistant" && (<>
       <div style={S.card}>
         <div style={S.sectionTitle}>🤖 Your Assistant</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
@@ -2556,8 +3096,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </>);
         })()}
       </div>
+      </>)}
 
-      {/* Call Tracking */}
+      {subview === "phone-calls" && (
       <div style={S.card}>
         <div style={S.sectionTitle}>📞 Call Tracking</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
@@ -2565,8 +3106,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         </div>
         <CallTrackingSettings user={user} />
       </div>
+      )}
 
-      {/* Evening Briefing */}
+      {subview === "notifications" && (
       <div style={S.card}>
         <div style={S.sectionTitle}>📋 Evening Schedule Briefing</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
@@ -2606,8 +3148,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         )}
       </div>
+      )}
 
-      {/* Team Management */}
+      {subview === "team" && (
       <div style={S.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={S.sectionTitle}>Team Access</div>
@@ -2693,8 +3236,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Contact the account owner to change your access permissions.</div>
         )}
       </div>
+      )}
 
-      {/* ── Feedback Section ──────────────────────────────────────────────── */}
+      {subview === "help" && (
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginTop: 8 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: C.muted, marginBottom: 10 }}>SEND FEEDBACK</div>
         <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12, lineHeight: 1.5 }}>
@@ -2707,8 +3251,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           💬 Send Feedback (Bug · Improvement · Idea)
         </button>
       </div>
+      )}
 
-      {/* ── Error Report Section ─────────────────────────────────────────── */}
+      {subview === "diagnostics" && (
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginTop: 8 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: C.muted, marginBottom: 10 }}>SYSTEM HEALTH</div>
         <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12, lineHeight: 1.5 }}>
@@ -2745,6 +3290,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         )}
       </div>
+      )}
 
       {/* Preview Modal */}
       {preview && (
@@ -2755,6 +3301,63 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               <button onClick={() => setPreview(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
             </div>
             <InvoicePreview brand={brand} />
+          </div>
+        </div>
+      )}
+      </>)}
+
+      {/* ─── Auto-save Toast ──────────────────────────────────────────────── */}
+      {toast && (
+        <div style={{
+          position: "fixed",
+          bottom: "max(24px, env(safe-area-inset-bottom, 24px))",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 500,
+          background: C.surface,
+          border: `1px solid ${C.green}40`,
+          borderRadius: 12,
+          padding: "10px 14px 10px 12px",
+          boxShadow: `0 12px 32px -8px rgba(0,0,0,0.6), 0 0 40px -8px ${C.green}30`,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          minWidth: 200,
+          maxWidth: "calc(100% - 32px)",
+          animation: "toast-in 200ms ease-out",
+        }}>
+          <div style={{
+            width: 28, height: 28,
+            borderRadius: "50%",
+            background: `${C.green}1f`,
+            border: `1px solid ${C.green}40`,
+            color: C.green,
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: 13,
+              fontWeight: 600,
+              color: C.text,
+              lineHeight: 1.2,
+            }}>{toast.text}</div>
+            {toast.sub && (
+              <div style={{
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 9,
+                color: C.green,
+                letterSpacing: "0.1em",
+                marginTop: 2,
+                fontWeight: 700,
+              }}>{toast.sub}</div>
+            )}
           </div>
         </div>
       )}
