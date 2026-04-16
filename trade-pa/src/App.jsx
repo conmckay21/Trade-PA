@@ -5337,10 +5337,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           handsfree_seconds_used: (prev.handsfree_seconds_used || 0) + elapsed,
         }));
         // Flush to DB (non-blocking)
-        supabase.rpc("increment_usage", {
+        Promise.resolve(supabase.rpc("increment_usage", {
           p_user_id: user.id, p_month: currentMonth,
           p_conversations: 0, p_seconds: elapsed,
-        }).catch(() => {});
+        })).catch(() => {});
       }
     }
   }, [handsFree]);
@@ -9193,10 +9193,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       if (user?.id && currentMonth && !isOnboardingTrigger) {
         const newCount = (usageDataRef.current?.conversations_used || 0) + 1;
         setUsageData(prev => ({ ...prev, conversations_used: newCount }));
-        supabase.rpc("increment_usage", {
+        Promise.resolve(supabase.rpc("increment_usage", {
           p_user_id: user.id, p_month: currentMonth,
           p_conversations: 1, p_seconds: 0,
-        }).catch(() => {});
+        })).catch(() => {});
         // Nudge at 80% of cap
         const caps = usageCapsRef.current || {};
         if (caps.convos !== Infinity && newCount === Math.floor(caps.convos * 0.8)) {
@@ -9371,7 +9371,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   const isHome = messages.length === 0 && !loading;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 140px)", minHeight: 400, gap: 12, overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 180px)", minHeight: 400, gap: 12, overflow: "hidden" }}>
 
       {/* ── HOME SCREEN ─────────────────────────────────────────────────── */}
       {isHome && (() => {
