@@ -13439,9 +13439,25 @@ function ImportContacts({ onImport, currentCustomers }) {
 }
 
 // ─── Customers ────────────────────────────────────────────────────────────────
-function Customers({ customers, setCustomers, customerContacts, setCustomerContacts, jobs, invoices, setView, user, makeCall, hasTwilio }) {
+function Customers({ customers, setCustomers, customerContacts, setCustomerContacts, jobs, invoices, setView, user, makeCall, hasTwilio, setContextHint }) {
   const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState(null);
+
+  // Phase 5b: publish context hint when a customer is selected.
+  useEffect(() => {
+    if (!setContextHint) return;
+    if (selected) {
+      const bits = [];
+      bits.push("Customer: " + (selected.name || "Unknown"));
+      if (selected.phone) bits.push(selected.phone);
+      else if (selected.email) bits.push(selected.email);
+      if (selected.address) bits.push(selected.address);
+      setContextHint(bits.join(" · "));
+    } else {
+      setContextHint(null);
+    }
+    return () => { if (setContextHint) setContextHint(null); };
+  }, [selected, setContextHint]);
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", notes: "", isCompany: false });
@@ -25292,7 +25308,7 @@ function AppInner() {
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} />}
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} />}
         {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} setContextHint={setContextHint} />}
-        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} customerContacts={customerContacts} setCustomerContacts={setCustomerContacts} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} />}
+        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} customerContacts={customerContacts} setCustomerContacts={setCustomerContacts} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} setContextHint={setContextHint} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}
         {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} customerContacts={customerContacts} />}
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
