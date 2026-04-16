@@ -3,6 +3,7 @@ import { supabase } from "./supabase.js";
 import { Device } from "@twilio/voice-sdk";
 import HelpCentre from "./HelpCentre.jsx";
 import AssistantSetup from "./AssistantSetup.jsx";
+import FieldMic from "./components/FieldMic.jsx";
 
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
@@ -11299,26 +11300,208 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
 }
 
 function CustomerForm({ form, set, onSave, onCancel }) {
+  // Per-field mic state: { [fieldKey]: "idle" | "listening" | "populated" }
+  const [micStates, setMicStates] = React.useState({});
+
+  // Per-field MediaRecorder + chunks (keyed by field so concurrent captures
+  // can't collide — though only one mic should be listening at a time)
+  const recRef = React.useRef({});
+  const chunksRef = React.useRef({});
+
+  // Field-specific normalisation prompt for Claude
+  const normalisePrompt = (fieldKey, rawTranscript) => {
+    const instructions = {
+      name: `Clean up a dictated customer name. Input: "${rawTranscript}". Return ONLY the name as title-case (e.g. "John Smith"), nothing else.`,
+      phone: `Extract a UK phone number from dictation. Input: "${rawTranscript}". Return ONLY the number formatted like "07700 900123" or "01234 567890", nothing else. If no number, return an empty string.`,
+      address: `Clean up a dictated UK address. Input: "${rawTranscript}". Return ONLY the address formatted with line breaks between parts (e.g. "5 High Street\\nGuildford\\nGU1 3AA"), nothing else.`,
+      email: `Extract an email address from dictation. Input: "${rawTranscript}". Return ONLY the email (lowercase, no spaces), nothing else. If no email, return an empty string.`,
+      notes: `Clean up dictated notes about a customer. Input: "${rawTranscript}". Return the notes in clear prose, preserving all details. Nothing else — no preamble.`,
+    };
+    return instructions[fieldKey] || `Clean up this dictation: "${rawTranscript}". Return only the cleaned text.`;
+  };
+
+  const stopAllMics = () => {
+    Object.keys(recRef.current).forEach(k => {
+      const mr = recRef.current[k];
+      if (mr?.state === "recording") mr.stop();
+    });
+  };
+
+  const startMic = async (fieldKey) => {
+    stopAllMics();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      chunksRef.current[fieldKey] = [];
+      mr.ondataavailable = (e) => chunksRef.current[fieldKey].push(e.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        try {
+          // 1. Transcribe audio → raw text
+          const blob = new Blob(chunksRef.current[fieldKey], { type: "audio/webm" });
+          const audioBase64 = await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(",")[1]);
+            reader.readAsDataURL(blob);
+          });
+          const transcribeRes = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audio: audioBase64, mimeType: "audio/webm" }),
+          });
+          const { text } = await transcribeRes.json();
+          if (!text) {
+            setMicStates(s => ({ ...s, [fieldKey]: "idle" }));
+            return;
+          }
+
+          // 2. Normalise via Claude → field-appropriate format
+          const claudeRes = await fetch("/api/claude", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-6",
+              max_tokens: 200,
+              messages: [{ role: "user", content: normalisePrompt(fieldKey, text) }],
+            }),
+          });
+          const data = await claudeRes.json();
+          const normalised = (data.content?.[0]?.text || text).trim();
+
+          // 3. Set the field via the existing set() pattern
+          // (matches how the parent's VoiceFillButton populates fields)
+          set(fieldKey)({ target: { value: normalised } });
+          setMicStates(s => ({ ...s, [fieldKey]: "populated" }));
+          // Revert to idle after 2s so the green state isn't permanent
+          setTimeout(() => {
+            setMicStates(s => ({ ...s, [fieldKey]: "idle" }));
+          }, 2000);
+        } catch (err) {
+          console.error("Field mic error:", err);
+          setMicStates(s => ({ ...s, [fieldKey]: "idle" }));
+        }
+      };
+      mr.start();
+      recRef.current[fieldKey] = mr;
+      setMicStates(s => ({ ...s, [fieldKey]: "listening" }));
+    } catch (err) {
+      console.error("Microphone access denied:", err);
+      setMicStates(s => ({ ...s, [fieldKey]: "idle" }));
+    }
+  };
+
+  const handleMicTap = (fieldKey) => {
+    const state = micStates[fieldKey] || "idle";
+    if (state === "listening") {
+      const mr = recRef.current[fieldKey];
+      if (mr?.state === "recording") mr.stop();
+    } else {
+      startMic(fieldKey);
+    }
+  };
+
+  // Cancel with confirmation if form has content
+  const hasAnyValue = !!(form.name || form.phone || form.address || form.email || form.notes);
+  const handleCancel = () => {
+    if (hasAnyValue && !window.confirm("Discard customer details?")) return;
+    onCancel();
+  };
+
+  // Reordered: Name → Phone → Address → Email → Notes
+  const fields = [
+    { k: "name",    l: "Full Name",     p: "e.g. John Smith",                       required: true },
+    { k: "phone",   l: "Phone Number",  p: "e.g. 07700 900123",                     inputMode: "tel" },
+    { k: "address", l: "Address",       p: "e.g. 5 High Street, Guildford, GU1 3AA" },
+    { k: "email",   l: "Email Address", p: "e.g. john@email.com",                   inputMode: "email" },
+  ];
+
+  // State-dependent input border (amber for listening, green for populated).
+  // Clones S.input without mutating it — safe to reuse elsewhere.
+  const inputStyleFor = (state) => {
+    if (state === "listening") {
+      return { ...S.input, borderColor: C.amber, boxShadow: `0 0 0 2px ${C.amber}22` };
+    }
+    if (state === "populated") {
+      return { ...S.input, borderColor: C.green + "88" };
+    }
+    return S.input;
+  };
+
+  // Label suffix showing listening / populated state inline
+  const renderStateBadge = (state) => {
+    if (state === "listening") {
+      return (
+        <span style={{ color: C.amber, fontWeight: 700, textTransform: "none", letterSpacing: 0, marginLeft: 8, fontSize: 10 }}>
+          ● listening
+        </span>
+      );
+    }
+    if (state === "populated") {
+      return (
+        <span style={{ color: C.green, fontWeight: 700, textTransform: "none", letterSpacing: 0, marginLeft: 8, fontSize: 10 }}>
+          ✓ filled
+        </span>
+      );
+    }
+    return null;
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {[
-        { k: "name", l: "Full Name", p: "e.g. John Smith", required: true },
-        { k: "phone", l: "Phone Number", p: "e.g. 07700 900123" },
-        { k: "email", l: "Email Address", p: "e.g. john@email.com" },
-        { k: "address", l: "Address", p: "e.g. 5 High Street, Guildford, GU1 3AA" },
-      ].map(({ k, l, p, required }) => (
-        <div key={k}>
-          <label style={S.label}>{l}{required && <span style={{ color: C.red }}> *</span>}</label>
-          <input style={S.input} placeholder={p} value={form[k]} onChange={set(k)} />
-        </div>
-      ))}
+      {fields.map(({ k, l, p, required, inputMode }) => {
+        const state = micStates[k] || "idle";
+        return (
+          <div key={k}>
+            <label style={S.label}>
+              {l}{required && <span style={{ color: C.red }}> *</span>}
+              {renderStateBadge(state)}
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <input
+                  style={inputStyleFor(state)}
+                  placeholder={p}
+                  value={form[k] || ""}
+                  onChange={set(k)}
+                  inputMode={inputMode}
+                />
+              </div>
+              <FieldMic
+                state={state}
+                onTap={() => handleMicTap(k)}
+                ariaLabel={`Dictate ${l.toLowerCase()}`}
+              />
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Notes — textarea treated specially (mic aligned to top) */}
       <div>
-        <label style={S.label}>Notes</label>
-        <textarea style={{ ...S.input, resize: "vertical", minHeight: 72 }} placeholder="e.g. Prefers morning appointments, gate code 1234..." value={form.notes} onChange={set("notes")} />
+        <label style={S.label}>
+          Notes
+          {renderStateBadge(micStates.notes || "idle")}
+        </label>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <textarea
+              style={{ ...inputStyleFor(micStates.notes || "idle"), resize: "vertical", minHeight: 72 }}
+              placeholder="e.g. Prefers morning appointments, gate code 1234..."
+              value={form.notes || ""}
+              onChange={set("notes")}
+            />
+          </div>
+          <FieldMic
+            state={micStates.notes || "idle"}
+            onTap={() => handleMicTap("notes")}
+            ariaLabel="Dictate notes"
+          />
+        </div>
       </div>
+
       <div style={{ display: "flex", gap: 8 }}>
         <button style={S.btn("primary", !form.name)} disabled={!form.name} onClick={onSave}>Save →</button>
-        <button style={S.btn("ghost")} onClick={onCancel}>Cancel</button>
+        <button style={S.btn("ghost")} onClick={handleCancel}>Cancel</button>
       </div>
     </div>
   );
