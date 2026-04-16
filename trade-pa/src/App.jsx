@@ -3632,7 +3632,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt }) {
+function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt, voiceHandle, handsFree }) {
   // ── Computed data ────────────────────────────────────────────────────────
   const today = new Date(); today.setHours(0,0,0,0);
   const todayJobs = jobs.filter(j => j.dateObj && isSameDay(new Date(j.dateObj), today));
@@ -3648,18 +3648,24 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt })
                  : hour >= 12 && hour < 18 ? "Good afternoon."
                  : "Good evening.";
 
-  // ── Local state for Session A (Session D will wire to actual hands-free system) ──
-  const [handsFree, setHandsFree] = useState(false);
+  // ── Local UI state (Session D: handsFree is now driven by voiceHandle) ──
   const [textMessage, setTextMessage] = useState("");
   const fileInputRef = useRef();
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
-  const goToVoice = () => setView("AI Assistant");
+  // ── Handlers (Session D — wired to real voice system via voiceHandle) ──
+  const onMicTap = () => {
+    // Start voice directly, then navigate to AI Assistant so the user sees the conversation.
+    try { voiceHandle?.current?.startVoice?.(); } catch {}
+    setView("AI Assistant");
+  };
+  const onHandsFreeTap = () => {
+    // Toggle the real hands-free state. Stays on Home — button reflects via handsFree prop.
+    try { voiceHandle?.current?.toggleHandsFree?.(); } catch {}
+  };
   const submitText = () => {
-    if (!textMessage.trim()) return;
-    // Session A bridge: persist the typed message in sessionStorage so the AIAssistant
-    // can pick it up. Session D will wire this directly into the AI input.
-    try { sessionStorage.setItem("dashboard-pending-message", textMessage.trim()); } catch {}
+    const trimmed = textMessage.trim();
+    if (!trimmed) return;
+    try { voiceHandle?.current?.sendText?.(trimmed); } catch {}
     setTextMessage("");
     setView("AI Assistant");
   };
@@ -3668,7 +3674,6 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt })
     if (!file || !onScanReceipt) return;
     onScanReceipt(file);
     e.target.value = "";
-    // After triggering, navigate to AI Assistant so the user can see the parsed result
     setView("AI Assistant");
   };
 
@@ -3822,7 +3827,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt })
           }} />
           {/* Mic button */}
           <button
-            onClick={goToVoice}
+            onClick={onMicTap}
             aria-label="Tap to speak"
             style={{
               position: "relative",
@@ -3864,7 +3869,7 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt })
 
       {/* Hands-free action button — morphs between start/stop */}
       <button
-        onClick={() => setHandsFree(v => !v)}
+        onClick={onHandsFreeTap}
         style={{
           background: handsFree ? `linear-gradient(180deg, ${C.amber}, #d97706)` : C.surfaceHigh,
           border: `1px solid ${handsFree ? `${C.amber}90` : C.border}`,
@@ -5110,7 +5115,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 500, hf_hours: 5 }, currentMonth = "" }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 500, hf_hours: 5 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -9232,6 +9237,38 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     }
     setLoading(false);
   };
+
+  // ── Session D — expose imperative voice handle to parent (Dashboard mic / hands-free / text) ──
+  // voiceHandle is a ref owned by AppInner that Dashboard reads. We re-populate it on every
+  // render so the closures over recording/handsFree/send/startRecording etc are always fresh.
+  useEffect(() => {
+    if (!voiceHandle) return;
+    voiceHandle.current = {
+      startVoice: () => {
+        // Toggle behaviour: tap once to start, tap again to stop-and-send.
+        if (recording) {
+          stopRecording();
+        } else {
+          startRecording(true);
+        }
+      },
+      toggleHandsFree: () => {
+        setHandsFree(v => !v);
+      },
+      sendText: (text) => {
+        if (!text || !text.trim()) return;
+        // Populate the input visually so the conversation reads naturally,
+        // then fire the existing send() path.
+        setInput("");
+        send(text);
+      },
+    };
+  });
+
+  // Notify parent when hands-free state changes so the Home button reflects real state.
+  useEffect(() => {
+    if (onHandsFreeChange) onHandsFreeChange(handsFree);
+  }, [handsFree, onHandsFreeChange]);
 
   const micLabel = transcribing ? "⏳ Transcribing..." : recording ? "⏹ Tap to stop" : "🎙 Voice note";
 
@@ -22845,6 +22882,9 @@ function AppInner() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  // Session D — voice-handle + hands-free mirror so Home can drive the AI directly
+  const voiceHandle = useRef({ startVoice() {}, toggleHandsFree() {}, sendText() {} });
+  const [aiHandsFree, setAiHandsFree] = useState(false);
   const [helpSlug, setHelpSlug] = useState(null);
 
   // ── Fair-use caps: usage tracking ─────────────────────────────
@@ -24156,7 +24196,7 @@ function AppInner() {
           }
           return null;
         })()}
-        {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} onScanReceipt={handleScanReceipt} />}
+        {view === "Dashboard" && <Dashboard setView={setView} jobs={jobs} invoices={invoices} enquiries={enquiries} brand={brand} onScanReceipt={handleScanReceipt} voiceHandle={voiceHandle} handsFree={aiHandsFree} />}
         {view === "JobsHub" && <JobsHub setView={setView} jobs={jobs} enquiries={enquiries} materials={materials} />}
         {view === "DiaryHub" && <DiaryHub setView={setView} jobs={jobs} reminders={reminders} />}
         {view === "AccountsHub" && <AccountsHub setView={setView} invoices={invoices} />}
@@ -24170,7 +24210,7 @@ function AppInner() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} />}
         {view === "Expenses" && <ExpensesTab user={user} />}
         {view === "CIS" && <CISStatementsTab user={user} />}
-        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} /></div>
+        <div style={{ display: view === "AI Assistant" ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} />}
