@@ -22761,15 +22761,13 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         borderTop: `1px solid ${C.border}`,
-        // Stabilises bar height when iOS keyboard opens and env(safe-area-inset-bottom)
-        // briefly collapses to 0 — the max() ensures a minimum ~6px always, so the
-        // bar doesn't "shrink" mid-interaction. Reduced from 10→6 for tighter visual.
-        // Set the bar's bottom padding to a flat 4px. The iOS home indicator
-        // area is handled by viewport-fit=cover + the bar being position:fixed
-        // bottom:0. Don't use env(safe-area-inset-bottom) here — it leaves far
-        // too much dead space on iPhone. If the home indicator visually brushes
-        // the labels, that's fine; tap targets are still the labels themselves.
-        paddingBottom: "4px",
+        paddingBottom: 0,
+        // transform:translateY physically shifts the bar down in pixels, bypassing
+        // any iOS safe-area clamping that affects bottom:0 positioning. Pulls the
+        // visible bar content (icons/labels) closer to the physical screen edge
+        // without changing the touch hit area layout. 20px = meets iOS home
+        // indicator guidance while reclaiming the dead space Connor flagged.
+        transform: "translateY(20px)",
       }}
     >
         <div style={{
