@@ -22762,12 +22762,17 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
         WebkitBackdropFilter: "blur(16px)",
         borderTop: `1px solid ${C.border}`,
         paddingBottom: 0,
+        // translateY(20px) shifts the bar physically down by 20px, bypassing iOS
+        // safe-area clamping on bottom:0. To avoid cropping labels, the grid below
+        // is taller (72 vs 52) and content is pinned to the TOP of the bar — the
+        // extra 20px of empty space at the bottom goes off-screen (invisible).
+        transform: "translateY(20px)",
       }}
     >
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(5, 1fr)",
-          height: 52,
+          height: 72,
           maxWidth: 520,
           margin: "0 auto",
         }}>
@@ -22786,11 +22791,11 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  justifyContent: "center",
+                  justifyContent: "flex-start",
                   gap: 4,
                   color: active ? C.amber : C.textDim,
                   fontFamily: "'DM Sans', sans-serif",
-                  padding: "4px 4px",
+                  padding: "6px 4px",
                   transition: "color 150ms ease",
                   position: "relative",
                 }}
@@ -24176,7 +24181,7 @@ function AppInner() {
             })}
           </nav>
         )}
-      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, paddingBottom: isDesktopBrowser ? undefined : "64px", ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
+      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, paddingBottom: isDesktopBrowser ? undefined : "60px", ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
         <div style={isDesktopBrowser ? { maxWidth: 720, margin: "0 auto", width: "100%" } : { display: "contents" }}>
         {(() => {
           // Guard — redirect member to Dashboard if they're on a tab they can't access
