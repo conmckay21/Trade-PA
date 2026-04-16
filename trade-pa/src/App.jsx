@@ -5403,6 +5403,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     () => onSilenceRef.current && onSilenceRef.current()
   );
 
+  // Phase 2: tracks active TTS playback (Deepgram Aura or Web Speech fallback).
+  // Declared BEFORE speak() to avoid TDZ in production bundles.
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
   // Update refs on every render so they always point to fresh closures
   onTranscriptRef.current = (text) => {
     if (!text) return;
@@ -5536,6 +5540,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     const clean = text.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
     if (!clean) return;
 
+    // Phase 2: flip speaking state ON before any TTS attempt so the UI can morph.
+    // Turned OFF in onSpeechEnd below, which is the single convergence point for
+    // Deepgram success, Deepgram→fallback, Web Speech end/error, and safety-timer abort.
+    setIsSpeaking(true);
+
     let speechEnded = false;
     let safetyTimer = null;
 
@@ -5544,6 +5553,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       speechEnded = true;
       clearTimeout(safetyTimer);
       ttsAudioRef.current = null;
+      setIsSpeaking(false);
       if (handsFreeRef.current) restartMicAfterSpeak(600);
     };
 
@@ -9370,8 +9380,56 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
   const isHome = messages.length === 0 && !loading;
 
+  // Phase 2: unified voice state — 'idle' | 'listening' | 'transcribing' | 'thinking' | 'speaking'.
+  // Derived (not stored) so it can't drift from the underlying flags. Priority: speaking >
+  // transcribing > thinking > listening > idle.  `loading` is AIAssistant's existing
+  // "waiting on Claude" flag, remapped here as the thinking phase.
+  const voiceState = isSpeaking ? "speaking"
+                   : transcribing ? "transcribing"
+                   : loading ? "thinking"
+                   : recording ? "listening"
+                   : "idle";
+
+  // Token map — colour + label + ring animation per state. One place to tune.
+  const voiceTokens = {
+    idle:         { color: handsFree ? C.green : C.amber, label: handsFree ? "Hands-free ready" : "Tap to speak",        sub: handsFree ? 'Say "hey trade pa"' : '"hey trade pa"', ring: "idle",   spinner: false, wave: false },
+    listening:    { color: C.red,                         label: "Listening — tap to stop",                              sub: "recording your voice",                             ring: "listen", spinner: false, wave: false },
+    transcribing: { color: C.amber,                       label: "Transcribing…",                                         sub: "turning speech into text",                          ring: "none",   spinner: true,  wave: false },
+    thinking:     { color: C.blue,                        label: "Thinking…",                                             sub: "Trade PA is working it out",                        ring: "none",   spinner: true,  wave: false },
+    speaking:     { color: C.green,                       label: "Speaking",                                              sub: "tap mic to interrupt",                              ring: "speak",  spinner: false, wave: true  },
+  };
+  const vt = voiceTokens[voiceState];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 200px)", minHeight: 400, gap: 12, overflow: "hidden" }}>
+
+      {/* Phase 2: unified keyframes — available in both home and chat views */}
+      <style>{`
+        @keyframes mic-listen-outer {
+          0%   { transform: scale(1);    opacity: 0.8; }
+          100% { transform: scale(1.35); opacity: 0;   }
+        }
+        @keyframes mic-speak-outer {
+          0%,100% { transform: scale(1);    opacity: 0.55; }
+          50%     { transform: scale(1.18); opacity: 0.9;  }
+        }
+        @keyframes mic-spin {
+          0%   { transform: rotate(0deg);   }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes typing-dot {
+          0%, 60%, 100% { transform: translateY(0);    opacity: 0.4; }
+          30%           { transform: translateY(-4px); opacity: 1;   }
+        }
+        @keyframes speak-wave {
+          0%, 100% { transform: scaleY(0.4); }
+          50%      { transform: scaleY(1);   }
+        }
+        @keyframes status-strip-in {
+          0%   { transform: translateY(6px); opacity: 0; }
+          100% { transform: translateY(0);   opacity: 1; }
+        }
+      `}</style>
 
       {/* ── HOME SCREEN ─────────────────────────────────────────────────── */}
       {isHome && (() => {
@@ -9424,38 +9482,78 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           </div>
 
-          {/* Mic hero */}
+          {/* Mic hero — Phase 2: 5-state morph (idle/listening/transcribing/thinking/speaking) */}
           <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "8px 0", gap: 18 }}>
             <div style={{ position: "relative", width: 170, height: 170 }}>
-              {/* Pulse ring (idle only) */}
-              {!recording && !transcribing && !loading && !handsFree && (
+              {/* Idle pulse — soft radial halo */}
+              {vt.ring === "idle" && (
                 <div style={{
                   position: "absolute", inset: 0, borderRadius: "50%",
-                  background: `radial-gradient(circle, ${C.amber}40 0%, ${C.amber}00 70%)`,
+                  background: `radial-gradient(circle, ${vt.color}40 0%, ${vt.color}00 70%)`,
                   animation: "mic-pulse-home 2.6s ease-out infinite",
+                  pointerEvents: "none",
+                }} />
+              )}
+              {/* Listening ring — tighter red pulse */}
+              {vt.ring === "listen" && (
+                <div style={{
+                  position: "absolute", inset: -6, borderRadius: "50%",
+                  border: `3px solid ${vt.color}`,
+                  animation: "mic-listen-outer 1.2s ease-out infinite",
+                  pointerEvents: "none",
+                }} />
+              )}
+              {/* Speaking ring — slow breathing halo */}
+              {vt.ring === "speak" && (
+                <div style={{
+                  position: "absolute", inset: -4, borderRadius: "50%",
+                  background: `radial-gradient(circle, ${vt.color}55 0%, ${vt.color}00 72%)`,
+                  animation: "mic-speak-outer 1.8s ease-in-out infinite",
+                  pointerEvents: "none",
+                }} />
+              )}
+              {/* Spinner ring — transcribing / thinking */}
+              {vt.spinner && (
+                <div style={{
+                  position: "absolute", inset: -4, borderRadius: "50%",
+                  border: `3px solid ${vt.color}22`,
+                  borderTopColor: vt.color,
+                  animation: "mic-spin 0.9s linear infinite",
                   pointerEvents: "none",
                 }} />
               )}
               <button
                 onClick={() => recording ? stopRecording() : startRecording(true)}
                 disabled={transcribing}
-                aria-label={recording ? "Stop recording" : "Tap to speak"}
+                aria-label={vt.label}
                 style={{
                   position: "relative",
                   width: 170, height: 170, borderRadius: "50%",
-                  background: recording ? C.red : handsFree ? `linear-gradient(180deg, #34d399, ${C.green})` : `linear-gradient(180deg, ${C.amber}, #d97706)`,
-                  border: `3px solid ${recording ? C.red + "80" : handsFree ? C.green + "80" : C.amber + "80"}`,
-                  boxShadow: recording ? `0 12px 40px -8px ${C.red}80, 0 0 0 16px ${C.red}22`
-                    : handsFree ? `0 12px 40px -8px ${C.green}80, 0 0 0 16px ${C.green}22`
-                    : `0 12px 40px -8px ${C.amber}80, 0 0 60px -12px ${C.amber}60`,
+                  background: voiceState === "listening" ? vt.color
+                    : voiceState === "idle" && handsFree ? `linear-gradient(180deg, #34d399, ${C.green})`
+                    : voiceState === "idle" ? `linear-gradient(180deg, ${C.amber}, #d97706)`
+                    : voiceState === "speaking" ? `linear-gradient(180deg, #34d399, ${C.green})`
+                    : voiceState === "thinking" ? `linear-gradient(180deg, #60a5fa, ${C.blue})`
+                    : `linear-gradient(180deg, ${C.amber}, #d97706)`,
+                  border: `3px solid ${vt.color}80`,
+                  boxShadow: `0 12px 40px -8px ${vt.color}80, 0 0 0 16px ${vt.color}22`,
                   cursor: transcribing ? "default" : "pointer",
                   display: "grid", placeItems: "center",
                   color: "#000", padding: 0,
-                  transition: "all 0.25s",
+                  transition: "background 0.3s, border-color 0.3s, box-shadow 0.3s",
                 }}
               >
-                {recording ? (
+                {voiceState === "listening" ? (
                   <div style={{ width: 34, height: 34, background: "#000", borderRadius: 5 }} />
+                ) : voiceState === "speaking" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, height: 40 }}>
+                    {[0, 1, 2, 3].map(i => (
+                      <div key={i} style={{
+                        width: 5, height: 24, borderRadius: 3, background: "#000",
+                        animation: `speak-wave 0.9s ease-in-out ${i * 0.12}s infinite`,
+                      }} />
+                    ))}
+                  </div>
                 ) : (
                   <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
@@ -9468,16 +9566,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               <div style={{
                 fontFamily: "'DM Sans', sans-serif",
                 fontSize: 15, fontWeight: 700,
-                color: recording ? C.red : transcribing ? C.amber : handsFree ? C.green : C.text,
+                color: voiceState === "idle" && !handsFree ? C.text : vt.color,
                 transition: "color 0.2s",
               }}>
-                {transcribing ? "Thinking..." : recording ? "Listening — tap to stop" : handsFree ? "Hands-free ready" : "Tap to speak"}
+                {vt.label}
               </div>
               <div style={{
                 fontFamily: "'DM Mono', monospace", fontSize: 10,
                 color: C.muted, letterSpacing: "0.08em",
               }}>
-                {handsFree ? 'Say "hey trade pa"' : '"hey trade pa"'}
+                {vt.sub}
               </div>
             </div>
           </div>
@@ -10532,21 +10630,58 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             {loading && (
               <div style={S.aiMsg("assistant")}>
                 <div style={S.avatar("assistant")}>⚡</div>
-                <div style={{ ...S.aiBubble("assistant"), color: C.muted }}>Working on it...</div>
+                <div style={{ ...S.aiBubble("assistant"), color: C.muted, display: "flex", alignItems: "center", gap: 4, padding: "10px 14px" }} aria-label="Trade PA is thinking">
+                  {[0, 1, 2].map(i => (
+                    <span key={i} style={{
+                      width: 7, height: 7, borderRadius: "50%",
+                      background: C.muted,
+                      display: "inline-block",
+                      animation: `typing-dot 1.2s ease-in-out ${i * 0.15}s infinite`,
+                    }} />
+                  ))}
+                </div>
               </div>
             )}
             <div ref={bottomRef} />
           </div>
 
-          {recording && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 6, fontSize: 12, color: C.red }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, animation: "bellPulse 1s ease infinite" }} />
-              Recording — tap Stop when done
-            </div>
-          )}
-          {transcribing && (
-            <div style={{ padding: "6px 12px", background: C.amber + "18", border: `1px solid ${C.amber}44`, borderRadius: 6, fontSize: 12, color: C.amber }}>
-              ⏳ Transcribing your voice note...
+          {/* Phase 2: unified status strip — one row, colour-coded by voiceState */}
+          {voiceState !== "idle" && (
+            <div
+              key={voiceState}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "6px 12px",
+                background: vt.color + "18",
+                border: `1px solid ${vt.color}44`,
+                borderRadius: 6,
+                fontSize: 12, color: vt.color,
+                animation: "status-strip-in 0.22s ease-out",
+              }}
+            >
+              {voiceState === "listening" && (
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: vt.color, animation: "bellPulse 1s ease infinite" }} />
+              )}
+              {(voiceState === "transcribing" || voiceState === "thinking") && (
+                <div style={{
+                  width: 12, height: 12, borderRadius: "50%",
+                  border: `2px solid ${vt.color}33`,
+                  borderTopColor: vt.color,
+                  animation: "mic-spin 0.8s linear infinite",
+                }} />
+              )}
+              {voiceState === "speaking" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 2, height: 12 }}>
+                  {[0, 1, 2].map(i => (
+                    <div key={i} style={{
+                      width: 2, height: 10, borderRadius: 1, background: vt.color,
+                      animation: `speak-wave 0.9s ease-in-out ${i * 0.12}s infinite`,
+                    }} />
+                  ))}
+                </div>
+              )}
+              <span style={{ fontWeight: 600 }}>{vt.label}</span>
+              <span style={{ color: vt.color + "aa", fontWeight: 400 }}>· {vt.sub}</span>
             </div>
           )}
         </>
@@ -10565,8 +10700,22 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         <button
           onClick={() => { unlockAudio(); recording ? stopRecording() : startRecording(true); }}
           disabled={transcribing}
-          style={{ padding: "10px 12px", borderRadius: 10, border: `1px solid ${recording ? C.red : C.border}`, background: recording ? C.red + "22" : C.surfaceHigh, color: recording ? C.red : C.muted, fontSize: 13, fontFamily: "'DM Mono',monospace", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-        >{transcribing ? "⏳" : recording ? "⏹" : "🎙"}</button>
+          aria-label={vt.label}
+          style={{
+            padding: "10px 12px", borderRadius: 10,
+            border: `1px solid ${voiceState === "idle" ? C.border : vt.color}`,
+            background: voiceState === "idle" ? C.surfaceHigh : vt.color + "22",
+            color: voiceState === "idle" ? C.muted : vt.color,
+            fontSize: 13, fontFamily: "'DM Mono',monospace",
+            cursor: transcribing ? "default" : "pointer",
+            whiteSpace: "nowrap", flexShrink: 0,
+            transition: "background 0.2s, border-color 0.2s, color 0.2s",
+          }}
+        >{voiceState === "transcribing" ? "⏳"
+          : voiceState === "thinking"   ? "…"
+          : voiceState === "speaking"   ? "🔊"
+          : voiceState === "listening"  ? "⏹"
+          :                               "🎙"}</button>
         <button onClick={() => { unlockAudio(); send(input); }} style={{ ...S.btn("primary"), padding: "11px 16px", flexShrink: 0 }} disabled={loading || !input.trim()}>Send</button>
       </div>
     </div>
