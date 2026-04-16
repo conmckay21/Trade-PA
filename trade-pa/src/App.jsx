@@ -11039,6 +11039,513 @@ Rules:
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
+// ─── DetailContactRow — full-width contact row used in Customer Detail modal ──
+// Green tinted icon if value present (whole row is tappable to call/email/maps).
+// Dashed grey icon + "+ Add" CTA if value missing (tap routes to Edit).
+function DetailContactRow({ kind, value, onTap, href, onAdd }) {
+  const labels = { phone: "PHONE", email: "EMAIL", address: "ADDRESS" };
+  const paths = {
+    phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />,
+    email: <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></>,
+    address: <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></>,
+  };
+  const present = !!value;
+
+  const rowContent = (
+    <>
+      <div style={{
+        width: 32, height: 32,
+        borderRadius: 10,
+        background: present ? `${C.green}1f` : "transparent",
+        border: present ? "none" : `1px dashed ${C.border}`,
+        color: present ? C.green : C.muted,
+        display: "grid",
+        placeItems: "center",
+        flexShrink: 0,
+      }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {paths[kind]}
+        </svg>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 9,
+          color: C.muted,
+          letterSpacing: "0.08em",
+          marginBottom: 2,
+        }}>{labels[kind]}</div>
+        {present ? (
+          <div style={{
+            fontSize: 13,
+            color: C.text,
+            lineHeight: 1.25,
+            wordBreak: "break-all",
+          }}>{value}</div>
+        ) : (
+          <div style={{
+            fontSize: 12,
+            color: C.muted,
+            fontStyle: "italic",
+          }}>Not added yet</div>
+        )}
+      </div>
+      {!present && (
+        <span style={{
+          fontSize: 11,
+          color: C.amber,
+          fontWeight: 700,
+          flexShrink: 0,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>+ Add</span>
+      )}
+    </>
+  );
+
+  const baseStyle = {
+    padding: "10px 14px",
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    borderTop: `1px solid ${C.border}`,
+    cursor: (present ? (onTap || href) : onAdd) ? "pointer" : "default",
+    textDecoration: "none",
+    color: "inherit",
+  };
+
+  // Three render paths: <a> for href (mailto/tel native), button-style div for onTap, button for onAdd
+  if (present && href) {
+    return <a href={href} style={baseStyle}>{rowContent}</a>;
+  }
+  if (present && onTap) {
+    return <div onClick={onTap} style={baseStyle}>{rowContent}</div>;
+  }
+  if (!present && onAdd) {
+    return <div onClick={onAdd} style={baseStyle}>{rowContent}</div>;
+  }
+  return <div style={baseStyle}>{rowContent}</div>;
+}
+
+// ─── ContactIcon — 22px coloured square showing phone/email/address presence ──
+// Used by the Customers list and Customer Detail. Green when the field is set,
+// dashed grey outline when missing.
+function ContactIcon({ kind, present }) {
+  const paths = {
+    phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />,
+    email: <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></>,
+    address: <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></>,
+  };
+  return (
+    <div
+      title={`${kind}${present ? "" : " — not set"}`}
+      style={{
+        width: 22, height: 22,
+        borderRadius: 6,
+        display: "grid",
+        placeItems: "center",
+        background: present ? `${C.green}1f` : "transparent",
+        border: present ? "none" : `1px dashed ${C.border}`,
+        color: present ? C.green : C.muted,
+        flexShrink: 0,
+      }}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {paths[kind]}
+      </svg>
+    </div>
+  );
+}
+
+// ─── vCard parser (used by ImportContacts) ────────────────────────────────────
+// Parses a vCard (.vcf) file into customer-shaped objects.
+// Handles vCard 3.0 + 4.0 line folding, common parameter syntax, skips nameless cards.
+function parseVCard(text) {
+  if (!text) return [];
+  const cards = String(text).split(/BEGIN:VCARD/i).slice(1);
+  return cards.map(card => {
+    const body = card.split(/END:VCARD/i)[0];
+    // RFC 6350 line unfolding: lines starting with whitespace continue prior line
+    const lines = body.replace(/\r?\n[ \t]/g, "").split(/\r?\n/);
+    const get = (key) => {
+      const re = new RegExp(`^${key}(;[^:]*)?:(.*)$`, "i");
+      for (const line of lines) {
+        const m = line.match(re);
+        if (m) return m[2].trim();
+      }
+      return "";
+    };
+    const fn = get("FN");
+    const tel = get("TEL").replace(/[^0-9+ ()-]/g, "").trim();
+    const email = get("EMAIL").toLowerCase();
+    // ADR per RFC: PO;Ext;Street;Locality;Region;Postcode;Country
+    const adrRaw = get("ADR");
+    let address = "";
+    if (adrRaw) {
+      const adrParts = adrRaw.split(";").slice(2);
+      address = adrParts.filter(Boolean).join(", ").trim();
+    }
+    const note = get("NOTE");
+    return { name: fn, phone: tel, email, address, notes: note };
+  }).filter(c => c.name);
+}
+
+// ─── ImportContacts — smart device detection + preview ────────────────────────
+// Android Chrome: uses Contact Picker API (instant native picker).
+// iOS / desktop / unsupported: falls back to .vcf file upload.
+// Either path lands in a preview modal where the user picks which contacts
+// to import, then bulk-adds them via the parent's onImport callback.
+function ImportContacts({ onImport, currentCustomers }) {
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState(null); // null | array of contact objects
+  const [selectedIdx, setSelectedIdx] = useState(new Set());
+  const fileInputRef = useRef(null);
+
+  const hasContactsAPI = typeof navigator !== "undefined"
+    && "contacts" in navigator
+    && navigator.contacts && typeof navigator.contacts.select === "function";
+
+  const handleClick = async () => {
+    if (busy) return;
+    if (hasContactsAPI) {
+      try {
+        setBusy(true);
+        const contacts = await navigator.contacts.select(
+          ["name", "tel", "email", "address"],
+          { multiple: true }
+        );
+        const normalised = contacts.map(c => ({
+          name: (c.name && c.name[0]) || "",
+          phone: (c.tel && c.tel[0]) || "",
+          email: (c.email && c.email[0]) || "",
+          address: (c.address && c.address[0])
+            ? [c.address[0].streetAddress, c.address[0].city, c.address[0].postalCode]
+                .filter(Boolean).join(", ")
+            : "",
+          notes: "",
+        })).filter(c => c.name);
+        if (normalised.length === 0) {
+          alert("No contacts selected.");
+        } else {
+          setPending(normalised);
+          setSelectedIdx(new Set(normalised.map((_, i) => i)));
+        }
+      } catch (err) {
+        console.error("Contact picker:", err);
+        if (err.name !== "AbortError") {
+          alert("Could not access contacts: " + (err.message || err.name));
+        }
+      } finally {
+        setBusy(false);
+      }
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try {
+      const text = await file.text();
+      const contacts = parseVCard(text);
+      if (contacts.length === 0) {
+        alert("No contacts found. Make sure this is a .vcf or vCard file from your phone's Contacts app.");
+      } else {
+        setPending(contacts);
+        setSelectedIdx(new Set(contacts.map((_, i) => i)));
+      }
+    } catch (err) {
+      console.error("vCard parse:", err);
+      alert("Could not read this file. Try a different .vcf export.");
+    } finally {
+      setBusy(false);
+      e.target.value = ""; // reset so same file can be re-selected
+    }
+  };
+
+  const toggleSelect = (idx) => {
+    setSelectedIdx(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+
+  const confirmImport = () => {
+    const toImport = pending.filter((_, i) => selectedIdx.has(i));
+    if (toImport.length === 0) {
+      alert("Select at least one contact to import.");
+      return;
+    }
+    // Detect duplicates by name (case-insensitive, trimmed)
+    const existingNames = new Set(currentCustomers.map(c => (c.name || "").toLowerCase().trim()));
+    const novel = toImport.filter(c => !existingNames.has(c.name.toLowerCase().trim()));
+    const dupCount = toImport.length - novel.length;
+    if (novel.length === 0) {
+      alert(`All ${toImport.length} selected ${toImport.length === 1 ? "contact is" : "contacts are"} already in your customer list.`);
+      return;
+    }
+    if (dupCount > 0) {
+      const ok = window.confirm(
+        `${dupCount} of ${toImport.length} are already saved (matched by name).\n\nImport only the ${novel.length} new ${novel.length === 1 ? "one" : "ones"}?`
+      );
+      if (!ok) return;
+    }
+    onImport(novel);
+    setPending(null);
+    setSelectedIdx(new Set());
+  };
+
+  return (
+    <>
+      {/* Banner — rendered inline by parent's Add modal */}
+      <div
+        onClick={handleClick}
+        role="button"
+        aria-label="Import from contacts"
+        style={{
+          margin: "10px 20px 0",
+          padding: "12px 14px",
+          background: C.surfaceHigh,
+          border: `1px solid ${C.border}`,
+          borderRadius: 10,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          cursor: busy ? "wait" : "pointer",
+          opacity: busy ? 0.6 : 1,
+          transition: "all 150ms ease",
+        }}
+      >
+        <div style={{
+          width: 32, height: 32,
+          borderRadius: "50%",
+          background: `${C.amber}26`,
+          border: `1px solid ${C.amber}66`,
+          color: C.amber,
+          display: "grid",
+          placeItems: "center",
+          flexShrink: 0,
+        }}>
+          {/* address book icon */}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>
+            {busy ? "Loading…" : "Import from contacts"}
+          </div>
+          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: C.textDim }}>
+            {hasContactsAPI ? "Pick from your phone's address book" : "Upload a .vcf file from your contacts app"}
+          </div>
+        </div>
+        <div style={{ color: C.textDim, fontSize: 18 }}>→</div>
+      </div>
+
+      {/* Hidden file input — only used on platforms without Contact Picker API */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".vcf,.vcard,text/vcard,text/x-vcard"
+        style={{ display: "none" }}
+        onChange={handleFile}
+      />
+
+      {/* Preview modal — appears after picker/upload returns contacts */}
+      {pending && (
+        <div
+          style={{
+            position: "fixed", inset: 0,
+            background: "#000c",
+            display: "flex", alignItems: "flex-start", justifyContent: "center",
+            zIndex: 320, padding: 16,
+            paddingTop: "max(52px, env(safe-area-inset-top, 52px))",
+            overflowY: "auto",
+          }}
+        >
+          <div style={{
+            maxWidth: 440, width: "100%",
+            marginBottom: 16,
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 14,
+            overflow: "hidden",
+            boxShadow: `0 0 0 1px rgba(255,255,255,0.02), 0 24px 48px -12px rgba(0,0,0,0.6), 0 0 80px -20px ${C.amber}1a`,
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: "20px 20px 16px",
+              borderBottom: `1px solid ${C.border}66`,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
+            }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.14em", color: C.amber, fontWeight: 500 }}>Import contacts</div>
+                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.1, color: C.text }}>
+                  {pending.length} {pending.length === 1 ? "contact" : "contacts"} found
+                </div>
+              </div>
+              <button
+                onClick={() => { setPending(null); setSelectedIdx(new Set()); }}
+                aria-label="Cancel import"
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${C.border}`,
+                  color: C.textDim,
+                  width: 32, height: 32, borderRadius: 10,
+                  display: "grid", placeItems: "center",
+                  cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0,
+                  flexShrink: 0,
+                }}
+              >×</button>
+            </div>
+
+            {/* Select all/none + count */}
+            <div style={{
+              padding: "12px 20px",
+              borderBottom: `1px solid ${C.border}66`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: C.textDim, letterSpacing: "0.04em" }}>
+                {selectedIdx.size} of {pending.length} selected
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => setSelectedIdx(new Set(pending.map((_, i) => i)))}
+                  style={{
+                    background: "transparent", border: `1px solid ${C.border}`,
+                    color: C.textDim, padding: "5px 10px", borderRadius: 6,
+                    fontFamily: "'DM Mono', monospace", fontSize: 10,
+                    textTransform: "uppercase", letterSpacing: "0.08em",
+                    cursor: "pointer",
+                  }}
+                >All</button>
+                <button
+                  onClick={() => setSelectedIdx(new Set())}
+                  style={{
+                    background: "transparent", border: `1px solid ${C.border}`,
+                    color: C.textDim, padding: "5px 10px", borderRadius: 6,
+                    fontFamily: "'DM Mono', monospace", fontSize: 10,
+                    textTransform: "uppercase", letterSpacing: "0.08em",
+                    cursor: "pointer",
+                  }}
+                >None</button>
+              </div>
+            </div>
+
+            {/* Contact list */}
+            <div style={{ maxHeight: "55vh", overflowY: "auto", padding: "8px 16px" }}>
+              {pending.map((c, i) => {
+                const isSel = selectedIdx.has(i);
+                return (
+                  <div
+                    key={i}
+                    onClick={() => toggleSelect(i)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: "10px 12px",
+                      margin: "4px 0",
+                      borderRadius: 10,
+                      background: isSel ? `${C.amber}14` : C.surfaceHigh,
+                      border: `1px solid ${isSel ? `${C.amber}66` : C.border}`,
+                      cursor: "pointer",
+                      transition: "all 150ms ease",
+                    }}
+                  >
+                    {/* Checkbox */}
+                    <div style={{
+                      width: 20, height: 20, borderRadius: 5,
+                      border: `1.5px solid ${isSel ? C.amber : C.border}`,
+                      background: isSel ? C.amber : "transparent",
+                      display: "grid", placeItems: "center",
+                      flexShrink: 0,
+                      transition: "all 150ms ease",
+                    }}>
+                      {isSel && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </div>
+                    {/* Avatar */}
+                    <div style={{
+                      width: 36, height: 36, borderRadius: "50%",
+                      background: `linear-gradient(135deg, ${C.amber}40, ${C.amber}20)`,
+                      border: `1px solid ${C.amber}40`,
+                      display: "grid", placeItems: "center",
+                      color: C.amber, fontFamily: "'DM Mono', monospace",
+                      fontWeight: 700, fontSize: 12,
+                      flexShrink: 0,
+                    }}>
+                      {(c.name || "?").split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
+                    </div>
+                    {/* Name + sub */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {c.name}
+                      </div>
+                      <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: C.textDim, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {[c.phone, c.email].filter(Boolean).join(" · ") || "no contact details"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Action row */}
+            <div style={{
+              padding: "16px 20px 20px",
+              borderTop: `1px solid ${C.border}66`,
+              display: "flex",
+              gap: 10,
+              background: C.surface,
+            }}>
+              <button
+                onClick={() => { setPending(null); setSelectedIdx(new Set()); }}
+                style={{
+                  flex: 1, height: 48, borderRadius: 10,
+                  background: "transparent",
+                  border: `1px solid ${C.border}`,
+                  color: C.textDim,
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 15, fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >Cancel</button>
+              <button
+                onClick={confirmImport}
+                disabled={selectedIdx.size === 0}
+                style={{
+                  flex: 1, height: 48, borderRadius: 10,
+                  background: selectedIdx.size === 0 ? C.surfaceHigh : C.amber,
+                  border: "none",
+                  color: selectedIdx.size === 0 ? C.muted : "#000",
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 15, fontWeight: 600,
+                  cursor: selectedIdx.size === 0 ? "not-allowed" : "pointer",
+                  opacity: selectedIdx.size === 0 ? 0.6 : 1,
+                }}
+              >
+                Import {selectedIdx.size > 0 ? `${selectedIdx.size} ` : ""}→
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── Customers ────────────────────────────────────────────────────────────────
 function Customers({ customers, setCustomers, jobs, invoices, setView, user, makeCall, hasTwilio }) {
   const [showAdd, setShowAdd] = useState(false);
@@ -11088,184 +11595,766 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
   const jobsForCustomer = (name) => jobs.filter(j => j.customer?.toLowerCase() === name?.toLowerCase());
   const invoicesForCustomer = (name) => invoices.filter(i => i.customer?.toLowerCase() === name?.toLowerCase());
 
+  // Customers missing both phone and email (drives the meta-line warning)
+  const missingDetailsCount = customers.filter(c => !c.phone && !c.email).length;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Customers</div>
-        <button style={S.btn("primary")} onClick={() => { setForm({ name: "", phone: "", email: "", address: "", notes: "" }); setShowAdd(true); }}>+ Add Customer</button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* ─── Page header ────────────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+          <div style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: 10,
+            textTransform: "uppercase",
+            letterSpacing: "0.14em",
+            color: C.amber,
+            fontWeight: 500,
+          }}>Customers</div>
+          <div style={{
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: 24,
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            color: C.text,
+            lineHeight: 1.1,
+          }}>
+            All customers
+          </div>
+          <div style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: 11,
+            color: C.textDim,
+            marginTop: 2,
+            letterSpacing: "0.02em",
+          }}>
+            <span style={{ color: C.text, fontWeight: 600 }}>{customers.length}</span>
+            {" "}{customers.length === 1 ? "customer" : "customers"}
+            {missingDetailsCount > 0 && (
+              <>
+                {" · "}
+                <span style={{ color: C.red }}>{missingDetailsCount} missing details</span>
+              </>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={() => { setForm({ name: "", phone: "", email: "", address: "", notes: "" }); setShowAdd(true); }}
+          style={{
+            background: C.amber,
+            color: "#000",
+            border: "none",
+            borderRadius: 10,
+            padding: "10px 14px",
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: "-0.01em",
+            cursor: "pointer",
+            boxShadow: `0 4px 12px ${C.amber}33`,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            flexShrink: 0,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span style={{ fontSize: 16, lineHeight: 1, marginTop: -1 }}>+</span> Add
+        </button>
       </div>
 
-      {/* Search */}
-      <input
-        style={S.input}
-        placeholder="Search by name, email or phone..."
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-      />
+      {/* ─── Search bar (mockup style with icon) ───────────────────── */}
+      <div style={{
+        background: C.surfaceHigh,
+        border: `1px solid ${C.border}`,
+        borderRadius: 12,
+        padding: "10px 12px",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+        <input
+          placeholder="Search by name, phone or email…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            flex: 1,
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: C.text,
+            fontSize: 16,
+            fontFamily: "'DM Sans', sans-serif",
+            minWidth: 0,
+          }}
+        />
+      </div>
 
-      {/* Customer list */}
-      <div style={S.card}>
-        <div style={S.sectionTitle}>All Customers ({customers.length})</div>
-        {customers.length === 0
-          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No customers yet. Add one above or they'll be added automatically when you book jobs via the AI Assistant.</div>
-          : filtered.length === 0
-          ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No customers match your search.</div>
-          : filtered.map(c => {
+      {/* ─── Customer cards ────────────────────────────────────────── */}
+      {customers.length === 0 ? (
+        <div style={{
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderRadius: 14,
+          padding: "32px 20px",
+          textAlign: "center",
+        }}>
+          <div style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: 11,
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            color: C.muted,
+            marginBottom: 8,
+          }}>No customers yet</div>
+          <div style={{ fontSize: 14, color: C.textDim, lineHeight: 1.5 }}>
+            Tap <strong style={{ color: C.amber }}>+ Add</strong> to add one manually,{" "}
+            import from your phone's contacts, or they'll be added automatically{" "}
+            when you book jobs via the AI Assistant.
+          </div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderRadius: 14,
+          padding: 24,
+          textAlign: "center",
+          color: C.textDim,
+          fontSize: 14,
+        }}>No customers match your search.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {filtered.map(c => {
             const cJobs = jobsForCustomer(c.name);
             const cInvoices = invoicesForCustomer(c.name);
             const totalSpend = cInvoices.reduce((s, i) => s + (i.amount || 0), 0);
+            const hasPhone = !!c.phone;
+            const hasEmail = !!c.email;
+            const hasAddr = !!c.address;
             return (
-              <div key={c.id} onClick={() => setSelected(c)} style={{ ...S.row, cursor: "pointer" }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.amber + "22", border: `1px solid ${C.amber}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: C.amber, flexShrink: 0 }}>
-                  {c.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+              <div
+                key={c.id}
+                onClick={() => setSelected(c)}
+                style={{
+                  background: C.surfaceHigh,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 14,
+                  padding: 12,
+                  cursor: "pointer",
+                  display: "grid",
+                  gridTemplateColumns: "40px 1fr auto",
+                  gap: 12,
+                  alignItems: "center",
+                  transition: "background 150ms ease",
+                }}
+              >
+                {/* Avatar */}
+                <div style={{
+                  width: 40, height: 40,
+                  borderRadius: "50%",
+                  background: `linear-gradient(135deg, ${C.amber}40, ${C.amber}20)`,
+                  border: `1.5px solid ${C.amber}4d`,
+                  display: "grid",
+                  placeItems: "center",
+                  color: C.amber,
+                  fontFamily: "'DM Mono', monospace",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  letterSpacing: "0.02em",
+                  flexShrink: 0,
+                }}>
+                  {c.name.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?"}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>
-                    {[c.phone, c.email].filter(Boolean).join(" · ") || "No contact details"}
+
+                {/* Body */}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: C.text,
+                    lineHeight: 1.2,
+                    marginBottom: 3,
+                    letterSpacing: "-0.01em",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>{c.name}</div>
+                  <div style={{
+                    fontSize: 11.5,
+                    color: c.address ? C.textDim : C.muted,
+                    fontStyle: c.address ? "normal" : "italic",
+                    lineHeight: 1.3,
+                    marginBottom: 6,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {c.address || "no address"}
+                  </div>
+                  {/* Contact icons row */}
+                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                    <ContactIcon kind="phone" present={hasPhone} />
+                    <ContactIcon kind="email" present={hasEmail} />
+                    <ContactIcon kind="address" present={hasAddr} />
                   </div>
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, textAlign: "right", flexShrink: 0 }}>
-                  {cJobs.length > 0 && <div>{cJobs.length} job{cJobs.length !== 1 ? "s" : ""}</div>}
-                  {totalSpend > 0 && <div style={{ color: C.amber }}>£{totalSpend.toLocaleString()}</div>}
+
+                {/* Right column */}
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  gap: 2,
+                  flexShrink: 0,
+                }}>
+                  {cJobs.length > 0 && (
+                    <div style={{
+                      fontSize: 11,
+                      color: C.textDim,
+                      fontFamily: "'DM Mono', monospace",
+                    }}>
+                      {cJobs.length} job{cJobs.length !== 1 ? "s" : ""}
+                    </div>
+                  )}
+                  {totalSpend > 0 && (
+                    <div style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: C.amber,
+                      fontFamily: "'DM Mono', monospace",
+                      letterSpacing: "-0.02em",
+                    }}>
+                      £{totalSpend.toLocaleString()}
+                    </div>
+                  )}
+                  {cJobs.length === 0 && totalSpend === 0 && (
+                    <div style={{ fontSize: 14, color: C.muted }}>→</div>
+                  )}
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, marginLeft: 10 }}>→</div>
               </div>
             );
-          })
-        }
-      </div>
-
-      {/* Customer Detail Modal */}
-      {selected && !editing && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => setSelected(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 500, width: "100%", marginBottom: 16 }}>
-            {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-              <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.amber + "22", border: `1px solid ${C.amber}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: C.amber, flexShrink: 0 }}>
-                  {selected.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
-                </div>
-                <div>
-                  <div style={{ fontSize: 17, fontWeight: 700 }}>{selected.name}</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{selected.address || "No address"}</div>
-                </div>
-              </div>
-              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
-            </div>
-
-            {/* Tab switcher */}
-            <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
-              {["overview", "calls"].map(t => (
-                <button key={t} onClick={() => setCustomerTab(t)} style={{ ...S.btn(customerTab === t ? "primary" : "ghost"), fontSize: 11, padding: "4px 12px", textTransform: "capitalize" }}>{t === "calls" ? `📞 Calls${callLogs.length > 0 ? ` (${callLogs.length})` : ""}` : "Overview"}</button>
-              ))}
-            </div>
-
-            {customerTab === "calls" && (
-              <div>
-                {callLogs.length === 0 ? (
-                  <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "20px 0" }}>
-                    No recorded calls yet.<br/>
-                    <span style={{ fontSize: 11 }}>Calls are recorded when this customer rings through your Trade PA number.</span>
-                  </div>
-                ) : callLogs.map(log => (
-                  <div key={log.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: 14, marginBottom: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 16 }}>{log.direction === "outbound" ? "📲" : "📞"}</span>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{new Date(log.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
-                          <div style={{ fontSize: 11, color: C.muted }}>{log.direction === "outbound" ? "Outbound · " : "Inbound · "}{Math.floor((log.duration_seconds || 0) / 60)}m {(log.duration_seconds || 0) % 60}s</div>
-                        </div>
-                      </div>
-                      <span style={S.badge(
-                        log.category === "existing_job" ? C.green :
-                        log.category === "new_enquiry" ? C.blue :
-                        log.category === "invoice_payment" ? C.amber : C.muted
-                      )}>{log.category?.replace(/_/g, " ")}</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6, marginBottom: 6 }}>{log.summary}</div>
-                    {log.key_details && <div style={{ fontSize: 11, color: C.amber, fontStyle: "italic" }}>📌 {log.key_details}</div>}
-                    {log.action_needed && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Action: {log.action_needed}</div>}
-                    {log.recording_url && (
-                      <audio controls style={{ width: "100%", marginTop: 8, height: 32 }}
-                        src={`/api/calls/audio?url=${encodeURIComponent(log.recording_url)}`}>
-                        Your browser does not support audio playback.
-                      </audio>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {customerTab === "overview" && (<>
-            {/* Contact details */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Phone</div>
-                {selected.phone
-                  ? hasTwilio
-                    ? <div onClick={() => makeCall(selected.phone, selected.name)} style={{ fontSize: 13, color: C.green, fontFamily: "'DM Mono',monospace", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>📞 {selected.phone} <span style={{ fontSize: 10, color: C.muted }}>(tap to call)</span></div>
-                    : <a href={`tel:${selected.phone.replace(/\s/g, "")}`} style={{ fontSize: 13, color: C.amber, textDecoration: "none", fontFamily: "'DM Mono',monospace" }}>📞 {selected.phone}</a>
-                  : <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>Not set</div>}
-              </div>
-              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Email</div>
-                {selected.email
-                  ? <a href={`mailto:${selected.email}`} style={{ fontSize: 12, color: C.blue, textDecoration: "none", wordBreak: "break-all" }}>✉ {selected.email}</a>
-                  : <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>Not set</div>}
-              </div>
-            </div>
-
-            {/* Notes */}
-            {selected.notes && (
-              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8, marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Notes</div>
-                <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{selected.notes}</div>
-              </div>
-            )}
-
-            {/* Job history */}
-            {jobsForCustomer(selected.name).length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 10 }}>Job History</div>
-                {jobsForCustomer(selected.name).map(j => (
-                  <div key={j.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>
-                    <span style={{ color: C.text }}>{j.type}</span>
-                    <span style={{ color: C.muted }}>{j.dateObj ? new Date(j.dateObj).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : j.date}</span>
-                    {j.value > 0 && <span style={{ color: C.amber }}>{fmtAmount(j.value)}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Invoice history */}
-            {invoicesForCustomer(selected.name).length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 10 }}>Invoice History</div>
-                {invoicesForCustomer(selected.name).map(i => (
-                  <div key={i.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>
-                    <span style={{ color: C.muted }}>{i.id}</span>
-                    <span style={{ color: C.text }}>{fmtAmount(i.amount)}</span>
-                    <span style={S.badge(statusColor[i.status] || C.muted)}>{statusLabel[i.status] || i.status}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Actions */}
-            {customerTab === "overview" && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button style={S.btn("primary")} onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}>Edit</button>
-              {selected.phone && <a href={`tel:${selected.phone.replace(/\s/g, "")}`} style={{ ...S.btn("ghost"), textDecoration: "none" }}>📞 Call</a>}
-              {selected.email && <a href={`mailto:${selected.email}`} style={{ ...S.btn("ghost"), textDecoration: "none" }}>✉ Email</a>}
-              <button style={{ ...S.btn("ghost"), color: C.red, marginLeft: "auto" }} onClick={() => del(selected.id)}>Delete</button>
-            </div>
-            )}
-            </>)}
-          </div>
+          })}
         </div>
       )}
+
+      {/* ─── Customer Detail Modal (mockup-styled) ─────────────────── */}
+      {selected && !editing && (() => {
+        const cJobs = jobsForCustomer(selected.name);
+        const cInvoices = invoicesForCustomer(selected.name);
+        const lifetime = cInvoices.reduce((s, i) => s + (i.amount || 0), 0);
+        const outstanding = cInvoices
+          .filter(i => i.status !== "paid")
+          .reduce((s, i) => s + (i.amount || 0), 0);
+        const hasOutstanding = outstanding > 0;
+        // Last seen: latest of any invoice/job/call timestamp
+        const allDates = [
+          ...cInvoices.map(i => i.created_at ? new Date(i.created_at).getTime() : 0),
+          ...cJobs.map(j => j.dateObj ? new Date(j.dateObj).getTime() : 0),
+          ...callLogs.map(l => l.created_at ? new Date(l.created_at).getTime() : 0),
+        ].filter(Boolean);
+        const lastSeen = allDates.length > 0 ? Math.max(...allDates) : 0;
+        const lastSeenDisplay = lastSeen > 0
+          ? new Date(lastSeen).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+          : "—";
+
+        return (
+        <div
+          onClick={() => setSelected(null)}
+          style={{
+            position: "fixed", inset: 0,
+            background: "#000c",
+            display: "flex", alignItems: "flex-start", justifyContent: "center",
+            zIndex: 300, padding: 16,
+            paddingTop: "max(52px, env(safe-area-inset-top, 52px))",
+            overflowY: "auto",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: 500, width: "100%",
+              marginBottom: 16,
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 14,
+              overflow: "hidden",
+              boxShadow: `0 0 0 1px rgba(255,255,255,0.02), 0 24px 48px -12px rgba(0,0,0,0.6), 0 0 80px -20px ${C.amber}1a`,
+            }}
+          >
+            {/* App bar — back / eyebrow / edit shortcut */}
+            <div style={{
+              padding: "12px 16px",
+              borderBottom: `1px solid ${C.border}66`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}>
+              <button
+                onClick={() => setSelected(null)}
+                aria-label="Back"
+                style={{
+                  background: "transparent", border: "none",
+                  color: C.text, padding: 6, cursor: "pointer",
+                  display: "grid", placeItems: "center",
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div style={{
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 11,
+                color: C.muted,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+              }}>Customer</div>
+              <button
+                onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
+                aria-label="Edit"
+                style={{
+                  background: "transparent", border: "none",
+                  color: C.text, padding: 6, cursor: "pointer",
+                  display: "grid", placeItems: "center",
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5m-1.414-9.414a2 2 0 1 1 2.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Identity */}
+            <div style={{
+              padding: "16px 18px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+            }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: "50%",
+                background: `linear-gradient(135deg, ${C.amber}40, ${C.amber}20)`,
+                border: `2px solid ${C.amber}66`,
+                display: "grid",
+                placeItems: "center",
+                color: C.amber,
+                fontFamily: "'DM Mono', monospace",
+                fontWeight: 700,
+                fontSize: 17,
+                flexShrink: 0,
+              }}>
+                {selected.name.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 22,
+                  fontWeight: 700,
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1.15,
+                  color: C.text,
+                }}>{selected.name}</div>
+              </div>
+            </div>
+
+            {/* Summary band */}
+            <div style={{
+              margin: "0 16px 14px",
+              padding: "12px 14px",
+              background: hasOutstanding
+                ? `linear-gradient(135deg, ${C.red}10, ${C.amber}08)`
+                : `linear-gradient(135deg, ${C.amber}0d, ${C.amber}05)`,
+              border: hasOutstanding
+                ? `1px solid ${C.red}40`
+                : `1px solid ${C.amber}33`,
+              borderRadius: 12,
+            }}>
+              {hasOutstanding && (
+                <div style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10,
+                  color: C.red,
+                  letterSpacing: "0.12em",
+                  fontWeight: 700,
+                  marginBottom: 8,
+                }}>
+                  £{outstanding.toLocaleString()} OUTSTANDING
+                </div>
+              )}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: 10,
+              }}>
+                {[
+                  { label: "LIFETIME", value: lifetime > 0 ? `£${lifetime.toLocaleString()}` : "—", color: C.text },
+                  { label: "OUTSTANDING", value: outstanding > 0 ? `£${outstanding.toLocaleString()}` : "£0", color: outstanding > 0 ? C.red : C.text },
+                  { label: "JOBS", value: cJobs.length || "0", color: C.text },
+                  { label: "LAST SEEN", value: lastSeenDisplay, color: C.text, fontSize: 12 },
+                ].map((stat, i) => (
+                  <div key={i} style={{ display: "flex", flexDirection: "column" }}>
+                    <div style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: 9,
+                      color: C.muted,
+                      letterSpacing: "0.06em",
+                      fontWeight: 600,
+                      marginBottom: 3,
+                    }}>{stat.label}</div>
+                    <div style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: stat.fontSize || 14,
+                      fontWeight: 700,
+                      color: stat.color,
+                      letterSpacing: "-0.02em",
+                      lineHeight: 1.1,
+                    }}>{stat.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Scroll content */}
+            <div style={{ padding: "0 16px 8px", display: "flex", flexDirection: "column", gap: 14 }}>
+
+              {/* CONTACT section */}
+              <div>
+                <div style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10,
+                  color: C.muted,
+                  letterSpacing: "0.14em",
+                  fontWeight: 700,
+                  marginBottom: 6,
+                  paddingLeft: 2,
+                }}>CONTACT</div>
+                <div style={{
+                  background: C.surfaceHigh,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 12,
+                  overflow: "hidden",
+                }}>
+                  <DetailContactRow
+                    kind="phone"
+                    value={selected.phone}
+                    onTap={selected.phone ? (hasTwilio ? () => makeCall(selected.phone, selected.name) : null) : null}
+                    href={!hasTwilio && selected.phone ? `tel:${selected.phone.replace(/\s/g, "")}` : null}
+                    onAdd={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
+                  />
+                  <DetailContactRow
+                    kind="email"
+                    value={selected.email}
+                    href={selected.email ? `mailto:${selected.email}` : null}
+                    onAdd={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
+                  />
+                  <DetailContactRow
+                    kind="address"
+                    value={selected.address}
+                    onAdd={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
+                  />
+                </div>
+              </div>
+
+              {/* INVOICES */}
+              {cInvoices.length > 0 && (
+                <div>
+                  <div style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: 10,
+                    color: C.muted,
+                    letterSpacing: "0.14em",
+                    fontWeight: 700,
+                    marginBottom: 6,
+                    paddingLeft: 2,
+                  }}>INVOICES · {cInvoices.length}</div>
+                  <div style={{
+                    background: C.surfaceHigh,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                  }}>
+                    {cInvoices.map((i, idx) => (
+                      <div key={i.id} style={{
+                        padding: "11px 14px",
+                        borderTop: idx > 0 ? `1px solid ${C.border}` : "none",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, letterSpacing: "-0.01em" }}>
+                            {i.id}
+                          </span>
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: "-0.02em" }}>
+                            {fmtAmount(i.amount)}
+                          </span>
+                        </div>
+                        <div>
+                          <span style={S.badge(statusColor[i.status] || C.muted)}>{statusLabel[i.status] || i.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* JOBS */}
+              {cJobs.length > 0 && (
+                <div>
+                  <div style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: 10,
+                    color: C.muted,
+                    letterSpacing: "0.14em",
+                    fontWeight: 700,
+                    marginBottom: 6,
+                    paddingLeft: 2,
+                  }}>JOBS · {cJobs.length}</div>
+                  <div style={{
+                    background: C.surfaceHigh,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                  }}>
+                    {cJobs.map((j, idx) => (
+                      <div key={j.id} style={{
+                        padding: "11px 14px",
+                        borderTop: idx > 0 ? `1px solid ${C.border}` : "none",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, letterSpacing: "-0.01em" }}>
+                            {j.type}
+                          </span>
+                          {j.value > 0 && (
+                            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: C.amber, letterSpacing: "-0.02em" }}>
+                              {fmtAmount(j.value)}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10.5, color: C.textDim }}>
+                          {j.dateObj ? new Date(j.dateObj).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : j.date}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* RECENT CALLS */}
+              {callLogs.length > 0 && (
+                <div>
+                  <div style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: 10,
+                    color: C.muted,
+                    letterSpacing: "0.14em",
+                    fontWeight: 700,
+                    marginBottom: 6,
+                    paddingLeft: 2,
+                  }}>RECENT CALLS · {callLogs.length}</div>
+                  <div style={{
+                    background: C.surfaceHigh,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                  }}>
+                    {callLogs.map((log, idx) => (
+                      <div key={log.id} style={{
+                        padding: 12,
+                        borderTop: idx > 0 ? `1px solid ${C.border}` : "none",
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 14 }}>{log.direction === "outbound" ? "📲" : "📞"}</span>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>
+                                {new Date(log.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                              <div style={{ fontSize: 10.5, color: C.textDim, fontFamily: "'DM Mono', monospace" }}>
+                                {log.direction === "outbound" ? "Outbound · " : "Inbound · "}{Math.floor((log.duration_seconds || 0) / 60)}m {(log.duration_seconds || 0) % 60}s
+                              </div>
+                            </div>
+                          </div>
+                          {log.category && (
+                            <span style={S.badge(
+                              log.category === "existing_job" ? C.green :
+                              log.category === "new_enquiry" ? C.blue :
+                              log.category === "invoice_payment" ? C.amber : C.muted
+                            )}>{log.category.replace(/_/g, " ")}</span>
+                          )}
+                        </div>
+                        {log.summary && <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, marginTop: 6 }}>{log.summary}</div>}
+                        {log.recording_url && (
+                          <audio controls style={{ width: "100%", marginTop: 8, height: 32 }}
+                            src={`/api/calls/audio?url=${encodeURIComponent(log.recording_url)}`}>
+                            Your browser does not support audio playback.
+                          </audio>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* NOTES */}
+              <div>
+                <div style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10,
+                  color: C.muted,
+                  letterSpacing: "0.14em",
+                  fontWeight: 700,
+                  marginBottom: 6,
+                  paddingLeft: 2,
+                }}>NOTES</div>
+                {selected.notes ? (
+                  <div style={{
+                    background: C.surfaceHigh,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 12,
+                    padding: "12px 14px",
+                    fontSize: 13,
+                    color: C.text,
+                    lineHeight: 1.6,
+                  }}>
+                    {selected.notes}
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
+                    style={{
+                      background: C.surfaceHigh,
+                      border: `1px dashed ${C.border}`,
+                      borderRadius: 12,
+                      padding: "14px",
+                      textAlign: "center",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      color: C.textDim,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Tap to add a note · gate code, access info, preferences
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Sticky CTA bar */}
+            <div style={{
+              padding: "14px 16px 18px",
+              borderTop: `1px solid ${C.border}66`,
+              background: C.surface,
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+            }}>
+              {hasOutstanding && selected.email ? (
+                <a
+                  href={`mailto:${selected.email}?subject=Payment%20reminder&body=Hi%20${encodeURIComponent(selected.name)}%2C%0A%0AJust%20a%20friendly%20reminder%20about%20the%20%C2%A3${outstanding.toLocaleString()}%20outstanding.%0A%0AThanks!`}
+                  style={{
+                    flex: 1,
+                    background: C.amber,
+                    color: "#000",
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    border: "none",
+                    padding: "12px 16px",
+                    borderRadius: 11,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    textDecoration: "none",
+                    letterSpacing: "-0.01em",
+                  }}
+                >Send chase email →</a>
+              ) : selected.phone ? (
+                hasTwilio ? (
+                  <button
+                    onClick={() => makeCall(selected.phone, selected.name)}
+                    style={{
+                      flex: 1,
+                      background: C.amber, color: "#000",
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontWeight: 700, fontSize: 14,
+                      border: "none",
+                      padding: "12px 16px", borderRadius: 11,
+                      cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      letterSpacing: "-0.01em",
+                    }}
+                  >📞 Call {selected.name.split(" ")[0]}</button>
+                ) : (
+                  <a
+                    href={`tel:${selected.phone.replace(/\s/g, "")}`}
+                    style={{
+                      flex: 1,
+                      background: C.amber, color: "#000",
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontWeight: 700, fontSize: 14,
+                      border: "none",
+                      padding: "12px 16px", borderRadius: 11,
+                      cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      textDecoration: "none",
+                      letterSpacing: "-0.01em",
+                    }}
+                  >📞 Call {selected.name.split(" ")[0]}</a>
+                )
+              ) : (
+                <button
+                  onClick={() => { setEditing(true); setForm({ name: selected.name, phone: selected.phone || "", email: selected.email || "", address: selected.address || "", notes: selected.notes || "" }); }}
+                  style={{
+                    flex: 1,
+                    background: C.amber, color: "#000",
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontWeight: 700, fontSize: 14,
+                    border: "none",
+                    padding: "12px 16px", borderRadius: 11,
+                    cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    letterSpacing: "-0.01em",
+                  }}
+                >+ Add contact details</button>
+              )}
+              <button
+                onClick={() => { if (window.confirm(`Delete ${selected.name}?`)) del(selected.id); }}
+                aria-label="Delete customer"
+                style={{
+                  width: 48, height: 48,
+                  background: "transparent",
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 11,
+                  color: C.red,
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6M14 11v6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
 
       {/* Edit Modal */}
       {selected && editing && (
@@ -11415,6 +12504,33 @@ function Customers({ customers, setCustomers, jobs, invoices, setView, user, mak
                 }}>Tap and speak — I'll fill every field</div>
               </div>
               <VoiceFillButton form={form} setForm={f => Object.keys(f).forEach(k => set(k)({ target: { value: f[k] } }))} fieldDescriptions="name (full name), phone (phone number), email (email address), address (full address), notes (any extra details)" />
+            </div>
+            {/* Import from Contacts banner — Android Chrome native picker, iOS/desktop vCard upload */}
+            <ImportContacts
+              currentCustomers={customers}
+              onImport={(novel) => {
+                // Each imported contact gets a unique ID so the setCustomersRaw
+                // diff (parent component) inserts a new row in Supabase per contact.
+                const stamped = novel.map((c, i) => ({ ...c, id: Date.now() + i }));
+                setCustomers(prev => [...prev, ...stamped]);
+                setShowAdd(false);
+                alert(`Imported ${stamped.length} ${stamped.length === 1 ? "contact" : "contacts"}.`);
+              }}
+            />
+            {/* "OR ENTER MANUALLY" divider */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "16px 20px 4px",
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 9,
+              color: C.muted,
+              letterSpacing: "0.16em",
+            }}>
+              <div style={{ flex: 1, height: 1, background: C.border }} />
+              OR ENTER MANUALLY
+              <div style={{ flex: 1, height: 1, background: C.border }} />
             </div>
             {/* Body */}
             <div style={{ padding: 20 }}>
