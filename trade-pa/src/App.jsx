@@ -3131,7 +3131,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
       {subview === "compliance" && (<>
       <div style={S.card}>
-        <div style={S.sectionTitle}>🏗 Trade Registrations</div>
+        <div style={S.sectionTitle}>Trade Registrations</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
           Select your trade types. Registration numbers feed directly onto certificates — they cannot be edited on the certificate itself. Verify each number to build your compliance audit trail.
         </div>
@@ -3316,7 +3316,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
       {/* Gas Safe Certificates — Sequential Numbering */}
       <div style={S.card}>
-        <div style={S.sectionTitle}>🔢 Certificate Numbering</div>
+        <div style={S.sectionTitle}>Certificate Numbering</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
           Sequential certificate reference numbers for your audit trail. Each certificate gets the next number automatically.
         </div>
@@ -3342,7 +3342,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
       {subview === "ai-assistant" && (<>
       <div style={S.card}>
-        <div style={S.sectionTitle}>🤖 Your Assistant</div>
+        <div style={S.sectionTitle}>Your Assistant</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
           Name your AI, set its personality, choose wake words, and teach it your own voice commands.
         </div>
@@ -3367,7 +3367,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
       {/* Usage — fair-use caps */}
       <div style={S.card}>
-        <div style={S.sectionTitle}>📊 Monthly Usage</div>
+        <div style={S.sectionTitle}>Monthly Usage</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
           Your allowance resets on the 1st of each month. Upgrade for higher limits.
         </div>
@@ -3438,7 +3438,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
       {subview === "phone-calls" && (
       <div style={S.card}>
-        <div style={S.sectionTitle}>📞 Call Tracking</div>
+        <div style={S.sectionTitle}>Call Tracking</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
           AI-powered call recording and transcription. Known customers who call are automatically recorded, transcribed and linked to their job or customer record. Unknown callers pass straight through unrecorded.
         </div>
@@ -3448,7 +3448,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
       {subview === "notifications" && (
       <div style={S.card}>
-        <div style={S.sectionTitle}>📋 Evening Schedule Briefing</div>
+        <div style={S.sectionTitle}>Evening Schedule Briefing</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
           Get a text message each evening with your schedule for the next day — so you're always prepared. Sends even when nothing is booked, so you always know the app is working.
         </div>
@@ -17486,6 +17486,8 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", source: "Phone", msg: "", urgent: false });
   const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [sortMode, setSortMode] = useState("recent");
 
   useEffect(() => {
     if (!setContextHint) return;
@@ -17506,7 +17508,17 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
     if (filter === "contacted") return e.status === "contacted";
     if (filter === "quoted") return e.status === "quoted";
     return true;
+  }).filter(e => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (e.name || "").toLowerCase().includes(q) || (e.phone || "").toLowerCase().includes(q) || (e.email || "").toLowerCase().includes(q) || (e.msg || "").toLowerCase().includes(q) || (e.address || "").toLowerCase().includes(q);
+  }).sort((a, b) => {
+    if (sortMode === "name") return (a.name || "").localeCompare(b.name || "");
+    if (sortMode === "source") return (a.source || "").localeCompare(b.source || "");
+    return (b.id || 0) - (a.id || 0); // recent first
   });
+  const sortLabels = { recent: "Recent", name: "A–Z", source: "Source" };
+  const nextSort = () => { const keys = Object.keys(sortLabels); setSortMode(keys[(keys.indexOf(sortMode) + 1) % keys.length]); };
 
   function addEnquiry() {
     if (!form.name) return;
@@ -17562,6 +17574,12 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
             <div style={{ fontSize: 22, fontWeight: 700, color: st.c }}>{st.v}</div>
           </div>
         ))}
+      </div>
+
+      {/* Search + Sort */}
+      <div style={{ display: "flex", gap: 8 }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search enquiries..." style={{ ...S.input, flex: 1, fontSize: 13 }} />
+        <button onClick={nextSort} style={S.btn("ghost")}>{sortLabels[sortMode]} ↕</button>
       </div>
 
       {/* Filters */}
