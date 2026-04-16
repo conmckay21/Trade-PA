@@ -265,42 +265,39 @@ export default function AssistantSetup({
       >
         {/* Header */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
+          display: "flex", alignItems: "center", gap: 10,
           padding: "12px 16px", borderBottom: `1px solid ${T.border}`,
-          background: T.surfaceHigh, flexShrink: 0,
+          flexShrink: 0,
         }}>
-          <div style={{
-            fontSize: 12, fontWeight: 700, color: T.amber,
-            letterSpacing: "0.08em", textTransform: "uppercase",
-          }}>
-            {mode === "edit" ? "Edit your assistant" : "Meet your assistant"}
-          </div>
           <button onClick={onClose} aria-label="Close" style={{
-            background: "transparent", border: "none", color: T.muted,
-            cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "0 4px",
-          }}>×</button>
+            background: "transparent", border: "none", color: T.text,
+            cursor: "pointer", padding: 4, display: "grid", placeItems: "center",
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: T.font, fontSize: 10, color: T.muted, letterSpacing: "0.06em" }}>
+              STEP {step === "name" ? "1" : step === "wake" ? "2" : "3"} OF 3
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 1 }}>
+              {mode === "edit" ? "Edit your assistant" : "Set up your assistant"}
+            </div>
+          </div>
         </div>
 
-        {/* Step tabs */}
-        <div style={{
-          display: "flex", gap: 2, padding: "8px 12px",
-          borderBottom: `1px solid ${T.border}`, background: T.surface,
-        }}>
-          {[
-            ["name", "1. Name"],
-            ["wake", "2. Wake words"],
-            ["commands", "3. Commands"],
-          ].map(([id, label]) => (
-            <button key={id} onClick={() => setStep(id)} style={{
-              flex: 1, padding: "6px 8px", borderRadius: 6,
-              border: "none", cursor: "pointer",
-              background: step === id ? T.amber : "transparent",
-              color: step === id ? "#000" : T.textDim,
-              fontSize: 10, fontFamily: T.font,
-              fontWeight: step === id ? 700 : 500,
-              letterSpacing: "0.04em",
-            }}>{label}</button>
-          ))}
+        {/* Progress segments + step label */}
+        <div style={{ padding: "10px 16px 0", display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", gap: 3 }}>
+            {["name", "wake", "commands"].map((s, i) => (
+              <div key={s} onClick={() => setStep(s)} style={{
+                flex: 1, height: 3, borderRadius: 2, cursor: "pointer",
+                background: (s === "name" || (s === "wake" && step !== "name") || (s === "commands" && step === "commands")) ? T.amber : (T.border),
+              }} />
+            ))}
+          </div>
+          <div style={{ fontFamily: T.font, fontSize: 10, color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            {step === "name" ? "Name & personality" : step === "wake" ? "Wake words" : "Custom commands"}
+          </div>
         </div>
 
         {/* Body */}
@@ -347,21 +344,21 @@ export default function AssistantSetup({
         {/* Footer */}
         <div style={{
           padding: "12px 16px", borderTop: `1px solid ${T.border}`,
-          background: T.surfaceHigh, display: "flex", justifyContent: "space-between",
+          display: "flex", justifyContent: "space-between",
           gap: 8, flexShrink: 0,
         }}>
           {mode === "onboard" && step !== "commands" ? (
             <>
-              <button onClick={onClose} style={ghostBtn}>Skip for now</button>
+              <button onClick={onClose} style={ghostBtn}>Cancel</button>
               <button
                 onClick={() => setStep(step === "name" ? "wake" : "commands")}
                 style={primaryBtn}
-              >Next →</button>
+              >Next — {step === "name" ? "Wake words" : "Commands"}</button>
             </>
           ) : (
             <>
               <button onClick={onClose} style={ghostBtn}>Cancel</button>
-              <button onClick={saveAll} disabled={saving} style={{ ...primaryBtn, opacity: saving ? 0.6 : 1 }}>
+              <button onClick={saveAll} disabled={saving} style={{ ...primaryBtn, background: T.green, color: "#fff", opacity: saving ? 0.6 : 1 }}>
                 {saving ? "Saving..." : "Save & close"}
               </button>
             </>
@@ -391,14 +388,14 @@ function NameStep({ name, setName, personaType, setPersonaType, customPersona, s
           <button
             key={p.id} onClick={() => setPersonaType(p.id)}
             style={{
-              textAlign: "left", padding: 10,
-              background: personaType === p.id ? T.amber + "18" : T.surfaceHigh,
-              border: `1px solid ${personaType === p.id ? T.amber : T.border}`,
-              borderRadius: 8, cursor: "pointer",
+              textAlign: "left", padding: 12,
+              background: personaType === p.id ? T.amber + "11" : T.surfaceHigh,
+              border: `1.5px solid ${personaType === p.id ? T.amber : T.border}`,
+              borderRadius: 12, cursor: "pointer",
               color: T.text, fontFamily: T.font,
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 700, color: personaType === p.id ? T.amber : T.text, marginBottom: 2 }}>{p.label}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: personaType === p.id ? T.amber : T.text, marginBottom: 3 }}>{p.label}</div>
             <div style={{ fontSize: 10, color: T.textDim, lineHeight: 1.4 }}>{p.description}</div>
           </button>
         ))}
@@ -467,7 +464,7 @@ function WakeStep({ name, wakeWords, setWakeWords, newWake, setNewWake }) {
             <button onClick={() => removeWake(i)} style={{
               background: "transparent", border: "none", color: T.amber,
               cursor: "pointer", padding: 0, fontSize: 14, lineHeight: 1,
-            }}>×</button>
+            }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
           </span>
         ))}
       </div>
@@ -508,7 +505,7 @@ function CommandsStep({ commands, draft, setDraft, editingIdx, setEditingIdx, ad
           {commands.map((c, i) => (
             <div key={c.id} style={{
               background: T.surfaceHigh, border: `1px solid ${T.border}`,
-              borderRadius: 8, padding: 10,
+              borderRadius: 12, padding: 10,
               opacity: c.enabled ? 1 : 0.5,
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
@@ -538,7 +535,7 @@ function CommandsStep({ commands, draft, setDraft, editingIdx, setEditingIdx, ad
                     }}
                     style={miniBtn(T.amber)}
                   >EDIT</button>
-                  <button onClick={() => deleteCommand(i)} style={miniBtn(T.red)}>×</button>
+                  <button onClick={() => deleteCommand(i)} style={miniBtn(T.red)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                 </div>
               </div>
             </div>
@@ -549,7 +546,7 @@ function CommandsStep({ commands, draft, setDraft, editingIdx, setEditingIdx, ad
       {/* Draft form */}
       <div style={{
         background: T.surfaceHigh, border: `1px solid ${T.border}`,
-        borderRadius: 8, padding: 12, marginBottom: 12,
+        borderRadius: 12, padding: 12, marginBottom: 12,
       }}>
         <SectionTitle>{editingIdx !== null ? "EDIT COMMAND" : "ADD A COMMAND"}</SectionTitle>
 
@@ -661,7 +658,7 @@ const blurb = { fontSize: 12, color: T.textDim, lineHeight: 1.5, marginBottom: 1
 const inputStyle = {
   width: "100%", boxSizing: "border-box",
   background: T.bg, border: `1px solid ${T.border}`,
-  borderRadius: 6, padding: "10px 12px",
+  borderRadius: 10, padding: "10px 12px",
   color: T.text, fontSize: 13, fontFamily: T.font, outline: "none",
 };
 const labelStyle = {
@@ -669,19 +666,19 @@ const labelStyle = {
   textTransform: "uppercase", marginBottom: 4, display: "block",
 };
 const primaryBtn = {
-  padding: "8px 14px", borderRadius: 6, border: "none",
+  padding: "9px 16px", borderRadius: 10, border: "none",
   background: T.amber, color: "#000",
   fontSize: 11, fontFamily: T.font, fontWeight: 700,
   letterSpacing: "0.04em", cursor: "pointer",
 };
 const ghostBtn = {
-  padding: "8px 14px", borderRadius: 6,
-  border: `1px solid ${T.border}`, background: T.surfaceHigh,
+  padding: "8px 14px", borderRadius: 10,
+  border: `1px solid ${T.border}`, background: "transparent",
   color: T.text, fontSize: 11, fontFamily: T.font, fontWeight: 600,
   letterSpacing: "0.04em", cursor: "pointer",
 };
 const pill = (active) => ({
-  flexShrink: 0, padding: "4px 10px", borderRadius: 16,
+  flexShrink: 0, padding: "5px 12px", borderRadius: 14,
   border: `1px solid ${active ? T.amber : T.border}`,
   background: active ? T.amber : "transparent",
   color: active ? "#000" : T.muted,
@@ -690,7 +687,7 @@ const pill = (active) => ({
   cursor: "pointer", letterSpacing: "0.04em",
 });
 const miniBtn = (color) => ({
-  padding: "3px 8px", borderRadius: 4,
+  padding: "3px 8px", borderRadius: 8,
   border: `1px solid ${color}44`, background: color + "18",
   color, fontSize: 10, fontFamily: T.font, fontWeight: 700,
   cursor: "pointer", letterSpacing: "0.04em",
