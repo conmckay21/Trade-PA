@@ -820,6 +820,66 @@ const MATERIALS = [];
 const statusColor = { confirmed: C.green, pending: C.amber, quote_sent: C.blue, overdue: C.red, due: C.amber, paid: C.green, to_order: C.red, ordered: C.amber, collected: C.green, sent: C.amber, draft: C.muted };
 const statusLabel = { confirmed: "Confirmed", pending: "Pending", quote_sent: "Quote Sent", overdue: "Overdue", due: "Due Today", paid: "Paid", to_order: "To Order", ordered: "Ordered", collected: "Collected", sent: "Sent", draft: "Draft" };
 
+// ── Shared list utilities (Phase 3: jobs / invoices / materials etc.) ──────
+// Module-scope so list screens share one source of truth. Hoisted after
+// JobsTab + InvoicesView triple-duplicated these; Materials now reuses.
+
+// Formats an ISO date as "just now" / "3m ago" / "2h ago" / "3d ago" / "2mo ago".
+// Returns "" for falsy/unparseable input so callers can render conditionally.
+function relTime(iso) {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (!t) return "";
+  const diff = Date.now() - t;
+  if (diff < 60000) return "just now";
+  const m = Math.floor(diff / 60000);
+  if (m < 60)  return m + "m ago";
+  const h = Math.floor(m / 60);
+  if (h < 24)  return h + "h ago";
+  const d = Math.floor(h / 24);
+  if (d < 7)   return d + "d ago";
+  const w = Math.floor(d / 7);
+  if (w < 5)   return w + "w ago";
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return mo + "mo ago";
+  return Math.floor(d / 365) + "y ago";
+}
+
+// Millisecond timestamps for TODAY / THIS WEEK windows in local time.
+// Week starts Monday. Safe to call per-render (a few Date operations).
+function weekBounds() {
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  const today0 = d.getTime();
+  const dow = d.getDay() || 7; // Sun=0 → 7 so Mon=1..Sun=7
+  const weekStart = today0 - (dow - 1) * 86400000;
+  return {
+    today0,
+    todayEnd: today0 + 86400000,
+    weekStart,
+    weekEnd: weekStart + 7 * 86400000,
+  };
+}
+
+// Partitions pre-sorted items into TODAY / THIS WEEK / EARLIER groups.
+// `timeGetter(item)` must return a millisecond timestamp. Items with no parseable
+// time fall into EARLIER. Empty groups are dropped from the output.
+function groupByRecency(sortedItems, timeGetter, bounds) {
+  const { today0, weekStart } = bounds;
+  const today = [], thisWeek = [], earlier = [];
+  for (const item of sortedItems) {
+    const t = timeGetter(item);
+    if (!t)                  earlier.push(item);
+    else if (t >= today0)    today.push(item);
+    else if (t >= weekStart) thisWeek.push(item);
+    else                     earlier.push(item);
+  }
+  return [
+    { key: "today",    label: "TODAY",     items: today    },
+    { key: "thisWeek", label: "THIS WEEK", items: thisWeek },
+    { key: "earlier",  label: "EARLIER",   items: earlier  },
+  ].filter(g => g.items.length > 0);
+}
+
 const DEFAULT_BRAND = {
   logo: null,
   tradingName: "",
@@ -14941,29 +15001,8 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
   };
   const pillFor = (i) => INV_PILL[(i.status || "").toLowerCase()] || { label: (i.status || "—"), color: C.muted };
 
-  // Relative timestamp
-  const relTime = (iso) => {
-    if (!iso) return "";
-    const t = new Date(iso).getTime();
-    if (!t) return "";
-    const diff = Date.now() - t;
-    if (diff < 60000) return "just now";
-    const m = Math.floor(diff / 60000);
-    if (m < 60)  return m + "m ago";
-    const h = Math.floor(m / 60);
-    if (h < 24)  return h + "h ago";
-    const d = Math.floor(h / 24);
-    if (d < 7)   return d + "d ago";
-    const w = Math.floor(d / 7);
-    if (w < 5)   return w + "w ago";
-    const mo = Math.floor(d / 30);
-    if (mo < 12) return mo + "mo ago";
-    return Math.floor(d / 365) + "y ago";
-  };
-
-  // Week-bound calcs (Mon-start week, local time)
-  const _today0 = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
-  const _weekStart = (() => { const d = new Date(_today0); const dow = d.getDay() || 7; return _today0 - (dow - 1) * 86400000; })();
+  // Relative timestamp + week bounds — see module-scope utilities.
+  const _bounds = weekBounds();
 
   // Per-invoice derivations
   const isUnpaid  = (i) => (i.status || "").toLowerCase() !== "paid";
@@ -15008,21 +15047,7 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
 
   // Group by recency (recent sort only)
   const groupedInvoices = sortMode === "recent"
-    ? (() => {
-        const today = [], thisWeek = [], earlier = [];
-        for (const i of sortedInvoices) {
-          const t = invTime(i);
-          if (!t)                     earlier.push(i);
-          else if (t >= _today0)      today.push(i);
-          else if (t >= _weekStart)   thisWeek.push(i);
-          else                        earlier.push(i);
-        }
-        return [
-          { key: "today",    label: "TODAY",     items: today    },
-          { key: "thisWeek", label: "THIS WEEK", items: thisWeek },
-          { key: "earlier",  label: "EARLIER",   items: earlier  },
-        ].filter(g => g.items.length > 0);
-      })()
+    ? groupByRecency(sortedInvoices, invTime, _bounds)
     : [{ key: "flat", label: null, items: sortedInvoices }];
 
   const CHIPS = [
@@ -18104,31 +18129,9 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
     on_hold:     { label: "On Hold",     color: C.muted  },
   };
 
-  // Relative timestamp — "3m ago" / "2h ago" / "3d ago" / "18d ago" / "2mo ago"
-  const relTime = (iso) => {
-    if (!iso) return "";
-    const t = new Date(iso).getTime();
-    if (!t) return "";
-    const diff = Date.now() - t;
-    if (diff < 60000) return "just now";
-    const m = Math.floor(diff / 60000);
-    if (m < 60)  return m + "m ago";
-    const h = Math.floor(m / 60);
-    if (h < 24)  return h + "h ago";
-    const d = Math.floor(h / 24);
-    if (d < 7)   return d + "d ago";
-    const w = Math.floor(d / 7);
-    if (w < 5)   return w + "w ago";
-    const mo = Math.floor(d / 30);
-    if (mo < 12) return mo + "mo ago";
-    return Math.floor(d / 365) + "y ago";
-  };
-
-  // Week-bound calcs (Mon-start week, local time)
-  const _today0 = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
-  const _todayEnd = _today0 + 86400000;
-  const _weekStart = (() => { const d = new Date(_today0); const dow = d.getDay() || 7; return _today0 - (dow - 1) * 86400000; })();
-  const _weekEnd = _weekStart + 7 * 86400000;
+  // Relative timestamp + week bounds — see module-scope utilities.
+  const _bounds = weekBounds();
+  const { weekStart: _weekStart, weekEnd: _weekEnd } = _bounds;
 
   // Per-job derivations — "needs invoice", "overdue", "this week"
   const invoiceFor     = (j) => (invoices || []).find(i => i.id === j.invoice_id);
@@ -18179,20 +18182,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView }) {
 
   // Group by recency bucket — only when sorting by recency
   const groupedJobs = sortMode === "recent"
-    ? (() => {
-        const today = [], thisWeek = [], earlier = [];
-        for (const j of sortedJobs) {
-          const t = jobTime(j);
-          if (t >= _today0)           today.push(j);
-          else if (t >= _weekStart)   thisWeek.push(j);
-          else                        earlier.push(j);
-        }
-        return [
-          { key: "today",    label: "TODAY",     items: today    },
-          { key: "thisWeek", label: "THIS WEEK", items: thisWeek },
-          { key: "earlier",  label: "EARLIER",   items: earlier  },
-        ].filter(g => g.items.length > 0);
-      })()
+    ? groupByRecency(sortedJobs, jobTime, _bounds)
     : [{ key: "flat", label: null, items: sortedJobs }];
 
   // Chip config + sort cycle
