@@ -22712,25 +22712,24 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
   const activeTabId = TABS.find(t => t.activeOn.includes(view))?.id;
 
   return (
-    <>
-      {/* Spacer div in main content flow so content isn't hidden behind the fixed bar */}
-      <div aria-hidden="true" style={{ height: "calc(64px + env(safe-area-inset-bottom, 0px))" }} />
-
-      <nav
-        aria-label="Main navigation"
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 95, // above content, below modals (which are 100+)
-          background: "rgba(15, 15, 15, 0.92)",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
-          borderTop: `1px solid ${C.border}`,
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
-        }}
-      >
+    <nav
+      aria-label="Main navigation"
+      style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 95, // above content, below modals (which are 100+)
+        background: "rgba(15, 15, 15, 0.92)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        borderTop: `1px solid ${C.border}`,
+        // Stabilises bar height when iOS keyboard opens and env(safe-area-inset-bottom)
+        // briefly collapses to 0 — the max() ensures a minimum ~10px always, so the
+        // bar doesn't "shrink" mid-interaction.
+        paddingBottom: "max(10px, env(safe-area-inset-bottom, 10px))",
+      }}
+    >
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(5, 1fr)",
@@ -22786,7 +22785,6 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
           })}
         </div>
       </nav>
-    </>
   );
 }
 
@@ -24141,7 +24139,7 @@ function AppInner() {
             })}
           </nav>
         )}
-      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
+      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, paddingBottom: isDesktopBrowser ? undefined : "calc(74px + env(safe-area-inset-bottom, 0px))", ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
         <div style={isDesktopBrowser ? { maxWidth: 720, margin: "0 auto", width: "100%" } : { display: "contents" }}>
         {(() => {
           // Guard — redirect member to Dashboard if they're on a tab they can't access
