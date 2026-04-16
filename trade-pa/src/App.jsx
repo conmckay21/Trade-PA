@@ -15,7 +15,7 @@ class ErrorBoundary extends Component {
         <div style={{ padding: 24, background: "#1a1a1a", borderRadius: 12, border: "1px solid #ef4444" }}>
           <div style={{ color: "#ef4444", fontWeight: 700, marginBottom: 8, fontFamily: "'DM Mono',monospace", fontSize: 13 }}>Settings crashed — error details:</div>
           <div style={{ color: "#fca5a5", fontSize: 12, fontFamily: "'DM Mono',monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{this.state.error?.message || String(this.state.error)}</div>
-          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 12, background: "#f59e0b", color: "#000", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>Try again</button>
+          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 12, background: "#f59e0b", color: "#000", border: "none", borderRadius: 10, padding: "8px 16px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>Try again</button>
         </div>
       );
     }
@@ -147,7 +147,7 @@ function LandingPage({ onAuth }) {
                 <div style={{ fontSize: 12, fontWeight: 700, color: item.color, marginBottom: 2 }}>{item.title}</div>
                 <div style={{ fontSize: 12, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.body}</div>
               </div>
-              <div style={{ background: "#10b981", color: "#000", padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>✓ Approve</div>
+              <div style={{ background: "#10b981", color: "#000", padding: "5px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>✓ Approve</div>
             </div>
           ))}
         </div>
@@ -366,8 +366,8 @@ function AuthScreen({ onAuth, initialMode = "login", onBack }) {
     input: { width: "100%", background: "#242424", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 14px", color: "#e5e5e5", fontSize: 13, fontFamily: "'DM Mono',monospace", outline: "none", boxSizing: "border-box", marginBottom: 16 },
     btn: { width: "100%", padding: "11px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'DM Mono',monospace", fontWeight: 700, letterSpacing: "0.04em", background: "#f59e0b", color: "#000", marginTop: 4 },
     ghost: { background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", textDecoration: "underline", padding: 0 },
-    error: { background: "#ef444422", border: "1px solid #ef444444", borderRadius: 6, padding: "10px 14px", fontSize: 12, color: "#ef4444", marginBottom: 16, lineHeight: 1.5 },
-    success: { background: "#10b98122", border: "1px solid #10b98144", borderRadius: 6, padding: "10px 14px", fontSize: 12, color: "#10b981", marginBottom: 16, lineHeight: 1.5 },
+    error: { background: "#ef444422", border: "1px solid #ef444444", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#ef4444", marginBottom: 16, lineHeight: 1.5 },
+    success: { background: "#10b98122", border: "1px solid #10b98144", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#10b981", marginBottom: 16, lineHeight: 1.5 },
     divider: { display: "flex", alignItems: "center", gap: 12, margin: "20px 0" },
     dividerLine: { flex: 1, height: 1, background: "#2a2a2a" },
     dividerText: { fontSize: 11, color: "#6b7280" },
@@ -792,9 +792,9 @@ const S = {
   app: { fontFamily: "'DM Mono','Courier New',monospace", background: C.bg, minHeight: "-webkit-fill-available", color: C.text, width: "100%", overflowX: "hidden" },
   header: { background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 12px", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 56, position: "sticky", top: 0, zIndex: 100, width: "100%", boxSizing: "border-box" },
   logo: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 14, letterSpacing: "0.05em", color: C.amber },
-  logoIcon: { width: 28, height: 28, background: C.amber, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontSize: 10, fontWeight: 900, letterSpacing: "-0.02em", flexShrink: 0 },
+  logoIcon: { width: 28, height: 28, background: C.amber, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontSize: 10, fontWeight: 900, letterSpacing: "-0.02em", flexShrink: 0 },
   nav: { display: "flex", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", flexShrink: 0 },
-  navBtn: (a) => ({ padding: "6px 8px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 10, fontFamily: "'DM Mono',monospace", fontWeight: a ? 700 : 400, letterSpacing: "0.04em", background: a ? C.amber : "transparent", color: a ? "#000" : C.textDim, transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }),
+  navBtn: (a) => ({ padding: "6px 8px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 10, fontFamily: "'DM Mono',monospace", fontWeight: a ? 700 : 400, letterSpacing: "0.04em", background: a ? C.amber : "transparent", color: a ? "#000" : C.textDim, transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }),
   main: { flex: 1, padding: "12px", maxWidth: 600, width: "100%", margin: "0 auto", boxSizing: "border-box", overflowX: "hidden" },
   card: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, minWidth: 0, boxSizing: "border-box" },
   grid2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 },
@@ -1285,8 +1285,8 @@ function PDFOverlay({ html, onClose }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", flexDirection: "column", background: "#fff" }}>
       <div style={{ display: "flex", gap: 8, padding: "12px 16px", paddingTop: "max(12px, env(safe-area-inset-top, 12px))", background: "#1a1a1a", flexShrink: 0 }}>
-        <button onClick={onClose} style={{ background: C.amber, border: "none", padding: "10px 18px", borderRadius: 6, fontWeight: 700, cursor: "pointer", fontSize: 14, color: "#000" }}>✕ Close</button>
-        <button onClick={() => { try { iframeRef.current?.contentWindow?.print(); } catch(e) {} }} style={{ background: "#444", color: "#fff", border: "none", padding: "10px 18px", borderRadius: 6, fontWeight: 700, cursor: "pointer", fontSize: 14 }}>🖨 Print / Save</button>
+        <button onClick={onClose} style={{ background: C.amber, border: "none", padding: "10px 18px", borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 14, color: "#000" }}>✕ Close</button>
+        <button onClick={() => { try { iframeRef.current?.contentWindow?.print(); } catch(e) {} }} style={{ background: "#444", color: "#fff", border: "none", padding: "10px 18px", borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 14 }}>🖨 Print / Save</button>
       </div>
       <iframe ref={iframeRef} style={{ flex: 1, border: "none", width: "100%" }} />
     </div>
@@ -1549,7 +1549,7 @@ function InvoicePreview({ brand, invoice }) {
 
         {/* BACS block */}
         {showBacs && (
-          <div style={{ background: "#f8f8f8", borderRadius: 6, padding: "14px 16px", border: "1px solid #eee" }}>
+          <div style={{ background: "#f8f8f8", borderRadius: 10, padding: "14px 16px", border: "1px solid #eee" }}>
             <div style={{ fontSize: 10, fontFamily: "Arial,sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: 10 }}>
               {showCard ? "Option 1 — Pay by Bank Transfer (BACS)" : "Pay by Bank Transfer (BACS)"}
             </div>
@@ -1569,14 +1569,14 @@ function InvoicePreview({ brand, invoice }) {
 
         {/* Card / Stripe block */}
         {showCard && (
-          <div style={{ background: "#635bff11", borderRadius: 6, padding: "14px 16px", border: "1px solid #635bff33" }}>
+          <div style={{ background: "#635bff11", borderRadius: 10, padding: "14px 16px", border: "1px solid #635bff33" }}>
             <div style={{ fontSize: 10, fontFamily: "Arial,sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", color: "#635bff", marginBottom: 8 }}>
               {showBacs ? "Option 2 — Pay by Card (Stripe)" : "Pay by Card (Stripe)"}
             </div>
             <div style={{ fontFamily: "Arial,sans-serif", fontSize: 12, color: "#444", marginBottom: 10 }}>
               Pay securely online by debit or credit card. Takes 30 seconds.
             </div>
-            <div style={{ display: "inline-block", padding: "8px 18px", background: "#635bff", borderRadius: 5, fontFamily: "Arial,sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>
+            <div style={{ display: "inline-block", padding: "8px 18px", background: "#635bff", borderRadius: 8, fontFamily: "Arial,sans-serif", fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>
               Pay {fmtAmount(inv.amount)} online →
             </div>
             <div style={{ fontFamily: "Arial,sans-serif", fontSize: 10, color: "#888", marginTop: 8 }}>
@@ -2342,9 +2342,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                   padding: 4,
                   display: "grid",
                   placeItems: "center",
-                  fontSize: 16,
+                  
                 }}
-              >×</button>
+              ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             )}
           </div>
 
@@ -2652,8 +2652,8 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             <div style={S.sectionTitle}>Preview</div>
             <div style={{ height: 6, borderRadius: 3, background: brand.accentColor, marginBottom: 8 }} />
             <div style={{ display: "flex", gap: 8 }}>
-              <div style={{ padding: "6px 14px", borderRadius: 6, background: brand.accentColor, color: "#fff", fontSize: 12, fontWeight: 700 }}>Button</div>
-              <div style={{ padding: "6px 14px", borderRadius: 6, background: brand.accentColor + "22", border: `1px solid ${brand.accentColor}`, color: brand.accentColor, fontSize: 12, fontWeight: 700 }}>Badge</div>
+              <div style={{ padding: "6px 14px", borderRadius: 10, background: brand.accentColor, color: "#fff", fontSize: 12, fontWeight: 700 }}>Button</div>
+              <div style={{ padding: "6px 14px", borderRadius: 10, background: brand.accentColor + "22", border: `1px solid ${brand.accentColor}`, color: brand.accentColor, fontSize: 12, fontWeight: 700 }}>Badge</div>
             </div>
           </div>
         </div>
@@ -2702,7 +2702,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             background: `${planTier === "pro" ? C.blue : planTier === "team" ? C.green : C.amber}1a`,
             border: `1px solid ${planTier === "pro" ? C.blue : planTier === "team" ? C.green : C.amber}40`,
             padding: "4px 10px",
-            borderRadius: 6,
+            borderRadius: 10,
             flexShrink: 0,
           }}>{planTier === "pro" ? "PRO" : planTier === "team" ? "TEAM" : "SOLO"}</span>
         </div>
@@ -3058,7 +3058,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 <input style={S.input} value={brand.refPrefix || ""} onChange={e => setBrand(b => ({ ...b, refPrefix: e.target.value.toUpperCase() }))} placeholder="e.g. DPH, DAVE, PLB" maxLength={8} />
               </div>
             )}
-            <div style={{ marginTop: 10, padding: "8px 12px", background: C.surfaceHigh, borderRadius: 6, border: `1px solid ${C.border}` }}>
+            <div style={{ marginTop: 10, padding: "8px 12px", background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 11, color: C.muted }}>Preview: </span>
               <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", color: C.text }}>{buildRef(brand, { id: "INV-041", customer: "James Oliver" })}</span>
             </div>
@@ -3278,7 +3278,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             </div>
             {brand.gasSafeLogo ? (
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <img src={brand.gasSafeLogo} alt="Gas Safe logo" style={{ height: 48, objectFit: "contain", background: "#fff", padding: 6, borderRadius: 6 }} />
+                <img src={brand.gasSafeLogo} alt="Gas Safe logo" style={{ height: 48, objectFit: "contain", background: "#fff", padding: 6, borderRadius: 10 }} />
                 <div style={{ flex: 1 }}>
                   <div style={S.badge(C.green)}>✓ Logo uploaded</div>
                   <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Appears on all gas safety certificates</div>
@@ -3764,7 +3764,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           <div onClick={e => e.stopPropagation()} style={{ maxHeight: "90vh", overflowY: "auto", borderRadius: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div style={{ fontSize: 12, color: C.muted, fontFamily: "'DM Mono',monospace" }}>INVOICE PREVIEW</div>
-              <button onClick={() => setPreview(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <button aria-label="Close" onClick={() => setPreview(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             <InvoicePreview brand={brand} />
           </div>
@@ -4708,7 +4708,7 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, us
               style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: "#2CA01C", borderColor: "#2CA01C44" }}>↑ QB Bill</button>
           </div>
           {(m.receiptId || m.receiptSource || m.receiptImage) && (
-            <div onClick={viewReceipt} style={{ fontSize: 12, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            <div onClick={viewReceipt} style={{ fontSize: 12, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
               🧾 {m.receiptFilename || "View Invoice"}
             </div>
           )}
@@ -5074,7 +5074,7 @@ Return only JSON, no other text.` },
                 <div style={{ fontSize: 15, fontWeight: 700 }}>Receipt Scanned ✓</div>
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Review and edit before saving</div>
               </div>
-              <button onClick={() => { setShowScanner(false); setScanResult(null); setScanImageData(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <button aria-label="Close" onClick={() => { setShowScanner(false); setScanResult(null); setScanImageData(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
 
             {/* Receipt image thumbnail */}
@@ -5121,7 +5121,7 @@ Return only JSON, no other text.` },
                 )}
               </div>
               {scanResult.vatRate > 0 && (
-                <div style={{ fontSize: 11, padding: "6px 10px", background: C.amber + "11", borderRadius: 6, color: C.amber }}>
+                <div style={{ fontSize: 11, padding: "6px 10px", background: C.amber + "11", borderRadius: 10, color: C.amber }}>
                   {scanResult.pricesIncVat
                     ? `Prices on receipt are inc. ${scanResult.vatRate}% VAT — ex-VAT prices will be calculated automatically`
                     : `Prices on receipt are ex. ${scanResult.vatRate}% VAT — VAT will be added when uploading to Xero`}
@@ -5147,7 +5147,7 @@ Return only JSON, no other text.` },
                       <input style={{ ...S.input, fontSize: 12 }} value={item.item} onChange={e => setScanResult(r => ({ ...r, items: r.items.map((x, j) => j === i ? { ...x, item: e.target.value } : x) }))} placeholder="Item name" />
                       <input style={{ ...S.input, fontSize: 12, textAlign: "center" }} type="number" min="1" value={item.qty} onChange={e => setScanResult(r => ({ ...r, items: r.items.map((x, j) => j === i ? { ...x, qty: parseFloat(e.target.value) || 1 } : x) }))} />
                       <input style={{ ...S.input, fontSize: 12 }} type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => setScanResult(r => ({ ...r, items: r.items.map((x, j) => j === i ? { ...x, unitPrice: parseFloat(e.target.value) || 0 } : x) }))} />
-                      <button onClick={() => setScanResult(r => ({ ...r, items: r.items.filter((_, j) => j !== i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: 0, textAlign: "center" }}>×</button>
+                      <button onClick={() => setScanResult(r => ({ ...r, items: r.items.filter((_, j) => j !== i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: 0, textAlign: "center" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                     </div>
                   ))}
                 </div>
@@ -5209,7 +5209,7 @@ Return only JSON, no other text.` },
             style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: C.text, fontSize: 13, minWidth: 0, fontFamily: "inherit" }}
           />
           {search && (
-            <button onClick={() => setSearch("")} aria-label="Clear search" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+            <button onClick={() => setSearch("")} aria-label="Clear search" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: 0, flexShrink: 0 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
           )}
         </div>
 
@@ -5320,7 +5320,7 @@ Return only JSON, no other text.` },
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Material</div>
-              <button onClick={() => setEditingMaterial(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <button aria-label="Close" onClick={() => setEditingMaterial(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div><label style={S.label}>Item Description</label><input style={S.input} value={editingMaterial.item} onChange={e => setEditingMaterial(m => ({ ...m, item: e.target.value }))} placeholder="e.g. 22mm copper pipe" /></div>
@@ -5341,7 +5341,7 @@ Return only JSON, no other text.` },
                 <div><label style={S.label}>Due Date</label><input style={S.input} type="date" value={editingMaterial.dueDate || ""} onChange={e => setEditingMaterial(m => ({ ...m, dueDate: e.target.value }))} /></div>
               </div>
               {editingMaterial.vatEnabled && editingMaterial.unitPrice > 0 && (
-                <div style={{ fontSize: 11, color: C.amber, background: C.amber + "11", borderRadius: 6, padding: "6px 10px" }}>
+                <div style={{ fontSize: 11, color: C.amber, background: C.amber + "11", borderRadius: 10, padding: "6px 10px" }}>
                   Total inc. VAT: £{(parseFloat(editingMaterial.unitPrice || 0) * parseFloat(editingMaterial.qty || 1) * (1 + (editingMaterial.vatRate || 20) / 100)).toFixed(2)}
                 </div>
               )}
@@ -5415,7 +5415,7 @@ Return only JSON, no other text.` },
                   }}
                   fieldDescriptions="item (material name e.g. Copper pipe 22mm), qty (quantity as number), unitPrice (unit price in £ as number), job (job name if mentioned), supplier (supplier name if mentioned)"
                 />
-                <button onClick={() => { setShowAdd(false); setRows([emptyRow()]); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={() => { setShowAdd(false); setRows([emptyRow()]); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ overflowX: "auto" }}>
@@ -5450,7 +5450,7 @@ Return only JSON, no other text.` },
                         <option value="ordered">Ordered</option>
                         <option value="collected">Collected</option>
                       </select>
-                      <button onClick={() => removeRow(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }} disabled={rows.length === 1}>×</button>
+                      <button onClick={() => removeRow(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }} disabled={rows.length === 1}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                     </div>
                   ))}
                 </div>
@@ -5478,7 +5478,7 @@ Return only JSON, no other text.` },
           <div style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Manage Suppliers</div>
-              <button onClick={() => { setShowSuppliers(false); setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <button aria-label="Close" onClick={() => { setShowSuppliers(false); setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
               {suppliers.map((sup, i) => (
@@ -5506,7 +5506,7 @@ Return only JSON, no other text.` },
                         {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", textDecoration: "none" }}>✉</a>}
                       </div>
                       <button onClick={() => { setEditingSupplier(i); setSupplierForm(sup); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px" }}>Edit</button>
-                      <button onClick={() => deleteSupplier(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>
+                      <button onClick={() => deleteSupplier(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                     </div>
                   )}
                 </div>
@@ -9951,9 +9951,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                     border: "none", background: "transparent",
                     color: C.muted, cursor: "pointer",
                     display: "grid", placeItems: "center", padding: 0,
-                    fontSize: 16, lineHeight: 1,
+                    
                   }}
-                >×</button>
+                ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
 
                 <div onClick={() => setView("Inbox")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", paddingRight: 24 }}>
                   <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.amber + "22", border: `1px solid ${C.amber}66`, display: "grid", placeItems: "center", fontSize: 16, flexShrink: 0 }}>🔔</div>
@@ -10063,7 +10063,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 }}
               >
                 {voiceState === "listening" ? (
-                  <div style={{ width: 34, height: 34, background: "#000", borderRadius: 5 }} />
+                  <div style={{ width: 34, height: 34, background: "#000", borderRadius: 8 }} />
                 ) : voiceState === "speaking" ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 4, height: 40 }}>
                     {[0, 1, 2, 3].map(i => (
@@ -10279,10 +10279,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                             </div>
                           )}
                           <div style={{ padding: "10px 14px", display: "flex", gap: 8 }}>
-                            <button onClick={() => onShowPdf && onShowPdf(inv)} style={{ flex: 1, padding: "8px", background: C.amber + "22", border: `1px solid ${C.amber}44`, borderRadius: 6, color: C.amber, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+                            <button onClick={() => onShowPdf && onShowPdf(inv)} style={{ flex: 1, padding: "8px", background: C.amber + "22", border: `1px solid ${C.amber}44`, borderRadius: 10, color: C.amber, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
                               📄 View PDF
                             </button>
-                            <button onClick={() => send("Update invoice " + inv.id + " for " + inv.customer)} style={{ flex: 1, padding: "8px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+                            <button onClick={() => send("Update invoice " + inv.id + " for " + inv.customer)} style={{ flex: 1, padding: "8px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
                               ✏ Edit invoice
                             </button>
                           </div>
@@ -10303,7 +10303,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                           </div>
                           {job.address && <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>📍 {job.address}</div>}
                           {job.notes && <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginBottom: 8 }}>{job.notes}</div>}
-                          {job.scope_of_work && <div style={{ fontSize: 11, color: C.textDim, background: C.surface, borderRadius: 6, padding: "8px 10px", marginBottom: 8 }}>{job.scope_of_work}</div>}
+                          {job.scope_of_work && <div style={{ fontSize: 11, color: C.textDim, background: C.surface, borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>{job.scope_of_work}</div>}
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                             <span style={{ fontSize: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "3px 8px", color: C.muted }}>{(job.status || "new").replace(/_/g, " ")}</span>
                             {job.type && <span style={{ fontSize: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "3px 8px", color: C.muted }}>{job.type}</span>}
@@ -10384,7 +10384,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                           ))}
                           {r.receiptImage && (
                             <div style={{ padding: "10px 14px", borderTop: `1px solid ${C.border}` }}>
-                              <img src={r.receiptImage} alt="Receipt" style={{ width: "100%", borderRadius: 6 }} />
+                              <img src={r.receiptImage} alt="Receipt" style={{ width: "100%", borderRadius: 10 }} />
                             </div>
                           )}
                           <div style={{ padding: "10px 14px", background: C.green + "11", borderTop: `1px solid ${C.border}` }}>
@@ -11041,7 +11041,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                                   </div>
                                 </div>
                                 {action.email_snippet && (
-                                  <div style={{ fontSize: 11, color: C.textDim, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: "8px 10px", marginBottom: 8, fontStyle: "italic", lineHeight: 1.5 }}>
+                                  <div style={{ fontSize: 11, color: C.textDim, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 10px", marginBottom: 8, fontStyle: "italic", lineHeight: 1.5 }}>
                                     "{action.email_snippet?.slice(0, 200)}{action.email_snippet?.length > 200 ? "..." : ""}"
                                   </div>
                                 )}
@@ -11173,7 +11173,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 padding: "6px 12px",
                 background: vt.color + "18",
                 border: `1px solid ${vt.color}44`,
-                borderRadius: 6,
+                borderRadius: 10,
                 fontSize: 12, color: vt.color,
                 animation: "status-strip-in 0.22s ease-out",
               }}
@@ -11702,7 +11702,7 @@ Do not include fields that aren't being changed.`,
       onClick={recording ? stop : start}
       disabled={processing}
       title={recording ? "Tap to stop" : "Voice edit"}
-      style={{ background: recording ? C.red + "22" : "none", border: `1px solid ${recording ? C.red + "66" : C.border}`, borderRadius: 6, color, cursor: processing ? "wait" : "pointer", fontSize: 15, padding: "4px 8px", transition: "all 0.2s", flexShrink: 0 }}
+      style={{ background: recording ? C.red + "22" : "none", border: `1px solid ${recording ? C.red + "66" : C.border}`, borderRadius: 10, color, cursor: processing ? "wait" : "pointer", fontSize: 15, padding: "4px 8px", transition: "all 0.2s", flexShrink: 0 }}
     >{label}</button>
   );
 }
@@ -11859,7 +11859,7 @@ function LineItemsBuilder({ form, setForm, accentColor, isQuote }) {
               />
             )}
             {items.length > 1 && (
-              <button onClick={() => removeItem(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>
+              <button onClick={() => removeItem(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             )}
           </div>
         ))}
@@ -11978,7 +11978,7 @@ function FeedbackModal({ open, onClose, user, brand, currentView }) {
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 16, fontWeight: 700 }}>Send Feedback</div>
-              <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <button aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
 
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
@@ -12062,12 +12062,12 @@ function FeedbackModal({ open, onClose, user, brand, currentView }) {
             </div>
 
             {/* Auto-context note */}
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 14, padding: "8px 10px", background: C.surfaceHigh, borderRadius: 6, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 14, padding: "8px 10px", background: C.surfaceHigh, borderRadius: 10, lineHeight: 1.5 }}>
               We'll automatically include: the page you're on, your device & browser, and your account email — so we don't have to ask.
             </div>
 
             {error && (
-              <div style={{ fontSize: 12, color: C.red, marginBottom: 12, padding: "8px 12px", background: "rgba(239,68,68,0.1)", borderRadius: 6, border: `1px solid ${C.red}44` }}>
+              <div style={{ fontSize: 12, color: C.red, marginBottom: 12, padding: "8px 12px", background: "rgba(239,68,68,0.1)", borderRadius: 10, border: `1px solid ${C.red}44` }}>
                 {error}
               </div>
             )}
@@ -12215,7 +12215,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user, cus
                       jobRef: form.jobRef, poNumber: form.poNumber || "",
                     });
                   }} style={S.pill(brand.accentColor, false)} disabled={!valid}>Preview PDF</button>
-                <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
 
@@ -12278,7 +12278,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user, cus
                       <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>CIS — Construction Industry Scheme</div>
                       <div style={{ fontSize: 11, color: C.muted }}>For subcontracting to contractors who deduct CIS tax from labour</div>
                     </div>
-                    <button onClick={() => setForm(f => ({ ...f, cisEnabled: !f.cisEnabled }))} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, background: form.cisEnabled ? C.amber : C.border, color: form.cisEnabled ? "#000" : C.muted, transition: "all 0.2s", flexShrink: 0, marginLeft: 12 }}>
+                    <button onClick={() => setForm(f => ({ ...f, cisEnabled: !f.cisEnabled }))} style={{ padding: "6px 14px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, background: form.cisEnabled ? C.amber : C.border, color: form.cisEnabled ? "#000" : C.muted, transition: "all 0.2s", flexShrink: 0, marginLeft: 12 }}>
                       {form.cisEnabled ? "CIS On ✓" : "Enable CIS"}
                     </button>
                   </div>
@@ -12297,7 +12297,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user, cus
                           <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
                             <input style={{ ...S.input, flex: 1 }} placeholder="e.g. Boiler unit" value={item.desc} onChange={e => setForm(f => { const next = [...(f.materialItems || [{ desc: "", amount: "" }])]; next[i] = { ...next[i], desc: e.target.value }; return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} />
                             <input style={{ ...S.input, width: 90, flexShrink: 0 }} type="number" placeholder="£" value={item.amount} onChange={e => setForm(f => { const next = [...(f.materialItems || [{ desc: "", amount: "" }])]; next[i] = { ...next[i], amount: e.target.value }; return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} />
-                            {(form.materialItems || []).length > 1 && <button onClick={() => setForm(f => { const next = f.materialItems.filter((_, j) => j !== i); return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>}
+                            {(form.materialItems || []).length > 1 && <button onClick={() => setForm(f => { const next = f.materialItems.filter((_, j) => j !== i); return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>}
                           </div>
                         ))}
                       </div>
@@ -12543,7 +12543,7 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user, custo
                   }} style={S.pill(C.blue, false)} disabled={!valid}>Preview PDF</button>
                 </div>
                 </div>
-                <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
 
@@ -12605,7 +12605,7 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user, custo
                       <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>CIS — Construction Industry Scheme</div>
                       <div style={{ fontSize: 11, color: C.muted }}>For subcontracting to contractors who deduct CIS tax from labour</div>
                     </div>
-                    <button onClick={() => setForm(f => ({ ...f, cisEnabled: !f.cisEnabled }))} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, background: form.cisEnabled ? C.amber : C.border, color: form.cisEnabled ? "#000" : C.muted, transition: "all 0.2s", flexShrink: 0, marginLeft: 12 }}>
+                    <button onClick={() => setForm(f => ({ ...f, cisEnabled: !f.cisEnabled }))} style={{ padding: "6px 14px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", fontWeight: 700, background: form.cisEnabled ? C.amber : C.border, color: form.cisEnabled ? "#000" : C.muted, transition: "all 0.2s", flexShrink: 0, marginLeft: 12 }}>
                       {form.cisEnabled ? "CIS On ✓" : "Enable CIS"}
                     </button>
                   </div>
@@ -12624,7 +12624,7 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user, custo
                           <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
                             <input style={{ ...S.input, flex: 1 }} placeholder="e.g. Boiler unit" value={item.desc} onChange={e => setForm(f => { const next = [...(f.materialItems || [])]; next[i] = { ...next[i], desc: e.target.value }; return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} />
                             <input style={{ ...S.input, width: 90, flexShrink: 0 }} type="number" placeholder="£" value={item.amount} onChange={e => setForm(f => { const next = [...(f.materialItems || [])]; next[i] = { ...next[i], amount: e.target.value }; return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} />
-                            {(form.materialItems || []).length > 1 && <button onClick={() => setForm(f => { const next = f.materialItems.filter((_, j) => j !== i); return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>}
+                            {(form.materialItems || []).length > 1 && <button onClick={() => setForm(f => { const next = f.materialItems.filter((_, j) => j !== i); return { ...f, materialItems: next, materials: String(next.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)) }; })} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>}
                           </div>
                         ))}
                       </div>
@@ -13182,7 +13182,7 @@ function ContactIcon({ kind, present }) {
       title={`${kind}${present ? "" : " — not set"}`}
       style={{
         width: 22, height: 22,
-        borderRadius: 6,
+        borderRadius: 10,
         display: "grid",
         placeItems: "center",
         background: present ? `${C.green}1f` : "transparent",
@@ -13446,7 +13446,7 @@ function ImportContacts({ onImport, currentCustomers }) {
                   cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0,
                   flexShrink: 0,
                 }}
-              >×</button>
+              ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
 
             {/* Select all/none + count */}
@@ -13465,7 +13465,7 @@ function ImportContacts({ onImport, currentCustomers }) {
                   onClick={() => setSelectedIdx(new Set(pending.map((_, i) => i)))}
                   style={{
                     background: "transparent", border: `1px solid ${C.border}`,
-                    color: C.textDim, padding: "5px 10px", borderRadius: 6,
+                    color: C.textDim, padding: "5px 10px", borderRadius: 10,
                     fontFamily: "'DM Mono', monospace", fontSize: 10,
                     textTransform: "uppercase", letterSpacing: "0.08em",
                     cursor: "pointer",
@@ -13475,7 +13475,7 @@ function ImportContacts({ onImport, currentCustomers }) {
                   onClick={() => setSelectedIdx(new Set())}
                   style={{
                     background: "transparent", border: `1px solid ${C.border}`,
-                    color: C.textDim, padding: "5px 10px", borderRadius: 6,
+                    color: C.textDim, padding: "5px 10px", borderRadius: 10,
                     fontFamily: "'DM Mono', monospace", fontSize: 10,
                     textTransform: "uppercase", letterSpacing: "0.08em",
                     cursor: "pointer",
@@ -13505,7 +13505,7 @@ function ImportContacts({ onImport, currentCustomers }) {
                   >
                     {/* Checkbox */}
                     <div style={{
-                      width: 20, height: 20, borderRadius: 5,
+                      width: 20, height: 20, borderRadius: 8,
                       border: `1.5px solid ${isSel ? C.amber : C.border}`,
                       background: isSel ? C.amber : "transparent",
                       display: "grid", placeItems: "center",
@@ -14895,7 +14895,7 @@ function Customers({ customers, setCustomers, customerContacts, setCustomerConta
                   fontSize: 18, lineHeight: 1, padding: 0,
                   flexShrink: 0,
                 }}
-              >×</button>
+              ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             {/* Body */}
             <div style={{ padding: 20 }}>
@@ -14959,7 +14959,7 @@ function Customers({ customers, setCustomers, customerContacts, setCustomerConta
                   fontSize: 18, lineHeight: 1, padding: 0,
                   flexShrink: 0,
                 }}
-              >×</button>
+              ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             {/* Voice-fill banner — wraps existing VoiceFillButton logic in mockup chrome */}
             <div style={{
@@ -15691,7 +15691,7 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
             style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: C.text, fontSize: 13, minWidth: 0, fontFamily: "inherit" }}
           />
           {search && (
-            <button onClick={() => setSearch("")} aria-label="Clear search" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+            <button onClick={() => setSearch("")} aria-label="Clear search" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: 0, flexShrink: 0 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
           )}
         </div>
 
@@ -16289,7 +16289,7 @@ function CompanyForm({ form, set, draftContacts, setDraftContacts, onSave, onCan
         letterSpacing: "0.08em",
         fontWeight: 700,
         padding: "4px 8px",
-        borderRadius: 5,
+        borderRadius: 8,
         cursor: "pointer",
         background: on ? `${colour}26` : "transparent",
         color: on ? colour : C.muted,
@@ -17120,7 +17120,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
     card: { background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 12, padding: 16, marginBottom: 12 },
     btn: (v) => ({ padding: "7px 14px", borderRadius: 10, fontSize: 11, fontWeight: 600, cursor: "pointer", border: v === "ghost" ? `1px solid ${IC.border}` : "none", fontFamily: "'DM Mono',monospace", background: v === "approve" ? IC.green : v === "amber" ? IC.amber : v === "red" ? "#7f1d1d" : v === "ghost" ? "transparent" : IC.bg3, color: v === "approve" ? "#fff" : v === "amber" ? "#000" : v === "red" ? IC.red : IC.text }),
     tab: (a) => ({ padding: "6px 14px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 11, fontWeight: a ? 700 : 400, fontFamily: "'DM Mono',monospace", background: a ? IC.amber : "transparent", color: a ? "#000" : IC.muted }),
-    input: { width: "100%", padding: "7px 10px", borderRadius: 6, border: `1px solid ${IC.border}`, background: IC.bg3, color: IC.text, fontSize: 12, marginBottom: 8, boxSizing: "border-box", fontFamily: "'DM Mono',monospace" },
+    input: { width: "100%", padding: "7px 10px", borderRadius: 10, border: `1px solid ${IC.border}`, background: IC.bg3, color: IC.text, fontSize: 12, marginBottom: 8, boxSizing: "border-box", fontFamily: "'DM Mono',monospace" },
   };
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: IC.muted, fontFamily: "'DM Mono',monospace" }}>Loading...</div>;
@@ -17289,7 +17289,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
                   <div style={{ fontSize: 13, fontWeight: 600, color: IC.text, marginBottom: 4 }}>{action.action_description}</div>
                   <div style={{ fontSize: 11, color: IC.muted, marginBottom: 2 }}>From: {action.email_from}</div>
                   <div style={{ fontSize: 11, color: IC.muted, marginBottom: 6 }}>Re: {action.email_subject}</div>
-                  <div style={{ fontSize: 11, color: IC.muted, background: IC.bg3, padding: "6px 10px", borderRadius: 6, fontStyle: "italic", lineHeight: 1.5 }}>"{action.email_snippet?.slice(0, 120)}..."</div>
+                  <div style={{ fontSize: 11, color: IC.muted, background: IC.bg3, padding: "6px 10px", borderRadius: 10, fontStyle: "italic", lineHeight: 1.5 }}>"{action.email_snippet?.slice(0, 120)}..."</div>
                 </div>
                 <div style={{ fontSize: 10, color: IC.muted, flexShrink: 0 }}>{formatTime(action.created_at)}</div>
               </div>
@@ -17343,7 +17343,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
                 <div style={{ padding: "14px 16px", borderBottom: `1px solid ${IC.border}`, background: IC.bg2, flexShrink: 0 }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: IC.text, flex: 1, marginRight: 12, lineHeight: 1.3 }}>{selectedThread.subject}</div>
-                    <button onClick={() => setSelectedThread(null)} style={{ background: "none", border: "none", color: IC.muted, cursor: "pointer", fontSize: 24, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+                    <button aria-label="Close" onClick={() => setSelectedThread(null)} style={{ background: "none", border: "none", color: IC.muted, cursor: "pointer", padding: 0, flexShrink: 0 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button style={IS.btn("amber")} onClick={() => {
@@ -17391,7 +17391,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
                 {/* Compose header */}
                 <div style={{ padding: "14px 16px", borderBottom: `1px solid ${IC.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: IC.text }}>New Email</div>
-                  <button onClick={() => { setComposing(false); setComposeData({ to: "", subject: "", body: "" }); }} style={{ background: "none", border: "none", color: IC.muted, cursor: "pointer", fontSize: 24, lineHeight: 1 }}>×</button>
+                  <button aria-label="Close" onClick={() => { setComposing(false); setComposeData({ to: "", subject: "", body: "" }); }} style={{ background: "none", border: "none", color: IC.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                 </div>
                 {/* Compose body */}
                 <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -17607,7 +17607,7 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
               <div style={{ fontSize: 15, fontWeight: 700 }}>New Enquiry</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="name (full name), phone (phone number), email (email address), address (address where work is needed), msg (what they want e.g. extension quote, boiler service), source (how they got in touch: Phone/Email/Website/Referral)" />
-                <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -17656,7 +17656,7 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
                   {selected.urgent && <div style={{ fontSize: 10, background: C.red, color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>URGENT</div>}
                 </div>
               </div>
-              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 24 }}>×</button>
+              <button aria-label="Close" onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
@@ -17696,7 +17696,7 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {Object.entries(statusLabel).map(([v, l]) => (
                   <button key={v} onClick={() => updateStatus(selected.id, v)}
-                    style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${selected.status === v ? statusColor[v] : C.border}`, background: selected.status === v ? statusColor[v] + "22" : "transparent", color: selected.status === v ? statusColor[v] : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600, cursor: "pointer" }}>
+                    style={{ padding: "5px 12px", borderRadius: 10, border: `1px solid ${selected.status === v ? statusColor[v] : C.border}`, background: selected.status === v ? statusColor[v] + "22" : "transparent", color: selected.status === v ? statusColor[v] : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600, cursor: "pointer" }}>
                     {l}
                   </button>
                 ))}
@@ -17881,7 +17881,7 @@ function SignaturePad({ onSave, onCancel, title = "Customer Signature" }) {
       <div style={{ background: "#fff", borderRadius: 12, padding: 20, maxWidth: 380, width: "100%" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{title}</div>
-          <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#999" }}>×</button>
+          <button aria-label="Close" onClick={onCancel} style={{ background: "none", border: "none", cursor: "pointer", color: "#999" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
         <div style={{ fontSize: 11, color: "#999", marginBottom: 8 }}>Sign in the box below</div>
         <div style={{ border: "2px solid #e5e5e5", borderRadius: 8, overflow: "hidden", touchAction: "none", background: "#fafafa" }}>
@@ -17895,8 +17895,8 @@ function SignaturePad({ onSave, onCancel, title = "Customer Signature" }) {
         </div>
         <div style={{ borderTop: "1px dashed #ccc", marginTop: 0, marginBottom: 12, marginLeft: 16, marginRight: 16 }} />
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={clear} style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid #e5e5e5", background: "#fff", color: "#666", cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace" }}>Clear</button>
-          <button onClick={save} disabled={!hasSig} style={{ flex: 1, padding: "10px", borderRadius: 6, border: "none", background: hasSig ? "#10b981" : "#e5e5e5", color: hasSig ? "#fff" : "#999", cursor: hasSig ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+          <button onClick={clear} style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid #e5e5e5", background: "#fff", color: "#666", cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace" }}>Clear</button>
+          <button onClick={save} disabled={!hasSig} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: hasSig ? "#10b981" : "#e5e5e5", color: hasSig ? "#fff" : "#999", cursor: hasSig ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
             ✓ Confirm Signature
           </button>
         </div>
@@ -19017,7 +19017,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
             style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: C.text, fontSize: 13, minWidth: 0, fontFamily: "inherit" }}
           />
           {search && (
-            <button onClick={() => setSearch("")} aria-label="Clear search" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+            <button onClick={() => setSearch("")} aria-label="Clear search" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: 0, flexShrink: 0 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
           )}
         </div>
 
@@ -19321,7 +19321,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                       {addTime.labour_type === "hourly" && <>
                         <div><label style={S.label}>Hours</label><input type="number" step="0.5" min="0" style={S.input} placeholder="e.g. 6" value={addTime.hours} onChange={e => setAddTime(p => ({ ...p, hours: e.target.value }))} /></div>
                         <div><label style={S.label}>Rate (£/hr)</label><input type="number" step="0.50" min="0" style={S.input} placeholder="e.g. 55" value={addTime.rate} onChange={e => setAddTime(p => ({ ...p, rate: e.target.value }))} /></div>
-                        {addTime.hours && addTime.rate && <div style={{ gridColumn: "1/-1", fontSize: 12, color: C.amber, background: C.amber + "11", borderRadius: 6, padding: "6px 10px" }}>
+                        {addTime.hours && addTime.rate && <div style={{ gridColumn: "1/-1", fontSize: 12, color: C.amber, background: C.amber + "11", borderRadius: 10, padding: "6px 10px" }}>
                           Labour cost: £{(parseFloat(addTime.hours || 0) * parseFloat(addTime.rate || 0)).toFixed(2)}
                         </div>}
                       </>}
@@ -19330,7 +19330,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                       {addTime.labour_type === "day_rate" && <>
                         <div><label style={S.label}>Number of Days</label><input type="number" step="0.5" min="0" style={S.input} placeholder="e.g. 2.5" value={addTime.days} onChange={e => setAddTime(p => ({ ...p, days: e.target.value }))} /></div>
                         <div><label style={S.label}>Day Rate (£/day)</label><input type="number" step="1" min="0" style={S.input} placeholder="e.g. 350" value={addTime.rate} onChange={e => setAddTime(p => ({ ...p, rate: e.target.value }))} /></div>
-                        {addTime.days && addTime.rate && <div style={{ gridColumn: "1/-1", fontSize: 12, color: C.amber, background: C.amber + "11", borderRadius: 6, padding: "6px 10px" }}>
+                        {addTime.days && addTime.rate && <div style={{ gridColumn: "1/-1", fontSize: 12, color: C.amber, background: C.amber + "11", borderRadius: 10, padding: "6px 10px" }}>
                           Labour cost: £{(parseFloat(addTime.days || 0) * parseFloat(addTime.rate || 0)).toFixed(2)}
                         </div>}
                       </>}
@@ -19338,7 +19338,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                       {/* Price work fields */}
                       {addTime.labour_type === "price_work" && <>
                         <div style={{ gridColumn: "1/-1" }}><label style={S.label}>Agreed Price (£)</label><input type="number" step="0.01" min="0" style={S.input} placeholder="e.g. 1200" value={addTime.total} onChange={e => setAddTime(p => ({ ...p, total: e.target.value }))} /></div>
-                        <div style={{ gridColumn: "1/-1", fontSize: 11, color: C.muted, background: C.surfaceHigh, borderRadius: 6, padding: "6px 10px" }}>
+                        <div style={{ gridColumn: "1/-1", fontSize: 11, color: C.muted, background: C.surfaceHigh, borderRadius: 10, padding: "6px 10px" }}>
                           Price work — fixed agreed amount for the job or task, no hourly or day rate tracking needed.
                         </div>
                       </>}
@@ -19356,9 +19356,9 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                   {/* Summary */}
                   {timeLogs.length > 0 && (
                     <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                      {totalTime > 0 && <div style={{ fontSize: 11, color: C.muted, background: C.surfaceHigh, borderRadius: 6, padding: "4px 10px" }}>⏱ {totalTime.toFixed(1)} hrs</div>}
-                      {totalDays > 0 && <div style={{ fontSize: 11, color: C.muted, background: C.surfaceHigh, borderRadius: 6, padding: "4px 10px" }}>📅 {totalDays} days</div>}
-                      <div style={{ fontSize: 11, color: C.amber, background: C.amber + "11", borderRadius: 6, padding: "4px 10px", fontWeight: 700 }}>£{totalLabour.toFixed(2)} total labour</div>
+                      {totalTime > 0 && <div style={{ fontSize: 11, color: C.muted, background: C.surfaceHigh, borderRadius: 10, padding: "4px 10px" }}>⏱ {totalTime.toFixed(1)} hrs</div>}
+                      {totalDays > 0 && <div style={{ fontSize: 11, color: C.muted, background: C.surfaceHigh, borderRadius: 10, padding: "4px 10px" }}>📅 {totalDays} days</div>}
+                      <div style={{ fontSize: 11, color: C.amber, background: C.amber + "11", borderRadius: 10, padding: "4px 10px", fontWeight: 700 }}>£{totalLabour.toFixed(2)} total labour</div>
                     </div>
                   )}
 
@@ -19384,7 +19384,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                           <button onClick={async () => {
                             await supabase.from("time_logs").delete().eq("id", t.id);
                             setTimeLogs(prev => prev.filter(x => x.id !== t.id));
-                          }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>
+                          }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                         </div>
                       </div>
                     );
@@ -19610,11 +19610,11 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                             <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", color: C.red }} onClick={async () => {
                               await supabase.from("job_drawings").delete().eq("id", d.id);
                               setDrawings(prev => prev.filter(x => x.id !== d.id));
-                            }}>×</button>
+                            }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                           </div>
                         </div>
                         {d.file_type !== "application/pdf" && d.file_data && (
-                          <img src={d.file_data} alt={d.filename} style={{ width: "100%", maxHeight: 160, objectFit: "contain", borderRadius: 6, background: "#fff", cursor: "pointer" }}
+                          <img src={d.file_data} alt={d.filename} style={{ width: "100%", maxHeight: 160, objectFit: "contain", borderRadius: 10, background: "#fff", cursor: "pointer" }}
                             onClick={() => document.getElementById(`view-drawing-${d.id}`) && document.getElementById(`view-drawing-${d.id}`).click()}
                           />
                         )}
@@ -19869,7 +19869,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Job</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={editForm} setForm={setEditForm} fieldDescriptions="title (job title), customer (customer name), address (property address), type (job type e.g. boiler service), status (enquiry/quoted/accepted/in_progress/completed), value (job value in pounds), po_number (PO number), notes (any notes)" />
-                <button onClick={() => setEditingJob(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={() => setEditingJob(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -19914,7 +19914,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>💰 Stage Payments</div>
-              <button onClick={() => setShowStagePayments(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <button aria-label="Close" onClick={() => setShowStagePayments(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>
               Job value: <strong style={{ color: C.amber }}>£{selected.value}</strong> · Each stage creates a draft invoice
@@ -19932,7 +19932,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>£{stageAmt.toFixed(2)}</div>
                     {stagePaymentStages.length > 1 && (
                       <button onClick={() => setStagePaymentStages(prev => prev.filter((_, j) => j !== i))}
-                        style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>
+                        style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                     )}
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, alignItems: "center" }}>
@@ -20213,7 +20213,7 @@ function ExpensesTab({ user, setContextHint }) {
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Expense</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="exp_type (type: mileage/fuel/parking/tools/materials/other), miles (miles as number if mileage), amount (£ amount as number), description (what it was for e.g. trip to Screwfix), exp_date (date in YYYY-MM-DD format)" />
-                <button onClick={() => { setShowAdd(false); setReceiptData(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={() => { setShowAdd(false); setReceiptData(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -20408,7 +20408,7 @@ function CISStatementsTab({ user, setContextHint }) {
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add CIS Statement</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="contractor_name (main contractor company name), tax_month (month in YYYY-MM format), gross_amount (gross amount as number), deduction_amount (CIS deduction as number), notes (any reference number or notes)" />
-                <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -21109,7 +21109,7 @@ ${generateReportHTML()}
             {allQuotes.length > 0 && (
               <div style={{ background: C.surface, borderRadius: 10, padding: 16, border: `1px solid ${C.border}` }}>
                 <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Quote outcomes</div>
-                <div style={{ display: "flex", height: 24, borderRadius: 6, overflow: "hidden", gap: 2 }}>
+                <div style={{ display: "flex", height: 24, borderRadius: 10, overflow: "hidden", gap: 2 }}>
                   {acceptedQuotes.length > 0 && <div style={{ flex: acceptedQuotes.length, background: C.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", fontWeight: 700 }}>{acceptedQuotes.length} Won</div>}
                   {pendingQuotes.length > 0 && <div style={{ flex: pendingQuotes.length, background: C.amber, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", fontWeight: 700 }}>{pendingQuotes.length} Pending</div>}
                   {declinedQuotes.length > 0 && <div style={{ flex: declinedQuotes.length, background: C.red + "88", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 700 }}>{declinedQuotes.length} Lost</div>}
@@ -21170,7 +21170,7 @@ ${generateReportHTML()}
             {allEnquiries.length > 0 && (
               <div style={{ background: C.surface, borderRadius: 10, padding: 16, border: `1px solid ${C.border}` }}>
                 <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Enquiry outcomes</div>
-                <div style={{ display: "flex", height: 24, borderRadius: 6, overflow: "hidden", gap: 2 }}>
+                <div style={{ display: "flex", height: 24, borderRadius: 10, overflow: "hidden", gap: 2 }}>
                   {(quotedEnquiries.length + wonEnquiries.length) > 0 && <div style={{ flex: quotedEnquiries.length + wonEnquiries.length, background: C.blue, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 700 }}>{quotedEnquiries.length + wonEnquiries.length} Quoted</div>}
                   {pendingEnquiries.length > 0 && <div style={{ flex: pendingEnquiries.length, background: C.amber, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", fontWeight: 700 }}>{pendingEnquiries.length} Pending</div>}
                   {lostEnquiries.length > 0 && <div style={{ flex: lostEnquiries.length, background: "rgba(128,128,140,0.27)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: C.muted, fontWeight: 700 }}>{lostEnquiries.length} Lost</div>}
@@ -21229,7 +21229,7 @@ function AssignToJobModal({ user, onAssign, onClose, currentJobId }) {
       <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>Assign to Job</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+          <button aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
         <input style={{ ...S.input, marginBottom: 12 }} placeholder="Search jobs..." value={search} onChange={e => setSearch(e.target.value)} autoFocus />
         {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16, textAlign: "center" }}>Loading jobs...</div> :
@@ -21394,7 +21394,7 @@ function MileageTab({ user, setContextHint }) {
             <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>{t.miles} mi</div>
             <div style={{ fontSize: 11, color: C.green, fontFamily: "'DM Mono',monospace" }}>£{(t.value || 0).toFixed(2)}</div>
           </div>
-          <button onClick={() => del(t.id, t.miles)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>
+          <button onClick={() => del(t.id, t.miles)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
       ))}
 
@@ -21405,7 +21405,7 @@ function MileageTab({ user, setContextHint }) {
               <div style={{ fontSize: 15, fontWeight: 700 }}>Log Trip</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="date (YYYY-MM-DD), from (start location e.g. Home), to (destination), miles (number), purpose (e.g. site visit)" />
-                <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -21420,7 +21420,7 @@ function MileageTab({ user, setContextHint }) {
                   <input style={S.input} type="number" step="0.1" min="0" value={form.miles} onChange={e => setForm(f => ({ ...f, miles: e.target.value }))} placeholder="0.0" />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-                  {form.miles > 0 && <div style={{ fontSize: 12, color: C.green, background: C.green + "11", borderRadius: 6, padding: "8px 10px", textAlign: "center", fontFamily: "'DM Mono',monospace" }}>£{calcValue(form.miles, yearMiles).toFixed(2)} claimable</div>}
+                  {form.miles > 0 && <div style={{ fontSize: 12, color: C.green, background: C.green + "11", borderRadius: 10, padding: "8px 10px", textAlign: "center", fontFamily: "'DM Mono',monospace" }}>£{calcValue(form.miles, yearMiles).toFixed(2)} claimable</div>}
                 </div>
               </div>
               <div><label style={S.label}>Job / Purpose</label><input style={S.input} value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} placeholder="e.g. Boiler service — J. Smith" /></div>
@@ -21810,7 +21810,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       {scanError && (
         <div style={{ background: "#ef444418", border: "1px solid #ef444444", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#ef4444", display: "flex", justifyContent: "space-between" }}>
           {scanError}
-          <button onClick={() => setScanError("")} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}>×</button>
+          <button onClick={() => setScanError("")} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
       )}
 
@@ -21823,7 +21823,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={() => setView("add_payment")} style={{ ...S.btn("primary"), fontSize: 11 }}>Review & Save</button>
-            <button onClick={() => { setSubScanResult(null); setSubScanImage(null); }} style={{ ...S.btn("ghost"), fontSize: 11 }}>×</button>
+            <button onClick={() => { setSubScanResult(null); setSubScanImage(null); }} style={{ ...S.btn("ghost"), fontSize: 11 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
           </div>
         </div>
       )}
@@ -22040,7 +22040,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Subcontractor</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={subForm} setForm={setSubForm} fieldDescriptions="name (full name), company (company name), utr (10-digit UTR number), cis_rate (20 for registered, 30 for unregistered, 0 for gross), email, phone, address (business or home address)" />
-                <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -22082,14 +22082,14 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={payForm} setForm={setPayForm} fieldDescriptions="date (YYYY-MM-DD), gross (gross amount in pounds), invoice_number (their invoice ref), job_ref (job reference), description (work description)" />
-                <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {/* Scanned invoice thumbnail */}
               {subScanImage && (
                 <div style={{ marginBottom: 4 }}>
-                  <img src={subScanImage} alt="Scanned invoice" style={{ width: "100%", maxHeight: 120, objectFit: "contain", borderRadius: 6, border: `1px solid ${C.border}` }} />
+                  <img src={subScanImage} alt="Scanned invoice" style={{ width: "100%", maxHeight: 120, objectFit: "contain", borderRadius: 10, border: `1px solid ${C.border}` }} />
                 </div>
               )}
               <div>
@@ -22138,7 +22138,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
                       <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
                         <input style={{ ...S.input, flex: 1 }} placeholder="e.g. Boiler unit" value={item.desc} onChange={e => setPayForm(f => ({ ...f, material_items: f.material_items.map((m,i) => i===idx ? {...m, desc: e.target.value} : m) }))} />
                         <input style={{ ...S.input, width: 90, flexShrink: 0 }} type="number" placeholder="£" value={item.amount} onChange={e => setPayForm(f => ({ ...f, material_items: f.material_items.map((m,i) => i===idx ? {...m, amount: e.target.value} : m) }))} />
-                        {(payForm.material_items || []).length > 1 && <button onClick={() => setPayForm(f => ({ ...f, material_items: f.material_items.filter((_,i) => i!==idx) }))} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer", fontSize: 16 }}>×</button>}
+                        {(payForm.material_items || []).length > 1 && <button onClick={() => setPayForm(f => ({ ...f, material_items: f.material_items.filter((_,i) => i!==idx) }))} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>}
                       </div>
                     ))}
                   </div>
@@ -22224,7 +22224,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={workerForm} setForm={setWorkerForm} fieldDescriptions="name (full name), type (subcontractor or employed), role (trade or job title), day_rate (daily rate in pounds), hourly_rate (hourly rate), utr (UTR number), email, phone" />
-                <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>×</button>
+                <button aria-label="Close" onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -22281,7 +22281,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
               <div style={{ fontSize: 15, fontWeight: 700 }}>Add Certificate / Document</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={docForm} setForm={setDocForm} fieldDescriptions="doc_type (cscs, gas_safe, public_liability, employers_liability, driving_licence, right_to_work, other), doc_number, issued_date (YYYY-MM-DD), expiry_date (YYYY-MM-DD), notes" />
-                <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>×</button>
+                <button aria-label="Close" onClick={() => setView("list")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -22327,7 +22327,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, maxHeight: "85vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Payment</div>
-              <button onClick={() => setEditingPayment(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
+              <button aria-label="Close" onClick={() => setEditingPayment(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
@@ -22388,7 +22388,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, maxHeight: "85vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Worker</div>
-              <button onClick={() => setEditingWorker(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
+              <button aria-label="Close" onClick={() => setEditingWorker(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div><label style={S.label}>Name</label><input style={S.input} value={editingWorker.name||""} onChange={e => setEditingWorker(w => ({...w, name: e.target.value}))}/></div>
@@ -22612,7 +22612,7 @@ function DocumentsTab({ user, customers, setContextHint }) {
               </div>
             </div>
             <button onClick={() => openDoc(doc)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>Open</button>
-            <button onClick={() => del(doc)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>
+            <button onClick={() => del(doc)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
           </div>
         ))
       }
@@ -22623,7 +22623,7 @@ function DocumentsTab({ user, customers, setContextHint }) {
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Upload Document</div>
-              <button onClick={() => { setShowUpload(false); setPendingFile(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <button aria-label="Close" onClick={() => { setShowUpload(false); setPendingFile(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>
@@ -22874,7 +22874,7 @@ function ReviewsTab({ user, brand, customers, setContextHint }) {
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Send Review Request</div>
-              <button onClick={() => setShowSendModal(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+              <button aria-label="Close" onClick={() => setShowSendModal(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
               Sending to <strong style={{ color: C.text }}>{showSendModal.customer}</strong> — choose which platforms to include:
@@ -22995,7 +22995,7 @@ function StockTab({ user, setContextHint }) {
           <div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="name (item name e.g. 22mm copper pipe), sku (stock code), quantity (number in stock), unit (unit e.g. m/unit/box/kg), unit_cost (cost per unit in pounds), reorder_level (alert when below this number), location (where stored e.g. van shelf 2)" />
-            <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+            <button aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -23016,7 +23016,7 @@ function StockTab({ user, setContextHint }) {
             <div><label style={S.label}>Unit Cost (£)</label><input style={S.input} type="number" step="0.01" min="0" value={form.unit_cost} onChange={e => setForm(f => ({ ...f, unit_cost: e.target.value }))} placeholder="0.00" /></div>
             <div><label style={S.label}>Reorder Level</label><input style={S.input} type="number" step="0.1" min="0" value={form.reorder_level} onChange={e => setForm(f => ({ ...f, reorder_level: e.target.value }))} placeholder="Alert when below" /></div>
           </div>
-          {form.quantity && form.unit_cost && <div style={{ fontSize: 11, color: C.green, background: C.green + "11", borderRadius: 6, padding: "6px 10px" }}>Stock value: £{(parseFloat(form.quantity||0) * parseFloat(form.unit_cost||0)).toFixed(2)}</div>}
+          {form.quantity && form.unit_cost && <div style={{ fontSize: 11, color: C.green, background: C.green + "11", borderRadius: 10, padding: "6px 10px" }}>Stock value: £{(parseFloat(form.quantity||0) * parseFloat(form.unit_cost||0)).toFixed(2)}</div>}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
           <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={save} disabled={!form.name}>Save</button>
@@ -23083,15 +23083,15 @@ function StockTab({ user, setContextHint }) {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                <button onClick={() => adjust(item.id, -1)} style={{ width: 28, height: 28, borderRadius: 6, background: C.surfaceHigh, border: `1px solid ${C.border}`, color: C.text, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+                <button onClick={() => adjust(item.id, -1)} style={{ width: 28, height: 28, borderRadius: 10, background: C.surfaceHigh, border: `1px solid ${C.border}`, color: C.text, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
                 <div style={{ textAlign: "center", minWidth: 50 }}>
                   <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: isLow ? C.red : C.text }}>{item.quantity}</div>
                   <div style={{ fontSize: 10, color: C.muted }}>{item.unit}</div>
                 </div>
-                <button onClick={() => adjust(item.id, 1)} style={{ width: 28, height: 28, borderRadius: 6, background: C.surfaceHigh, border: `1px solid ${C.border}`, color: C.text, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                <button onClick={() => adjust(item.id, 1)} style={{ width: 28, height: 28, borderRadius: 10, background: C.surfaceHigh, border: `1px solid ${C.border}`, color: C.text, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
               </div>
               <button onClick={() => openEdit(item)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>✏</button>
-              <button onClick={() => del(item.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>×</button>
+              <button onClick={() => del(item.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
           </div>
         );
@@ -23258,7 +23258,7 @@ function PurchaseOrdersTab({ user, brand }) {
               <div style={{ fontSize: 15, fontWeight: 700 }}>New Purchase Order</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="supplier (supplier name), supplier_email (email address), job_ref (which job this is for), notes (any special instructions), expected_delivery (date YYYY-MM-DD)" />
-                <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22 }}>×</button>
+                <button aria-label="Close" onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -23287,7 +23287,7 @@ function PurchaseOrdersTab({ user, brand }) {
                         {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                       </select>
                       <input style={{ ...S.input, fontSize: 12 }} type="number" step="0.01" placeholder="0.00" value={item.unit_price} onChange={e => setForm(f => ({ ...f, items: f.items.map((x,j) => j===i ? {...x, unit_price: e.target.value} : x) }))} />
-                      <button onClick={() => setForm(f => ({ ...f, items: f.items.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }} disabled={form.items.length===1}>×</button>
+                      <button onClick={() => setForm(f => ({ ...f, items: f.items.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }} disabled={form.items.length===1}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                     </div>
                   ))}
                   {orderTotal(form.items) > 0 && <div style={{ fontSize: 12, fontWeight: 700, textAlign: "right", color: C.amber, fontFamily: "'DM Mono',monospace" }}>Total: £{orderTotal(form.items).toFixed(2)}</div>}
@@ -23859,7 +23859,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
                     <select style={{ ...S.input, flex: 1, fontSize: 11 }} value={h.risk} onChange={e => setForm(f => ({ ...f, custom_hazards: f.custom_hazards.map((x,j) => j===i ? {...x,risk:e.target.value} : x) }))}>
                       {["Low","Medium","High","Critical"].map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
-                    <button onClick={() => setForm(f => ({ ...f, custom_hazards: f.custom_hazards.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18 }}>×</button>
+                    <button onClick={() => setForm(f => ({ ...f, custom_hazards: f.custom_hazards.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                   </div>
                   <input style={{ ...S.input, fontSize: 12, marginBottom: 6 }} value={h.control} onChange={e => setForm(f => ({ ...f, custom_hazards: f.custom_hazards.map((x,j) => j===i ? {...x,control:e.target.value} : x) }))} placeholder="Control measures" />
                   <input style={{ ...S.input, fontSize: 12 }} value={h.ppe} onChange={e => setForm(f => ({ ...f, custom_hazards: f.custom_hazards.map((x,j) => j===i ? {...x,ppe:e.target.value} : x) }))} placeholder="PPE required" />
@@ -23881,7 +23881,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
                     const sel = form.selected_method_steps.includes(step);
                     return (
                       <div key={si} onClick={() => setForm(f => ({ ...f, selected_method_steps: sel ? f.selected_method_steps.filter(x => x !== step) : [...f.selected_method_steps, step] }))}
-                        style={{ display: "flex", gap: 10, padding: "8px 10px", borderRadius: 6, border: `1px solid ${sel ? C.amber + "88" : C.border}`, background: sel ? C.amber + "0a" : "transparent", cursor: "pointer" }}>
+                        style={{ display: "flex", gap: 10, padding: "8px 10px", borderRadius: 10, border: `1px solid ${sel ? C.amber + "88" : C.border}`, background: sel ? C.amber + "0a" : "transparent", cursor: "pointer" }}>
                         <div style={{ width: 18, height: 18, borderRadius: 3, border: `2px solid ${sel ? C.amber : C.border}`, background: sel ? C.amber : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", flexShrink: 0, marginTop: 1 }}>
                           {sel ? "✓" : ""}
                         </div>
@@ -23901,7 +23901,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
               {form.custom_method_steps.map((s, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
                   <input style={{ ...S.input, flex: 1, fontSize: 12 }} value={s} onChange={e => setForm(f => ({ ...f, custom_method_steps: f.custom_method_steps.map((x,j) => j===i ? e.target.value : x) }))} placeholder="Custom step..." />
-                  <button onClick={() => setForm(f => ({ ...f, custom_method_steps: f.custom_method_steps.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18 }}>×</button>
+                  <button onClick={() => setForm(f => ({ ...f, custom_method_steps: f.custom_method_steps.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                 </div>
               ))}
             </div>
@@ -23919,7 +23919,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
                   const sel = form.coshh_substances.includes(s.name);
                   return (
                     <div key={i} onClick={() => setForm(f => ({ ...f, coshh_substances: sel ? f.coshh_substances.filter(x => x !== s.name) : [...f.coshh_substances, s.name] }))}
-                      style={{ display: "flex", gap: 10, padding: "8px 10px", borderRadius: 6, border: `1px solid ${sel ? C.amber + "88" : C.border}`, background: sel ? C.amber + "0a" : "transparent", cursor: "pointer" }}>
+                      style={{ display: "flex", gap: 10, padding: "8px 10px", borderRadius: 10, border: `1px solid ${sel ? C.amber + "88" : C.border}`, background: sel ? C.amber + "0a" : "transparent", cursor: "pointer" }}>
                       <div style={{ width: 18, height: 18, borderRadius: 3, border: `2px solid ${sel ? C.amber : C.border}`, background: sel ? C.amber : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#000", flexShrink: 0 }}>
                         {sel ? "✓" : ""}
                       </div>
@@ -23942,7 +23942,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
                 <div key={i} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 12px", marginBottom: 8, border: `1px solid ${C.border}` }}>
                   <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
                     <input style={{ ...S.input, flex: 1, fontSize: 12 }} value={s.name} onChange={e => setForm(f => ({ ...f, custom_coshh: f.custom_coshh.map((x,j) => j===i ? {...x,name:e.target.value} : x) }))} placeholder="Substance name" />
-                    <button onClick={() => setForm(f => ({ ...f, custom_coshh: f.custom_coshh.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18 }}>×</button>
+                    <button onClick={() => setForm(f => ({ ...f, custom_coshh: f.custom_coshh.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                   </div>
                   <input style={{ ...S.input, fontSize: 12, marginBottom: 6 }} value={s.hazard} onChange={e => setForm(f => ({ ...f, custom_coshh: f.custom_coshh.map((x,j) => j===i ? {...x,hazard:e.target.value} : x) }))} placeholder="Hazard" />
                   <input style={{ ...S.input, fontSize: 12, marginBottom: 6 }} value={s.exposure} onChange={e => setForm(f => ({ ...f, custom_coshh: f.custom_coshh.map((x,j) => j===i ? {...x,exposure:e.target.value} : x) }))} placeholder="Control measure / exposure limit" />
@@ -24088,7 +24088,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
                 <button onClick={() => startEdit(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}` }}>✏ Edit</button>
                 <button onClick={() => duplicateRAMS(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}` }}>📋 Copy</button>
                 <button onClick={() => setAssigningRams(r)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, borderRadius: 0, border: "none", borderRight: `1px solid ${C.border}`, color: r.job_id ? C.green : C.muted }}>🔗 {r.job_id ? "Linked" : "Job"}</button>
-                <button onClick={() => del(r.id)} aria-label="Delete" style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 16, borderRadius: 0, border: "none", color: C.red, padding: "6px 0" }}>×</button>
+                <button onClick={() => del(r.id)} aria-label="Delete" style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 16, borderRadius: 0, border: "none", color: C.red, padding: "6px 0" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
           );
@@ -25699,7 +25699,7 @@ function AppInner() {
           <div style={{ flex: 1, fontSize: 12, color: "#fff", lineHeight: 1.5 }}>
             <strong>Microphone blocked</strong> — calls can't ring in the app. Go to your browser/device settings and allow microphone access for Trade PA.
           </div>
-          <button onClick={() => setMicBlocked(false)} style={{ background: "none", border: "none", color: "#fff", fontSize: 18, cursor: "pointer", padding: "0 4px" }}>×</button>
+          <button onClick={() => setMicBlocked(false)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", padding: "0 4px" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
       )}
 
@@ -25717,7 +25717,7 @@ function AppInner() {
           {pwaPrompt && !isIos && (
             <button onClick={async () => { pwaPrompt.prompt(); const { outcome } = await pwaPrompt.userChoice; if (outcome === "accepted") setShowPwaBanner(false); }} style={{ background: "#f59e0b", color: "#000", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>Install →</button>
           )}
-          <button onClick={() => setShowPwaBanner(false)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 20, flexShrink: 0, padding: "0 4px" }}>×</button>
+          <button aria-label="Close" onClick={() => setShowPwaBanner(false)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", flexShrink: 0, padding: "0 4px" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
       )}
       <style>{`
@@ -26018,7 +26018,7 @@ function AppInner() {
                         style={{
                           display: "flex", alignItems: "center", gap: 8,
                           width: "100%", padding: "8px 12px", marginBottom: 1,
-                          border: "none", borderRadius: 6,
+                          border: "none", borderRadius: 10,
                           background: active ? C.amber : "transparent",
                           color: active ? "#000" : C.text,
                           fontSize: 12, fontWeight: active ? 700 : 500,
