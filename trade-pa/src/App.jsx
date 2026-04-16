@@ -9371,7 +9371,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   const isHome = messages.length === 0 && !loading;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 160px)", minHeight: 400, gap: 12, overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 200px)", minHeight: 400, gap: 12, overflow: "hidden" }}>
 
       {/* ── HOME SCREEN ─────────────────────────────────────────────────── */}
       {isHome && (() => {
@@ -9393,7 +9393,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `£${Math.round(v).toLocaleString()}`;
         };
         return (
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 100 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 8 }}>
 
           {/* Greeting */}
           <div style={{ paddingTop: 4 }}>
@@ -9616,7 +9616,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             </div>
           )}
 
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0 100px" }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0" }}>
             {messages.map((m, i) => (
               <div key={i}>
                 <div style={S.aiMsg(m.role)}>
@@ -10549,22 +10549,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         </>
       )}
 
-      {/* ── INPUT BAR — fixed above bottom nav, never scrolls ───────────── */}
-      <div style={{
-        position: "fixed",
-        bottom: "calc(52px + env(safe-area-inset-bottom, 0px))",
-        left: 0,
-        right: 0,
-        padding: "10px 12px 10px",
-        background: "rgba(10,10,10,0.96)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        borderTop: `1px solid ${C.border}`,
-        zIndex: 90,
-        display: "flex",
-        gap: 8,
-        alignItems: "flex-end",
-      }}>
+      {/* ── INPUT BAR — in flow, pinned by flex at bottom ────────────────── */}
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0, paddingTop: 6 }}>
         <textarea
           style={{ ...S.input, flex: 1, minHeight: 46, maxHeight: 120, resize: "none", fontSize: 14, padding: "11px 14px" }}
           placeholder={isHome ? "Ask Trade PA anything..." : "Type here, or tap 🎙 to speak..."}
