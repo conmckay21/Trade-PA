@@ -3758,6 +3758,10 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt })
           70% { transform: scale(1.6); opacity: 0; }
           100% { transform: scale(1.6); opacity: 0; }
         }
+        @keyframes hf-pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.6); opacity: 0.4; }
+        }
       `}</style>
 
       {/* Greeting */}
@@ -3858,12 +3862,12 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt })
         </div>
       </div>
 
-      {/* Hands-free toggle row */}
-      <div
+      {/* Hands-free action button — morphs between start/stop */}
+      <button
         onClick={() => setHandsFree(v => !v)}
         style={{
-          background: C.surfaceHigh,
-          border: `1px solid ${handsFree ? `${C.amber}40` : C.border}`,
+          background: handsFree ? `linear-gradient(180deg, ${C.amber}, #d97706)` : C.surfaceHigh,
+          border: `1px solid ${handsFree ? `${C.amber}90` : C.border}`,
           borderRadius: 14,
           padding: "12px 14px",
           display: "flex",
@@ -3871,59 +3875,62 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt })
           justifyContent: "space-between",
           gap: 12,
           cursor: "pointer",
-          transition: "border-color 150ms ease",
+          transition: "all 180ms ease",
+          width: "100%",
+          color: handsFree ? "#000" : C.text,
+          fontFamily: "'DM Sans', sans-serif",
+          textAlign: "left",
+          boxShadow: handsFree ? `0 8px 24px -8px ${C.amber}60` : "none",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <div style={{
             width: 36, height: 36,
             borderRadius: 10,
-            background: handsFree ? `${C.amber}1f` : C.surface,
-            border: `1px solid ${handsFree ? `${C.amber}40` : C.border}`,
-            color: handsFree ? C.amber : C.textDim,
+            background: handsFree ? "rgba(0,0,0,0.15)" : C.surface,
+            border: `1px solid ${handsFree ? "rgba(0,0,0,0.2)" : C.border}`,
+            color: handsFree ? "#000" : C.textDim,
             display: "grid",
             placeItems: "center",
             flexShrink: 0,
             transition: "all 150ms ease",
+            position: "relative",
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill={handsFree ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{
-              fontFamily: "'DM Sans', sans-serif",
               fontSize: 14,
-              fontWeight: 600,
-              color: C.text,
+              fontWeight: 700,
+              color: handsFree ? "#000" : C.text,
               letterSpacing: "-0.01em",
-            }}>Hands-free: {handsFree ? "On" : "Off"}</div>
-            <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>
-              Auto-listen after each reply
-            </div>
+            }}>{handsFree ? "Hands-free active" : "Start hands-free"}</div>
+            <div style={{
+              fontSize: 11.5,
+              color: handsFree ? "rgba(0,0,0,0.7)" : C.textDim,
+              marginTop: 2,
+            }}>{handsFree ? "Tap to stop · auto-listening after each reply" : "One tap, continuous voice mode"}</div>
           </div>
         </div>
-        {/* Switch */}
-        <div style={{
-          width: 44, height: 24,
-          borderRadius: 12,
-          background: handsFree ? C.amber : C.border,
-          position: "relative",
-          flexShrink: 0,
-          transition: "background 150ms ease",
-        }}>
-          <div style={{
-            position: "absolute",
-            top: 2,
-            left: handsFree ? 22 : 2,
-            width: 20, height: 20,
-            borderRadius: "50%",
-            background: "#fff",
-            transition: "left 150ms ease",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-          }} />
-        </div>
-      </div>
+        {/* Right indicator — pulsing dot when active, chevron when idle */}
+        {handsFree ? (
+          <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0, marginRight: 4 }}>
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: "50%",
+              background: "#000",
+              animation: "hf-pulse 1.2s ease-in-out infinite",
+            }} />
+          </div>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: C.textDim, flexShrink: 0 }}>
+            <path d="M9 5l7 7-7 7" />
+          </svg>
+        )}
+      </button>
 
       {/* Quick actions */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
@@ -22346,6 +22353,161 @@ function ActiveCallScreen({ callerName, callerNumber, direction, startTime, mute
   );
 }
 
+// ─── BottomTabBar — Session B (mobile only, coexists with top nav) ──────────
+// 5-tab bottom navigation per the new Home-centric design:
+// Home · Jobs · Diary · Money · People
+// Each bottom tab maps to an existing internal view until Session C consolidates.
+function BottomTabBar({ view, setView, isDesktopBrowser }) {
+  if (isDesktopBrowser) return null; // desktop has side nav; skip bottom bar entirely
+
+  // Map each bottom tab to its primary internal view and a set of "related" views
+  // that should light it up when active. Session C will consolidate these into
+  // proper containers with internal routers.
+  const TABS = [
+    {
+      id: "Home",
+      label: "Home",
+      view: "Dashboard",
+      activeOn: ["Dashboard", "AI Assistant"],
+      icon: (active) => (
+        <svg viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1h-5v-7h-6v7H4a1 1 0 01-1-1V10.5z" />
+        </svg>
+      ),
+    },
+    {
+      id: "Jobs",
+      label: "Jobs",
+      view: "Jobs",
+      activeOn: ["Jobs", "Enquiries", "Materials", "RAMS", "Documents"],
+      icon: (active) => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+          <rect x="9" y="3" width="6" height="4" rx="1" />
+        </svg>
+      ),
+    },
+    {
+      id: "Diary",
+      label: "Diary",
+      view: "Schedule",
+      activeOn: ["Schedule", "Reminders"],
+      icon: (active) => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M8 3v4M16 3v4M3 11h18" />
+        </svg>
+      ),
+    },
+    {
+      id: "Accounts",
+      label: "Accounts",
+      view: "Invoices",
+      activeOn: ["Invoices", "Quotes", "Payments", "Expenses", "Mileage", "CIS", "Reports"],
+      icon: (active) => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="6" width="20" height="12" rx="2" />
+          <circle cx="12" cy="12" r="2.5" />
+          <path d="M6 10h.01M18 14h.01" />
+        </svg>
+      ),
+    },
+    {
+      id: "People",
+      label: "People",
+      view: "Customers",
+      activeOn: ["Customers", "Subcontractors", "Reviews", "Inbox"],
+      icon: (active) => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M5 21c0-3.87 3.13-7 7-7s7 3.13 7 7" />
+        </svg>
+      ),
+    },
+  ];
+
+  // Which tab is "active" based on current view
+  const activeTabId = TABS.find(t => t.activeOn.includes(view))?.id;
+
+  return (
+    <>
+      {/* Spacer div in main content flow so content isn't hidden behind the fixed bar */}
+      <div aria-hidden="true" style={{ height: "calc(64px + env(safe-area-inset-bottom, 0px))" }} />
+
+      <nav
+        aria-label="Main navigation"
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 95, // above content, below modals (which are 100+)
+          background: "rgba(15, 15, 15, 0.92)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          borderTop: `1px solid ${C.border}`,
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        }}
+      >
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(5, 1fr)",
+          height: 64,
+          maxWidth: 520,
+          margin: "0 auto",
+        }}>
+          {TABS.map(tab => {
+            const active = tab.id === activeTabId;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setView(tab.view)}
+                aria-label={tab.label}
+                aria-current={active ? "page" : undefined}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 4,
+                  color: active ? C.amber : C.textDim,
+                  fontFamily: "'DM Sans', sans-serif",
+                  padding: "6px 4px",
+                  transition: "color 150ms ease",
+                  position: "relative",
+                }}
+              >
+                {/* Active indicator bar */}
+                {active && (
+                  <span style={{
+                    position: "absolute",
+                    top: 0,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    width: 28,
+                    height: 2,
+                    borderRadius: 1,
+                    background: C.amber,
+                  }} />
+                )}
+                <div style={{ width: 22, height: 22 }}>{tab.icon(active)}</div>
+                <div style={{
+                  fontSize: 10,
+                  fontWeight: active ? 700 : 500,
+                  letterSpacing: "0.01em",
+                }}>{tab.label}</div>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+    </>
+  );
+}
+
 function AppInner() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -23544,6 +23706,7 @@ function AppInner() {
         </div>
       </main>
       </div>
+      <BottomTabBar view={view} setView={setView} isDesktopBrowser={isDesktopBrowser} />
       <HelpCentre open={helpOpen} openSlug={helpSlug} onClose={() => { setHelpOpen(false); setHelpSlug(null); }} />
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} user={user} brand={brand} currentView={view} />
       <AssistantSetup
