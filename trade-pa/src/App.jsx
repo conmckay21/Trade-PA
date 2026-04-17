@@ -5900,6 +5900,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         emptyCyclesRef.current = 0;
         setHandsFree(false);
         handsFreeRef.current = false;
+        if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
+        stopRecording();
         const signoffMsg = assistantSignoffRef.current
           || ("No problem, I'll stop there. Just say Hey " + (assistantNameRef.current || "Trade PA") + " whenever you need me.");
         speak(signoffMsg);
@@ -6153,12 +6155,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     } else {
       stopRecording();
       stopWakeWord();
+      if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     }
   };
 
   // Restart mic after AI finishes speaking (used by hands-free loop)
+  const restartTimerRef = useRef(null);
   const restartMicAfterSpeak = (delay = 1200) => {
-    setTimeout(() => {
+    if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+    restartTimerRef.current = setTimeout(() => {
+      restartTimerRef.current = null;
       if (!handsFreeRef.current) return;
       // 7s silence: user needs time to digest what was said before responding
       if (isAndroid) initWakeWord(); else startRecording(true, 3000);
@@ -9338,7 +9344,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         const toolLower = toolResultText.toLowerCase();
         const firstToolWords = toolLower.split(" ").slice(0, 8).join(" ");
         const strictDuplicate = firstToolWords.length > 15 && replyLower.includes(firstToolWords);
-        finalReply = strictDuplicate ? allReplyText.trim() : [allReplyText.trim(), toolResultText].join(" ").trim();
+        // If a widget is present AND Claude already wrote 80+ chars, the tool result text
+        // is redundant — the widget shows it visually and Claude described it conversationally.
+        const widgetCoversIt = allWidgets.length > 0 && allReplyText.trim().length > 80;
+        finalReply = (strictDuplicate || widgetCoversIt) ? allReplyText.trim() : [allReplyText.trim(), toolResultText].join(" ").trim();
       } else {
         finalReply = (allReplyText.trim() || toolResultText || "Done.").trim();
       }
@@ -11630,10 +11639,8 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush, set
 
 // ─── Mic Button for Modals ────────────────────────────────────────────────────
 function MicButton({ form, setForm, accentColor }) {
-  const [recording, setRecording] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const mediaRef = useRef(null);
-  const chunksRef = useRef([]);
+  // Voice-fill via floating mic — inline mic button removed
+  return null;
 
   const start = async () => {
     try {
@@ -19898,7 +19905,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
       {/* Edit job modal */}
       {editingJob && selected && (
         <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 16 }}>
-          <div style={{ ...S.card, maxWidth: 460, width: "100%", maxHeight: "85vh", overflowY: "auto" }}>
+          <div style={{ ...S.card, maxWidth: 460, width: "100%", maxHeight: "85vh", overflowY: "auto", borderRadius: 14, overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Job</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -22389,7 +22396,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       {/* ── Edit Payment Modal ───────────────────────────────────────── */}
       {editingPayment && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "max(60px, env(safe-area-inset-top, 60px)) 16px 20px" }}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, maxHeight: "85vh", overflowY: "auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, maxHeight: "85vh", overflowY: "auto", borderRadius: 14, overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Payment</div>
               <button aria-label="Close" onClick={() => setEditingPayment(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
@@ -22450,7 +22457,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       {/* ── Edit Worker Modal ────────────────────────────────────────── */}
       {editingWorker && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, overflowY: "auto", padding: "max(60px, env(safe-area-inset-top, 60px)) 16px 20px" }}>
-          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, maxHeight: "85vh", overflowY: "auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, maxHeight: "85vh", overflowY: "auto", borderRadius: 14, overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Worker</div>
               <button aria-label="Close" onClick={() => setEditingWorker(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
