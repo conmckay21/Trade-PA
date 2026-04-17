@@ -6761,17 +6761,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     });
 
     const container = document.createElement("div");
-    container.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;background:#fff;z-index:-1;";
+    // Keep in viewport but invisible — html2canvas can't capture off-screen elements reliably
+    container.style.cssText = "position:absolute;top:0;left:0;width:794px;background:#fff;opacity:0;pointer-events:none;z-index:-1;";
     container.innerHTML = html;
     container.querySelectorAll(".back-bar,.no-print").forEach(el => el.remove());
     document.body.appendChild(container);
 
     try {
+      // Wait for images AND a paint frame so the DOM is fully rendered
       await Promise.all([...container.querySelectorAll("img")].map(img =>
         img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
       ));
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+      // Temporarily make visible for capture — html2canvas skips opacity:0 elements
+      container.style.opacity = "1";
       const canvas = await window.html2canvas(container, {
-        scale: 1.5, useCORS: true, allowTaint: true,
+        scale: 2, useCORS: true, allowTaint: true,
+        width: 794,
         windowWidth: 794, logging: false, backgroundColor: "#ffffff",
       });
       const { jsPDF } = window.jspdf;
@@ -6779,7 +6786,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = pdf.internal.pageSize.getHeight();
       const imgH = (canvas.height * pdfW) / canvas.width;
-      const imgData = canvas.toDataURL("image/jpeg", 0.82);
+      const imgData = canvas.toDataURL("image/jpeg", 0.85);
       let y = 0;
       while (y < imgH) {
         pdf.addImage(imgData, "JPEG", 0, -y, pdfW, imgH);
@@ -6793,18 +6800,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   };
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const sendEmailViaConnectedAccount = async (userId, to, subject, body, pdfBase64OrHtml = null, filename = "document.pdf", { pdfHtml = null } = {}) => {
-    // If pdfHtml provided, server generates the PDF. If pdfBase64 provided, server attaches it directly.
-    const payload = { userId, to, subject, body, filename };
-    if (pdfHtml) {
-      payload.pdfHtml = pdfHtml;
-    } else if (pdfBase64OrHtml) {
-      payload.pdfBase64 = pdfBase64OrHtml;
-    }
+  const sendEmailViaConnectedAccount = async (userId, to, subject, body, pdfBase64 = null, filename = "document.pdf") => {
     const res = await fetch("/api/send-invoice-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ userId, to, subject, body, pdfBase64, filename }),
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => res.status.toString());
@@ -8268,16 +8268,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               <p style="color:#555;font-size:13px;">If you have any questions, please don't hesitate to get in touch.</p>`,
           });
           try {
-            const pdfHtml = buildInvoiceHTML(brand, {
-              ...inv,
-              grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
-              lineItems: inv.line_items || inv.lineItems || [],
-              vatEnabled: inv.vat_enabled || inv.vatEnabled,
-              paymentMethod: inv.payment_method || inv.paymentMethod || "both",
-            });
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body, null, `Invoice-${inv.id}.pdf`, { pdfHtml });
+            let invPdfBase64 = null;
+            try { invPdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { console.warn("PDF gen failed:", pe.message); }
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body, invPdfBase64, `Invoice-${inv.id}.pdf`);
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount } };
-            return `Invoice ${inv.id} sent to ${inv.customer} at ${email} (PDF attached).`;
+            return `Invoice ${inv.id} sent to ${inv.customer} at ${email}${invPdfBase64 ? " (PDF attached)" : ""}.`;
           } catch(e) {
             return `Failed to send invoice: ${e.message}`;
           }
@@ -8322,11 +8317,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               <p style="color:#555;font-size:13px;">This quote is valid for 30 days from the date of issue. If you would like to go ahead, or have any questions, please don't hesitate to get in touch.</p>`,
           });
           try {
-            const quoteForPdf = { ...quote, grossAmount: quote.gross_amount || quote.grossAmount || quote.amount, lineItems: quote.line_items || quote.lineItems || [], vatEnabled: quote.vat_enabled || quote.vatEnabled, paymentMethod: quote.payment_method || quote.paymentMethod || "both", isQuote: true };
-            const pdfHtml = buildInvoiceHTML(brand, quoteForPdf);
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body, null, `Quote-${quote.id}.pdf`, { pdfHtml });
+            let quotePdfBase64 = null;
+            try {
+              const quoteForPdf = { ...quote, grossAmount: quote.gross_amount || quote.grossAmount || quote.amount, lineItems: quote.line_items || quote.lineItems || [], vatEnabled: quote.vat_enabled || quote.vatEnabled, paymentMethod: quote.payment_method || quote.paymentMethod || "both", isQuote: true };
+              quotePdfBase64 = await generateInvoicePDFBase64(brand, quoteForPdf);
+            } catch(pe) { console.warn("PDF gen failed:", pe.message); }
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body, quotePdfBase64, `Quote-${quote.id}.pdf`);
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: quote.customer, invoice_id: quote.id, amount: quote.grossAmount || quote.amount, isQuote: true } };
-            return `Quote ${quote.id} sent to ${quote.customer} at ${email} (PDF attached).`;
+            return `Quote ${quote.id} sent to ${quote.customer} at ${email}${quotePdfBase64 ? " (PDF attached)" : ""}.`;
           } catch(e) {
             return `Failed to send quote: ${e.message}`;
           }
@@ -8425,17 +8423,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               ${chaseClose}`,
           });
           try {
-            const pdfHtml = buildInvoiceHTML(brand, {
-              ...inv,
-              grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
-              lineItems: inv.line_items || inv.lineItems || [],
-              vatEnabled: inv.vat_enabled || inv.vatEnabled,
-              paymentMethod: inv.payment_method || inv.paymentMethod || "both",
-            });
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body, null, `Invoice-${inv.id}.pdf`, { pdfHtml });
+            let chasePdfBase64 = null;
+            try { chasePdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { console.warn("PDF gen failed:", pe.message); }
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfBase64, `Invoice-${inv.id}.pdf`);
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
             const toneLabel = chaseNum <= 1 ? "Gentle reminder" : chaseNum === 2 ? "Firm follow-up" : "Final notice";
-            return `${toneLabel} sent to ${inv.customer} at ${email} for invoice ${inv.id} (${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))}) (PDF attached). This is chase #${chaseNum}.`;
+            return `${toneLabel} sent to ${inv.customer} at ${email} for invoice ${inv.id} (${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))})${chasePdfBase64 ? " (PDF attached)" : ""}. This is chase #${chaseNum}.`;
           } catch(e) {
             return `Chase email failed: ${e.message}`;
           }
