@@ -5,6 +5,7 @@ import HelpCentre from "./HelpCentre.jsx";
 import AssistantSetup from "./AssistantSetup.jsx";
 import FieldMic from "./components/FieldMic.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
+import OfflineSettings from "./components/OfflineSettings.jsx";
 import { prewarmCache } from "./lib/prewarm.js";
 import { drainQueue } from "./lib/writeQueue.js";
 
@@ -25093,6 +25094,7 @@ function AppInner() {
   }, [user?.id]);
 
   const [pdfHtml, setPdfHtml] = useState(null);
+  const [offlineSettingsOpen, setOfflineSettingsOpen] = useState(false);
   const [viewRaw, setViewRaw] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('xero') || params.has('qb')) return "Settings";
@@ -26166,7 +26168,8 @@ function AppInner() {
 
   return (
     <div style={S.app}>
-      <OfflineBanner />
+      <OfflineBanner onOpenSettings={() => setOfflineSettingsOpen(true)} />
+      <OfflineSettings open={offlineSettingsOpen} onClose={() => setOfflineSettingsOpen(false)} />
 
       {/* ── ONBOARDING OVERLAYS ──────────────────────────────────────── */}
 
