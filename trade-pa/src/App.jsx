@@ -1000,7 +1000,7 @@ function buildRef(brand, inv) {
 function buildInvoiceHTML(brand, inv) {
   try {
   const accent = brand.accentColor || "#f59e0b";
-  const ref = buildRef(brand, inv);
+  let ref; try { ref = buildRef(brand, inv); } catch(e) { console.error("[PDF CRASH] buildRef:", e.message); ref = inv.id || "INV-001"; }
   const payMethod = inv.paymentMethod || brand.defaultPaymentMethod || "both";
   const showBacs = payMethod === "bacs" || payMethod === "both";
   const showCard = payMethod === "card" || payMethod === "both";
@@ -6752,10 +6752,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
 
+    const rawLI = inv.lineItems || inv.line_items || [];
+    const parsedLI = typeof rawLI === "string" ? (() => { try { return JSON.parse(rawLI); } catch { return []; } })() : rawLI;
     const html = buildInvoiceHTML(brand, {
       ...inv,
       grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
-      lineItems: inv.line_items || inv.lineItems || [],
+      lineItems: Array.isArray(parsedLI) ? parsedLI : [],
       vatEnabled: inv.vat_enabled || inv.vatEnabled,
       paymentMethod: inv.payment_method || inv.paymentMethod || "both",
     });
