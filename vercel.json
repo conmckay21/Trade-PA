@@ -6,7 +6,8 @@
     "api/calls/recording.js": { "maxDuration": 300 },
     "api/email-cron.js": { "maxDuration": 120 },
     "api/email.js": { "maxDuration": 60 },
-    "api/cron/evening-briefing.js": { "maxDuration": 60 }
+    "api/cron/evening-briefing.js": { "maxDuration": 60 },
+    "api/daily-automation.js": { "maxDuration": 120 }
   },
   "crons": [
     {
@@ -16,6 +17,10 @@
     {
       "path": "/api/cron/evening-briefing",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/daily-automation",
+      "schedule": "0 8 * * *"
     }
   ],
   "rewrites": [
