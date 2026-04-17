@@ -956,6 +956,34 @@ function fmtAmount(n) {
   return "£" + num.toLocaleString("en-GB", { minimumFractionDigits: hasDecimals ? 2 : 0, maximumFractionDigits: 2 });
 }
 // ─────────────────────────────────────────────────────────────────────────────
+// Shared email template — ensures consistent branding across all outbound emails
+function buildEmailHTML(brand, { heading, body, showBacs = false, invoiceId = "" }) {
+  const accent = brand?.accentColor || "#f59e0b";
+  const name = brand?.tradingName || "";
+  const bacsBlock = showBacs && brand?.bankName ? `
+    <div style="background:#f8f8f8;border-radius:6px;padding:14px 16px;margin:16px 0;border:1px solid #eee;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:8px;">Pay by bank transfer (BACS)</div>
+      <div style="font-size:13px;line-height:1.8;">
+        <b>Bank:</b> ${brand.bankName}<br>
+        <b>Account name:</b> ${brand.accountName || ""}<br>
+        <b>Sort code:</b> ${brand.sortCode || ""}<br>
+        <b>Account number:</b> ${brand.accountNumber || ""}<br>
+        <b>Reference:</b> ${invoiceId}
+      </div>
+    </div>` : "";
+  const sig = `<p style="margin-top:24px;">Many thanks,<br><strong>${name}</strong>${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+    <div style="background:${accent};padding:24px 28px;border-radius:8px 8px 0 0;">
+      <h2 style="color:#fff;margin:0;font-size:20px;">${name}</h2>
+      ${heading ? `<div style="color:rgba(255,255,255,0.8);font-size:13px;margin-top:4px;">${heading}</div>` : ""}
+    </div>
+    <div style="padding:24px 28px;background:#fff;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px;">
+      ${body}
+      ${bacsBlock}
+      ${sig}
+    </div>
+  </div>`;
+}
 
 function buildRef(brand, inv) {
   const num = (inv.id || "INV-001").replace(/\D/g, "");
@@ -8049,10 +8077,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type").eq("user_id", user?.id).ilike("customer", `%${input.customer||""}%`).order("created_at", { ascending: false }).limit(1);
           const platforms = Object.entries(brand||{}).filter(([k,v]) => ["googleReviewUrl","trustpilotUrl","checkatradeUrl","ratedPeopleUrl","myBuilderUrl"].includes(k) && v).map(([k,v]) => ({ name: k.replace("Url","").replace(/([A-Z])/g," $1").trim(), url: v }));
           if (!platforms.length) return `No review platform links set up. Add them in Settings → Business Details first.`;
-          const linksHtml = platforms.map(p => `<a href="${p.url}">${p.name}</a>`).join(" | ");
-          const body = `Hi ${input.customer},\n\nThank you for choosing ${brand?.tradingName||"us"} — we really appreciate your business.\n\nIf you're happy with the work, we'd be grateful if you could leave us a review:\n\n${platforms.map(p => p.url).join("\n")}\n\nMany thanks,\n${brand?.tradingName||""}`;
+          const linksHtml = platforms.map(p => `<a href="${p.url}" style="display:inline-block;padding:10px 20px;background:${brand?.accentColor || "#f59e0b"};color:#000;text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;margin:4px 4px 4px 0;">${p.name}</a>`).join(" ");
+          const body = buildEmailHTML(brand, {
+            heading: "WE'D LOVE YOUR FEEDBACK",
+            body: `<p style="font-size:15px;">Hi ${input.customer},</p>
+              <p style="color:#555;">Thank you for choosing ${brand?.tradingName || "us"} — we really appreciate your business.</p>
+              <p style="color:#555;">If you're happy with the work, we'd be really grateful if you could take a moment to leave us a review. It makes a huge difference to small businesses like ours.</p>
+              <div style="margin:20px 0;">${linksHtml}</div>
+              <p style="color:#888;font-size:12px;">Thank you — it only takes a minute and helps other customers find us.</p>`,
+          });
           try {
-            await sendEmailViaConnectedAccount(user?.id, email, `Review request from ${brand?.tradingName||""}`, body.replace(/\n/g,"<br>")).catch(() => {});
+            await sendEmailViaConnectedAccount(user?.id, email, `${brand?.tradingName || "Your tradesperson"} — we'd love your feedback`, body).catch(() => {});
           } catch(e) {}
           if (jc?.length) {
             await supabase.from("review_requests").insert({ user_id: user?.id, job_id: jc[0].id, customer: input.customer, email, platforms: platforms.map(p=>p.name).join(","), sent_at: new Date().toISOString(), created_at: new Date().toISOString() });
@@ -8211,38 +8246,21 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const email = input.email || custRow2?.[0]?.email || inv.email;
           if (!email) return `No email for ${inv.customer}. Provide their email address.`;
           const subject = `Invoice ${inv.id} from ${brand?.tradingName || ""}`;
-          const invAmt = parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2);
+          const invAmt = fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0));
           const invDue = inv.due || "30 days";
-          // Build a properly formatted invoice email with all payment details
-          const bacsBlock = brand?.bankName ? `
-            <div style="background:#f8f8f8;border-radius:6px;padding:14px 16px;margin:16px 0;border:1px solid #eee;">
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:8px;">Pay by Bank Transfer (BACS)</div>
-              <div style="font-size:13px;line-height:1.8;">
-                <b>Bank:</b> ${brand.bankName}<br>
-                <b>Account name:</b> ${brand.accountName || ""}<br>
-                <b>Sort code:</b> ${brand.sortCode || ""}<br>
-                <b>Account number:</b> ${brand.accountNumber || ""}<br>
-                <b>Reference:</b> ${inv.id}
-              </div>
-            </div>` : "";
           const accent = brand?.accentColor || "#f59e0b";
-          const body = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
-            <div style="background:${accent};padding:24px 28px;border-radius:8px 8px 0 0;">
-              <h2 style="color:#fff;margin:0;font-size:20px;">${brand?.tradingName || ""}</h2>
-              <div style="color:rgba(255,255,255,0.8);font-size:13px;margin-top:4px;">INVOICE ${inv.id}</div>
-            </div>
-            <div style="padding:24px 28px;background:#fff;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px;">
-              <p style="font-size:15px;">Dear ${inv.customer},</p>
-              <p style="color:#555;">Please find your invoice ${inv.id} for <strong>${fmtAmount(invAmt)}</strong> below. Payment is due ${invDue}.</p>
+          const body = buildEmailHTML(brand, {
+            heading: `INVOICE ${inv.id}`,
+            showBacs: true,
+            invoiceId: inv.id,
+            body: `<p style="font-size:15px;">Dear ${inv.customer},</p>
+              <p style="color:#555;">Please find your invoice ${inv.id} for <strong>${invAmt}</strong> attached. Payment is due ${invDue}.</p>
               <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
-                <div style="font-size:22px;font-weight:700;color:${accent};">${fmtAmount(invAmt)}</div>
+                <div style="font-size:22px;font-weight:700;color:${accent};">${invAmt}</div>
                 <div style="font-size:12px;color:#888;margin-top:4px;">Due: ${invDue}</div>
               </div>
-              ${bacsBlock}
-              <p style="color:#555;font-size:13px;">If you have any questions, please don't hesitate to get in touch.</p>
-              <p style="margin-top:20px;">Many thanks,<br><strong>${brand?.tradingName || ""}</strong>${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>
-            </div>
-          </div>`;
+              <p style="color:#555;font-size:13px;">If you have any questions, please don't hesitate to get in touch.</p>`,
+          });
           try {
             let invPdfBase64 = null;
             let invPdfError = "";
@@ -8282,7 +8300,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const email = input.email || custRowQ?.[0]?.email || quote.email;
           if (!email) return `No email for ${quote.customer}. Provide their email address.`;
           const subject = `Quote ${quote.id} from ${brand?.tradingName || ""}`;
-          const body = `<p>Dear ${quote.customer},</p><p>Thank you for your enquiry. Please find your quote ${quote.id} for ${fmtCurrency(parseFloat(quote.grossAmount || quote.amount || 0))} below.</p><p>This quote is valid for 30 days. Please don't hesitate to get in touch if you have any questions.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? "<br>" + brand.phone : ""}</p>`;
+          const quoteAmt = fmtCurrency(parseFloat(quote.grossAmount || quote.amount || 0));
+          const accent = brand?.accentColor || "#f59e0b";
+          const body = buildEmailHTML(brand, {
+            heading: `QUOTE ${quote.id}`,
+            body: `<p style="font-size:15px;">Dear ${quote.customer},</p>
+              <p style="color:#555;">Thank you for your enquiry. Please find your quote ${quote.id} for <strong>${quoteAmt}</strong> attached.</p>
+              <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
+                <div style="font-size:22px;font-weight:700;color:${accent};">${quoteAmt}</div>
+                <div style="font-size:12px;color:#888;margin-top:4px;">Valid for 30 days</div>
+              </div>
+              <p style="color:#555;font-size:13px;">This quote is valid for 30 days from the date of issue. If you would like to go ahead, or have any questions, please don't hesitate to get in touch.</p>`,
+          });
           try {
             // Generate PDF, upload to Supabase Storage, pass URL to server — same as invoices
             let quotePdfBase64 = null;
@@ -8353,38 +8382,22 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             .select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
           const email = input.email || custRows?.[0]?.email || inv.email;
           if (!email) return `No email on file for ${inv.customer}. Say their email address and I'll send the chase.`;
-          const subject = `Payment reminder - Invoice ${inv.id}`;
-          const chaseAmt = parseFloat(inv.grossAmount || inv.amount || 0).toFixed(2);
+          const subject = `Payment reminder — Invoice ${inv.id}`;
+          const chaseAmt = fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0));
           const accent = brand?.accentColor || "#f59e0b";
-          const chaseBacs = brand?.bankName ? `
-            <div style="background:#f8f8f8;border-radius:6px;padding:14px 16px;margin:16px 0;border:1px solid #eee;">
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:8px;">Payment details</div>
-              <div style="font-size:13px;line-height:1.8;">
-                <b>Bank:</b> ${brand.bankName}<br>
-                <b>Account name:</b> ${brand.accountName || ""}<br>
-                <b>Sort code:</b> ${brand.sortCode || ""}<br>
-                <b>Account number:</b> ${brand.accountNumber || ""}<br>
-                <b>Reference:</b> ${inv.id}
-              </div>
-            </div>` : "";
-          const body = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
-            <div style="background:${accent};padding:24px 28px;border-radius:8px 8px 0 0;">
-              <h2 style="color:#fff;margin:0;font-size:20px;">${brand?.tradingName || ""}</h2>
-              <div style="color:rgba(255,255,255,0.8);font-size:13px;margin-top:4px;">PAYMENT REMINDER</div>
-            </div>
-            <div style="padding:24px 28px;background:#fff;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px;">
-              <p style="font-size:15px;">Dear ${inv.customer},</p>
+          const body = buildEmailHTML(brand, {
+            heading: "PAYMENT REMINDER",
+            showBacs: true,
+            invoiceId: inv.id,
+            body: `<p style="font-size:15px;">Dear ${inv.customer},</p>
               <p style="color:#555;">I hope you are well. This is a friendly reminder that the following invoice remains outstanding:</p>
               <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
                 <div style="font-size:13px;color:#666;margin-bottom:4px;">Invoice ${inv.id}</div>
-                <div style="font-size:22px;font-weight:700;color:${accent};">GBP${chaseAmt}</div>
+                <div style="font-size:22px;font-weight:700;color:${accent};">${chaseAmt}</div>
                 <div style="font-size:12px;color:#888;margin-top:4px;">Currently outstanding</div>
               </div>
-              ${chaseBacs}
-              <p style="color:#555;font-size:13px;">If payment has already been sent, please disregard this message. If you have any queries, please don't hesitate to get in touch.</p>
-              <p style="margin-top:20px;color:#555;">Many thanks,<br><strong>${brand?.tradingName || ""}</strong>${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>
-            </div>
-          </div>`;
+              <p style="color:#555;font-size:13px;">If payment has already been sent, please disregard this message. If you have any queries, please don't hesitate to get in touch.</p>`,
+          });
           try {
             // Generate PDF, upload to Supabase Storage, pass URL to server
             let chasePdfBase64 = null;
@@ -15510,16 +15523,21 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending, cust
 
   const isQuote = doc.isQuote;
   const docType = isQuote ? "Quote" : "Invoice";
-  const subject = `${docType} ${doc.id} from ${brand.tradingName} - GBP${doc.amount}`;
-  const body = `<p>Dear ${doc.customer},</p>
-<p>Please find your ${docType.toLowerCase()} ${doc.id} for ${fmtAmount(doc.amount)} attached below.</p>
-${!isQuote && brand.bankName ? `<p><strong>Payment details:</strong><br>
-Bank: ${brand.bankName}<br>
-Sort code: ${brand.sortCode}<br>
-Account number: ${brand.accountNumber}<br>
-Reference: ${doc.id}</p>` : ""}
-${isQuote ? `<p>This quote is valid for 30 days. Please get in touch to proceed or if you have any questions.</p>` : `<p>Payment is due within ${brand.paymentTerms || 30} days.</p>`}
-<p>Many thanks,<br>${brand.tradingName}${brand.phone ? `<br>${brand.phone}` : ""}${brand.email ? `<br>${brand.email}` : ""}</p>`;
+  const subject = `${docType} ${doc.id} from ${brand.tradingName} — ${fmtCurrency(doc.amount)}`;
+  const accent = brand?.accentColor || "#f59e0b";
+  const docAmt = fmtCurrency(doc.amount);
+  const body = buildEmailHTML(brand, {
+    heading: `${docType.toUpperCase()} ${doc.id}`,
+    showBacs: !isQuote,
+    invoiceId: doc.id,
+    body: `<p style="font-size:15px;">Dear ${doc.customer},</p>
+      <p style="color:#555;">Please find your ${docType.toLowerCase()} ${doc.id} for <strong>${docAmt}</strong> attached.</p>
+      <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
+        <div style="font-size:22px;font-weight:700;color:${accent};">${docAmt}</div>
+        <div style="font-size:12px;color:#888;margin-top:4px;">${isQuote ? "Valid for 30 days" : `Due within ${brand.paymentTerms || 30} days`}</div>
+      </div>
+      <p style="color:#555;font-size:13px;">${isQuote ? "This quote is valid for 30 days. Please get in touch to proceed or if you have any questions." : "If you have any questions, please don't hesitate to get in touch."}</p>`,
+  });
 
   if (setSending) setSending(doc.id);
   try {
@@ -17100,6 +17118,25 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
 
         if (inv) {
           setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, status: "paid", due: "Paid" } : i));
+          // Send payment confirmation email
+          const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+          const custRecord = (customers || []).find(c => c.name?.toLowerCase().includes(customerNameLower));
+          const confirmEmail = custRecord?.email || inv.email || replyTo;
+          if (confirmEmail && connection) {
+            const paidAmt = fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0));
+            const confirmBody = buildEmailHTML(brand, {
+              heading: "PAYMENT RECEIVED",
+              body: `<p style="font-size:15px;">Dear ${inv.customer},</p>
+                <p style="color:#555;">Thank you for your payment of <strong>${paidAmt}</strong> for invoice ${inv.id}. This invoice is now marked as paid.</p>
+                <p style="color:#555;font-size:13px;">If you need a receipt or have any questions, please don't hesitate to get in touch.</p>`,
+            });
+            const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+            await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId: user.id, to: confirmEmail, subject: `Payment received — Invoice ${inv.id}`, body: confirmBody }),
+            }).catch(err => console.error("Payment confirmation failed:", err.message));
+          }
         }
         break;
       }
@@ -17861,12 +17898,14 @@ async function emailComplianceDoc(doc, job, customers, user, connection, brand) 
   const issued = doc.issued_date ? new Date(doc.issued_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
   const html = buildComplianceDocHTML(doc, job, brand);
 
-  const body = `<p>Dear ${job?.customer || "Customer"},</p>
-<p>Please find below your ${doc.doc_type}${doc.doc_number ? ` (Certificate No: ${doc.doc_number})` : ""}${issued ? `, issued ${issued}` : ""}.</p>
-<p>If you have any questions regarding this certificate, please don't hesitate to get in touch.</p>
-<p>Many thanks,<br>${brand.tradingName || ""}${brand.phone ? `<br>${brand.phone}` : ""}${brand.email ? `<br>${brand.email}` : ""}</p>
-<hr style="margin:24px 0;border:none;border-top:1px solid #eee">
-${html.replace(/<!DOCTYPE.*?<body>/s, "").replace(/<\/body>.*$/s, "")}`;
+  const body = buildEmailHTML(brand, {
+    heading: doc.doc_type.toUpperCase(),
+    body: `<p style="font-size:15px;">Dear ${job?.customer || "Customer"},</p>
+      <p style="color:#555;">Please find your ${doc.doc_type}${doc.doc_number ? ` (Certificate No: ${doc.doc_number})` : ""}${issued ? `, issued ${issued}` : ""} below.</p>
+      <p style="color:#555;font-size:13px;">If you have any questions regarding this certificate, please don't hesitate to get in touch.</p>
+      <hr style="margin:24px 0;border:none;border-top:1px solid #eee">
+      ${html.replace(/<!DOCTYPE.*?<body>/s, "").replace(/<\/body>.*$/s, "")}`,
+  });
 
   const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
   try {
