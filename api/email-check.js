@@ -149,23 +149,29 @@ ${email.pdfAttachments?.length > 0 ? `PDF files: ${email.pdfAttachments.map(a =>
 
 ACTION RULES:
 1. BOOKING REQUEST — customer asking to book/schedule work (no prior quote mentioned) → "create_job"
-2. PAYMENT CONFIRMATION — customer says they have paid → "mark_invoice_paid"
+2. PAYMENT CONFIRMATION — customer says they have paid, bank transfer sent, payment made → "mark_invoice_paid"
 3. QUOTE ACCEPTANCE — customer saying yes to a quote, wants to proceed, going ahead with work → "accept_quote"
-4. SUPPLIER MATERIAL INVOICE — supplier (Screwfix, Toolstation, City Plumbing, Travis Perkins, Wolseley, BSS, Plumb Center etc) sending material invoice/receipt with PDF → "add_materials"
-5. CIS MONTHLY STATEMENT — main contractor sending a CIS monthly statement or deduction statement PDF showing gross pay, CIS deduction, net amount → "add_cis_statement"
-6. NEW ENQUIRY — potential customer asking about work/prices → "create_enquiry"
-7. SAVE CONTACT — someone providing their contact details → "save_customer"
-8. IGNORE — newsletters, marketing, automated system emails, Google/Microsoft alerts → "ignore"
+4. RESCHEDULE REQUEST — customer asking to move/change/postpone an existing appointment to a different date → "reschedule_job"
+5. CANCELLATION REQUEST — customer cancelling a job, no longer needs the work, pulling out → "cancel_job"
+6. JOB COMPLETION CONFIRMATION — customer confirming work is finished, happy with results, signing off on completed work → "update_job"
+7. SUPPLIER MATERIAL INVOICE — supplier (Screwfix, Toolstation, City Plumbing, Travis Perkins, Wolseley, BSS, Plumb Center etc) sending material invoice/receipt with PDF → "add_materials"
+8. CIS MONTHLY STATEMENT — main contractor sending a CIS monthly statement or deduction statement PDF showing gross pay, CIS deduction, net amount → "add_cis_statement"
+9. NEW ENQUIRY — potential customer asking about work/prices → "create_enquiry"
+10. SAVE CONTACT — someone providing their contact details → "save_customer"
+11. IGNORE — newsletters, marketing, automated system emails, Google/Microsoft alerts, promotional offers, social media notifications → "ignore"
 
 IMPORTANT DISTINCTIONS:
+- "reschedule_job" = customer wants to MOVE an existing booking to a different date (not cancel, not a new booking)
+- "cancel_job" = customer wants to CANCEL entirely — no longer wants the work done
+- "update_job" = customer confirms the job IS DONE — only use when customer explicitly confirms completion or satisfaction
 - "add_materials" = supplier invoice for physical goods/materials with a PDF
 - "add_cis_statement" = monthly CIS deduction statement from a main contractor (shows gross, deduction, net)
 - If unsure between materials and CIS statement, look at: is it from a building/construction contractor (CIS) or a merchant/supplier (materials)?
 
-For accept_quote and create_job/create_enquiry, always set reply_to to the sender's email address.
+For accept_quote, create_job, create_enquiry, reschedule_job, cancel_job, and update_job — always set reply_to to the sender's email address.
 
 Respond ONLY with JSON:
-{"action_type":"create_job"|"accept_quote"|"create_enquiry"|"mark_invoice_paid"|"add_materials"|"add_cis_statement"|"save_customer"|"ignore","action_description":"One sentence describing what will happen","action_data":{"customer":"name from email","type":"job type","date_text":"date/time mentioned","address":"address if mentioned","notes":"key details","source":"Email","message":"summary for enquiry","urgent":false,"supplier":"supplier name for materials","contractor_name":"contractor company name for CIS","tax_month":"YYYY-MM format for CIS","gross_amount":"gross amount as number for CIS","deduction_amount":"deduction as number for CIS","name":"name for contact","email":"email for contact","reply_to":"sender email address","sender_name":"first name of sender"}}`;
+{"action_type":"create_job"|"accept_quote"|"create_enquiry"|"mark_invoice_paid"|"add_materials"|"add_cis_statement"|"save_customer"|"reschedule_job"|"cancel_job"|"update_job"|"ignore","action_description":"One sentence describing what will happen","action_data":{"customer":"name from email","type":"job type","date_text":"date/time mentioned","new_date":"new requested date for reschedules","address":"address if mentioned","notes":"key details","source":"Email","message":"summary for enquiry","urgent":false,"supplier":"supplier name for materials","contractor_name":"contractor company name for CIS","tax_month":"YYYY-MM format for CIS","gross_amount":"gross amount as number for CIS","deduction_amount":"deduction as number for CIS","name":"name for contact","email":"email for contact","reply_to":"sender email address","sender_name":"first name of sender"}}`;
 
       const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
