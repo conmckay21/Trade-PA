@@ -8382,21 +8382,43 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             .select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
           const email = input.email || custRows?.[0]?.email || inv.email;
           if (!email) return `No email on file for ${inv.customer}. Say their email address and I'll send the chase.`;
-          const subject = `Payment reminder — Invoice ${inv.id}`;
+          // Chase escalation — track count on invoice, vary tone
+          const chaseNum = (inv.chaseCount || 0) + 1;
+          setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, chaseCount: chaseNum, lastChased: new Date().toISOString() } : i));
           const chaseAmt = fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0));
           const accent = brand?.accentColor || "#f59e0b";
+          let chaseIntro, chaseClose, chaseHeading, subject;
+          if (chaseNum <= 1) {
+            // Gentle
+            subject = `Payment reminder — Invoice ${inv.id}`;
+            chaseHeading = "PAYMENT REMINDER";
+            chaseIntro = `<p style="color:#555;">I hope you are well. This is a friendly reminder that the following invoice remains outstanding:</p>`;
+            chaseClose = `<p style="color:#555;font-size:13px;">If payment has already been sent, please disregard this message. If you have any queries, please don't hesitate to get in touch.</p>`;
+          } else if (chaseNum === 2) {
+            // Firm
+            subject = `Second reminder — Invoice ${inv.id}`;
+            chaseHeading = "SECOND REMINDER";
+            chaseIntro = `<p style="color:#555;">I'm writing to follow up on my previous reminder regarding the outstanding balance below. I would appreciate your prompt attention to this matter.</p>`;
+            chaseClose = `<p style="color:#555;font-size:13px;">Please arrange payment at your earliest convenience. If there is an issue with the invoice or you would like to discuss payment terms, please get in touch.</p>`;
+          } else {
+            // Final
+            subject = `Final notice — Invoice ${inv.id} overdue`;
+            chaseHeading = "FINAL NOTICE";
+            chaseIntro = `<p style="color:#555;">Despite previous reminders, the following invoice remains unpaid. Please treat this as a matter of urgency.</p>`;
+            chaseClose = `<p style="color:#555;font-size:13px;">If payment is not received within 7 days, I may need to consider further action to recover this debt. If you have already made payment, please let me know so I can update my records.</p>`;
+          }
           const body = buildEmailHTML(brand, {
-            heading: "PAYMENT REMINDER",
+            heading: chaseHeading,
             showBacs: true,
             invoiceId: inv.id,
             body: `<p style="font-size:15px;">Dear ${inv.customer},</p>
-              <p style="color:#555;">I hope you are well. This is a friendly reminder that the following invoice remains outstanding:</p>
+              ${chaseIntro}
               <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
                 <div style="font-size:13px;color:#666;margin-bottom:4px;">Invoice ${inv.id}</div>
                 <div style="font-size:22px;font-weight:700;color:${accent};">${chaseAmt}</div>
-                <div style="font-size:12px;color:#888;margin-top:4px;">Currently outstanding</div>
+                <div style="font-size:12px;color:#888;margin-top:4px;">${chaseNum >= 3 ? "OVERDUE" : "Currently outstanding"}</div>
               </div>
-              <p style="color:#555;font-size:13px;">If payment has already been sent, please disregard this message. If you have any queries, please don't hesitate to get in touch.</p>`,
+              ${chaseClose}`,
           });
           try {
             // Generate PDF, upload to Supabase Storage, pass URL to server
@@ -8406,7 +8428,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfBase64, `Invoice-${inv.id}.pdf`);
             const chaseAttachNote = chasePdfBase64 ? " (PDF attached)" : chasePdfError ? ` (PDF failed: ${chasePdfError})` : " (no PDF)";
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
-            return `Payment chase sent to ${inv.customer} at ${email} for invoice ${inv.id} (${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))})${chaseAttachNote}.`;
+            const toneLabel = chaseNum <= 1 ? "Gentle reminder" : chaseNum === 2 ? "Firm follow-up" : "Final notice";
+            return `${toneLabel} sent to ${inv.customer} at ${email} for invoice ${inv.id} (${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))})${chaseAttachNote}. This is chase #${chaseNum}.`;
           } catch(e) {
             return `Chase email failed: ${e.message}`;
           }
@@ -16582,9 +16605,9 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
 
   // Urgency scoring — higher = more important. Used for sort order on the pending list.
   // Customer-facing actions beat money actions beat admin actions.
-  const URGENCY = { create_job: 5, accept_quote: 5, create_enquiry: 4, mark_invoice_paid: 3, save_customer: 2, update_job: 2, add_materials: 1, add_cis_statement: 1 };
+  const URGENCY = { create_job: 5, accept_quote: 5, create_enquiry: 4, reschedule_job: 4, cancel_job: 4, mark_invoice_paid: 3, save_customer: 2, update_job: 2, add_materials: 1, add_cis_statement: 1 };
   const urgencyOf = (a) => URGENCY[a.action_type] || 1;
-  const CATEGORY = { create_job: "customer", accept_quote: "customer", create_enquiry: "customer", save_customer: "customer",
+  const CATEGORY = { create_job: "customer", accept_quote: "customer", create_enquiry: "customer", save_customer: "customer", reschedule_job: "customer", cancel_job: "customer",
                      mark_invoice_paid: "money",
                      add_materials: "admin", add_cis_statement: "admin", update_job: "admin" };
   const categoryOf = (a) => CATEGORY[a.action_type] || "admin";
@@ -17066,13 +17089,11 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
         const jobValue = d.job_value ? parseFloat(d.job_value) : null;
 
         if (jobId) {
-          // Direct job_id match
           await supabase.from("job_cards")
             .update({ status: "completed", completion_date: new Date().toISOString() })
             .eq("id", jobId)
             .eq("user_id", user.id);
         } else {
-          // Match by customer name + value if available
           const { data: matchingJobs } = await supabase.from("job_cards")
             .select("id, title, type, status, value")
             .eq("user_id", user.id)
@@ -17081,7 +17102,6 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
             .order("created_at", { ascending: false });
 
           if (matchingJobs?.length > 0) {
-            // If we have a value, try to match on it first (within 10% tolerance)
             let bestMatch = matchingJobs[0];
             if (jobValue && matchingJobs.length > 1) {
               const valueMatch = matchingJobs.find(j =>
@@ -17094,6 +17114,89 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
               .eq("id", bestMatch.id)
               .eq("user_id", user.id);
           }
+        }
+        // Send completion confirmation email
+        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+        const custRecord = (customers || []).find(c => c.name?.toLowerCase().includes(customerNameForJob));
+        const completeEmail = custRecord?.email || replyTo;
+        const completeName = d.customer || custRecord?.name || "there";
+        if (completeEmail && connection) {
+          const jobDesc = d.type || "the work";
+          const completeBody = `<p>Hi ${completeName},</p>
+<p>Just to confirm that ${jobDesc} has been completed and marked off on our system.</p>
+<p>If there's anything you're not happy with or if you have any questions, please don't hesitate to get in touch.</p>
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, to: completeEmail, subject: `Job completed — ${brand?.tradingName || ""}`, body: completeBody }),
+          }).catch(err => console.error("Completion email failed:", err.message));
+        }
+        break;
+      }
+      case "reschedule_job": {
+        const customerName = d.customer || "";
+        const newDate = d.new_date || d.date_text || "";
+        const { data: matchJobs } = await supabase.from("job_cards")
+          .select("id, title, type, customer")
+          .eq("user_id", user.id)
+          .ilike("customer", `%${customerName}%`)
+          .neq("status", "completed")
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (matchJobs?.length) {
+          const updates = { notes: `Rescheduled via email: ${action.email_subject}` };
+          if (newDate) {
+            updates.date = newDate;
+            try { updates.dateObj = new Date(newDate).toISOString(); } catch {}
+          }
+          await supabase.from("job_cards").update(updates).eq("id", matchJobs[0].id).eq("user_id", user.id);
+          setJobs(prev => (prev || []).map(j => j.id === matchJobs[0].id ? { ...j, ...updates } : j));
+        }
+        // Reply confirming reschedule
+        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+        if (replyTo && connection) {
+          const senderName = d.sender_name || customerName || "there";
+          const dateConfirm = newDate ? ` I've updated the diary to ${newDate}.` : "";
+          const replyBody = `<p>Hi ${senderName},</p>
+<p>No problem at all.${dateConfirm}${!newDate ? " Could you let me know what date and time would work better for you?" : ""}</p>
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+          }).catch(err => console.error("Reschedule reply failed:", err.message));
+        }
+        break;
+      }
+      case "cancel_job": {
+        const customerName = d.customer || "";
+        const { data: matchJobs } = await supabase.from("job_cards")
+          .select("id, title, type, customer")
+          .eq("user_id", user.id)
+          .ilike("customer", `%${customerName}%`)
+          .neq("status", "completed")
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (matchJobs?.length) {
+          await supabase.from("job_cards").update({ status: "cancelled", notes: `Cancelled via email: ${action.email_subject}` }).eq("id", matchJobs[0].id).eq("user_id", user.id);
+          setJobs(prev => (prev || []).map(j => j.id === matchJobs[0].id ? { ...j, status: "cancelled" } : j));
+        }
+        // Reply confirming cancellation
+        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+        if (replyTo && connection) {
+          const senderName = d.sender_name || customerName || "there";
+          const replyBody = `<p>Hi ${senderName},</p>
+<p>No problem — I've removed that from the diary. If you'd like to rebook in the future, just get in touch and we'll get you sorted.</p>
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+          }).catch(err => console.error("Cancellation reply failed:", err.message));
         }
         break;
       }
@@ -17178,8 +17281,8 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
     }
   }
 
-  function actionIcon(type) { return { create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", update_job: "🔧", add_materials: "🔧", save_customer: "👤", accept_quote: "🤝", add_cis_statement: "🏗" }[type] || "⚡"; }
-  function actionColor(type) { return { create_job: IC.green, create_enquiry: IC.blue, mark_invoice_paid: IC.green, update_job: IC.amber, add_materials: IC.amber, save_customer: "#8b5cf6", accept_quote: IC.green, add_cis_statement: IC.blue }[type] || IC.amber; }
+  function actionIcon(type) { return { create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", update_job: "🔧", add_materials: "🔧", save_customer: "👤", accept_quote: "🤝", add_cis_statement: "🏗", reschedule_job: "🔄", cancel_job: "❌" }[type] || "⚡"; }
+  function actionColor(type) { return { create_job: IC.green, create_enquiry: IC.blue, mark_invoice_paid: IC.green, update_job: IC.amber, add_materials: IC.amber, save_customer: "#8b5cf6", accept_quote: IC.green, add_cis_statement: IC.blue, reschedule_job: IC.blue, cancel_job: IC.red }[type] || IC.amber; }
   function formatTime(ts) { if (!ts) return ""; const d = new Date(ts), diff = Date.now() - d; if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`; if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`; return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
   function fromName(from) { if (!from) return "Unknown"; const m = from.match(/^(.+?)\s*</); return m ? m[1].replace(/"/g, "") : from.split("@")[0]; }
 
