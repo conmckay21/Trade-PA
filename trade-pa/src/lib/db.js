@@ -2,23 +2,15 @@
 //
 // Smart database client wrapper.
 //
-// Session 1: pure pass-through (db === supabase).
-// Session 2 (NOW): read caching for Tier 1 + Tier 2 tables.
-//   - Online reads execute against Supabase and mirror the result to IDB.
-//   - Offline reads (or reads that error) serve from IDB using the same
-//     filter / order / limit spec the caller requested.
-//   - Writes pass through unchanged. Session 4 will queue them offline.
+// Session 1: pass-through.
+// Session 2: read caching.
+// Session 2.1: Proxy re-wrap fix.
+// Session 4 (NOW): offline write queue. When offline, writes go through
+//   writeQueue.handleOfflineWrite — which applies an optimistic cache
+//   update and enqueues the write for replay on reconnect.
 //
-// Session 2.1 FIX: re-wrap any new builder returned by a chained call.
-// Supabase's .select() returns a different builder class than .from(),
-// so `result === target` is false on that boundary. Previous version
-// handed control back to the raw builder on this transition, which meant
-// the cache code never fired for queries that used .select(). The fix
-// re-wraps any thenable builder so the Proxy stays active through the
-// entire chain, with the shared spec carrying across.
-//
-// Kill switch: `localStorage.tradepa_disable_cache = "1"` in DevTools
-// bypasses the caching layer entirely.
+// Kill switch: `localStorage.tradepa_disable_cache = "1"` bypasses the
+// entire caching+queue layer.
 
 import { supabase } from "../supabase.js";
 import {
@@ -27,6 +19,7 @@ import {
   readCachedRows,
   deleteCachedRows,
 } from "./offlineDb.js";
+import { handleOfflineWrite } from "./writeQueue.js";
 
 // ─── Kill switch ─────────────────────────────────────────────────────
 
@@ -51,6 +44,7 @@ function makeSpec(table) {
   return {
     table,
     operation: null,
+    data: null,       // captured arg for insert/update/upsert
     filters: [],
     order: null,
     limit: null,
@@ -65,7 +59,7 @@ const FILTER_METHODS = new Set([
   "like", "ilike", "is", "in",
 ]);
 
-// ─── Filter application in-memory ─────────────────────────────────────
+// ─── Filter application in-memory (for offline reads) ────────────────
 
 function matchValue(row, col, op, val) {
   const cell = row?.[col];
@@ -129,28 +123,46 @@ function applyQuerySpec(rows, spec) {
 // ─── The main execution step ──────────────────────────────────────────
 
 async function executeWithCache(realBuilder, spec) {
+  // Writes: online path runs the real query and syncs cache. Offline
+  // path queues the write and optimistically updates cache.
   if (spec.operation !== "select") {
-    const result = await realBuilder;
-    if (!result.error && isCached(spec.table)) {
-      if (spec.operation === "insert" || spec.operation === "upsert" || spec.operation === "update") {
-        if (result.data) {
-          const rows = Array.isArray(result.data) ? result.data : [result.data];
-          await cacheRows(spec.table, rows);
-        }
-      } else if (spec.operation === "delete") {
-        const idFilter = spec.filters.find(
-          f => f.op === "eq" && (f.col === "id" || f.col.endsWith("_id"))
-        );
-        if (idFilter) await deleteCachedRows(spec.table, [idFilter.val]);
-      }
+    if (cacheDisabled()) {
+      return await realBuilder;
     }
-    return result;
+
+    if (isOnline()) {
+      const result = await realBuilder;
+      if (!result.error && isCached(spec.table)) {
+        if (spec.operation === "insert" || spec.operation === "upsert" || spec.operation === "update") {
+          if (result.data) {
+            const rows = Array.isArray(result.data) ? result.data : [result.data];
+            await cacheRows(spec.table, rows);
+          }
+        } else if (spec.operation === "delete") {
+          const idFilter = spec.filters.find(
+            f => f.op === "eq" && (f.col === "id" || f.col.endsWith("_id"))
+          );
+          if (idFilter) await deleteCachedRows(spec.table, [idFilter.val]);
+        }
+      }
+      return result;
+    }
+
+    // Offline — route to writeQueue
+    return await handleOfflineWrite({
+      table: spec.table,
+      operation: spec.operation,
+      data: spec.data,
+      filters: spec.filters,
+    });
   }
 
+  // Reads: passthrough for non-cached tables
   if (!isCached(spec.table) || cacheDisabled()) {
     return await realBuilder;
   }
 
+  // Cached-table reads: always-fresh-when-online, cache-as-fallback
   if (isOnline()) {
     try {
       const result = await realBuilder;
@@ -191,11 +203,6 @@ async function readFromCache(spec) {
 }
 
 // ─── Builder proxy ────────────────────────────────────────────────────
-//
-// FIX: re-wrap any thenable builder returned by a chained method.
-// Supabase returns a new builder class from .select() etc., so we can't
-// just rely on identity check — we have to detect "this is a query
-// builder" and keep the Proxy active across the transition.
 
 function wrapBuilder(realBuilder, spec) {
   const proxy = new Proxy(realBuilder, {
@@ -209,13 +216,21 @@ function wrapBuilder(realBuilder, spec) {
       if (typeof value !== "function") return value;
 
       return (...args) => {
-        // Record spec state for cache replay
-        if (prop === "select") spec.operation = spec.operation ?? "select";
-        else if (prop === "insert") spec.operation = "insert";
-        else if (prop === "update") spec.operation = "update";
-        else if (prop === "upsert") spec.operation = "upsert";
-        else if (prop === "delete") spec.operation = "delete";
-        else if (FILTER_METHODS.has(prop)) {
+        // Record spec state for cache replay and offline queueing
+        if (prop === "select") {
+          spec.operation = spec.operation ?? "select";
+        } else if (prop === "insert") {
+          spec.operation = "insert";
+          spec.data = args[0];
+        } else if (prop === "update") {
+          spec.operation = "update";
+          spec.data = args[0];
+        } else if (prop === "upsert") {
+          spec.operation = "upsert";
+          spec.data = args[0];
+        } else if (prop === "delete") {
+          spec.operation = "delete";
+        } else if (FILTER_METHODS.has(prop)) {
           spec.filters.push({ op: prop, col: args[0], val: args[1] });
         } else if (prop === "match") {
           const obj = args[0] || {};
@@ -239,17 +254,12 @@ function wrapBuilder(realBuilder, spec) {
 
         const result = value.apply(target, args);
 
-        // Same builder returned — stay on the current proxy.
         if (result === target) return proxy;
 
-        // New thenable builder (e.g. .select() returning FilterBuilder).
-        // Re-wrap so the Proxy stays active for the rest of the chain,
-        // with the same accumulated spec.
         if (result && typeof result === "object" && typeof result.then === "function") {
           return wrapBuilder(result, spec);
         }
 
-        // Anything else (unusual) — return as-is.
         return result;
       };
     },
