@@ -2,30 +2,24 @@
 //
 // IndexedDB store for the offline read-cache and pending-writes queue.
 //
-// Phase 1 Session 1: schema defined and DB is provisioned on first call
-// to getOfflineDb(). No reads or writes happen through this layer yet —
-// Session 2 wires up read caching, Session 4 wires up the write queue.
+// Phase 1 Session 1: schema defined, no data flows through yet.
+// Phase 1 Session 2 (NOW): cache read/write/merge helpers added, used
+//   by db.js when queries hit cached tables.
+// Phase 1 Session 4: pending_writes queue wired up.
 //
 // Schema:
-//   One object store per cached Supabase table (Tier 1 + Tier 2)
+//   One object store per cached Supabase table (Tier 1 + Tier 2).
 //     Keyed on `id`. Indexed on `user_id` and `updated_at`.
-//   One `pending_writes` store for the offline write queue
-//     Auto-increment key. Indexed on `created_at` and `status`.
-//   One `_cache_meta` store for bookkeeping
-//     Tracks last-fetch timestamp per table, cache version, etc.
-//
-// Storage size: IndexedDB quota varies by browser. Safari ~1GB, Chrome
-// up to 60% of free disk. Real concern is photos — Session 5 will add
-// quota monitoring and eviction for photo blobs specifically.
+//   One `pending_writes` store for the offline write queue (dormant).
+//   One `_cache_meta` store for bookkeeping.
 
 import { openDB } from "idb";
 
 const DB_NAME = "tradepa-offline";
 const DB_VERSION = 1;
 
-// ─── Table tiers (must match the offline architecture plan) ────────────
+// ─── Table tiers ──────────────────────────────────────────────────────
 
-// Tier 1 — tradesperson on site. MUST work offline.
 export const TIER_1_TABLES = [
   "jobs",
   "job_cards",
@@ -43,7 +37,6 @@ export const TIER_1_TABLES = [
   "trade_certificates",
 ];
 
-// Tier 2 — nice to have offline (viewing existing records mostly).
 export const TIER_2_TABLES = [
   "invoices",
   "quotes",
@@ -56,18 +49,12 @@ export const TIER_2_TABLES = [
   "purchase_orders",
 ];
 
-// All tables that get cached locally. Anything not in this list stays
-// online-only (config tables, AI infrastructure, phone logs, etc.)
 export const CACHED_TABLES = [...TIER_1_TABLES, ...TIER_2_TABLES];
 
 // ─── Database initialisation ──────────────────────────────────────────
 
 let dbPromise = null;
 
-/**
- * Returns a promise for the IndexedDB handle. Lazily initialised on first
- * call. Returns null on environments without IndexedDB (old browsers, SSR).
- */
 export function getOfflineDb() {
   if (typeof window === "undefined" || !("indexedDB" in window)) {
     return null;
@@ -75,7 +62,6 @@ export function getOfflineDb() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
       upgrade(idb) {
-        // One object store per cached table
         for (const table of CACHED_TABLES) {
           if (!idb.objectStoreNames.contains(table)) {
             const store = idb.createObjectStore(table, { keyPath: "id" });
@@ -83,8 +69,6 @@ export function getOfflineDb() {
             store.createIndex("updated_at", "updated_at", { unique: false });
           }
         }
-
-        // Pending-writes queue — replayed when connection returns
         if (!idb.objectStoreNames.contains("pending_writes")) {
           const pw = idb.createObjectStore("pending_writes", {
             keyPath: "id",
@@ -94,8 +78,6 @@ export function getOfflineDb() {
           pw.createIndex("status", "status", { unique: false });
           pw.createIndex("table", "table", { unique: false });
         }
-
-        // Cache bookkeeping
         if (!idb.objectStoreNames.contains("_cache_meta")) {
           idb.createObjectStore("_cache_meta", { keyPath: "key" });
         }
@@ -111,14 +93,112 @@ export function getOfflineDb() {
   return dbPromise;
 }
 
-// ─── Convenience helpers ──────────────────────────────────────────────
-
-/** Is this table cacheable in the offline store? */
 export function isCached(table) {
   return CACHED_TABLES.includes(table);
 }
 
-/** Clear every cached row (used on logout; preserves schema). */
+// ─── Row-level cache helpers ─────────────────────────────────────────
+//
+// Session 2 uses these from db.js to mirror Supabase reads into IDB
+// and to serve reads from IDB when offline.
+
+/**
+ * Write rows to the cache. If a row with the same id already exists,
+ * merges the columns (new row's fields overwrite old ones, but any
+ * columns missing in the new row are preserved from the old row).
+ *
+ * This merge behaviour matters because different queries select
+ * different column subsets. Without merge, cache rows would keep
+ * losing columns as narrower queries overwrote them.
+ *
+ * Silently no-ops for non-cached tables and when IDB is unavailable.
+ */
+export async function cacheRows(table, rows) {
+  if (!isCached(table)) return;
+  if (!Array.isArray(rows)) rows = [rows];
+  if (rows.length === 0) return;
+
+  const idb = await getOfflineDb();
+  if (!idb) return;
+
+  try {
+    const tx = idb.transaction(table, "readwrite");
+    const store = tx.objectStore(table);
+    for (const row of rows) {
+      if (!row || row.id == null) continue; // skip rows without id
+      const existing = await store.get(row.id);
+      const merged = existing ? { ...existing, ...row } : row;
+      await store.put(merged);
+    }
+    await tx.done;
+    await writeMeta(`${table}:last_cached`, Date.now());
+  } catch (err) {
+    // Cache is a performance/reliability layer — a write failure here
+    // must never break the caller. Log and move on.
+    console.warn(`[offlineDb] cacheRows(${table}) failed:`, err);
+  }
+}
+
+/**
+ * Read every row from a cached table. Caller applies filter/order/limit
+ * in-memory afterwards (see applyQuerySpec in db.js).
+ */
+export async function readCachedRows(table) {
+  if (!isCached(table)) return [];
+  const idb = await getOfflineDb();
+  if (!idb) return [];
+  try {
+    return await idb.getAll(table);
+  } catch (err) {
+    console.warn(`[offlineDb] readCachedRows(${table}) failed:`, err);
+    return [];
+  }
+}
+
+/**
+ * Delete specific row ids from the cache. Called on successful Supabase
+ * deletes, so subsequent offline reads don't return zombie rows.
+ */
+export async function deleteCachedRows(table, ids) {
+  if (!isCached(table)) return;
+  if (!Array.isArray(ids)) ids = [ids];
+  if (ids.length === 0) return;
+
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    const tx = idb.transaction(table, "readwrite");
+    await Promise.all(ids.map((id) => tx.objectStore(table).delete(id)));
+    await tx.done;
+  } catch (err) {
+    console.warn(`[offlineDb] deleteCachedRows(${table}) failed:`, err);
+  }
+}
+
+// ─── Cache bookkeeping ────────────────────────────────────────────────
+
+async function writeMeta(key, value) {
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    await idb.put("_cache_meta", { key, value, updated_at: Date.now() });
+  } catch (err) {
+    console.warn(`[offlineDb] writeMeta(${key}) failed:`, err);
+  }
+}
+
+export async function readMeta(key) {
+  const idb = await getOfflineDb();
+  if (!idb) return null;
+  try {
+    const row = await idb.get("_cache_meta", key);
+    return row?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Used on logout — clears every cached row. Preserves schema. */
 export async function clearAllCache() {
   const idb = await getOfflineDb();
   if (!idb) return;
@@ -134,7 +214,7 @@ export async function clearAllCache() {
   await tx.done;
 }
 
-/** Cheap diagnostic — row counts per store. Used by Settings > Storage. */
+/** Row counts per store — used in diagnostics. */
 export async function getCacheStats() {
   const idb = await getOfflineDb();
   if (!idb) return null;
