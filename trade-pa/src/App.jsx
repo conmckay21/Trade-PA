@@ -6793,12 +6793,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   };
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const sendEmailViaConnectedAccount = async (userId, to, subject, body, pdfBase64 = null, filename = "document.pdf") => {
-    // Sends email via server. pdfBase64 is a base64 string generated client-side.
+  const sendEmailViaConnectedAccount = async (userId, to, subject, body, pdfBase64OrHtml = null, filename = "document.pdf", { pdfHtml = null } = {}) => {
+    // If pdfHtml provided, server generates the PDF. If pdfBase64 provided, server attaches it directly.
+    const payload = { userId, to, subject, body, filename };
+    if (pdfHtml) {
+      payload.pdfHtml = pdfHtml;
+    } else if (pdfBase64OrHtml) {
+      payload.pdfBase64 = pdfBase64OrHtml;
+    }
     const res = await fetch("/api/send-invoice-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, to, subject, body, pdfBase64, filename }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => res.status.toString());
@@ -8262,13 +8268,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               <p style="color:#555;font-size:13px;">If you have any questions, please don't hesitate to get in touch.</p>`,
           });
           try {
-            let invPdfBase64 = null;
-            let invPdfError = "";
-            try { invPdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { invPdfError = pe.message; console.warn("PDF gen failed:", pe.message); }
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body, invPdfBase64, `Invoice-${inv.id}.pdf`);
-            const attachNote = invPdfBase64 ? " (PDF attached)" : invPdfError ? ` (PDF failed: ${invPdfError})` : " (no PDF)";
+            const pdfHtml = buildInvoiceHTML(brand, {
+              ...inv,
+              grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
+              lineItems: inv.line_items || inv.lineItems || [],
+              vatEnabled: inv.vat_enabled || inv.vatEnabled,
+              paymentMethod: inv.payment_method || inv.paymentMethod || "both",
+            });
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body, null, `Invoice-${inv.id}.pdf`, { pdfHtml });
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount } };
-            return `Invoice ${inv.id} sent to ${inv.customer} at ${email}${attachNote}.`;
+            return `Invoice ${inv.id} sent to ${inv.customer} at ${email} (PDF attached).`;
           } catch(e) {
             return `Failed to send invoice: ${e.message}`;
           }
@@ -8313,16 +8322,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               <p style="color:#555;font-size:13px;">This quote is valid for 30 days from the date of issue. If you would like to go ahead, or have any questions, please don't hesitate to get in touch.</p>`,
           });
           try {
-            // Generate PDF, upload to Supabase Storage, pass URL to server — same as invoices
-            let quotePdfBase64 = null;
-            try {
-              const quoteForPdf = { ...quote, grossAmount: quote.gross_amount || quote.grossAmount || quote.amount, lineItems: quote.line_items || quote.lineItems || [], vatEnabled: quote.vat_enabled || quote.vatEnabled, paymentMethod: quote.payment_method || quote.paymentMethod || "both", isQuote: true };
-              quotePdfBase64 = await generateInvoicePDFBase64(brand, quoteForPdf);
-            } catch(pe) { console.warn("PDF gen failed:", pe.message); }
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body, quotePdfBase64, `Quote-${quote.id}.pdf`);
-            const qAttachNote = quotePdfBase64 ? " (PDF attached)" : "";
+            const quoteForPdf = { ...quote, grossAmount: quote.gross_amount || quote.grossAmount || quote.amount, lineItems: quote.line_items || quote.lineItems || [], vatEnabled: quote.vat_enabled || quote.vatEnabled, paymentMethod: quote.payment_method || quote.paymentMethod || "both", isQuote: true };
+            const pdfHtml = buildInvoiceHTML(brand, quoteForPdf);
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body, null, `Quote-${quote.id}.pdf`, { pdfHtml });
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: quote.customer, invoice_id: quote.id, amount: quote.grossAmount || quote.amount, isQuote: true } };
-            return `Quote ${quote.id} sent to ${quote.customer} at ${email}${qAttachNote}.`;
+            return `Quote ${quote.id} sent to ${quote.customer} at ${email} (PDF attached).`;
           } catch(e) {
             return `Failed to send quote: ${e.message}`;
           }
@@ -8421,15 +8425,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               ${chaseClose}`,
           });
           try {
-            // Generate PDF, upload to Supabase Storage, pass URL to server
-            let chasePdfBase64 = null;
-            let chasePdfError = "";
-            try { chasePdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { chasePdfError = pe.message; console.warn("PDF gen failed:", pe.message); }
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfBase64, `Invoice-${inv.id}.pdf`);
-            const chaseAttachNote = chasePdfBase64 ? " (PDF attached)" : chasePdfError ? ` (PDF failed: ${chasePdfError})` : " (no PDF)";
+            const pdfHtml = buildInvoiceHTML(brand, {
+              ...inv,
+              grossAmount: inv.gross_amount || inv.grossAmount || inv.amount,
+              lineItems: inv.line_items || inv.lineItems || [],
+              vatEnabled: inv.vat_enabled || inv.vatEnabled,
+              paymentMethod: inv.payment_method || inv.paymentMethod || "both",
+            });
+            await sendEmailViaConnectedAccount(user?.id, email, subject, body, null, `Invoice-${inv.id}.pdf`, { pdfHtml });
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
             const toneLabel = chaseNum <= 1 ? "Gentle reminder" : chaseNum === 2 ? "Firm follow-up" : "Final notice";
-            return `${toneLabel} sent to ${inv.customer} at ${email} for invoice ${inv.id} (${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))})${chaseAttachNote}. This is chase #${chaseNum}.`;
+            return `${toneLabel} sent to ${inv.customer} at ${email} for invoice ${inv.id} (${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))}) (PDF attached). This is chase #${chaseNum}.`;
           } catch(e) {
             return `Chase email failed: ${e.message}`;
           }
