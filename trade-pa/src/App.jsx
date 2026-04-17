@@ -5838,8 +5838,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     "all done", "i'm done", "im done", "we're done", "we are done",
     "nothing else", "no that's all", "no thats all",
     "no thanks", "no thank you",
-    "goodbye", "good bye", "bye for now",
+    "goodbye", "good bye", "bye for now", "bye bye",
     "stop listening", "stop hands free", "exit hands free",
+    "that'll do", "that will do", "thatll do",
+    "i'm good", "im good", "we're good",
+    "catch you later", "see you later",
+    "turn off", "stop stop", "stop it",
+    "thanks that's it", "thanks thats it",
+    "nah you're alright", "nah your alright",
   ];
 
   // Use a ref for the transcript callback so it always uses fresh send()/messages
