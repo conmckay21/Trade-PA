@@ -6760,40 +6760,52 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       paymentMethod: inv.payment_method || inv.paymentMethod || "both",
     });
 
+    console.log("[PDF DEBUG] HTML length:", html.length, "starts with:", html.slice(0, 100));
+    console.log("[PDF DEBUG] inv keys:", Object.keys(inv).join(", "));
+    console.log("[PDF DEBUG] lineItems:", JSON.stringify(inv.lineItems || inv.line_items || []).slice(0, 200));
+    console.log("[PDF DEBUG] amount:", inv.grossAmount || inv.gross_amount || inv.amount);
+
     const container = document.createElement("div");
-    // Keep in viewport but invisible — html2canvas can't capture off-screen elements reliably
-    container.style.cssText = "position:absolute;top:0;left:0;width:794px;background:#fff;opacity:0;pointer-events:none;z-index:-1;";
+    container.style.cssText = "position:absolute;top:0;left:0;width:794px;background:#fff;pointer-events:none;z-index:-1;";
     container.innerHTML = html;
     container.querySelectorAll(".back-bar,.no-print").forEach(el => el.remove());
     document.body.appendChild(container);
 
     try {
-      // Wait for images AND a paint frame so the DOM is fully rendered
       await Promise.all([...container.querySelectorAll("img")].map(img =>
         img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
       ));
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-      // Temporarily make visible for capture — html2canvas skips opacity:0 elements
-      container.style.opacity = "1";
+      console.log("[PDF DEBUG] container dimensions:", container.offsetWidth, "x", container.offsetHeight);
+      console.log("[PDF DEBUG] container childNodes:", container.childNodes.length);
+
       const canvas = await window.html2canvas(container, {
         scale: 2, useCORS: true, allowTaint: true,
         width: 794,
         windowWidth: 794, logging: false, backgroundColor: "#ffffff",
       });
+
+      console.log("[PDF DEBUG] canvas size:", canvas.width, "x", canvas.height);
+
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4", compress: true });
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = pdf.internal.pageSize.getHeight();
       const imgH = (canvas.height * pdfW) / canvas.width;
       const imgData = canvas.toDataURL("image/jpeg", 0.85);
+
+      console.log("[PDF DEBUG] imgData length:", imgData.length, "imgH:", imgH);
+
       let y = 0;
       while (y < imgH) {
         pdf.addImage(imgData, "JPEG", 0, -y, pdfW, imgH);
         y += pdfH;
         if (y < imgH) pdf.addPage();
       }
-      return pdf.output("datauristring").split(",")[1]; // base64 only
+      const result = pdf.output("datauristring").split(",")[1];
+      console.log("[PDF DEBUG] final base64 length:", result.length);
+      return result;
     } finally {
       document.body.removeChild(container);
     }
@@ -25189,6 +25201,10 @@ function AppInner() {
     const viewport = document.querySelector('meta[name="viewport"]');
     if (viewport && !viewport.content.includes('viewport-fit')) {
       viewport.content = viewport.content + ', viewport-fit=cover';
+    }
+    // Prevent iOS Safari from zooming in when focusing inputs with font-size < 16px
+    if (viewport && !viewport.content.includes('maximum-scale')) {
+      viewport.content = viewport.content + ', maximum-scale=1';
     }
     // Detect iOS and standalone mode
     const ua2 = navigator.userAgent.toLowerCase(); const ios = ua2.indexOf("iphone") !== -1 || ua2.indexOf("ipad") !== -1 || ua2.indexOf("ipod") !== -1;
