@@ -115,41 +115,148 @@ function LandingPage({ onAuth }) {
         <div style={{ position: "relative" }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 100, padding: "6px 16px", fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 28 }}>
             <div style={{ width: 6, height: 6, background: "#f59e0b", borderRadius: "50%", animation: "pulse 2s infinite" }} />
-            Built for UK Tradespeople
+            Voice-first · Inbox-monitored · UK-built
           </div>
-          <h1 style={LP.h1}>The admin assistant<br/><span style={{ color: "#f59e0b" }}>that works when you do.</span></h1>
-          <p style={LP.sub}>Speak a quote into existence on the drive home. Dictate a Gas Safe cert on site. Let the AI handle your inbox while you're under a boiler. Trade PA does the work you don't have time for.</p>
+          <h1 style={LP.h1}>Your PA works<br/><span style={{ color: "#f59e0b" }}>when you can't.</span></h1>
+          <p style={LP.sub}>Trade PA reads every email 24/7, drafts every action, chases every unpaid invoice — and waits for one tap to approve. Voice-controlled for when you're on the tools. The admin assistant that runs your business while you run the jobs.</p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 16 }}>
             <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Get started — from £49/month →</button>
             <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
           </div>
-          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail & Outlook · Built-in business phone · UK-built</p>
+          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail &amp; Outlook · 4 UK Patents Pending · Built for UK Trades</p>
         </div>
       </div>
 
-      {/* AI ACTIONS DEMO */}
-      <div style={{ maxWidth: 680, margin: "0 auto 72px", padding: "0 24px" }}>
-        <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: 20, boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 14, borderBottom: "1px solid #1e1e1e", marginBottom: 14 }}>
-            <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444" }} />
-            <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#f59e0b" }} />
-            <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#10b981" }} />
-            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#444", marginLeft: 8 }}>Trade PA — AI Actions</span>
+      {/* INBOX PA */}
+      <div style={{ padding: "72px 24px 0", borderTop: "1px solid #1a1a1a" }}>
+        <div style={{ maxWidth: 1040, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <div style={LP.sectionLabel}>The inbox that runs itself</div>
+            <h2 style={LP.h2}>An inbox that works<br/>while you sleep.</h2>
+            <p style={{ fontSize: 16, color: "#888", maxWidth: 560, margin: "16px auto 0", lineHeight: 1.7 }}>16 email types. 3 trigger paths. 1 learning loop that gets smarter with every tap.</p>
           </div>
-          {[
-            { icon: "📋", title: "Create an invoice & create a job — Lisa Thompson", body: "Is happy with quote for 42 Maple Avenue and would like to go ahead.", color: "#3b82f6" },
-            { icon: "🔧", title: "Material — City Plumbing", body: "2× copper tube 22mm × 3m @ £29.70 — total £59.40. Upload invoice and create material note.", color: "#f59e0b" },
-            { icon: "🏗", title: "CIS statement — ABC Construction", body: "Gross £4,200 · Deduction £840 · Net £3,360 — PDF attached.", color: "#10b981" },
-          ].map((item, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.12)", borderRadius: 10, marginBottom: i < 2 ? 8 : 0 }}>
-              <div style={{ fontSize: 20, flexShrink: 0 }}>{item.icon}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: item.color, marginBottom: 2 }}>{item.title}</div>
-                <div style={{ fontSize: 12, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.body}</div>
+
+          {/* AI Actions demo mockup */}
+          <div style={{ maxWidth: 680, margin: "0 auto 56px" }}>
+            <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: 20, boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 14, borderBottom: "1px solid #1e1e1e", marginBottom: 14 }}>
+                <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444" }} />
+                <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#f59e0b" }} />
+                <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#10b981" }} />
+                <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#444", marginLeft: 8 }}>Trade PA — AI Actions</span>
               </div>
-              <div style={{ background: "#10b981", color: "#000", padding: "5px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>✓ Approve</div>
+              {[
+                { icon: "📋", title: "Create an invoice & create a job — Lisa Thompson", body: "Is happy with quote for 42 Maple Avenue and would like to go ahead.", color: "#3b82f6" },
+                { icon: "🔧", title: "Material — City Plumbing", body: "2× copper tube 22mm × 3m @ £29.70 — total £59.40. Upload invoice and create material note.", color: "#f59e0b" },
+                { icon: "🏗", title: "CIS statement — ABC Construction", body: "Gross £4,200 · Deduction £840 · Net £3,360 — PDF attached.", color: "#10b981" },
+              ].map((item, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.12)", borderRadius: 10, marginBottom: i < 2 ? 8 : 0 }}>
+                  <div style={{ fontSize: 20, flexShrink: 0 }}>{item.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: item.color, marginBottom: 2 }}>{item.title}</div>
+                    <div style={{ fontSize: 12, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.body}</div>
+                  </div>
+                  <div style={{ background: "#10b981", color: "#000", padding: "5px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>✓ Approve</div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+
+          {/* 3 Pathway cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 24 }}>
+            {[
+              {
+                tag: "Path 1",
+                title: "Voice or chat → instant send",
+                body: "Say \"Send Glenn his invoice.\" Fires immediately — branded PDF from your Gmail or Outlook.",
+                examples: ["Invoice & quote send", "Chase (gentle → firm → final)", "Review request", "Compliance certificate"],
+                highlight: false,
+              },
+              {
+                tag: "Path 2",
+                title: "Inbox monitoring → approve",
+                body: "Checks inbox hourly. Analyses every email against 10 pattern rules. Drafts an action. Tap approve — executes + auto-replies.",
+                examples: ["Job booking (new or existing)", "Quote acceptance reply", "Reschedule / cancellation", "Completion confirmation"],
+                highlight: true,
+              },
+              {
+                tag: "Path 3",
+                title: "Daily automation → proactive",
+                body: "8am loop. Queries the database for follow-up candidates. Sends. Marks the timestamp so it never sends twice.",
+                examples: ["Quote follow-up at 3 days", "Appointment reminder", "Auto review request post-job"],
+                highlight: false,
+              },
+            ].map((p) => (
+              <div key={p.tag} style={{ background: p.highlight ? "#1a1a1a" : "#141414", border: p.highlight ? "1px solid rgba(245,158,11,0.3)" : "1px solid #222", borderRadius: 14, padding: "24px 22px", position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 3, background: "#f59e0b" }} />
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#f59e0b", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10 }}>{p.tag}</div>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 14, color: "#f0f0f0", marginBottom: 10, lineHeight: 1.35 }}>{p.title}</div>
+                <div style={{ fontSize: 12.5, color: "#888", lineHeight: 1.65, marginBottom: 14 }}>{p.body}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {p.examples.map(ex => (
+                    <div key={ex} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#666" }}>
+                      <span style={{ color: "#f59e0b", fontSize: 10 }}>•</span>{ex}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Learning loop callout */}
+          <div style={{ textAlign: "center", padding: "20px 28px", background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 14, marginBottom: 72 }}>
+            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#f59e0b", fontWeight: 700 }}>↻ Learning loop:</span>
+            <span style={{ fontSize: 13, color: "#888", marginLeft: 10, lineHeight: 1.7 }}>every approved action teaches the system — known suppliers, customers, job types. Rejected actions teach it harder. Sharper with every tap.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* VOICE PA */}
+      <div style={{ padding: "72px 24px", background: "#0d0d0d", borderTop: "1px solid #1a1a1a", borderBottom: "1px solid #1a1a1a" }}>
+        <div style={{ maxWidth: 1040, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <div style={LP.sectionLabel}>Voice that thinks like a PA</div>
+            <h2 style={LP.h2}>Talk once. Done.<br/>Next job.</h2>
+            <p style={{ fontSize: 16, color: "#888", maxWidth: 560, margin: "16px auto 0", lineHeight: 1.7 }}>Not dictation. Direction. One spoken sentence, multiple actions completed — while you carry the tools, not the phone.</p>
+          </div>
+
+          {/* Example conversation */}
+          <div style={{ maxWidth: 680, margin: "0 auto 48px" }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>🎙</div>
+              <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 14, padding: "14px 18px", fontSize: 14, color: "#ccc", lineHeight: 1.65, flex: 1, fontStyle: "italic" }}>
+                "Book Lisa Thompson in for a boiler service Thursday, add two metres of 22mm copper from City Plumbing to the quote I did last week, and chase the invoice from the Maple Avenue job."
+              </div>
+            </div>
+            <div style={{ paddingLeft: 42 }}>
+              <div style={{ background: "#141414", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                {[
+                  "Booked Lisa Thompson — Thursday 11:30, boiler service",
+                  "Added £59.40 of materials to the Maple Ave quote",
+                  "Chase email sent to Maple Ave — gentle reminder",
+                ].map((line, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#ccc" }}>
+                    <span style={{ color: "#10b981", fontWeight: 700, flexShrink: 0 }}>✓</span>{line}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 3 Voice capability cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+            {[
+              { title: "Wake word + hands-free loop", body: "\"Hey Trade PA\" wakes it. Continuous voice loop with silence detection. Phase-aware safety timers — never dies silently. Built for vans, roofs, lofts and plant rooms." },
+              { title: "Voice on every form", body: "43 features accept voice dictation. Quotes, invoices, certificates, RAMS, time logs. Deepgram Nova-2 — tuned for UK, Irish and regional accents. No menus. Just talk." },
+              { title: "Multi-action conversational AI", body: "93 tools the AI can call autonomously. Several actions per spoken sentence. Conversational RAMS builder. Asks follow-ups only when it needs to." },
+            ].map((f) => (
+              <div key={f.title} style={{ background: "#141414", border: "1px solid #222", borderRadius: 14, padding: "24px 22px", position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 3, background: "#f59e0b" }} />
+                <div style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 14, color: "#f0f0f0", marginBottom: 10, lineHeight: 1.35 }}>{f.title}</div>
+                <div style={{ fontSize: 12.5, color: "#888", lineHeight: 1.65 }}>{f.body}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -177,17 +284,15 @@ function LandingPage({ onAuth }) {
       {/* FEATURES */}
       <div style={{ padding: "72px 24px", background: "#0d0d0d", borderTop: "1px solid #1a1a1a", borderBottom: "1px solid #1a1a1a" }}>
         <div style={{ maxWidth: 1040, margin: "0 auto" }}>
-          <div style={LP.sectionLabel}>Everything included</div>
+          <div style={LP.sectionLabel}>Everything else included</div>
           <h2 style={LP.h2}>The full toolkit.<br/>One price.</h2>
           <div style={{ ...LP.featureGrid, marginTop: 40 }}>
             {[
-              { icon: "🎙", title: "Voice dictation everywhere", body: "Tap the mic on any form — jobs, quotes, invoices, certificates, time logs. Speak and the AI fills it in.", badge: "Unique to Trade PA", badgeColor: "#10b981", badgeBg: "rgba(16,185,129,0.1)", badgeBorder: "rgba(16,185,129,0.2)" },
               { icon: "📋", title: "All-trades certificates", body: "CP12, EICR, EIC, PAT, Pressure Test, Unvented HW, CD/11, CD/12, Fire Alarm, Emergency Lighting, Part P." },
               { icon: "🏗", title: "Deep CIS support", body: "Domestic Reverse Charge invoicing, UTR on all documents, CIS monthly statement logging with PDF storage." },
               { icon: "💷", title: "Quotes & invoices", body: "Professional branded documents sent from your Gmail or Outlook. Xero and QuickBooks sync built in." },
               { icon: "📅", title: "Jobs & scheduling", body: "Full job cards with notes, photos, time logs, variation orders, daywork sheets and customer sign-off." },
-              { icon: "💸", title: "Overdue payment chasing", body: "Trade PA automatically sends professional chase emails weekly until overdue invoices are paid." },
-              { icon: "📞", title: "Business phone, built in", body: "Get a dedicated business number that rings inside the app. Every call recorded, transcribed and AI-logged against the job. No second SIM needed.", badge: "Add-on · Any plan", badgeColor: "#f59e0b", badgeBg: "rgba(245,158,11,0.1)", badgeBorder: "rgba(245,158,11,0.2)" },
+              { icon: "📞", title: "Business phone, built in", body: "A dedicated business number that rings inside the app. Every call recorded, transcribed and AI-logged against the job. No second SIM needed.", badge: "Add-on · Any plan", badgeColor: "#f59e0b", badgeBg: "rgba(245,158,11,0.1)", badgeBorder: "rgba(245,158,11,0.2)" },
               { icon: "📍", title: "GPS job tracking", body: "Auto-arrives when you reach site, auto-logs your departure. Time tracked in the background while you work — no timesheets to fill in.", badge: "Team & Pro", badgeColor: "#3b82f6", badgeBg: "rgba(59,130,246,0.1)", badgeBorder: "rgba(59,130,246,0.2)" },
             ].map((f, i) => (
               <div key={i} style={{ ...LP.feature }} className="lp-feature">
@@ -323,7 +428,7 @@ function LandingPage({ onAuth }) {
         <div style={{ position: "absolute", width: 400, height: 400, background: "radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)", top: "50%", left: "50%", transform: "translate(-50%,-50%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
           <h2 style={{ ...LP.h2, marginBottom: 20 }}>Stop doing admin<br/>after hours.</h2>
-          <p style={{ fontSize: 17, color: "#666", marginBottom: 40, maxWidth: 440, margin: "0 auto 40px", lineHeight: 1.7 }}>Trade PA handles the calls, the paperwork and the chasing while you handle the jobs.</p>
+          <p style={{ fontSize: 17, color: "#888", marginBottom: 40, maxWidth: 500, margin: "0 auto 40px", lineHeight: 1.7 }}>Trade PA runs your inbox while you're on the tools, and chases your money while you sleep. One tap to approve. That's it.</p>
           <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, fontSize: 16, padding: "16px 40px" }} className="lp-btn-primary">Get started →</button>
           <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 16 }}>Works with Gmail · Works with Outlook · Built-in business phone · UK-built for UK trades</p>
         </div>
