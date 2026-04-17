@@ -4057,13 +4057,6 @@ function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanReceipt, v
             fontWeight: 600,
             color: C.text,
           }}>Tap to speak</div>
-          <div style={{
-            fontFamily: "'DM Mono', monospace",
-            fontSize: 10,
-            color: C.muted,
-            letterSpacing: "0.1em",
-            textTransform: "lowercase",
-          }}>"hey trade pa"</div>
         </div>
       </div>
 
@@ -4430,7 +4423,7 @@ function Schedule({ jobs, setJobs, customers, setContextHint }) {
       {dayJobs.length === 0 ? (
         <div onClick={() => openAdd(activeDay)} style={{ background: C.surfaceHigh, border: `2px dashed ${C.border}`, borderRadius: 12, padding: "32px 20px", textAlign: "center", cursor: "pointer" }}>
           <div style={{ fontSize: 14, color: C.muted, marginBottom: 4 }}>No jobs {dayLabel(activeDay).toLowerCase()}</div>
-          <div style={{ fontSize: 11, color: C.textDim }}>Tap to add one, or say "Hey Trade PA, book a job"</div>
+          <div style={{ fontSize: 11, color: C.textDim }}>Tap to add one, or tap the mic to book by voice</div>
         </div>
       ) : dayJobs.map(job => (
         <div
@@ -5896,7 +5889,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           emptyCyclesRef.current = 0;
           setHandsFree(false);
           handsFreeRef.current = false;
-          speak("I'll pause there — say Hey " + (assistantNameRef.current || "Trade PA") + " when you need me.");
+          speak("I'll pause there — tap the mic when you need me.");
         }
         return;
       }
@@ -5909,7 +5902,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
         stopRecording();
         const signoffMsg = assistantSignoffRef.current
-          || ("No problem, I'll stop there. Just say Hey " + (assistantNameRef.current || "Trade PA") + " whenever you need me.");
+          || ("No problem, I'll stop there. Just tap the mic whenever you need me.");
         speak(signoffMsg);
       } else {
         emptyCyclesRef.current = 0;
@@ -5944,7 +5937,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         emptyCyclesRef.current = 0;
         setHandsFree(false);
         handsFreeRef.current = false;
-        speak("I'll pause there — say Hey " + (assistantNameRef.current || "Trade PA") + " when you need me.");
+        speak("I'll pause there — tap the mic when you need me.");
         return;
       }
       setTimeout(() => {
@@ -9857,7 +9850,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
   // Token map — colour + label + ring animation per state. One place to tune.
   const voiceTokens = {
-    idle:         { color: handsFree ? C.green : C.amber, label: handsFree ? "Hands-free ready" : "Tap to speak",        sub: handsFree ? 'Say "hey trade pa"' : '"hey trade pa"', ring: "idle",   spinner: false, wave: false },
+    idle:         { color: handsFree ? C.green : C.amber, label: handsFree ? "Hands-free ready" : "Tap to speak",        sub: handsFree ? "listening for you" : "ask me anything",                  ring: "idle",   spinner: false, wave: false },
     listening:    { color: C.red,                         label: "Listening — tap to stop",                              sub: "recording your voice",                             ring: "listen", spinner: false, wave: false },
     transcribing: { color: C.amber,                       label: "Transcribing…",                                         sub: "turning speech into text",                          ring: "none",   spinner: true,  wave: false },
     thinking:     { color: C.blue,                        label: "Thinking…",                                             sub: "Trade PA is working it out",                        ring: "none",   spinner: true,  wave: false },
@@ -25788,7 +25781,7 @@ function AppInner() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#f0f0f0" }}>Install Trade PA</div>
             {isIos
-              ? <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Tap <strong style={{ color: "#f59e0b" }}>Share</strong> then <strong style={{ color: "#f59e0b" }}>Add to Home Screen</strong></div>
+              ? <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Tap <strong style={{ color: "#f59e0b" }}>Share</strong> → <strong style={{ color: "#f59e0b" }}>Show More</strong> → <strong style={{ color: "#f59e0b" }}>Add to Home Screen</strong></div>
               : <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Add to your home screen for the best experience</div>
             }
           </div>
