@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, Component } from "react";
-import { supabase } from "./supabase.js";
+import { db } from "./lib/db.js";
 import { Device } from "@twilio/voice-sdk";
 import HelpCentre from "./HelpCentre.jsx";
 import AssistantSetup from "./AssistantSetup.jsx";
@@ -22,7 +22,7 @@ class ErrorBoundary extends Component {
     return this.props.children;
   }
 }
-window._supabase = supabase;
+window._supabase = db;
 
 // ─── Sync invoice to accounting software ─────────────────────────────────────
 async function syncInvoiceToAccounting(userId, invoice) {
@@ -481,7 +481,7 @@ function AuthScreen({ onAuth, initialMode = "login", onBack }) {
   const handleLogin = async () => {
     if (!form.email || !form.password) { setError("Please enter your email and password."); return; }
     setLoading(true); setError("");
-    const { data, error } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+    const { data, error } = await db.auth.signInWithPassword({ email: form.email, password: form.password });
     if (error) setError(error.message);
     else onAuth(data.user);
     setLoading(false);
@@ -493,7 +493,7 @@ function AuthScreen({ onAuth, initialMode = "login", onBack }) {
     if (form.password.length < 6) { setError("Password must be at least 6 characters."); return; }
     if (form.password !== form.confirm) { setError("Passwords don't match."); return; }
     setLoading(true); setError("");
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await db.auth.signUp({
       email: form.email,
       password: form.password,
       options: { data: { full_name: form.name } }
@@ -507,7 +507,7 @@ function AuthScreen({ onAuth, initialMode = "login", onBack }) {
   const handleReset = async () => {
     if (!form.email) { setError("Please enter your email address."); return; }
     setLoading(true); setError("");
-    const { error } = await supabase.auth.resetPasswordForEmail(form.email, {
+    const { error } = await db.auth.resetPasswordForEmail(form.email, {
       redirectTo: window.location.origin,
     });
     if (error) setError(error.message);
@@ -1750,7 +1750,7 @@ function CallTrackingSettings({ user }) {
 
   useEffect(() => {
     if (!user?.id) return;
-    supabase.from("call_tracking")
+    db.from("call_tracking")
       .select("*")
       .eq("user_id", user.id)
       .limit(1)
@@ -1919,7 +1919,7 @@ function TeamInvite({ companyId, planTier, currentMemberCount }) {
 
     setSending(true); setError("");
     try {
-      const { data: existing } = await supabase
+      const { data: existing } = await db
         .from("invites")
         .select("id")
         .eq("company_id", companyId)
@@ -1932,9 +1932,9 @@ function TeamInvite({ companyId, planTier, currentMemberCount }) {
         return;
       }
 
-      await supabase.from("invites").insert({
+      await db.from("invites").insert({
         company_id: companyId,
-        invited_by: (await supabase.auth.getUser()).data.user.id,
+        invited_by: (await db.auth.getUser()).data.user.id,
         email: email.toLowerCase(),
         role,
         permissions: role === "owner" ? null : permissions,
@@ -2134,7 +2134,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
     }
     // Always check DB for actual connection status
     if (!user?.id) return;
-    supabase
+    db
       .from("accounting_connections")
       .select("provider")
       .eq("user_id", user.id)
@@ -2614,7 +2614,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             <button
               onClick={async () => {
                 if (!window.confirm("Sign out of Trade PA?")) return;
-                try { await supabase.auth.signOut(); window.location.reload(); }
+                try { await db.auth.signOut(); window.location.reload(); }
                 catch (e) { alert("Sign out failed: " + e.message); }
               }}
               style={{
@@ -3678,7 +3678,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                             const updated = members.map((mem, j) => j === i ? { ...mem, permissions: newPerms } : mem);
                             // Update in Supabase
                             try {
-                              await supabase.from("company_members")
+                              await db.from("company_members")
                                 .update({ permissions: newPerms })
                                 .eq("company_id", companyId)
                                 .eq("user_id", m.user_id);
@@ -4816,7 +4816,7 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, us
                 const paidValue = !m.paid;
                 const paid_on = paidValue ? new Date().toISOString().slice(0, 10) : null;
                 if (m.id) {
-                  await supabase.from("materials").update({ paid: paidValue, paid_on }).eq("id", m.id).eq("user_id", user?.id);
+                  await db.from("materials").update({ paid: paidValue, paid_on }).eq("id", m.id).eq("user_id", user?.id);
                 }
                 setMaterials(prev => (prev || []).map((x, j) => j === i ? { ...x, paid: paidValue, paid_on } : x));
               }}
@@ -5721,7 +5721,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     if (!user?.id) return;
     const cutoff = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
-    supabase.from("worker_documents")
+    db.from("worker_documents")
       .select("*, workers(name)").eq("user_id", user.id)
       .lte("expiry_date", cutoff).gte("expiry_date", today)
       .order("expiry_date", { ascending: true }).limit(5)
@@ -5803,7 +5803,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   // Load memories from Supabase on mount
   useEffect(() => {
     if (!user?.id) return;
-    supabase.from("pa_memories")
+    db.from("pa_memories")
       .select("id, content, category, times_reinforced")
       .eq("user_id", user.id)
       .order("times_reinforced", { ascending: false })
@@ -5822,11 +5822,11 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     );
     if (existing) {
       const n = (existing.times_reinforced || 1) + boost;
-      await supabase.from("pa_memories")
+      await db.from("pa_memories")
         .update({ times_reinforced: n, last_used: new Date().toISOString() }).eq("id", existing.id);
       setPaMemories(prev => prev.map(m => m.id === existing.id ? { ...m, times_reinforced: n } : m));
     } else {
-      const { data: ins } = await supabase.from("pa_memories").insert({
+      const { data: ins } = await db.from("pa_memories").insert({
         user_id: user.id, content: memContent, category: category || "fact",
         times_reinforced: boost, created_at: new Date().toISOString(), last_used: new Date().toISOString(),
       }).select().single();
@@ -5919,7 +5919,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           handsfree_seconds_used: (prev.handsfree_seconds_used || 0) + elapsed,
         }));
         // Flush to DB (non-blocking)
-        Promise.resolve(supabase.rpc("increment_usage", {
+        Promise.resolve(db.rpc("increment_usage", {
           p_user_id: user.id, p_month: currentMonth,
           p_conversations: 0, p_seconds: elapsed,
         })).catch(() => {});
@@ -5937,7 +5937,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   const logError = async (type, fields = {}) => {
     if (!user?.id) return;
     try {
-      await supabase.from("pa_error_log").insert({
+      await db.from("pa_error_log").insert({
         user_id: user.id,
         error_type: type,
         occurred_at: new Date().toISOString(),
@@ -6934,7 +6934,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       const errText = await res.text().catch(() => res.status.toString());
       // If new endpoint not deployed yet, fall back to basic send
       if (res.status === 404) {
-        const { data: conns } = await supabase.from("email_connections")
+        const { data: conns } = await db.from("email_connections")
           .select("provider").eq("user_id", userId).limit(1);
         const provider = conns?.[0]?.provider;
         if (!provider) throw new Error("No email account connected. Go to the Inbox tab to connect Gmail or Outlook first.");
@@ -6957,7 +6957,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     // ─── Shared job lookup helper — must be before switch to avoid TDZ ───────
     const findJob = async (customer, jobTitle, actionLabel = "action") => {
       if (!customer && !jobTitle) return { error: "No customer or job title provided." };
-      let q = supabase.from("job_cards")
+      let q = db.from("job_cards")
         .select("id,title,type,customer,status,address,value")
         .eq("user_id", user?.id)
         .order("created_at", { ascending: false })
@@ -7057,7 +7057,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           setInvoices(prev => [inv, ...(prev || [])]);
           syncInvoiceToAccounting(user?.id, inv);
           // Persist to Supabase so send/chase can retrieve full line items
-          supabase.from("invoices").upsert({
+          db.from("invoices").upsert({
             id: inv.id, user_id: user?.id,
             customer: inv.customer, address: inv.address || "",
             email: inv.email || "", phone: inv.phone || "",
@@ -7116,7 +7116,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             isQuote: true,
           };
           setInvoices(prev => [quote, ...(prev || [])]);
-          supabase.from("invoices").upsert({
+          db.from("invoices").upsert({
             id: quote.id, user_id: user?.id,
             customer: quote.customer, address: quote.address || "",
             email: quote.email || "", phone: quote.phone || "",
@@ -7166,7 +7166,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const reminder = { id: `r${Date.now()}`, text: input.text, time: fireAt.getTime(), timeLabel: input.time_label || fireAt.toLocaleString("en-GB"), done: false };
           onAddReminder(reminder);
           try {
-            await supabase.from("reminders").insert({
+            await db.from("reminders").insert({
               user_id: user?.id,
               text: input.text,
               fire_at: fireAt.toISOString(),
@@ -7211,7 +7211,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             m.created_at && m.created_at > sixtySecsAgo
           );
           if (veryRecentMats.length >= 1 && !input.force) return ""; // Silent dedup — just created in last 60s
-          const { data: newMat, error: matErr } = await supabase.from("materials").insert(matPayload).select().single();
+          const { data: newMat, error: matErr } = await db.from("materials").insert(matPayload).select().single();
           if (matErr) return `Failed to add material: ${matErr.message}`;
           // Append to React state using setMaterials prop (always available, no companyId needed for appends)
           // The wrapper only triggers DELETE+INSERT sync when companyId exists in App scope
@@ -7256,7 +7256,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "update_material": {
           // Find the material - filter by job if given to target the right entry
-          let updateQuery = supabase.from("materials")
+          let updateQuery = db.from("materials")
             .select("id, item, job, unit_price, qty, supplier").eq("user_id", user?.id)
             .ilike("item", `%${input.item}%`).order("created_at", { ascending: false });
           if (input.job) updateQuery = updateQuery.ilike("job", `%${input.job}%`);
@@ -7268,7 +7268,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (input.qty !== undefined) updates.qty = parseInt(input.qty);
           if (input.supplier !== undefined) updates.supplier = input.supplier;
           if (!Object.keys(updates).length) return "Nothing to update — provide unit_price, qty, or supplier.";
-          const { error: updErr } = await supabase.from("materials").update(updates).eq("id", mat.id);
+          const { error: updErr } = await db.from("materials").update(updates).eq("id", mat.id);
           if (updErr) return `Failed to update: ${updErr.message}`;
           // Sync React state
           setMaterialsRaw(prev => (prev || []).map(m => m.id === mat.id ? { ...m, unitPrice: updates.unit_price ?? m.unitPrice, qty: updates.qty ?? m.qty, supplier: updates.supplier ?? m.supplier } : m));
@@ -7278,7 +7278,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "delete_material": {
           const count = input.count || 1;
           // Build query — always filter by job if provided to avoid deleting across all jobs
-          let matQuery = supabase.from("materials")
+          let matQuery = db.from("materials")
             .select("id, item, job").eq("user_id", user?.id)
             .ilike("item", `%${input.item}%`)
             .order("created_at", { ascending: false });
@@ -7289,7 +7289,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (!allMats?.length) return `Couldn't find "${input.item}"${input.job ? ` on ${input.job}` : ""}. Check the Materials tab.`;
           // SAFETY: never delete more than count (default 1)
           const toDelete = allMats.slice(0, count);
-          const { error: delErr } = await supabase.from("materials").delete().in("id", toDelete.map(m => m.id));
+          const { error: delErr } = await db.from("materials").delete().in("id", toDelete.map(m => m.id));
           if (delErr) return `Failed to delete: ${delErr.message}`;
           // Sync React state without triggering the full DELETE+INSERT wrapper
           const deletedIds = new Set(toDelete.map(m => m.id));
@@ -7298,7 +7298,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Deleted ${toDelete.length} "${toDelete[0].item}" entr${toDelete.length !== 1 ? "ies" : "y"}.`;
         }
         case "mark_invoice_paid": {
-          const { data: paidRows } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", false).neq("status", "paid").order("created_at", { ascending: false }).limit(50);
+          const { data: paidRows } = await db.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", false).neq("status", "paid").order("created_at", { ascending: false }).limit(50);
           const statePaid = (invoices || []).filter(i => !i.isQuote && i.status !== "paid");
           const seenPaidIds = new Set((paidRows || []).map(i => i.id));
           const paidAll = [...(paidRows || []), ...statePaid.filter(i => !seenPaidIds.has(i.id))];
@@ -7337,7 +7337,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "update_material_status": {
           const term = input.item.toLowerCase();
           // Build query — filter by job if provided to avoid updating across all jobs
-          let statusQuery = supabase.from("materials").select("id, item, job")
+          let statusQuery = db.from("materials").select("id, item, job")
             .eq("user_id", user?.id).ilike("item", `%${input.item}%`);
           if (input.job || input.job_title) {
             statusQuery = statusQuery.ilike("job", `%${input.job || input.job_title}%`);
@@ -7347,7 +7347,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           // Dedup: if already this status, skip silently
           const needsUpdate = matRows.filter(m => m.status !== input.status);
           if (!needsUpdate.length) return "";
-          const { error: updateErr } = await supabase.from("materials")
+          const { error: updateErr } = await db.from("materials")
             .update({ status: input.status })
             .in("id", needsUpdate.map(m => m.id));
           if (updateErr) return `Failed to update status: ${updateErr.message}`;
@@ -7363,7 +7363,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const titleMatch = (input.title || input.type || "").toLowerCase();
           const custMatch = (input.customer || "").toLowerCase();
           if (custMatch) {
-            const { data: existing } = await supabase.from("job_cards")
+            const { data: existing } = await db.from("job_cards")
               .select("id,title,customer,status,value")
               .eq("user_id", user?.id)
               .ilike("customer", `%${custMatch}%`)
@@ -7391,7 +7391,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             updated_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
           };
-          const { data: jobCard, error: jcErr } = await supabase.from("job_cards").insert(payload).select().single();
+          const { data: jobCard, error: jcErr } = await db.from("job_cards").insert(payload).select().single();
           if (jcErr) return `Failed to create job card: ${jcErr.message}`;
           if (refreshJobs) refreshJobs();
           setLastAction({ type: "job_card", label: `${input.title || input.customer}`, view: "Jobs" });
@@ -7428,7 +7428,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "list_invoices": {
           const filter = (input.filter || "all").toLowerCase().trim();
           // Always query Supabase directly — React state can be stale if a previous sync failed
-          const { data: freshRows } = await supabase
+          const { data: freshRows } = await db
             .from("invoices")
             .select("id, customer, amount, gross_amount, status, due, is_quote, line_items, created_at")
             .eq("user_id", user?.id)
@@ -7454,7 +7454,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
         case "list_jobs": {
           const filter = input.filter || "all";
-          const { data: jobList } = await supabase.from("job_cards").select("*").eq("user_id", user?.id).order("created_at", { ascending: false }).limit(20);
+          const { data: jobList } = await db.from("job_cards").select("*").eq("user_id", user?.id).order("created_at", { ascending: false }).limit(20);
           let list = jobList || [];
           if (filter === "active") list = list.filter(j => j.status !== "completed");
           if (filter === "completed") list = list.filter(j => j.status === "completed");
@@ -7466,7 +7466,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "list_materials": {
           const filter = input.filter || "all";
           // Query Supabase directly — React state may be stale after recent delete/update operations
-          let query = supabase.from("materials").select("*").eq("user_id", user?.id).order("created_at", { ascending: true });
+          let query = db.from("materials").select("*").eq("user_id", user?.id).order("created_at", { ascending: true });
           if (filter === "to_order") query = query.eq("status", "to_order");
           if (filter === "ordered") query = query.eq("status", "ordered");
           if (filter === "collected") query = query.eq("status", "collected");
@@ -7521,7 +7521,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           // (React state in closure can be stale if create_job was called moments ago)
           let freshJobs = jobs || [];
           try {
-            const { data: dbJobs } = await supabase.from("jobs")
+            const { data: dbJobs } = await db.from("jobs")
               .select("*").eq("user_id", user?.id)
               .gte("date_obj", start.toISOString())
               .lte("date_obj", end.toISOString())
@@ -7555,13 +7555,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           let drawings = { data: [] }, vos = { data: [] }, docs = { data: [] };
           try {
             [notes, , timeLogs, materials, drawings, vos, docs] = await Promise.all([
-              supabase.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
-              supabase.from("job_photos").select("id,filename,created_at").eq("job_id", job.id),
-              supabase.from("time_logs").select("*").eq("job_id", job.id),
-              supabase.from("materials").select("*").eq("job_id", job.id),
-              supabase.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
-              supabase.from("variation_orders").select("*").eq("job_id", job.id),
-              supabase.from("compliance_docs").select("*").eq("job_id", job.id),
+              db.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
+              db.from("job_photos").select("id,filename,created_at").eq("job_id", job.id),
+              db.from("time_logs").select("*").eq("job_id", job.id),
+              db.from("materials").select("*").eq("job_id", job.id),
+              db.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
+              db.from("variation_orders").select("*").eq("job_id", job.id),
+              db.from("compliance_docs").select("*").eq("job_id", job.id),
             ]);
           } catch (e) { /* show card anyway if related queries fail */ }
           pendingWidgetRef.current = {
@@ -7585,15 +7585,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
           // Fetch core cost data
           const [{ data: tLogs }, { data: mats }, { data: vos }] = await Promise.all([
-            supabase.from("time_logs").select("total,hours,rate,labour_type,days,description").eq("job_id", pJob.id),
-            supabase.from("materials").select("item,qty,unit_price,status").eq("job_id", pJob.id),
-            supabase.from("variation_orders").select("description,amount,status").eq("job_id", pJob.id),
+            db.from("time_logs").select("total,hours,rate,labour_type,days,description").eq("job_id", pJob.id),
+            db.from("materials").select("item,qty,unit_price,status").eq("job_id", pJob.id),
+            db.from("variation_orders").select("description,amount,status").eq("job_id", pJob.id),
           ]);
           // Optional tables — wrapped individually to avoid crashing if table doesn't exist
           let daysheets = [], dayExpenses = [], subPayments = [];
-          try { const r = await supabase.from("daywork_sheets").select("hours,rate,description").eq("job_id", pJob.id); daysheets = r.data || []; } catch(e) {}
-          try { const r = await supabase.from("expenses").select("amount,description").eq("job_id", pJob.id); dayExpenses = r.data || []; } catch(e) {}
-          try { const r = await supabase.from("subcontractor_payments").select("gross,net,subcontractor_id").eq("job_id", pJob.id).eq("user_id", user?.id); subPayments = r.data || []; } catch(e) {}
+          try { const r = await db.from("daywork_sheets").select("hours,rate,description").eq("job_id", pJob.id); daysheets = r.data || []; } catch(e) {}
+          try { const r = await db.from("expenses").select("amount,description").eq("job_id", pJob.id); dayExpenses = r.data || []; } catch(e) {}
+          try { const r = await db.from("subcontractor_payments").select("gross,net,subcontractor_id").eq("job_id", pJob.id).eq("user_id", user?.id); subPayments = r.data || []; } catch(e) {}
 
           const jobValue = parseFloat(pJob.value || 0);
           const voIncome = (vos || []).reduce((s, v) => s + parseFloat(v.amount || 0), 0);
@@ -7758,7 +7758,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             scope: updated.scope, cdm_notifiable: updated.cdm_notifiable || false,
             form_data: JSON.stringify(updated),
           };
-          const { data, error } = await supabase.from("rams_documents").insert({ user_id: user?.id, ...payload, created_at: new Date().toISOString() }).select().single();
+          const { data, error } = await db.from("rams_documents").insert({ user_id: user?.id, ...payload, created_at: new Date().toISOString() }).select().single();
           setRamsSession(null);
           if (error) return `RAMS built but failed to save: ${error.message}`;
           pendingWidgetRef.current = { type: "rams_complete", data: { ...updated, id: data?.id } };
@@ -7766,7 +7766,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "find_invoice": {
           const term = (input.customer || input.id || "").toLowerCase();
-          const { data: rows } = await supabase.from("invoices")
+          const { data: rows } = await db.from("invoices")
             .select("*").eq("user_id", user?.id).eq("is_quote", false)
             .order("created_at", { ascending: false }).limit(50);
           const fresh = (rows || []).map(r => ({ ...r, isQuote: r.is_quote, grossAmount: parseFloat(r.gross_amount || r.amount) || 0, amount: parseFloat(r.amount) || 0, status: (r.status || "").toLowerCase().trim(), lineItems: Array.isArray(r.line_items) ? r.line_items : (r.line_items ? JSON.parse(r.line_items) : []) }));
@@ -7777,7 +7777,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "find_quote": {
           const term = (input.customer || input.id || "").toLowerCase();
-          const { data: rows } = await supabase.from("invoices")
+          const { data: rows } = await db.from("invoices")
             .select("*").eq("user_id", user?.id).eq("is_quote", true)
             .order("created_at", { ascending: false }).limit(50);
           const fresh = (rows || []).map(r => ({ ...r, isQuote: true, grossAmount: parseFloat(r.gross_amount || r.amount) || 0, amount: parseFloat(r.amount) || 0, status: (r.status || "").toLowerCase().trim(), lineItems: Array.isArray(r.line_items) ? r.line_items : (r.line_items ? JSON.parse(r.line_items) : []) }));
@@ -7789,7 +7789,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "find_job_card": {
           const term = (input.customer || input.title || "").toLowerCase();
           if (!term) return "Please tell me which job card to find — provide the customer name or job title.";
-          const { data: found, error: findErr } = await supabase.from("job_cards")
+          const { data: found, error: findErr } = await db.from("job_cards")
             .select("*").eq("user_id", user?.id)
             .or(`customer.ilike.%${term}%,title.ilike.%${term}%,type.ilike.%${term}%`)
             .order("created_at", { ascending: false }).limit(1);
@@ -7797,26 +7797,26 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const match = found?.[0];
           if (!match) {
             // Fallback: try just customer name
-            const { data: fallback } = await supabase.from("job_cards")
+            const { data: fallback } = await db.from("job_cards")
               .select("*").eq("user_id", user?.id)
               .ilike("customer", `%${term}%`)
               .order("created_at", { ascending: false }).limit(1);
             if (!fallback?.length) return `No job card found for "${input.customer || input.title}". Try: list_jobs to see all job cards.`;
           }
-          const job = found?.[0] || (await supabase.from("job_cards").select("*").eq("user_id", user?.id).ilike("customer", `%${term}%`).order("created_at", { ascending: false }).limit(1)).data?.[0];
+          const job = found?.[0] || (await db.from("job_cards").select("*").eq("user_id", user?.id).ilike("customer", `%${term}%`).order("created_at", { ascending: false }).limit(1)).data?.[0];
           if (!job) return `No job card found for "${input.customer || input.title}".`;
           // Fetch related data — wrapped so a failed sub-query never blocks the card showing
           let jNotes = { data: [] }, jTimeLogs = { data: [] }, jMats = { data: [] };
           let jDrawings = { data: [] }, jVos = { data: [] }, jDocs = { data: [] };
           try {
             [jNotes, , jTimeLogs, jMats, jDrawings, jVos, jDocs] = await Promise.all([
-              supabase.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
-              supabase.from("job_photos").select("id,filename,created_at").eq("job_id", job.id),
-              supabase.from("time_logs").select("*").eq("job_id", job.id),
-              supabase.from("materials").select("*").eq("job_id", job.id),
-              supabase.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
-              supabase.from("variation_orders").select("*").eq("job_id", job.id),
-              supabase.from("compliance_docs").select("*").eq("job_id", job.id),
+              db.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
+              db.from("job_photos").select("id,filename,created_at").eq("job_id", job.id),
+              db.from("time_logs").select("*").eq("job_id", job.id),
+              db.from("materials").select("*").eq("job_id", job.id),
+              db.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
+              db.from("variation_orders").select("*").eq("job_id", job.id),
+              db.from("compliance_docs").select("*").eq("job_id", job.id),
             ]);
           } catch (e) { /* related data unavailable, show card anyway */ }
           pendingWidgetRef.current = {
@@ -7843,7 +7843,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           setMaterials(prev => (prev || []).map((m, i) => i === matIdx ? { ...m, job_id: job.id, job: job.title || job.type || input.customer } : m));
           // Also persist to Supabase if material has an ID
           if (mat.id) {
-            await supabase.from("materials").update({ job_id: job.id }).eq("id", mat.id).eq("user_id", user?.id);
+            await db.from("materials").update({ job_id: job.id }).eq("id", mat.id).eq("user_id", user?.id);
           }
           setLastAction({ type: "material", label: `${mat.item} → ${job.customer}`, view: "Materials" });
           return `"${mat.item}" linked to ${job.customer}'s job. It will now show in that job's profit breakdown.`;
@@ -7860,7 +7860,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           // Dedup: block only if same job + same date + same total + same labour_type
           // Different labour type or different job = legitimate new entry
           if (total > 0) {
-            const { data: existingLog } = await supabase.from("time_logs")
+            const { data: existingLog } = await db.from("time_logs")
               .select("id").eq("job_id", timeJob.id).eq("user_id", user?.id)
               .eq("log_date", input.date || today).eq("total", total)
               .eq("labour_type", type).limit(1);
@@ -7868,7 +7868,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               return ""; // Silent dedup
             }
           }
-          const { error: timeErr } = await supabase.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, log_date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
+          const { error: timeErr } = await db.from("time_logs").insert({ job_id: timeJob.id, user_id: user?.id, log_date: input.date || today, labour_type: type, hours, days: input.days || null, rate: input.rate || 0, total, description: input.description || "" });
           if (timeErr) return `Labour log failed: ${timeErr.message}`;
           setLastAction({ type: "job", label: `Time logged — ${input.customer}`, view: "Jobs" });
           const label = type === "hourly" ? `${input.hours}hrs @ ${fmtAmount(input.rate)}/hr` : type === "day_rate" ? `${input.days} days @ ${fmtAmount(input.rate)}/day` : `Price work ${fmtAmount(input.total)}`;
@@ -7907,7 +7907,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const value = parseFloat((miles * 0.45).toFixed(2));
           // Check for duplicate entry (same route, same date) to prevent re-logging
           const tripDate = input.date || today;
-          const { data: existingTrip } = await supabase.from("mileage_logs")
+          const { data: existingTrip } = await db.from("mileage_logs")
             .select("id").eq("user_id", user?.id).eq("date", tripDate)
             .ilike("from_location", `%${(input.from_location || "").slice(0, 15)}%`)
             .ilike("to_location", `%${(input.to_location || "").slice(0, 15)}%`)
@@ -7915,7 +7915,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (existingTrip?.length) {
             return ""; // Silent dedup — no output, no context for Claude to re-address
           }
-          const { error: mileErr } = await supabase.from("mileage_logs").insert({
+          const { error: mileErr } = await db.from("mileage_logs").insert({
             user_id: user?.id, date: tripDate,
             from_location: input.from_location || "", to_location: input.to_location || "",
             miles, purpose: input.purpose || "", rate: 0.45, value,
@@ -7931,16 +7931,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "add_job_note": {
           const { job: noteJob, error: noteJobErr } = await findJob(input.customer, input.job_title, "add this note to");
           if (noteJobErr) return noteJobErr;
-          await supabase.from("job_notes").insert({ job_id: noteJob.id, user_id: user?.id, note: input.note, created_at: new Date().toISOString() });
+          await db.from("job_notes").insert({ job_id: noteJob.id, user_id: user?.id, note: input.note, created_at: new Date().toISOString() });
           setLastAction({ type: "job", label: `Note added — ${input.customer}`, view: "Jobs" });
           return `Note added to ${input.customer}'s job: "${input.note.slice(0, 60)}${input.note.length > 60 ? "..." : ""}"`;
         }
         case "update_stock": {
-          const { data: stockItems } = await supabase.from("stock_items").select("*").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: stockItems } = await db.from("stock_items").select("*").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (!stockItems?.length) return `Couldn't find stock item "${input.name}". Check the Stock tab.`;
           const item = stockItems[0];
           const newQty = Math.max(0, parseFloat(item.quantity || 0) + parseFloat(input.adjustment));
-          const { error: stockErr } = await supabase.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", item.id);
+          const { error: stockErr } = await db.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", item.id);
           if (stockErr) return `Failed to update stock: ${stockErr.message}`;
           const direction = input.adjustment > 0 ? "added" : "removed";
           return `Stock updated: ${item.name} — ${Math.abs(input.adjustment)} ${item.unit || "units"} ${direction}. New quantity: ${newQty} ${item.unit || "units"}.`;
@@ -7952,11 +7952,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             : (parseFloat(input.amount) || 0);
           // Dedup: same description + amount + date = duplicate
           const expDate = input.exp_date || new Date().toISOString().slice(0,10);
-          const { data: existingExp } = await supabase.from("expenses")
+          const { data: existingExp } = await db.from("expenses")
             .select("id").eq("user_id", user?.id).eq("exp_date", expDate)
             .ilike("description", input.description || "").eq("amount", amount).limit(1);
           if (existingExp?.length) return ""; // Silent dedup
-          const { data, error } = await supabase.from("expenses").insert({
+          const { data, error } = await db.from("expenses").insert({
             user_id: user?.id,
             exp_type: input.exp_type || "other",
             description: input.description || "",
@@ -7969,7 +7969,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Expense logged: ${input.description || input.exp_type} — ${fmtCurrency(amount)}`;
         }
         case "list_expenses": {
-          const { data } = await supabase.from("expenses").select("*").eq("user_id", user?.id).order("exp_date", { ascending: false }).limit(20);
+          const { data } = await db.from("expenses").select("*").eq("user_id", user?.id).order("exp_date", { ascending: false }).limit(20);
           if (!data?.length) return "No expenses logged yet.";
           pendingWidgetRef.current = { type: "expense_list", data };
           return `Here are your recent expenses:`;
@@ -7979,12 +7979,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const deduction = parseFloat(input.deduction_amount) || 0;
           const taxMonth = (input.tax_month || new Date().toISOString().slice(0,7)) + "-01";
           // Dedup: same contractor + same month = duplicate
-          const { data: existingCis } = await supabase.from("cis_statements")
+          const { data: existingCis } = await db.from("cis_statements")
             .select("id").eq("user_id", user?.id)
             .eq("contractor_name", input.contractor_name || "")
             .eq("tax_month", taxMonth).limit(1);
           if (existingCis?.length) return ""; // Silent dedup
-          const { data, error } = await supabase.from("cis_statements").insert({
+          const { data, error } = await db.from("cis_statements").insert({
             user_id: user?.id,
             contractor_name: input.contractor_name || "",
             tax_month: (input.tax_month || new Date().toISOString().slice(0,7)) + "-01",
@@ -7998,15 +7998,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `CIS statement logged — ${input.contractor_name}: gross ${fmtCurrency(gross)}, deduction ${fmtCurrency(deduction)}, net ${fmtCurrency((gross-deduction))}.`;
         }
         case "list_cis_statements": {
-          const { data } = await supabase.from("cis_statements").select("*").eq("user_id", user?.id).order("tax_month", { ascending: false }).limit(12);
+          const { data } = await db.from("cis_statements").select("*").eq("user_id", user?.id).order("tax_month", { ascending: false }).limit(12);
           if (!data?.length) return "No CIS statements logged yet.";
           pendingWidgetRef.current = { type: "cis_list", data };
           return `Here are your CIS statements:`;
         }
         case "add_subcontractor": {
-          const existing = await supabase.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const existing = await db.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (existing.data?.length) return `${input.name} is already in your subcontractors.`;
-          const { data, error } = await supabase.from("subcontractors").insert({
+          const { data, error } = await db.from("subcontractors").insert({
             user_id: user?.id,
             name: input.name, company: input.company || "", utr: input.utr || "",
             cis_rate: parseInt(input.cis_rate) || 20, email: input.email || "", phone: input.phone || "",
@@ -8017,11 +8017,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${data.name} added as a subcontractor — CIS rate ${data.cis_rate}%.`;
         }
         case "log_subcontractor_payment": {
-          const { data: subs } = await supabase.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
+          const { data: subs } = await db.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
           const sub = subs?.[0];
           if (!sub) {
             // Not in subcontractors — check workers table too
-            const { data: wCheck } = await supabase.from("workers")
+            const { data: wCheck } = await db.from("workers")
               .select("id,name").eq("user_id", user?.id)
               .ilike("name", `%${(input.name||"")}%`).limit(1);
             if (wCheck?.length) return `${wCheck[0].name} is in your workers list, not subcontractors. Use "log worker time" to record their hours.`;
@@ -8043,7 +8043,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const net = parseFloat((gross - deduction).toFixed(2));
           const payDate = input.date || new Date().toISOString().split("T")[0];
           // Dedup: same sub + same gross + same date = duplicate payment
-          const { data: existingSub } = await supabase.from("subcontractor_payments")
+          const { data: existingSub } = await db.from("subcontractor_payments")
             .select("id").eq("user_id", user?.id).eq("subcontractor_id", sub.id)
             .eq("date", payDate).eq("gross", gross).limit(1);
           if (existingSub?.length) return ""; // Silent dedup
@@ -8057,7 +8057,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               subJobRef = subJobRef || `${subJob.customer} — ${subJob.title || subJob.type || ""}`.trim();
             }
           }
-          const { data, error } = await supabase.from("subcontractor_payments").insert({
+          const { data, error } = await db.from("subcontractor_payments").insert({
             user_id: user?.id, subcontractor_id: sub.id,
             date: payDate,
             gross, deduction, net, cis_rate: sub.cis_rate || 20,
@@ -8081,7 +8081,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Payment logged for ${sub.name} — ${payDesc}gross ${fmtCurrency(gross)}, CIS deduction ${fmtCurrency(deduction)} (on ${payType === "price_work" && execLabour > 0 ? "labour only" : "full amount"}), net to pay ${fmtCurrency(net)}.`;
         }
         case "list_subcontractors": {
-          const { data } = await supabase.from("subcontractors").select("*").eq("user_id", user?.id).order("name");
+          const { data } = await db.from("subcontractors").select("*").eq("user_id", user?.id).order("name");
           if (!data?.length) return "No subcontractors added yet. Say 'add subcontractor' to add one.";
           pendingWidgetRef.current = { type: "subcontractor_list", data };
           return `Here are your subcontractors:`;
@@ -8092,7 +8092,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           let unpaidMats = [];
 
           if (scope === "all" || scope === "subcontractors") {
-            const { data: pays } = await supabase
+            const { data: pays } = await db
               .from("subcontractor_payments")
               .select("id, date, gross, net, deduction, subcontractor_id, description, job_ref, invoice_number, paid")
               .eq("user_id", user?.id)
@@ -8101,7 +8101,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             if (pays?.length) {
               const subIds = [...new Set(pays.map(p => p.subcontractor_id).filter(Boolean))];
               const { data: subs } = subIds.length
-                ? await supabase.from("subcontractors").select("id, name").eq("user_id", user?.id).in("id", subIds)
+                ? await db.from("subcontractors").select("id, name").eq("user_id", user?.id).in("id", subIds)
                 : { data: [] };
               const subMap = Object.fromEntries((subs || []).map(s => [s.id, s.name]));
               unpaidSubs = pays.map(p => ({ ...p, subcontractor_name: subMap[p.subcontractor_id] || "Unknown" }));
@@ -8109,7 +8109,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }
 
           if (scope === "all" || scope === "materials") {
-            const { data: mats } = await supabase
+            const { data: mats } = await db
               .from("materials")
               .select("id, item, qty, unit_price, supplier, job, paid, created_at")
               .eq("user_id", user?.id)
@@ -8147,7 +8147,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { job: jcMatch, error: dwErr } = await findJob(input.customer, input.job_title, "log daywork to");
           if (dwErr) return dwErr;
           const jc = [jcMatch];
-                    const { data, error } = await supabase.from("compliance_docs").insert({
+                    const { data, error } = await db.from("compliance_docs").insert({
             job_id: jc[0].id, user_id: user?.id,
             doc_type: input.doc_type || "", doc_number: input.doc_number || "",
             issued_date: input.issued_date || new Date().toISOString().slice(0,10),
@@ -8163,11 +8163,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const jc = [jcMatch];
                     const amount = parseFloat(input.amount) || 0;
           // Dedup: same job + same description + same amount = duplicate
-          const { data: existingVo } = await supabase.from("variation_orders")
+          const { data: existingVo } = await db.from("variation_orders")
             .select("id").eq("job_id", jc[0].id).eq("user_id", user?.id)
             .ilike("description", input.description || "").eq("amount", amount).limit(1);
           if (existingVo?.length) return ""; // Silent dedup
-          const { data, error } = await supabase.from("variation_orders").insert({
+          const { data, error } = await db.from("variation_orders").insert({
             job_id: jc[0].id, user_id: user?.id,
             vo_number: input.vo_number || `VO-${Date.now().toString().slice(-4)}`,
             description: input.description || "", amount, status: "pending",
@@ -8183,11 +8183,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                     const total = (parseFloat(input.hours) || 0) * (parseFloat(input.rate) || 0);
           const sheetDate = input.date || new Date().toISOString().slice(0,10);
           // Dedup: same job + same date + same total = duplicate
-          const { data: existingDw } = await supabase.from("daywork_sheets")
+          const { data: existingDw } = await db.from("daywork_sheets")
             .select("id").eq("job_id", jc[0].id).eq("user_id", user?.id)
             .eq("sheet_date", sheetDate).eq("hours", parseFloat(input.hours) || 0).limit(1);
           if (existingDw?.length) return ""; // Silent dedup
-          const { data, error } = await supabase.from("daywork_sheets").insert({
+          const { data, error } = await db.from("daywork_sheets").insert({
             job_id: jc[0].id, user_id: user?.id,
             sheet_date: input.date || new Date().toISOString().slice(0,10),
             worker_name: input.worker_name || brand?.ownerName || "",
@@ -8201,10 +8201,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Daywork logged for ${jc[0].customer} — ${input.hours}hrs @ ${fmtAmount(input.rate)}/hr = ${fmtCurrency(total)}.`;
         }
         case "send_review_request": {
-          const { data: custSearch } = await supabase.from("customers").select("email,name").eq("user_id", user?.id).ilike("name", `%${input.customer||""}%`).limit(1);
+          const { data: custSearch } = await db.from("customers").select("email,name").eq("user_id", user?.id).ilike("name", `%${input.customer||""}%`).limit(1);
           const email = input.email || custSearch?.[0]?.email;
           if (!email) return `No email found for ${input.customer}. Add their email first or provide it now.`;
-          const { data: jc } = await supabase.from("job_cards").select("id,customer,title,type").eq("user_id", user?.id).ilike("customer", `%${input.customer||""}%`).order("created_at", { ascending: false }).limit(1);
+          const { data: jc } = await db.from("job_cards").select("id,customer,title,type").eq("user_id", user?.id).ilike("customer", `%${input.customer||""}%`).order("created_at", { ascending: false }).limit(1);
           const platforms = Object.entries(brand||{}).filter(([k,v]) => ["googleReviewUrl","trustpilotUrl","checkatradeUrl","ratedPeopleUrl","myBuilderUrl"].includes(k) && v).map(([k,v]) => ({ name: k.replace("Url","").replace(/([A-Z])/g," $1").trim(), url: v }));
           if (!platforms.length) return `No review platform links set up. Add them in Settings → Business Details first.`;
           const linksHtml = platforms.map(p => `<a href="${p.url}" style="display:inline-block;padding:10px 20px;background:${brand?.accentColor || "#f59e0b"};color:#000;text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;margin:4px 4px 4px 0;">${p.name}</a>`).join(" ");
@@ -8220,7 +8220,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             await sendEmailViaConnectedAccount(user?.id, email, `${brand?.tradingName || "Your tradesperson"} — we'd love your feedback`, body).catch(() => {});
           } catch(e) {}
           if (jc?.length) {
-            await supabase.from("review_requests").insert({ user_id: user?.id, job_id: jc[0].id, customer: input.customer, email, platforms: platforms.map(p=>p.name).join(","), sent_at: new Date().toISOString(), created_at: new Date().toISOString() });
+            await db.from("review_requests").insert({ user_id: user?.id, job_id: jc[0].id, customer: input.customer, email, platforms: platforms.map(p=>p.name).join(","), sent_at: new Date().toISOString(), created_at: new Date().toISOString() });
           }
           pendingWidgetRef.current = { type: "review_sent", data: { customer: input.customer, email, platforms } };
           return `Review request sent to ${input.customer} at ${email} — ${platforms.length} platform${platforms.length!==1?"s":""} included.`;
@@ -8272,7 +8272,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Here's your ${label.toLowerCase()} report:`;
         }
         case "list_reminders": {
-          const { data } = await supabase.from("reminders").select("*").eq("user_id", user?.id).eq("done", false).order("fire_at", { ascending: true }).limit(20);
+          const { data } = await db.from("reminders").select("*").eq("user_id", user?.id).eq("done", false).order("fire_at", { ascending: true }).limit(20);
           if (!data?.length) return "No active reminders.";
           pendingWidgetRef.current = { type: "reminder_list", data };
           return `Here are your active reminders:`;
@@ -8292,7 +8292,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
 
         case "list_mileage": {
-          const { data } = await supabase.from("mileage_logs").select("*").eq("user_id", user?.id).order("date", { ascending: false }).limit(20);
+          const { data } = await db.from("mileage_logs").select("*").eq("user_id", user?.id).order("date", { ascending: false }).limit(20);
           if (!data?.length) return "No mileage logs found.";
           const total = data.reduce((s, t) => s + parseFloat(t.miles || 0), 0);
           const value = data.reduce((s, t) => s + parseFloat(t.value || 0), 0);
@@ -8300,21 +8300,21 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Here are your recent mileage logs — ${data.length} trip${data.length !== 1 ? "s" : ""}, ${total.toFixed(1)} miles total, ${fmtCurrency(value)} claimable:`;
         }
         case "list_stock": {
-          const { data } = await supabase.from("stock_items").select("*").eq("user_id", user?.id).order("name");
+          const { data } = await db.from("stock_items").select("*").eq("user_id", user?.id).order("name");
           if (!data?.length) return "No stock items found. Say \"add stock item\" to add one.";
           pendingWidgetRef.current = { type: "stock_list", data };
           return `Here are your stock items:`;
         }
         case "add_stock_item": {
           // Check if item already exists - if so, update quantity rather than duplicate
-          const { data: existingStock } = await supabase.from("stock_items")
+          const { data: existingStock } = await db.from("stock_items")
             .select("id,name,quantity").eq("user_id", user?.id).ilike("name", input.name).limit(1);
           if (existingStock?.length) {
             const newQty = (parseFloat(existingStock[0].quantity) || 0) + (parseFloat(input.quantity) || 0);
-            await supabase.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", existingStock[0].id);
+            await db.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", existingStock[0].id);
             return `${input.name} already in stock — quantity updated to ${newQty} ${input.unit || "units"}.`;
           }
-          const { data, error } = await supabase.from("stock_items").insert({
+          const { data, error } = await db.from("stock_items").insert({
             user_id: user?.id,
             name: input.name, sku: input.sku || "",
             quantity: parseFloat(input.quantity) || 0,
@@ -8330,20 +8330,20 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Stock item added: ${data.name} — ${data.quantity} ${data.unit} in stock.`;
         }
         case "delete_stock_item": {
-          const { data: found } = await supabase.from("stock_items").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: found } = await db.from("stock_items").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (!found?.length) return `Stock item "${input.name}" not found.`;
-          await supabase.from("stock_items").delete().eq("id", found[0].id);
+          await db.from("stock_items").delete().eq("id", found[0].id);
           return `Stock item "${found[0].name}" deleted.`;
         }
         case "list_rams": {
-          const { data } = await supabase.from("rams_documents").select("id,title,site_address,prepared_by,date,created_at").eq("user_id", user?.id).order("created_at", { ascending: false }).limit(10);
+          const { data } = await db.from("rams_documents").select("id,title,site_address,prepared_by,date,created_at").eq("user_id", user?.id).order("created_at", { ascending: false }).limit(10);
           if (!data?.length) return "No RAMS documents found. Say \"start a RAMS\" to build one.";
           pendingWidgetRef.current = { type: "rams_list", data };
           return `Here are your RAMS documents:`;
         }
         case "send_invoice": {
           const term = (input.customer || input.invoice_id || "").toLowerCase();
-          const { data: invRows2 } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", false).order("created_at", { ascending: false }).limit(50);
+          const { data: invRows2 } = await db.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", false).order("created_at", { ascending: false }).limit(50);
           const stateInvs2 = (invoices || []).filter(i => !i.isQuote);
           const invRows2Mapped = (invRows2 || []).map(r => {
             let parsedLI = r.line_items;
@@ -8372,7 +8372,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             }
           }
           if (!inv) return `No invoice found for "${input.customer || input.invoice_id}".`;
-          const { data: custRow2 } = await supabase.from("customers").select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
+          const { data: custRow2 } = await db.from("customers").select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
           const email = input.email || custRow2?.[0]?.email || inv.email;
           if (!email) return `No email for ${inv.customer}. Provide their email address.`;
           const subject = `Invoice ${inv.id} from ${brand?.tradingName || ""}`;
@@ -8403,7 +8403,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "send_quote": {
           const term = (input.customer || input.quote_id || "").toLowerCase();
-          const { data: qRows } = await supabase.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", true).order("created_at", { ascending: false }).limit(50);
+          const { data: qRows } = await db.from("invoices").select("*").eq("user_id", user?.id).eq("is_quote", true).order("created_at", { ascending: false }).limit(50);
           const allQ = qRows || (invoices || []).filter(i => i.isQuote);
           const termQ = (input.customer || "").toLowerCase();
           let quote = null;
@@ -8424,7 +8424,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             }
           }
           if (!quote) return `No quote found for "${input.customer || input.quote_id}".`;
-          const { data: custRowQ } = await supabase.from("customers").select("email").eq("user_id", user?.id).ilike("name", `%${quote.customer}%`).limit(1);
+          const { data: custRowQ } = await db.from("customers").select("email").eq("user_id", user?.id).ilike("name", `%${quote.customer}%`).limit(1);
           const email = input.email || custRowQ?.[0]?.email || quote.email;
           if (!email) return `No email for ${quote.customer}. Provide their email address.`;
           const subject = `Quote ${quote.id} from ${brand?.tradingName || ""}`;
@@ -8457,7 +8457,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const term = (input.customer || input.invoice_id || "").toLowerCase();
           // Query Supabase directly, with React state as fallback
           // (invoices may be indexed by company_id not user_id depending on account setup)
-          const { data: invRows } = await supabase.from("invoices")
+          const { data: invRows } = await db.from("invoices")
             .select("*")
             .eq("user_id", user?.id).eq("is_quote", false).neq("status", "paid")
             .order("created_at", { ascending: false }).limit(50);
@@ -8504,7 +8504,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }
           if (!inv) return `No unpaid invoice found for "${input.customer || input.invoice_id}". Check the Invoices tab — it may already be marked paid.`;
           // Get email: explicit input → customer record → invoice email field
-          const { data: custRows } = await supabase.from("customers")
+          const { data: custRows } = await db.from("customers")
             .select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
           const email = input.email || custRows?.[0]?.email || inv.email;
           if (!email) return `No email on file for ${inv.customer}. Say their email address and I'll send the chase.`;
@@ -8559,11 +8559,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "create_invoice_from_job": {
           const term = (input.customer || input.job_title || "").toLowerCase();
-          const { data: jcList } = await supabase.from("job_cards").select("*").eq("user_id", user?.id).or(`customer.ilike.%${term}%,title.ilike.%${term}%`).order("created_at", { ascending: false }).limit(1);
+          const { data: jcList } = await db.from("job_cards").select("*").eq("user_id", user?.id).or(`customer.ilike.%${term}%,title.ilike.%${term}%`).order("created_at", { ascending: false }).limit(1);
           const jc = jcList?.[0];
           if (!jc) return `Couldn't find a job card for "${input.customer || input.job_title}".`;
-          const { data: timeLogs } = await supabase.from("time_logs").select("*").eq("job_id", jc.id);
-          const { data: mats } = await supabase.from("materials").select("*").eq("job_id", jc.id);
+          const { data: timeLogs } = await db.from("time_logs").select("*").eq("job_id", jc.id);
+          const { data: mats } = await db.from("materials").select("*").eq("job_id", jc.id);
           const lineItems = [];
           if (timeLogs?.length) {
             timeLogs.forEach(t => {
@@ -8584,7 +8584,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "add_stage_payment": {
           const term = (input.customer || input.job_title || "").toLowerCase();
-          const { data: jcList } = await supabase.from("job_cards").select("id,customer,title,type,value").eq("user_id", user?.id).or(`customer.ilike.%${term}%,title.ilike.%${term}%`).order("created_at", { ascending: false }).limit(1);
+          const { data: jcList } = await db.from("job_cards").select("id,customer,title,type,value").eq("user_id", user?.id).or(`customer.ilike.%${term}%,title.ilike.%${term}%`).order("created_at", { ascending: false }).limit(1);
           const jc = jcList?.[0];
           if (!jc) return `Couldn't find a job card for "${input.customer || input.job_title}".`;
           const stages = input.stages ? JSON.parse(input.stages) : [
@@ -8597,7 +8597,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             ...s,
             amount: s.type === "pct" ? parseFloat(((jobValue * parseFloat(s.value)) / 100).toFixed(2)) : parseFloat(s.value),
           }));
-          const { error } = await supabase.from("job_cards").update({ stage_payments: JSON.stringify(stagesWithAmounts) }).eq("id", jc.id);
+          const { error } = await db.from("job_cards").update({ stage_payments: JSON.stringify(stagesWithAmounts) }).eq("id", jc.id);
           if (error) return `Failed to save stage payments: ${error.message}`;
           pendingWidgetRef.current = { type: "stage_payments", data: { customer: jc.customer, jobValue, stages: stagesWithAmounts } };
           return `Stage payments set for ${jc.customer} — ${stagesWithAmounts.length} stages totalling ${fmtCurrency(stagesWithAmounts.reduce((s,st) => s + st.amount, 0))}.`;
@@ -8636,11 +8636,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }
         }
         case "generate_subcontractor_statement": {
-          const { data: subs } = await supabase.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
+          const { data: subs } = await db.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
           const sub = subs?.[0];
           if (!sub) return `Subcontractor "${input.name}" not found.`;
           const month = input.month || new Date().toISOString().slice(0,7);
-          const { data: payments } = await supabase.from("subcontractor_payments").select("*").eq("user_id", user?.id).eq("subcontractor_id", sub.id).gte("date", month + "-01").lte("date", month + "-31");
+          const { data: payments } = await db.from("subcontractor_payments").select("*").eq("user_id", user?.id).eq("subcontractor_id", sub.id).gte("date", month + "-01").lte("date", month + "-31");
           if (!payments?.length) return `No payments found for ${sub.name} in ${month}.`;
           const totalGross = payments.reduce((s,p) => s + parseFloat(p.gross||0), 0);
           const totalDed = payments.reduce((s,p) => s + parseFloat(p.deduction||0), 0);
@@ -8652,7 +8652,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
         case "update_job_card": {
           const term = (input.customer || input.title || "").toLowerCase();
-          const { data: found } = await supabase.from("job_cards")
+          const { data: found } = await db.from("job_cards")
             .select("*").eq("user_id", user?.id)
             .or(`customer.ilike.%${term}%,title.ilike.%${term}%,type.ilike.%${term}%`)
             .order("created_at", { ascending: false }).limit(1);
@@ -8669,16 +8669,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (input.new_po_number !== undefined) updates.po_number = input.new_po_number;
           if (!Object.keys(updates).length) return "No changes specified. Tell me what to update.";
           updates.updated_at = new Date().toISOString();
-          const { data: updated, error } = await supabase.from("job_cards").update(updates).eq("id", job.id).select("*").single();
+          const { data: updated, error } = await db.from("job_cards").update(updates).eq("id", job.id).select("*").single();
           if (error) return `Failed to update job card: ${error.message}`;
           // Re-fetch all related data
           const [notes, timeLogs, materials, drawings, vos, docs] = await Promise.all([
-            supabase.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
-            supabase.from("time_logs").select("*").eq("job_id", job.id),
-            supabase.from("materials").select("*").eq("job_id", job.id),
-            supabase.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
-            supabase.from("variation_orders").select("*").eq("job_id", job.id),
-            supabase.from("compliance_docs").select("*").eq("job_id", job.id),
+            db.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
+            db.from("time_logs").select("*").eq("job_id", job.id),
+            db.from("materials").select("*").eq("job_id", job.id),
+            db.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
+            db.from("variation_orders").select("*").eq("job_id", job.id),
+            db.from("compliance_docs").select("*").eq("job_id", job.id),
           ]);
           pendingWidgetRef.current = {
             type: "job_full",
@@ -8691,7 +8691,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const term = (input.customer || input.invoice_id || "").toLowerCase();
           if (!term) return "Please specify which invoice to update — provide the customer name or invoice ID.";
           // Query Supabase directly to avoid stale closure
-          const { data: invSearchRows } = await supabase.from("invoices")
+          const { data: invSearchRows } = await db.from("invoices")
             .select("*").eq("user_id", user?.id).eq("is_quote", false)
             .order("created_at", { ascending: false }).limit(50);
           const searchPool = invSearchRows || (invoices || []).filter(i => !i.isQuote);
@@ -8728,7 +8728,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
 
         case "list_quotes": {
-          const { data: rows } = await supabase.from("invoices")
+          const { data: rows } = await db.from("invoices")
             .select("id, customer, amount, gross_amount, status, due, is_quote, created_at")
             .eq("user_id", user?.id).eq("is_quote", true)
             .order("created_at", { ascending: false }).limit(20);
@@ -8738,19 +8738,19 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Here are your quotes:`;
         }
         case "delete_expense": {
-          const { data: found } = await supabase.from("expenses").select("id,description").eq("user_id", user?.id).ilike("description", `%${input.description || ""}%`).order("exp_date", { ascending: false }).limit(1);
+          const { data: found } = await db.from("expenses").select("id,description").eq("user_id", user?.id).ilike("description", `%${input.description || ""}%`).order("exp_date", { ascending: false }).limit(1);
           if (!found?.length) return `Expense not found.`;
-          await supabase.from("expenses").delete().eq("id", found[0].id);
+          await db.from("expenses").delete().eq("id", found[0].id);
           return `Expense "${found[0].description}" deleted.`;
         }
         case "delete_cis_statement": {
-          const { data: found } = await supabase.from("cis_statements").select("id,contractor_name,tax_month").eq("user_id", user?.id).ilike("contractor_name", `%${input.contractor_name || ""}%`).order("tax_month", { ascending: false }).limit(1);
+          const { data: found } = await db.from("cis_statements").select("id,contractor_name,tax_month").eq("user_id", user?.id).ilike("contractor_name", `%${input.contractor_name || ""}%`).order("tax_month", { ascending: false }).limit(1);
           if (!found?.length) return `CIS statement not found.`;
-          await supabase.from("cis_statements").delete().eq("id", found[0].id);
+          await db.from("cis_statements").delete().eq("id", found[0].id);
           return `CIS statement for ${found[0].contractor_name} (${found[0].tax_month?.slice(0,7)}) deleted.`;
         }
         case "add_worker": {
-          const { data: newWorker, error: wErr } = await supabase.from("workers").insert({
+          const { data: newWorker, error: wErr } = await db.from("workers").insert({
             user_id: user?.id,
             name: input.name, type: input.type || "subcontractor",
             role: input.role || "", email: input.email || "", phone: input.phone || "",
@@ -8765,7 +8765,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Worker added: ${input.name}${input.role ? ` (${input.role})` : ""} as a ${workerType}${input.day_rate ? ` — day rate ${fmtAmount(input.day_rate)}` : ""}${input.hourly_rate ? ` — hourly rate ${fmtAmount(input.hourly_rate)}` : ""}.`;
         }
         case "list_workers": {
-          const { data: workerList } = await supabase.from("workers")
+          const { data: workerList } = await db.from("workers")
             .select("*").eq("user_id", user?.id).eq("active", true).order("name");
           const filtered = (workerList || []).filter(w =>
             !input.type || input.type === "all" || w.type === input.type
@@ -8781,7 +8781,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "assign_worker_to_job": {
           // Find worker
-          const { data: wMatches } = await supabase.from("workers")
+          const { data: wMatches } = await db.from("workers")
             .select("id,name,role,day_rate,hourly_rate").eq("user_id", user?.id)
             .ilike("name", `%${input.worker_name}%`).limit(1);
           if (!wMatches?.length) return `Worker "${input.worker_name}" not found. Add them first with "add a worker".`;
@@ -8790,10 +8790,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { job: assignJob, error: assignErr } = await findJob(input.customer, input.job_title, "assign this worker to");
           if (assignErr) return assignErr;
           // Check not already assigned
-          const { data: existing } = await supabase.from("job_workers")
+          const { data: existing } = await db.from("job_workers")
             .select("id").eq("user_id", user?.id).eq("job_id", assignJob.id).eq("worker_id", worker.id).limit(1);
           if (existing?.length) return `${worker.name} is already assigned to ${assignJob.customer} — ${assignJob.title || assignJob.type}.`;
-          const { error: jwErr } = await supabase.from("job_workers").insert({
+          const { error: jwErr } = await db.from("job_workers").insert({
             user_id: user?.id, job_id: assignJob.id, worker_id: worker.id,
             role: input.role || worker.role || "", rate: input.rate || worker.day_rate || null,
             rate_type: input.rate_type || "day_rate",
@@ -8805,12 +8805,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "log_worker_time": {
           // Find worker — check workers table first, then subcontractors
-          const { data: wtMatches } = await supabase.from("workers")
+          const { data: wtMatches } = await db.from("workers")
             .select("id,name,day_rate,hourly_rate").eq("user_id", user?.id)
             .ilike("name", `%${input.worker_name}%`).limit(1);
           if (!wtMatches?.length) {
             // Not in workers — check subcontractors table
-            const { data: subCheck } = await supabase.from("subcontractors")
+            const { data: subCheck } = await db.from("subcontractors")
               .select("id,name,cis_rate").eq("user_id", user?.id)
               .ilike("name", `%${input.worker_name}%`).limit(1);
             if (subCheck?.length) {
@@ -8829,7 +8829,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 const { job: spJob } = await findJob(input.customer || "", input.job_title || "");
                 if (spJob) { spJobId = spJob.id; spJobRef = `${spJob.customer} — ${spJob.title || spJob.type || ""}`.trim(); }
               }
-              const { error: spErr } = await supabase.from("subcontractor_payments").insert({
+              const { error: spErr } = await db.from("subcontractor_payments").insert({
                 user_id: user?.id, subcontractor_id: sub.id,
                 date: spDate, gross: spGross, deduction: spDeduction, net: spNet,
                 cis_rate: sub.cis_rate || 0, payment_type: spType,
@@ -8854,7 +8854,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           else if (wtType === "day_rate") { wtHours = parseFloat(input.days || 0) * 8; wtTotal = parseFloat(input.days || 0) * parseFloat(input.rate || wtWorker.day_rate || 0); }
           else { wtTotal = parseFloat(input.total || 0); }
           const today = new Date().toISOString().slice(0,10);
-          const { error: wtLogErr } = await supabase.from("time_logs").insert({
+          const { error: wtLogErr } = await db.from("time_logs").insert({
             job_id: wtJob.id, user_id: user?.id,
             log_date: input.date || today, labour_type: wtType,
             hours: wtHours, days: input.days || null,
@@ -8867,11 +8867,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Time logged for ${wtWorker.name} on ${wtJob.customer} — ${wtJob.title || wtJob.type}: ${wtLabel} = ${fmtCurrency(wtTotal)}.`;
         }
         case "add_worker_document": {
-          const { data: wdMatches } = await supabase.from("workers")
+          const { data: wdMatches } = await db.from("workers")
             .select("id,name").eq("user_id", user?.id).ilike("name", `%${input.worker_name}%`).limit(1);
           if (!wdMatches?.length) return `Worker "${input.worker_name}" not found. Add them first.`;
           const wdWorker = wdMatches[0];
-          const { error: wdErr } = await supabase.from("worker_documents").insert({
+          const { error: wdErr } = await db.from("worker_documents").insert({
             user_id: user?.id, worker_id: wdWorker.id,
             doc_type: input.doc_type, doc_number: input.doc_number || "",
             issued_date: input.issued_date || null, expiry_date: input.expiry_date || null,
@@ -8885,11 +8885,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const days = parseInt(input.days || 60);
           const cutoff = new Date(Date.now() + days * 86400000).toISOString().slice(0,10);
           const today = new Date().toISOString().slice(0,10);
-          const { data: expiring } = await supabase.from("worker_documents")
+          const { data: expiring } = await db.from("worker_documents")
             .select("*, workers(name)").eq("user_id", user?.id)
             .lte("expiry_date", cutoff).gte("expiry_date", today)
             .order("expiry_date", { ascending: true });
-          const { data: expired } = await supabase.from("worker_documents")
+          const { data: expired } = await db.from("worker_documents")
             .select("*, workers(name)").eq("user_id", user?.id)
             .lt("expiry_date", today).order("expiry_date", { ascending: false }).limit(5);
           const docs = [...(expired || []).map(d => ({...d, status: "expired"})),
@@ -8901,13 +8901,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${expiredCount ? expiredCount + " expired, " : ""}${expiringCount} expiring in the next ${days} days.`;
         }
         case "delete_subcontractor": {
-          const { data: found } = await supabase.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name || ""}%`).limit(1);
+          const { data: found } = await db.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name || ""}%`).limit(1);
           if (!found?.length) return `Subcontractor not found.`;
-          await supabase.from("subcontractors").delete().eq("id", found[0].id);
+          await db.from("subcontractors").delete().eq("id", found[0].id);
           return `${found[0].name} removed from subcontractors.`;
         }
         case "update_worker": {
-          const { data: wMatches } = await supabase.from("workers").select("*").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: wMatches } = await db.from("workers").select("*").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (!wMatches?.length) return `Worker "${input.name}" not found.`;
           const w = wMatches[0];
           const updates = {};
@@ -8919,23 +8919,23 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (input.phone) updates.phone = input.phone;
           if (input.utr) updates.utr = input.utr;
           if (!Object.keys(updates).length) return `Nothing to update for ${w.name} — tell me what to change.`;
-          const { error: wUpdErr } = await supabase.from("workers").update(updates).eq("id", w.id).eq("user_id", user?.id);
+          const { error: wUpdErr } = await db.from("workers").update(updates).eq("id", w.id).eq("user_id", user?.id);
           if (wUpdErr) return `Failed to update: ${wUpdErr.message}`;
           const changes = Object.entries(updates).map(([k,v]) => `${k.replace(/_/g," ")} → ${v}`).join(", ");
           return `${w.name} updated: ${changes}.`;
         }
         case "delete_worker": {
-          const { data: wDel } = await supabase.from("workers").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: wDel } = await db.from("workers").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (!wDel?.length) return `Worker "${input.name}" not found.`;
-          const { error: wDelErr } = await supabase.from("workers").delete().eq("id", wDel[0].id).eq("user_id", user?.id);
+          const { error: wDelErr } = await db.from("workers").delete().eq("id", wDel[0].id).eq("user_id", user?.id);
           if (wDelErr) return `Failed to delete: ${wDelErr.message}`;
           return `${wDel[0].name} removed from workers.`;
         }
         case "update_subcontractor_payment": {
-          const { data: subFind } = await supabase.from("subcontractors").select("id,name,cis_rate").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: subFind } = await db.from("subcontractors").select("id,name,cis_rate").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (!subFind?.length) return `Subcontractor "${input.name}" not found.`;
           const sub = subFind[0];
-          let pQuery = supabase.from("subcontractor_payments").select("*").eq("user_id", user?.id).eq("subcontractor_id", sub.id).order("date", { ascending: false });
+          let pQuery = db.from("subcontractor_payments").select("*").eq("user_id", user?.id).eq("subcontractor_id", sub.id).order("date", { ascending: false });
           if (input.date) pQuery = pQuery.eq("date", input.date);
           const { data: spRows } = await pQuery.limit(5);
           if (!spRows?.length) return `No payment found for ${sub.name}${input.date ? ` on ${input.date}` : ""}. Check the Subcontractors tab.`;
@@ -8962,47 +8962,47 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           spUpdates.gross = newGross;
           spUpdates.deduction = parseFloat((cisBase * cisRate).toFixed(2));
           spUpdates.net = parseFloat((newGross - spUpdates.deduction).toFixed(2));
-          const { error: spUpdErr } = await supabase.from("subcontractor_payments").update(spUpdates).eq("id", pay.id).eq("user_id", user?.id);
+          const { error: spUpdErr } = await db.from("subcontractor_payments").update(spUpdates).eq("id", pay.id).eq("user_id", user?.id);
           if (spUpdErr) return `Failed to update: ${spUpdErr.message}`;
           return `Payment updated for ${sub.name}: gross ${fmtCurrency(spUpdates.gross)}, CIS -${fmtCurrency(spUpdates.deduction)}, net ${fmtCurrency(spUpdates.net)}.`;
         }
         case "delete_subcontractor_payment": {
-          const { data: subFindDel } = await supabase.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: subFindDel } = await db.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (!subFindDel?.length) return `Subcontractor "${input.name}" not found.`;
-          let dpQuery = supabase.from("subcontractor_payments").select("id,gross,date").eq("user_id", user?.id).eq("subcontractor_id", subFindDel[0].id).order("date", { ascending: false });
+          let dpQuery = db.from("subcontractor_payments").select("id,gross,date").eq("user_id", user?.id).eq("subcontractor_id", subFindDel[0].id).order("date", { ascending: false });
           if (input.date) dpQuery = dpQuery.eq("date", input.date);
           const { data: dpRows } = await dpQuery.limit(5);
           if (!dpRows?.length) return `No payment found for ${subFindDel[0].name}${input.date ? ` on ${input.date}` : ""}.`;
           const dp = input.gross
             ? dpRows.find(p => Math.abs(parseFloat(p.gross) - parseFloat(input.gross)) < 1) || dpRows[0]
             : dpRows[0];
-          const { error: dpDelErr } = await supabase.from("subcontractor_payments").delete().eq("id", dp.id).eq("user_id", user?.id);
+          const { error: dpDelErr } = await db.from("subcontractor_payments").delete().eq("id", dp.id).eq("user_id", user?.id);
           if (dpDelErr) return `Failed to delete: ${dpDelErr.message}`;
           return `Payment of ${fmtCurrency(parseFloat(dp.gross))} on ${dp.date} deleted for ${subFindDel[0].name}.`;
         }
         case "delete_job_card": {
           const term = (input.customer || input.title || "").toLowerCase();
-          const { data: found } = await supabase.from("job_cards").select("id,customer,title").eq("user_id", user?.id).or(`customer.ilike.%${term}%,title.ilike.%${term}%`).order("created_at", { ascending: false }).limit(1);
+          const { data: found } = await db.from("job_cards").select("id,customer,title").eq("user_id", user?.id).or(`customer.ilike.%${term}%,title.ilike.%${term}%`).order("created_at", { ascending: false }).limit(1);
           if (!found?.length) return `Job card not found for "${input.customer || input.title}".`;
-          await supabase.from("job_cards").delete().eq("id", found[0].id);
+          await db.from("job_cards").delete().eq("id", found[0].id);
           return `Job card for ${found[0].customer}${found[0].title ? " — " + found[0].title : ""} deleted.`;
         }
         case "delete_mileage": {
-          let query = supabase.from("mileage_logs").select("id,from_location,to_location,date,miles").eq("user_id", user?.id);
+          let query = db.from("mileage_logs").select("id,from_location,to_location,date,miles").eq("user_id", user?.id);
           if (input.date) query = query.eq("date", input.date);
           if (input.from_location) query = query.ilike("from_location", `%${input.from_location}%`);
           if (input.to_location) query = query.ilike("to_location", `%${input.to_location}%`);
           const { data: found } = await query.order("date", { ascending: false }).limit(1);
           if (!found?.length) return `No mileage log found matching that description.`;
-          const { error: delMileErr } = await supabase.from("mileage_logs").delete().eq("id", found[0].id);
+          const { error: delMileErr } = await db.from("mileage_logs").delete().eq("id", found[0].id);
           if (delMileErr) return `Failed to delete mileage log: ${delMileErr.message}`;
           return `Mileage log deleted: ${found[0].from_location || ""} → ${found[0].to_location || ""} on ${found[0].date} (${found[0].miles} miles).`;
         }
         case "delete_rams": {
           const term = (input.title || "").toLowerCase();
-          const { data: found } = await supabase.from("rams_documents").select("id,title").eq("user_id", user?.id).ilike("title", `%${term}%`).order("created_at", { ascending: false }).limit(1);
+          const { data: found } = await db.from("rams_documents").select("id,title").eq("user_id", user?.id).ilike("title", `%${term}%`).order("created_at", { ascending: false }).limit(1);
           if (!found?.length) return `RAMS document not found.`;
-          await supabase.from("rams_documents").delete().eq("id", found[0].id);
+          await db.from("rams_documents").delete().eq("id", found[0].id);
           return `RAMS "${found[0].title}" deleted.`;
         }
 
@@ -9010,7 +9010,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "request_signature": {
           // Navigate to Jobs tab and open the job — user can tap signature from there
           const term = (input.customer || input.title || "").toLowerCase();
-          const { data: found } = await supabase.from("job_cards")
+          const { data: found } = await db.from("job_cards")
             .select("id,customer,title,type,customer_signature")
             .eq("user_id", user?.id)
             .or(`customer.ilike.%${term}%,title.ilike.%${term}%`)
@@ -9102,7 +9102,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             m.content.toLowerCase().includes(memContent.slice(0, 20).toLowerCase())
           );
           if (existing) {
-            await supabase.from("pa_memories")
+            await db.from("pa_memories")
               .update({ times_reinforced: (existing.times_reinforced || 1) + 1, last_used: new Date().toISOString() })
               .eq("id", existing.id);
             setPaMemories(prev => prev.map(m => m.id === existing.id
@@ -9111,7 +9111,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             ));
             return `Got it — I already knew that. I'll keep it in mind.`;
           }
-          const { data: inserted, error } = await supabase.from("pa_memories").insert({
+          const { data: inserted, error } = await db.from("pa_memories").insert({
             user_id: user?.id,
             content: memContent,
             category: input.category || "fact",
@@ -9846,7 +9846,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       if (user?.id && currentMonth && !isOnboardingTrigger) {
         const newCount = (usageDataRef.current?.conversations_used || 0) + 1;
         setUsageData(prev => ({ ...prev, conversations_used: newCount }));
-        Promise.resolve(supabase.rpc("increment_usage", {
+        Promise.resolve(db.rpc("increment_usage", {
           p_user_id: user.id, p_month: currentMonth,
           p_conversations: 1, p_seconds: 0,
         })).catch(() => {});
@@ -12943,7 +12943,7 @@ function useReminders(userId) {
           if (valid.length > 0) return; // local cache hit, skip Supabase hydration
         }
         // Local empty — hydrate from Supabase
-        const { data } = await supabase
+        const { data } = await db
           .from("reminders")
           .select("*")
           .eq("user_id", userId)
@@ -13824,7 +13824,7 @@ function Customers({ customers, setCustomers, customerContacts, setCustomerConta
   useEffect(() => {
     if (!selected || !user?.id) return;
     setCustomerTab("overview");
-    supabase.from("call_logs")
+    db.from("call_logs")
       .select("*")
       .eq("user_id", user.id)
       .ilike("customer_name", selected.name)
@@ -15619,7 +15619,7 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending, cust
     }
   ).catch(() => null);
 
-  // Use supabase client directly instead
+  // Use db client directly instead
   const { data: conns } = await window._supabase
     .from("email_connections")
     .select("provider, email")
@@ -16174,7 +16174,7 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
       : (quote.description || quote.desc || "");
     // Create a job card in Supabase
     if (user?.id) {
-      supabase.from("job_cards").insert({
+      db.from("job_cards").insert({
         user_id: user.id,
         title: `${quote.id} — ${quote.customer}`,
         customer: quote.customer,
@@ -17212,12 +17212,12 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
         const jobValue = d.job_value ? parseFloat(d.job_value) : null;
 
         if (jobId) {
-          await supabase.from("job_cards")
+          await db.from("job_cards")
             .update({ status: "completed", completion_date: new Date().toISOString() })
             .eq("id", jobId)
             .eq("user_id", user.id);
         } else {
-          const { data: matchingJobs } = await supabase.from("job_cards")
+          const { data: matchingJobs } = await db.from("job_cards")
             .select("id, title, type, status, value")
             .eq("user_id", user.id)
             .ilike("customer", `%${customerNameForJob}%`)
@@ -17232,7 +17232,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
               );
               if (valueMatch) bestMatch = valueMatch;
             }
-            await supabase.from("job_cards")
+            await db.from("job_cards")
               .update({ status: "completed", completion_date: new Date().toISOString() })
               .eq("id", bestMatch.id)
               .eq("user_id", user.id);
@@ -17261,7 +17261,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
       case "reschedule_job": {
         const customerName = d.customer || "";
         const newDate = d.new_date || d.date_text || "";
-        const { data: matchJobs } = await supabase.from("job_cards")
+        const { data: matchJobs } = await db.from("job_cards")
           .select("id, title, type, customer")
           .eq("user_id", user.id)
           .ilike("customer", `%${customerName}%`)
@@ -17274,7 +17274,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
             updates.date = newDate;
             try { updates.dateObj = new Date(newDate).toISOString(); } catch {}
           }
-          await supabase.from("job_cards").update(updates).eq("id", matchJobs[0].id).eq("user_id", user.id);
+          await db.from("job_cards").update(updates).eq("id", matchJobs[0].id).eq("user_id", user.id);
           setJobs(prev => (prev || []).map(j => j.id === matchJobs[0].id ? { ...j, ...updates } : j));
         }
         // Reply confirming reschedule
@@ -17296,7 +17296,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
       }
       case "cancel_job": {
         const customerName = d.customer || "";
-        const { data: matchJobs } = await supabase.from("job_cards")
+        const { data: matchJobs } = await db.from("job_cards")
           .select("id, title, type, customer")
           .eq("user_id", user.id)
           .ilike("customer", `%${customerName}%`)
@@ -17304,7 +17304,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
           .order("created_at", { ascending: false })
           .limit(1);
         if (matchJobs?.length) {
-          await supabase.from("job_cards").update({ status: "cancelled", notes: `Cancelled via email: ${action.email_subject}` }).eq("id", matchJobs[0].id).eq("user_id", user.id);
+          await db.from("job_cards").update({ status: "cancelled", notes: `Cancelled via email: ${action.email_subject}` }).eq("id", matchJobs[0].id).eq("user_id", user.id);
           setJobs(prev => (prev || []).map(j => j.id === matchJobs[0].id ? { ...j, status: "cancelled" } : j));
         }
         // Reply confirming cancellation
@@ -18559,7 +18559,7 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
 
   async function loadCerts() {
     if (!user || !job?.id) return;
-    const { data } = await supabase.from("trade_certificates").select("*").eq("job_id", job.id).order("created_at", { ascending: false });
+    const { data } = await db.from("trade_certificates").select("*").eq("job_id", job.id).order("created_at", { ascending: false });
     setCerts(data || []);
   }
 
@@ -18573,7 +18573,7 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
       : "";
     const certData = { ...form, id: showForm, label: certType?.label || "", short: certType?.short || "", signature: sigData, certNumber: certNum };
     const html = buildCertHTML(certData, brand, job, sigData);
-    const { data } = await supabase.from("trade_certificates").insert({ job_id: job.id, user_id: user.id, cert_type: showForm, cert_label: certType?.label || "", cert_data: certData, html_content: html, signature: sigData || null, created_at: new Date().toISOString() }).select().single();
+    const { data } = await db.from("trade_certificates").insert({ job_id: job.id, user_id: user.id, cert_type: showForm, cert_label: certType?.label || "", cert_data: certData, html_content: html, signature: sigData || null, created_at: new Date().toISOString() }).select().single();
     if (data) {
       setCerts(prev => [data, ...prev]);
       // Auto-increment the certificate counter in brand settings
@@ -18844,7 +18844,7 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
             if (pendingSig) {
               const certData = { ...pendingSig.cert_data, signature: sigData };
               const html = buildCertHTML(certData, brand, job, sigData);
-              await supabase.from("trade_certificates").update({ signature: sigData, html_content: html }).eq("id", pendingSig.id);
+              await db.from("trade_certificates").update({ signature: sigData, html_content: html }).eq("id", pendingSig.id);
               setCerts(prev => prev.map(c => c.id === pendingSig.id ? { ...c, signature: sigData, html_content: html } : c));
               setPendingSig(null);
             } else {
@@ -18860,7 +18860,7 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
 
 // ─── Jobs Tab ─────────────────────────────────────────────────────────────────
 function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setContextHint }) {
-  const supabase = window._supabase;
+  const db = window._supabase;
   const [jobs, setJobCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -18984,7 +18984,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
     setArrivalTime(new Date());
     setGeoState("arrived");
     // Update job to in_progress
-    supabase.from("job_cards").update({ status: "in_progress" }).eq("id", job.id).then(() => {
+    db.from("job_cards").update({ status: "in_progress" }).eq("id", job.id).then(() => {
       setJobCards(prev => prev.map(j => j.id === job.id ? { ...j, status: "in_progress" } : j));
       if (selected?.id === job.id) setSelected(s => ({ ...s, status: "in_progress" }));
     });
@@ -18997,7 +18997,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
     const arrStr = arrival.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     const depStr = departure.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     if (job?.id && user?.id) {
-      const { data } = await supabase.from("time_logs").insert({
+      const { data } = await db.from("time_logs").insert({
         job_id: job.id, user_id: user.id,
         log_date: arrival.toISOString().slice(0, 10),
         hours,
@@ -19018,7 +19018,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
       loadJobDetails(selected.id);
       // Load call logs for this job
       if (user?.id) {
-        supabase.from("call_logs")
+        db.from("call_logs")
           .select("*")
           .eq("user_id", user.id)
           .ilike("customer_name", selected.customer || "")
@@ -19042,14 +19042,14 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
 
   async function loadEmailConn() {
     if (!user) return;
-    const { data } = await supabase.from("email_connections").select("provider, email").eq("user_id", user.id);
+    const { data } = await db.from("email_connections").select("provider, email").eq("user_id", user.id);
     if (data?.length) setEmailConnection(data[0]);
   }
 
   async function loadJobs() {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase.from("job_cards").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    const { data } = await db.from("job_cards").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
     setJobCards(data || []);
     setLoading(false);
   }
@@ -19057,16 +19057,16 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
   async function loadJobDetails(jobId) {
     try {
       const [n, p, t, v, d, ds, dr, rams, mats, pos] = await Promise.all([
-        supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("time_logs").select("*").eq("job_id", jobId).order("log_date", { ascending: false }),
-        supabase.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
-        supabase.from("job_drawings").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("rams_documents").select("id,title,site_address,created_at").eq("job_id", jobId).eq("user_id", user.id),
-        supabase.from("materials").select("*").eq("job_id", jobId).eq("user_id", user.id),
-        supabase.from("purchase_orders").select("*, purchase_order_items(*)").eq("job_id", jobId).eq("user_id", user.id),
+        db.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        db.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        db.from("time_logs").select("*").eq("job_id", jobId).order("log_date", { ascending: false }),
+        db.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        db.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        db.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
+        db.from("job_drawings").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        db.from("rams_documents").select("id,title,site_address,created_at").eq("job_id", jobId).eq("user_id", user.id),
+        db.from("materials").select("*").eq("job_id", jobId).eq("user_id", user.id),
+        db.from("purchase_orders").select("*, purchase_order_items(*)").eq("job_id", jobId).eq("user_id", user.id),
       ]);
       setNotes(n.data || []);
       setPhotos(p.data || []);
@@ -19082,12 +19082,12 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
       console.error("loadJobDetails error:", err.message);
       // Still load critical data even if drawings table missing
       const [n, p, t, v, d, ds] = await Promise.all([
-        supabase.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("time_logs").select("*").eq("job_id", jobId).order("log_date", { ascending: false }),
-        supabase.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
-        supabase.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
+        db.from("job_notes").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        db.from("job_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        db.from("time_logs").select("*").eq("job_id", jobId).order("log_date", { ascending: false }),
+        db.from("variation_orders").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        db.from("compliance_docs").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        db.from("daywork_sheets").select("*").eq("job_id", jobId).order("sheet_date", { ascending: false }),
       ]);
       setNotes(n.data || []);
       setPhotos(p.data || []);
@@ -19103,9 +19103,9 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
   async function sendServiceReminder(job) {
     const cust = (customers || []).find(c => c.name?.toLowerCase() === job.customer?.toLowerCase());
     if (!cust?.email) return;
-    await supabase.from("job_cards").update({ service_reminder_sent: true }).eq("id", job.id);
+    await db.from("job_cards").update({ service_reminder_sent: true }).eq("id", job.id);
     setJobCards(prev => prev.map(j => j.id === job.id ? { ...j, service_reminder_sent: true } : j));
-    const { data: conns } = await supabase.from("email_connections").select("provider").eq("user_id", user.id);
+    const { data: conns } = await db.from("email_connections").select("provider").eq("user_id", user.id);
     if (!conns?.length) return;
     const provider = conns[0].provider;
     const endpoint = provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
@@ -19117,21 +19117,21 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
     if (!form.customer && !form.title) return;
     setSaving(true);
     const payload = { user_id: user.id, title: form.title, customer: form.customer, address: form.address, type: form.type, status: form.status, value: parseFloat(form.value) || 0, po_number: form.po_number, notes: form.notes, scope_of_work: form.scope_of_work || "", annual_service: form.annual_service, updated_at: new Date().toISOString() };
-    const { data, error } = await supabase.from("job_cards").insert(payload).select().single();
+    const { data, error } = await db.from("job_cards").insert(payload).select().single();
     if (!error && data) { setJobCards(prev => [data, ...prev]); setShowAdd(false); setForm({ title: "", customer: "", address: "", type: "", status: "enquiry", value: "", po_number: "", notes: "", scope_of_work: "", annual_service: false }); }
     setSaving(false);
   }
 
   async function deleteJob(id) {
     if (!window.confirm("Delete this job card?")) return;
-    await supabase.from("job_cards").delete().eq("id", id);
+    await db.from("job_cards").delete().eq("id", id);
     setJobCards(prev => prev.filter(j => j.id !== id));
     setSelected(null);
   }
 
   async function addNoteToJob() {
     if (!addNote.trim() || !selected) return;
-    const { data } = await supabase.from("job_notes").insert({ job_id: selected.id, user_id: user.id, note: addNote, created_at: new Date().toISOString() }).select().single();
+    const { data } = await db.from("job_notes").insert({ job_id: selected.id, user_id: user.id, note: addNote, created_at: new Date().toISOString() }).select().single();
     if (data) { setNotes(prev => [data, ...prev]); setAddNote(""); }
   }
 
@@ -19172,13 +19172,13 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
       if (addTime.worker) payload.worker = addTime.worker;
     } catch(e) {}
 
-    const { data, error } = await supabase.from("time_logs").insert(payload).select().single();
+    const { data, error } = await db.from("time_logs").insert(payload).select().single();
 
     if (error) {
       // If new columns don't exist, retry with basic payload
       if (error.message?.includes("labour_type") || error.message?.includes("total") || error.message?.includes("worker") || error.message?.includes("days") || error.message?.includes("date")) {
         const basicPayload = { job_id: selected.id, user_id: user.id, hours, rate, description: `${addTime.description || ""}${type !== "hourly" ? ` [${type}: ${fmtCurrency(total)}]` : ""}` };
-        const { data: d2, error: e2 } = await supabase.from("time_logs").insert(basicPayload).select().single();
+        const { data: d2, error: e2 } = await db.from("time_logs").insert(basicPayload).select().single();
         if (e2) { alert(`Failed to log labour: ${e2.message}\n\nPlease run the SQL migration in Supabase to add missing columns.`); return; }
         if (d2) { setTimeLogs(prev => [{ ...d2, labour_type: type, total, days, log_date: addTime.date }, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" }); }
       } else {
@@ -19195,19 +19195,19 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
 
   async function addVariationOrder() {
     if (!addVO.description || !selected) return;
-    const { data } = await supabase.from("variation_orders").insert({ job_id: selected.id, user_id: user.id, ...addVO, amount: parseFloat(addVO.amount) || 0, status: "pending" }).select().single();
+    const { data } = await db.from("variation_orders").insert({ job_id: selected.id, user_id: user.id, ...addVO, amount: parseFloat(addVO.amount) || 0, status: "pending" }).select().single();
     if (data) { setVos(prev => [data, ...prev]); setAddVO({ vo_number: "", description: "", amount: "" }); }
   }
 
   async function addComplianceDoc() {
     if (!addDoc.doc_type || !selected) return;
-    const { data } = await supabase.from("compliance_docs").insert({ job_id: selected.id, user_id: user.id, ...addDoc }).select().single();
+    const { data } = await db.from("compliance_docs").insert({ job_id: selected.id, user_id: user.id, ...addDoc }).select().single();
     if (data) { setCompDocs(prev => [data, ...prev]); setAddDoc({ doc_type: "", doc_number: "", issued_date: "", expiry_date: "", notes: "" }); }
   }
 
   async function addDayworkSheet() {
     if (!addDaysheet.hours || !addDaysheet.rate || !selected) return;
-    const { data } = await supabase.from("daywork_sheets").insert({ job_id: selected.id, user_id: user.id, ...addDaysheet, hours: parseFloat(addDaysheet.hours), rate: parseFloat(addDaysheet.rate) }).select().single();
+    const { data } = await db.from("daywork_sheets").insert({ job_id: selected.id, user_id: user.id, ...addDaysheet, hours: parseFloat(addDaysheet.hours), rate: parseFloat(addDaysheet.rate) }).select().single();
     if (data) { setDaysheets(prev => [data, ...prev]); setAddDaysheet({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" }); }
   }
 
@@ -19607,7 +19607,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                     if (!file) return;
                     const reader = new FileReader();
                     reader.onload = async ev => {
-                      const { data } = await supabase.from("job_photos").insert({ job_id: selected.id, user_id: user.id, photo_data: ev.target.result, filename: file.name, created_at: new Date().toISOString() }).select().single();
+                      const { data } = await db.from("job_photos").insert({ job_id: selected.id, user_id: user.id, photo_data: ev.target.result, filename: file.name, created_at: new Date().toISOString() }).select().single();
                       if (data) setPhotos(prev => [data, ...prev]);
                     };
                     reader.readAsDataURL(file);
@@ -19713,7 +19713,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>£{cost.toFixed(2)}</div>
                           <button onClick={async () => {
-                            await supabase.from("time_logs").delete().eq("id", t.id);
+                            await db.from("time_logs").delete().eq("id", t.id);
                             setTimeLogs(prev => prev.filter(x => x.id !== t.id));
                           }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                         </div>
@@ -19755,7 +19755,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                           <button style={{ ...S.btn("green"), fontSize: 11, padding: "4px 10px" }} onClick={async () => {
                             // Mark VO approved
-                            await supabase.from("variation_orders").update({ status: "approved" }).eq("id", v.id);
+                            await db.from("variation_orders").update({ status: "approved" }).eq("id", v.id);
                             setVos(prev => prev.map(x => x.id === v.id ? { ...x, status: "approved" } : x));
                             // Create draft invoice for this variation
                             const invId = nextInvoiceId(invoices);
@@ -19777,7 +19777,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                             setInvoices(prev => [newInv, ...(prev || [])]);
                             alert(`✓ VO approved — draft invoice ${invId} created for ${fmtAmount(v.amount)}. Review and send from the Invoices tab.`);
                           }}>Approve</button>
-                          <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.red }} onClick={async () => { await supabase.from("variation_orders").update({ status: "rejected" }).eq("id", v.id); setVos(prev => prev.map(x => x.id === v.id ? { ...x, status: "rejected" } : x)); }}>Reject</button>
+                          <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.red }} onClick={async () => { await db.from("variation_orders").update({ status: "rejected" }).eq("id", v.id); setVos(prev => prev.map(x => x.id === v.id ? { ...x, status: "rejected" } : x)); }}>Reject</button>
                         </div>
                       )}
                     </div>
@@ -19879,7 +19879,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                         if (!file || !selected) return;
                         const reader = new FileReader();
                         reader.onload = async ev => {
-                          const { data } = await supabase.from("job_drawings").insert({
+                          const { data } = await db.from("job_drawings").insert({
                             job_id: selected.id,
                             user_id: user.id,
                             filename: file.name,
@@ -19939,7 +19939,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                               document.body.appendChild(overlay);
                             }}>View</button>
                             <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", color: C.red }} onClick={async () => {
-                              await supabase.from("job_drawings").delete().eq("id", d.id);
+                              await db.from("job_drawings").delete().eq("id", d.id);
                               setDrawings(prev => prev.filter(x => x.id !== d.id));
                             }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                           </div>
@@ -20227,7 +20227,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
               <div style={{ display: "flex", gap: 8 }}>
                 <button style={{ ...S.btn("primary"), flex: 1 }} onClick={async () => {
                   const updates = { ...editForm, value: parseFloat(editForm.value) || 0, updated_at: new Date().toISOString() };
-                  await supabase.from("job_cards").update(updates).eq("id", selected.id);
+                  await db.from("job_cards").update(updates).eq("id", selected.id);
                   setJobCards(prev => prev.map(j => j.id === selected.id ? { ...j, ...updates } : j));
                   setSelected(s => ({ ...s, ...updates }));
                   setEditingJob(false);
@@ -20361,14 +20361,14 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
         <SignaturePad
           title={`Customer sign-off — ${selected.customer}`}
           onSave={async sigData => {
-            await supabase.from("job_cards").update({ customer_signature: sigData, status: "completed", completion_date: new Date().toISOString() }).eq("id", selected.id);
+            await db.from("job_cards").update({ customer_signature: sigData, status: "completed", completion_date: new Date().toISOString() }).eq("id", selected.id);
             setJobCards(prev => prev.map(j => j.id === selected.id ? { ...j, customer_signature: sigData, status: "completed" } : j));
             setSelected(s => ({ ...s, customer_signature: sigData, status: "completed" }));
             setShowSignature(false);
             if (selected.annual_service) {
               const nextService = new Date();
               nextService.setDate(nextService.getDate() + 350);
-              await supabase.from("job_cards").update({ next_service_date: nextService.toISOString().slice(0,10), service_reminder_sent: false }).eq("id", selected.id);
+              await db.from("job_cards").update({ next_service_date: nextService.toISOString().slice(0,10), service_reminder_sent: false }).eq("id", selected.id);
             }
           }}
           onCancel={() => setShowSignature(false)}
@@ -20403,7 +20403,7 @@ function ExpensesTab({ user, setContextHint }) {
   async function loadExpenses() {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase.from("expenses").select("*").eq("user_id", user.id).order("exp_date", { ascending: false });
+    const { data } = await db.from("expenses").select("*").eq("user_id", user.id).order("exp_date", { ascending: false });
     setExpenses(data || []);
     setLoading(false);
   }
@@ -20413,7 +20413,7 @@ function ExpensesTab({ user, setContextHint }) {
     if (form.exp_type === "mileage" && form.miles) {
       amount = parseFloat(form.miles) * MILEAGE_RATE;
     }
-    const { data } = await supabase.from("expenses").insert({
+    const { data } = await db.from("expenses").insert({
       user_id: user.id,
       exp_type: form.exp_type,
       description: form.description,
@@ -20613,7 +20613,7 @@ function CISStatementsTab({ user, setContextHint }) {
   async function loadStatements() {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase.from("cis_statements").select("*").eq("user_id", user.id).order("tax_month", { ascending: false });
+    const { data } = await db.from("cis_statements").select("*").eq("user_id", user.id).order("tax_month", { ascending: false });
     setStatements(data || []);
     setLoading(false);
   }
@@ -20621,7 +20621,7 @@ function CISStatementsTab({ user, setContextHint }) {
   async function saveStatement() {
     const gross = parseFloat(form.gross_amount) || 0;
     const deduction = parseFloat(form.deduction_amount) || 0;
-    const { data } = await supabase.from("cis_statements").insert({
+    const { data } = await db.from("cis_statements").insert({
       user_id: user.id,
       contractor_name: form.contractor_name,
       tax_month: form.tax_month + "-01",
@@ -21543,7 +21543,7 @@ function AssignToJobModal({ user, onAssign, onClose, currentJobId }) {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    supabase.from("job_cards").select("id,title,type,customer,status").eq("user_id", user.id)
+    db.from("job_cards").select("id,title,type,customer,status").eq("user_id", user.id)
       .order("created_at", { ascending: false }).then(({ data }) => { setJobs(data || []); setLoading(false); });
   }, [user?.id]);
 
@@ -21623,7 +21623,7 @@ function MileageTab({ user, setContextHint }) {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from("mileage_logs").select("*").eq("user_id", user.id).order("date", { ascending: false });
+    const { data } = await db.from("mileage_logs").select("*").eq("user_id", user.id).order("date", { ascending: false });
     setTrips(data || []);
     const ym = (data || []).filter(t => t.date >= taxYearStart()).reduce((s, t) => s + parseFloat(t.miles || 0), 0);
     setYearMiles(ym);
@@ -21633,12 +21633,12 @@ function MileageTab({ user, setContextHint }) {
   const save = async () => {
     if (!form.miles || !form.date) return;
     const value = calcValue(form.miles, yearMiles);
-    const { data, error } = await supabase.from("mileage_logs").insert({ user_id: user.id, date: form.date, from_location: form.from, to_location: form.to, miles: parseFloat(form.miles), job_ref: form.job, purpose: form.purpose, rate: parseFloat(form.miles) <= (10000 - yearMiles) ? 0.45 : 0.25, value, created_at: new Date().toISOString() }).select().single();
+    const { data, error } = await db.from("mileage_logs").insert({ user_id: user.id, date: form.date, from_location: form.from, to_location: form.to, miles: parseFloat(form.miles), job_ref: form.job, purpose: form.purpose, rate: parseFloat(form.miles) <= (10000 - yearMiles) ? 0.45 : 0.25, value, created_at: new Date().toISOString() }).select().single();
     if (!error && data) { setTrips(p => [data, ...p]); setYearMiles(y => y + parseFloat(form.miles)); setShowAdd(false); setForm({ date: new Date().toISOString().split("T")[0], from: "", to: "", miles: "", job: "", purpose: "" }); }
   };
 
   const del = async (id, miles) => {
-    await supabase.from("mileage_logs").delete().eq("id", id).eq("user_id", user.id);
+    await db.from("mileage_logs").delete().eq("id", id).eq("user_id", user.id);
     setTrips(p => p.filter(t => t.id !== id));
     setYearMiles(y => y - parseFloat(miles || 0));
   };
@@ -21648,7 +21648,7 @@ function MileageTab({ user, setContextHint }) {
     const oldMiles = parseFloat(editingTrip.miles || 0);
     const newMiles = parseFloat(form.miles);
     const value = calcValue(newMiles, yearMiles - oldMiles);
-    const { error } = await supabase.from("mileage_logs").update({
+    const { error } = await db.from("mileage_logs").update({
       date: form.date, from_location: form.from, to_location: form.to,
       miles: newMiles, job_ref: form.job, purpose: form.purpose, value,
     }).eq("id", editingTrip.id).eq("user_id", user.id);
@@ -21871,7 +21871,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
   const [subForm, setSubForm] = useState({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "", address: "" });
   const [jobs, setJobs] = useState([]);
   useEffect(() => {
-    if (user?.id) supabase.from("job_cards").select("id,title,type,customer,address").eq("user_id", user.id).eq("status","in_progress").order("created_at",{ascending:false}).limit(30).then(({data})=>setJobs(data||[]));
+    if (user?.id) db.from("job_cards").select("id,title,type,customer,address").eq("user_id", user.id).eq("status","in_progress").order("created_at",{ascending:false}).limit(30).then(({data})=>setJobs(data||[]));
   }, [user?.id]);
   const [payForm, setPayForm] = useState({ subcontractor_id: "", job_id: "", date: new Date().toISOString().split("T")[0], payment_type: "price_work", days: "", hours: "", rate: "", gross: "", labour_amount: "", material_items: [{ desc: "", amount: "" }], job_ref: "", description: "", invoice_number: "" });
   const [filterSub, setFilterSub] = useState("all");
@@ -21885,10 +21885,10 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
   const load = async () => {
     setLoading(true);
     const [{ data: s }, { data: p }, { data: w }, { data: wd }] = await Promise.all([
-      supabase.from("subcontractors").select("*").eq("user_id", user.id).order("name"),
-      supabase.from("subcontractor_payments").select("*").eq("user_id", user.id).order("date", { ascending: false }),
-      supabase.from("workers").select("*").eq("user_id", user.id).eq("active", true).order("name"),
-      supabase.from("worker_documents").select("*, workers(name)").eq("user_id", user.id).order("expiry_date", { ascending: true }),
+      db.from("subcontractors").select("*").eq("user_id", user.id).order("name"),
+      db.from("subcontractor_payments").select("*").eq("user_id", user.id).order("date", { ascending: false }),
+      db.from("workers").select("*").eq("user_id", user.id).eq("active", true).order("name"),
+      db.from("worker_documents").select("*, workers(name)").eq("user_id", user.id).order("expiry_date", { ascending: true }),
     ]);
     setSubs(s || []);
     setPayments(p || []);
@@ -21910,13 +21910,13 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
 
   const saveSub = async () => {
     if (!subForm.name) return;
-    const { data, error } = await supabase.from("subcontractors").insert({ user_id: user.id, ...subForm, created_at: new Date().toISOString() }).select().single();
+    const { data, error } = await db.from("subcontractors").insert({ user_id: user.id, ...subForm, created_at: new Date().toISOString() }).select().single();
     if (!error && data) { setSubs(p => [...p, data]); setView("list"); setSubForm({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "" }); }
   };
 
   const saveWorker = async () => {
     if (!workerForm.name) return;
-    const { data, error } = await supabase.from("workers").insert({
+    const { data, error } = await db.from("workers").insert({
       user_id: user.id, ...workerForm,
       day_rate: parseFloat(workerForm.day_rate) || null,
       hourly_rate: parseFloat(workerForm.hourly_rate) || null,
@@ -21926,10 +21926,10 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
     if (!error && data) {
       // If subcontractor type, also add to legacy subcontractors table for CIS payment lookups
       if (workerForm.type === "subcontractor") {
-        const { data: existingSub } = await supabase.from("subcontractors")
+        const { data: existingSub } = await db.from("subcontractors")
           .select("id").eq("user_id", user.id).ilike("name", workerForm.name).limit(1);
         if (!existingSub?.length) {
-          const { data: newSub } = await supabase.from("subcontractors").insert({
+          const { data: newSub } = await db.from("subcontractors").insert({
             user_id: user.id, name: workerForm.name, company: "",
             utr: workerForm.utr || "", cis_rate: parseInt(workerForm.cis_rate) || 20,
             email: workerForm.email || "", phone: workerForm.phone || "",
@@ -21946,7 +21946,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
 
   const saveWorkerDoc = async () => {
     if (!docForm.worker_id || !docForm.doc_type) return;
-    const { data, error } = await supabase.from("worker_documents").insert({
+    const { data, error } = await db.from("worker_documents").insert({
       user_id: user.id, ...docForm, created_at: new Date().toISOString(),
     }).select("*, workers(name)").single();
     if (!error && data) {
@@ -21980,7 +21980,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
     const cisBase = (payForm.payment_type === "price_work" && labourAmount > 0) ? labourAmount : gross;
     const deduction = parseFloat((cisBase * cisRate).toFixed(2));
     const net = parseFloat((gross - deduction).toFixed(2));
-    const { data, error } = await supabase.from("subcontractor_payments").insert({
+    const { data, error } = await db.from("subcontractor_payments").insert({
       user_id: user.id, subcontractor_id: payForm.subcontractor_id,
       job_id: payForm.job_id || null,
       date: payForm.date, gross, deduction, net,
@@ -22017,7 +22017,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
     const cisBase = (editingPayment.payment_type === "price_work" && labourAmount > 0) ? labourAmount : gross;
     const deduction = parseFloat((cisBase * cisRate).toFixed(2));
     const net = parseFloat((gross - deduction).toFixed(2));
-    const { error } = await supabase.from("subcontractor_payments").update({
+    const { error } = await db.from("subcontractor_payments").update({
       date: editingPayment.date, gross, deduction, net,
       payment_type: editingPayment.payment_type,
       days: parseFloat(editingPayment.days) || null,
@@ -22038,13 +22038,13 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
   };
 
   const deletePayment = async (id) => {
-    const { error } = await supabase.from("subcontractor_payments").delete().eq("id", id).eq("user_id", user.id);
+    const { error } = await db.from("subcontractor_payments").delete().eq("id", id).eq("user_id", user.id);
     if (!error) { setPayments(ps => ps.filter(p => p.id !== id)); setDeletingPayment(null); }
   };
 
   const updateWorker = async () => {
     if (!editingWorker) return;
-    const { error } = await supabase.from("workers").update({
+    const { error } = await db.from("workers").update({
       name: editingWorker.name, type: editingWorker.type,
       role: editingWorker.role || "", email: editingWorker.email || "",
       phone: editingWorker.phone || "", address: editingWorker.address || "",
@@ -22060,7 +22060,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
   };
 
   const deleteWorker = async (id) => {
-    const { error } = await supabase.from("workers").delete().eq("id", id).eq("user_id", user.id);
+    const { error } = await db.from("workers").delete().eq("id", id).eq("user_id", user.id);
     if (!error) { setWorkers(ws => ws.filter(w => w.id !== id)); setDeletingWorker(null); }
   };
 
@@ -22110,7 +22110,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
 
   const markPaymentPaid = async (pay, paidValue) => {
     const paid_on = paidValue ? new Date().toISOString().slice(0, 10) : null;
-    const { error } = await supabase
+    const { error } = await db
       .from("subcontractor_payments")
       .update({ paid: paidValue, paid_on })
       .eq("id", pay.id)
@@ -22856,8 +22856,8 @@ function DocumentsTab({ user, customers, setContextHint }) {
   const load = async () => {
     setLoading(true);
     const [{ data: d }, { data: j }] = await Promise.all([
-      supabase.from("documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("job_cards").select("id,title,type,customer").eq("user_id", user.id).order("created_at", { ascending: false }),
+      db.from("documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      db.from("job_cards").select("id,title,type,customer").eq("user_id", user.id).order("created_at", { ascending: false }),
     ]);
     setDocs(d || []);
     setJobCards(j || []);
@@ -22870,10 +22870,10 @@ function DocumentsTab({ user, customers, setContextHint }) {
     try {
       const ext = file.name.split(".").pop();
       const path = `${user.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const { error: uploadError } = await supabase.storage.from("documents").upload(path, file);
+      const { error: uploadError } = await db.storage.from("documents").upload(path, file);
       if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path);
-      const { data, error } = await supabase.from("documents").insert({
+      const { data: { publicUrl } } = db.storage.from("documents").getPublicUrl(path);
+      const { data, error } = await db.from("documents").insert({
         user_id: user.id, name: file.name, type: file.type, category: category || "Other",
         job_id: linkedJob || null, customer_id: linkedCustomer || null,
         storage_path: path, file_size: file.size, public_url: publicUrl,
@@ -22886,8 +22886,8 @@ function DocumentsTab({ user, customers, setContextHint }) {
 
   const del = async (doc) => {
     if (!confirm(`Delete "${doc.name}"?`)) return;
-    await supabase.storage.from("documents").remove([doc.storage_path]);
-    await supabase.from("documents").delete().eq("id", doc.id).eq("user_id", user.id);
+    await db.storage.from("documents").remove([doc.storage_path]);
+    await db.from("documents").delete().eq("id", doc.id).eq("user_id", user.id);
     setDocs(p => p.filter(d => d.id !== doc.id));
   };
 
@@ -23060,8 +23060,8 @@ function ReviewsTab({ user, brand, customers, setContextHint }) {
   const load = async () => {
     setLoading(true);
     const [{ data: reqs }, { data: jobData }] = await Promise.all([
-      supabase.from("review_requests").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("job_cards").select("*").eq("user_id", user.id).eq("status", "completed").order("completion_date", { ascending: false }),
+      db.from("review_requests").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      db.from("job_cards").select("*").eq("user_id", user.id).eq("status", "completed").order("completion_date", { ascending: false }),
     ]);
     setRequests(reqs || []);
     const sent = new Set((reqs || []).map(r => r.job_id));
@@ -23100,7 +23100,7 @@ function ReviewsTab({ user, brand, customers, setContextHint }) {
     try {
       const endpoint = import.meta.env.VITE_EMAIL_ENDPOINT || "/api/email";
       await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id, to: email, subject: `How did we do? — ${businessName}`, body }) });
-      const { data } = await supabase.from("review_requests").insert({
+      const { data } = await db.from("review_requests").insert({
         user_id: user.id, job_id: job.id, customer: job.customer, email,
         platforms: selectedPlatforms.join(","),
         sent_at: new Date().toISOString(), created_at: new Date().toISOString()
@@ -23292,7 +23292,7 @@ function StockTab({ user, setContextHint }) {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from("stock_items").select("*").eq("user_id", user.id).order("name");
+    const { data } = await db.from("stock_items").select("*").eq("user_id", user.id).order("name");
     setItems(data || []);
     setLoading(false);
   };
@@ -23301,10 +23301,10 @@ function StockTab({ user, setContextHint }) {
     if (!form.name) return;
     const payload = { user_id: user.id, name: form.name, sku: form.sku, quantity: parseFloat(form.quantity || 0), unit: form.unit, reorder_level: parseFloat(form.reorder_level || 0), unit_cost: parseFloat(form.unit_cost || 0), location: form.location, updated_at: new Date().toISOString() };
     if (editing) {
-      const { data, error } = await supabase.from("stock_items").update(payload).eq("id", editing.id).eq("user_id", user.id).select().single();
+      const { data, error } = await db.from("stock_items").update(payload).eq("id", editing.id).eq("user_id", user.id).select().single();
       if (!error && data) { setItems(p => p.map(i => i.id === data.id ? data : i)); setEditing(null); }
     } else {
-      const { data, error } = await supabase.from("stock_items").insert({ ...payload, created_at: new Date().toISOString() }).select().single();
+      const { data, error } = await db.from("stock_items").insert({ ...payload, created_at: new Date().toISOString() }).select().single();
       if (!error && data) { setItems(p => [...p, data]); setShowAdd(false); }
     }
     setForm({ name: "", sku: "", quantity: "", unit: "unit", reorder_level: "", unit_cost: "", location: "" });
@@ -23314,13 +23314,13 @@ function StockTab({ user, setContextHint }) {
     const item = items.find(i => i.id === id);
     if (!item) return;
     const newQty = Math.max(0, parseFloat(item.quantity || 0) + delta);
-    const { data, error } = await supabase.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", user.id).select().single();
+    const { data, error } = await db.from("stock_items").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", user.id).select().single();
     if (!error && data) setItems(p => p.map(i => i.id === data.id ? data : i));
   };
 
   const del = async (id) => {
     if (!confirm("Delete this stock item?")) return;
-    await supabase.from("stock_items").delete().eq("id", id).eq("user_id", user.id);
+    await db.from("stock_items").delete().eq("id", id).eq("user_id", user.id);
     setItems(p => p.filter(i => i.id !== id));
   };
 
@@ -23474,7 +23474,7 @@ function PurchaseOrdersTab({ user, brand }) {
   const [form, setForm] = useState({ supplier: "", supplier_email: "", job_ref: "", notes: "", expected_delivery: "", items: [{ description: "", qty: 1, unit_price: "", unit: "unit" }] });
 
   const assignPOToJob = async (orderId, jobId, jobTitle) => {
-    await supabase.from("purchase_orders").update({ job_id: jobId, job_ref: jobTitle || "" }).eq("id", orderId).eq("user_id", user.id);
+    await db.from("purchase_orders").update({ job_id: jobId, job_ref: jobTitle || "" }).eq("id", orderId).eq("user_id", user.id);
     setOrders(p => p.map(o => o.id === orderId ? { ...o, job_id: jobId, job_ref: jobTitle || o.job_ref } : o));
     setAssigningPO(null);
   };
@@ -23483,7 +23483,7 @@ function PurchaseOrdersTab({ user, brand }) {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from("purchase_orders").select("*, purchase_order_items(*)").eq("user_id", user.id).order("created_at", { ascending: false });
+    const { data } = await db.from("purchase_orders").select("*, purchase_order_items(*)").eq("user_id", user.id).order("created_at", { ascending: false });
     setOrders(data || []);
     setLoading(false);
   };
@@ -23497,7 +23497,7 @@ function PurchaseOrdersTab({ user, brand }) {
     if (!form.supplier) return;
     const poNumber = nextPONumber();
     const total = orderTotal(form.items);
-    const { data: order, error } = await supabase.from("purchase_orders").insert({
+    const { data: order, error } = await db.from("purchase_orders").insert({
       user_id: user.id, po_number: poNumber, supplier: form.supplier,
       supplier_email: form.supplier_email, job_ref: form.job_ref, notes: form.notes,
       expected_delivery: form.expected_delivery || null, status: "sent", total,
@@ -23505,7 +23505,7 @@ function PurchaseOrdersTab({ user, brand }) {
     }).select().single();
     if (error || !order) return;
     if (form.items.length > 0) {
-      await supabase.from("purchase_order_items").insert(form.items.filter(i => i.description).map(i => ({
+      await db.from("purchase_order_items").insert(form.items.filter(i => i.description).map(i => ({
         po_id: order.id, description: i.description, qty: parseFloat(i.qty || 1),
         unit_price: parseFloat(i.unit_price || 0), unit: i.unit, total: lineTotal(i),
       })));
@@ -23520,7 +23520,7 @@ function PurchaseOrdersTab({ user, brand }) {
   };
 
   const updateStatus = async (id, status) => {
-    await supabase.from("purchase_orders").update({ status }).eq("id", id).eq("user_id", user.id);
+    await db.from("purchase_orders").update({ status }).eq("id", id).eq("user_id", user.id);
     setOrders(p => p.map(o => o.id === id ? { ...o, status } : o));
     if (selected?.id === id) setSelected(s => ({ ...s, status }));
   };
@@ -23880,7 +23880,7 @@ function RAMSTab({ user, brand, setContextHint }) {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from("rams_documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    const { data } = await db.from("rams_documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
     setRams(data || []);
     setLoading(false);
   };
@@ -23900,10 +23900,10 @@ function RAMSTab({ user, brand, setContextHint }) {
       scope: form.scope, cdm_notifiable: form.cdm_notifiable, form_data: JSON.stringify(form),
     };
     if (editingId) {
-      const { data, error } = await supabase.from("rams_documents").update(payload).eq("id", editingId).eq("user_id", user.id).select().single();
+      const { data, error } = await db.from("rams_documents").update(payload).eq("id", editingId).eq("user_id", user.id).select().single();
       if (!error && data) { setRams(p => p.map(r => r.id === editingId ? data : r)); }
     } else {
-      const { data, error } = await supabase.from("rams_documents").insert({ user_id: user.id, ...payload, created_at: new Date().toISOString() }).select().single();
+      const { data, error } = await db.from("rams_documents").insert({ user_id: user.id, ...payload, created_at: new Date().toISOString() }).select().single();
       if (!error && data) { setRams(p => [data, ...p]); }
     }
     setScreen("list"); setForm(blankForm()); setStep(1); setEditingId(null);
@@ -23958,7 +23958,7 @@ function RAMSTab({ user, brand, setContextHint }) {
   const [assigningRams, setAssigningRams] = useState(null);
 
   const assignRamsToJob = async (ramsId, jobId, jobTitle) => {
-    await supabase.from("rams_documents").update({ job_id: jobId, job_ref: jobTitle || "" }).eq("id", ramsId).eq("user_id", user.id);
+    await db.from("rams_documents").update({ job_id: jobId, job_ref: jobTitle || "" }).eq("id", ramsId).eq("user_id", user.id);
     setRams(p => p.map(r => r.id === ramsId ? { ...r, job_id: jobId, job_ref: jobTitle || "" } : r));
     setAssigningRams(null);
   };
@@ -24089,7 +24089,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
 
   const del = async (id) => {
     if (!confirm("Delete this RAMS document?")) return;
-    await supabase.from("rams_documents").delete().eq("id", id).eq("user_id", user.id);
+    await db.from("rams_documents").delete().eq("id", id).eq("user_id", user.id);
     setRams(p => p.filter(r => r.id !== id));
   };
 
@@ -25177,7 +25177,7 @@ function AppInner() {
   useEffect(() => {
     if (!user?.id) return;
     (async () => {
-      const { data: s } = await supabase
+      const { data: s } = await db
         .from("user_settings")
         .select("assistant_name, assistant_wake_words, assistant_persona, assistant_signoff")
         .eq("user_id", user.id)
@@ -25188,7 +25188,7 @@ function AppInner() {
         if (s.assistant_persona) setAssistantPersona(s.assistant_persona);
         if (s.assistant_signoff) setAssistantSignoff(s.assistant_signoff);
       }
-      const { data: cmds } = await supabase
+      const { data: cmds } = await db
         .from("user_commands")
         .select("*")
         .eq("user_id", user.id)
@@ -25203,7 +25203,7 @@ function AppInner() {
     if (!user?.id) return;
     (async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await db
           .from("usage_tracking")
           .select("conversations_used, handsfree_seconds_used")
           .eq("user_id", user.id)
@@ -25390,7 +25390,7 @@ function AppInner() {
 
     const initDevice = async () => {
       try {
-        const { data: ct } = await supabase.from("call_tracking").select("twilio_number").eq("user_id", user.id).limit(1).maybeSingle();
+        const { data: ct } = await db.from("call_tracking").select("twilio_number").eq("user_id", user.id).limit(1).maybeSingle();
         if (!ct?.twilio_number) return;
 
         // Check mic permission
@@ -25478,11 +25478,11 @@ function AppInner() {
 
   // Check existing session on load
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    db.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setAuthLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = db.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
@@ -25502,7 +25502,7 @@ function AppInner() {
     }
 
     async function checkSubscription() {
-      const { data } = await supabase.from("subscriptions").select("status, current_period_end, stripe_price_id").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1);
+      const { data } = await db.from("subscriptions").select("status, current_period_end, stripe_price_id").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1);
       if (!data?.length) { setSubscriptionStatus("none"); return; }
       const sub = data[0];
 
@@ -25557,7 +25557,7 @@ function AppInner() {
     }
 
     // Then check Supabase in background — if newer data exists, update silently
-    supabase.from("user_settings")
+    db.from("user_settings")
       .select("brand_data, updated_at")
       .eq("user_id", user.id)
       .maybeSingle()
@@ -25604,7 +25604,7 @@ function AppInner() {
     brandSaveTimer.current = setTimeout(async () => {
       try {
         const { logo, gasSafeLogo, _exemptBypass, ...syncData } = brand;
-        await supabase.from("user_settings").upsert({
+        await db.from("user_settings").upsert({
           user_id: user.id,
           brand_data: syncData,
           updated_at: new Date().toISOString(),
@@ -25616,7 +25616,7 @@ function AppInner() {
   }, [brand, user?.id]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await db.auth.signOut();
     setJobsRaw([]); setInvoicesRaw([]); setEnquiriesRaw([]);
     setMaterialsRaw([]); setCustomersRaw([]);
     setCompanyId(null); setCompanyName(""); setMembers([]);
@@ -25641,7 +25641,7 @@ function AppInner() {
   // ── Get or create company for user ───────────────────────────────────────
   const getOrCreateCompany = async (uid) => {
     // Check if user already belongs to a company
-    const { data: membership } = await supabase
+    const { data: membership } = await db
       .from("company_members")
       .select("company_id, role, companies(name)")
       .eq("user_id", uid)
@@ -25656,7 +25656,7 @@ function AppInner() {
     }
 
     // Check for pending invite using user's email
-    const { data: invite } = await supabase
+    const { data: invite } = await db
       .from("invites")
       .select("*")
       .eq("email", user.email)
@@ -25665,15 +25665,15 @@ function AppInner() {
 
     if (invite) {
       // Accept the invite — join the existing company with permissions from invite
-      await supabase.from("company_members").insert({
+      await db.from("company_members").insert({
         company_id: invite.company_id,
         user_id: uid,
         role: invite.role || "member",
         invited_email: user.email,
         permissions: invite.permissions || null,
       });
-      await supabase.from("invites").update({ accepted: true }).eq("id", invite.id);
-      const { data: co } = await supabase.from("companies").select("name").eq("id", invite.company_id).single();
+      await db.from("invites").update({ accepted: true }).eq("id", invite.id);
+      const { data: co } = await db.from("companies").select("name").eq("id", invite.company_id).single();
       setCompanyId(invite.company_id);
       setCompanyName(co?.name || "");
       setUserRole(invite.role || "member");
@@ -25683,14 +25683,14 @@ function AppInner() {
 
     // No company yet — create a new one
     const compName = brand.tradingName || `${user.user_metadata?.full_name || "My"}'s Business`;
-    const { data: newCompany } = await supabase
+    const { data: newCompany } = await db
       .from("companies")
       .insert({ name: compName })
       .select()
       .single();
 
     if (newCompany) {
-      await supabase.from("company_members").insert({
+      await db.from("company_members").insert({
         company_id: newCompany.id,
         user_id: uid,
         role: "owner",
@@ -25713,19 +25713,19 @@ function AppInner() {
         if (!cid) { setDbLoading(false); return; }
 
         // Load members for team management
-        const { data: mem } = await supabase
+        const { data: mem } = await db
           .from("company_members")
           .select("*, users:user_id(email)")
           .eq("company_id", cid);
         if (mem) setMembers(mem);
 
         const [j, inv, enq, mat, cust, contacts] = await Promise.all([
-          supabase.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
-          supabase.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
-          supabase.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
-          supabase.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
-          supabase.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
-          supabase.from("customer_contacts").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
+          db.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
+          db.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
+          db.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
+          db.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
+          db.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
+          db.from("customer_contacts").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
         ]);
         if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
         if (inv.data) setInvoicesRaw(inv.data.map(r => ({
@@ -25786,11 +25786,11 @@ function AppInner() {
           const prevIds = new Set(prev.map(j => String(j.id)));
           const nextIds = new Set(next.map(j => String(j.id)));
           for (const id of prevIds) {
-            if (!nextIds.has(id)) await supabase.from("jobs").delete().eq("id", id).eq("company_id", companyId);
+            if (!nextIds.has(id)) await db.from("jobs").delete().eq("id", id).eq("company_id", companyId);
           }
           for (const job of next) {
             if (!prevIds.has(String(job.id))) {
-              await supabase.from("jobs").upsert({
+              await db.from("jobs").upsert({
                 id: String(job.id), company_id: companyId, user_id: user.id,
                 customer: job.customer, address: job.address, type: job.type,
                 date: job.date, date_obj: job.dateObj || job.date_obj,
@@ -25799,7 +25799,7 @@ function AppInner() {
             } else {
               const old = prev.find(j => String(j.id) === String(job.id));
               if (JSON.stringify(old) !== JSON.stringify(job)) {
-                await supabase.from("jobs").update({
+                await db.from("jobs").update({
                   customer: job.customer, address: job.address, type: job.type,
                   date: job.date, date_obj: job.dateObj || job.date_obj,
                   status: job.status, value: job.value || 0, notes: job.notes || "",
@@ -25822,7 +25822,7 @@ function AppInner() {
           const prevIds = new Set(prev.map(i => i.id));
           const nextIds = new Set(next.map(i => i.id));
           for (const id of prevIds) {
-            if (!nextIds.has(id)) await supabase.from("invoices").delete().eq("id", id).eq("company_id", companyId);
+            if (!nextIds.has(id)) await db.from("invoices").delete().eq("id", id).eq("company_id", companyId);
           }
           for (const inv of next) {
             const invRow = {
@@ -25844,12 +25844,12 @@ function AppInner() {
               material_items: JSON.stringify(inv.materialItems || []),
             };
             if (!prevIds.has(inv.id)) {
-              await supabase.from("invoices").upsert(invRow);
+              await db.from("invoices").upsert(invRow);
             } else {
               const old = prev.find(i => i.id === inv.id);
               if (JSON.stringify(old) !== JSON.stringify(inv)) {
                 const { id, company_id, user_id, ...updateFields } = invRow;
-                await supabase.from("invoices").update(updateFields).eq("id", inv.id).eq("company_id", companyId);
+                await db.from("invoices").update(updateFields).eq("id", inv.id).eq("company_id", companyId);
               }
             }
           }
@@ -25860,7 +25860,7 @@ function AppInner() {
             try {
               for (const inv of next) {
                 const invRow = { id: inv.id, company_id: companyId, user_id: user.id, customer: inv.customer || "", amount: inv.amount || 0, gross_amount: inv.grossAmount || inv.amount || 0, due: inv.due, status: inv.status, description: inv.description || "", is_quote: inv.isQuote || false, job_ref: inv.jobRef || "", line_items: JSON.stringify(inv.lineItems || []), vat_enabled: inv.vatEnabled || false, vat_rate: inv.vatRate || 20, payment_method: inv.paymentMethod || "both", cis_enabled: inv.cisEnabled || false, cis_rate: inv.cisRate || 20, cis_deduction: inv.cisDeduction || 0, cis_net_payable: inv.cisNetPayable || 0 };
-                await supabase.from("invoices").upsert(invRow);
+                await db.from("invoices").upsert(invRow);
               }
             } catch(e2) { console.error("Invoices sync retry failed:", e2); }
           }, 3000);
@@ -25876,9 +25876,9 @@ function AppInner() {
       if (!companyId) return next;
       (async () => {
         try {
-          await supabase.from("enquiries").delete().eq("company_id", companyId);
+          await db.from("enquiries").delete().eq("company_id", companyId);
           if (next.length > 0) {
-            await supabase.from("enquiries").insert(
+            await db.from("enquiries").insert(
               next.map(e => ({ company_id: companyId, user_id: user.id, name: e.name, source: e.source, msg: e.msg, time: e.time, urgent: e.urgent || false, status: e.status || "new", phone: e.phone || "", email: e.email || "", address: e.address || "" }))
             );
           }
@@ -25903,11 +25903,11 @@ function AppInner() {
           const prevIds = new Set(prev.map(c => c.id));
           const nextIds = new Set(next.map(c => c.id));
           for (const id of prevIds) {
-            if (!nextIds.has(id)) await supabase.from("customers").delete().eq("id", id).eq("company_id", companyId);
+            if (!nextIds.has(id)) await db.from("customers").delete().eq("id", id).eq("company_id", companyId);
           }
           for (const c of next) {
             if (!prevIds.has(c.id)) {
-              await supabase.from("customers").insert({
+              await db.from("customers").insert({
                 company_id: companyId, user_id: user.id,
                 name: c.name, phone: c.phone || "", email: c.email || "",
                 address: c.address || "", notes: c.notes || "",
@@ -25916,7 +25916,7 @@ function AppInner() {
             } else {
               const old = prev.find(x => x.id === c.id);
               if (JSON.stringify(old) !== JSON.stringify(c)) {
-                await supabase.from("customers").update({
+                await db.from("customers").update({
                   name: c.name, phone: c.phone || "", email: c.email || "",
                   address: c.address || "", notes: c.notes || "",
                   is_company: !!c.is_company,
@@ -25944,14 +25944,14 @@ function AppInner() {
           const nextIds = new Set(next.map(c => c.id).filter(Boolean));
           for (const id of prevIds) {
             if (!nextIds.has(id)) {
-              await supabase.from("customer_contacts").delete().eq("id", id).eq("user_id", user.id);
+              await db.from("customer_contacts").delete().eq("id", id).eq("user_id", user.id);
             }
           }
           for (let idx = 0; idx < next.length; idx++) {
             const c = next[idx];
             if (!c.id || !prevIds.has(c.id)) {
               // New contact — insert and capture the server-assigned UUID back into state
-              const { data: inserted } = await supabase.from("customer_contacts").insert({
+              const { data: inserted } = await db.from("customer_contacts").insert({
                 customer_id: c.customerId,
                 user_id: user.id,
                 company_id: companyId,
@@ -25969,7 +25969,7 @@ function AppInner() {
             } else {
               const old = prev.find(x => x.id === c.id);
               if (JSON.stringify(old) !== JSON.stringify(c)) {
-                await supabase.from("customer_contacts").update({
+                await db.from("customer_contacts").update({
                   name: c.name || "",
                   role: c.role || "",
                   phone: c.phone || "",
@@ -26083,7 +26083,7 @@ function AppInner() {
           <a href="https://www.tradespa.co.uk/signup.html" style={{ display: "block", background: "#f59e0b", color: "#000", padding: "16px 32px", borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: "none", marginBottom: 12 }}>
             {subscriptionStatus === "past_due" ? "Update Payment Details →" : "Subscribe Now →"}
           </a>
-          <button onClick={async () => { await supabase.auth.signOut(); setUser(null); }} style={{ background: "transparent", border: "none", color: "#555", fontSize: 13, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+          <button onClick={async () => { await db.auth.signOut(); setUser(null); }} style={{ background: "transparent", border: "none", color: "#555", fontSize: 13, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
             Sign out
           </button>
         </div>
@@ -26745,7 +26745,7 @@ function AppInner() {
       <AssistantSetup
         open={assistantSetupOpen || onboardingStep === 3}
         onClose={() => { setAssistantSetupOpen(false); if (onboardingStepRef.current === 3) advanceOnboarding(4); }}
-        supabase={supabase}
+        db={db}
         user={user}
         tools={null}
         mode={onboardingStep === 3 ? "onboard" : "edit"}
@@ -26754,7 +26754,7 @@ function AppInner() {
           setAssistantWakeWords(s.assistant_wake_words);
           setAssistantPersona(s.assistant_persona);
           setAssistantSignoff(s.assistant_signoff || "");
-          supabase.from("user_commands")
+          db.from("user_commands")
             .select("*").eq("user_id", user.id).eq("enabled", true)
             .order("created_at", { ascending: true })
             .then(({ data }) => { if (data) setUserCommands(data); });
