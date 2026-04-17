@@ -3,7 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Trade PA</title>
+
+    <!-- SEO — page title and description -->
+    <title>Trade PA — The AI admin assistant that runs your business while you run the jobs</title>
+    <meta name="description" content="Trade PA is the voice-first, inbox-monitored AI admin assistant built for UK tradespeople. Reads every email 24/7, drafts every action, chases every unpaid invoice — one tap to approve. Quotes, invoices, CIS, certificates, and a business phone, all in one app." />
+    <link rel="canonical" href="https://tradespa.co.uk/" />
+
+    <!-- Open Graph (Facebook, LinkedIn, WhatsApp, iMessage, Slack) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://tradespa.co.uk/" />
+    <meta property="og:title" content="Trade PA — Your AI admin assistant for UK trades" />
+    <meta property="og:description" content="Reads every email 24/7. Drafts every action. Chases every unpaid invoice. Voice-controlled for when you're on the tools. Built for UK tradespeople." />
+    <meta property="og:image" content="https://tradespa.co.uk/icon-512.png" />
+    <meta property="og:site_name" content="Trade PA" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://tradespa.co.uk/" />
+    <meta name="twitter:title" content="Trade PA — Your AI admin assistant for UK trades" />
+    <meta name="twitter:description" content="Reads every email 24/7. Drafts every action. Chases every unpaid invoice. Voice-controlled. Built for UK tradespeople." />
+    <meta name="twitter:image" content="https://tradespa.co.uk/icon-512.png" />
 
     <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />
@@ -22,9 +41,40 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
-    <!-- SEO / sharing -->
-    <meta name="description" content="AI-powered admin tool for tradespeople. Scheduling, invoicing, voice notes and more." />
     <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- JSON-LD: SoftwareApplication schema for Google rich snippets -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Trade PA",
+      "description": "AI-powered admin assistant built for UK tradespeople. Voice-first, inbox-monitored. Handles quotes, invoices, jobs, CIS, certificates, payment chasing and a business phone.",
+      "url": "https://tradespa.co.uk/",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web, iOS, Android",
+      "offers": {
+        "@type": "Offer",
+        "price": "49",
+        "priceCurrency": "GBP",
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "price": "49",
+          "priceCurrency": "GBP",
+          "referenceQuantity": {
+            "@type": "QuantitativeValue",
+            "value": "1",
+            "unitCode": "MON"
+          }
+        }
+      },
+      "provider": {
+        "@type": "Organization",
+        "name": "Trade PA",
+        "url": "https://tradespa.co.uk/"
+      }
+    }
+    </script>
 
     <style>
       *, *::before, *::after { box-sizing: border-box; }
@@ -59,4 +109,3 @@
     </script>
   </body>
 </html>
-
