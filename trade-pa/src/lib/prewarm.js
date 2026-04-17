@@ -14,30 +14,25 @@
 // bandwidth. Tier 1 runs ahead of Tier 2 because it's the critical
 // path for tradesperson-on-site usage.
 //
-// Silent — no UI feedback in Session 2. A diagnostics panel in Settings
-// is planned for Session 3.
+// Session refresh: we call refreshSession() before the query loop to
+// guarantee the JWT is attached to every PostgREST request. Without
+// this, a race in Supabase's connection pool after fresh sign-in can
+// cause some tables to return 0 rows even when the user has access.
+// The symptom was subtle — jobs/customers/invoices would cache fine,
+// but time_logs/subcontractors/subcontractor_payments would randomly
+// come back empty. One refresh up front fixes it.
 
 import { db } from "./db.js";
 import { TIER_1_TABLES, TIER_2_TABLES } from "./offlineDb.js";
 
-// Small delay between requests so we don't saturate the network or
-// Supabase connection pool. 50ms × 23 tables = ~1.2s total minimum.
 const YIELD_MS = 50;
 
 let inFlight = false;
 
-/**
- * Fire read queries for every cached table. Safe to call multiple times
- * — a concurrent call is a no-op. RLS ensures each user only gets their
- * own rows regardless of any filter we set.
- */
 export async function prewarmCache() {
-  // Don't run if offline — no point, and the wrapper would just read
-  // empty cache anyway.
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     return;
   }
-  // Prevent overlap if called multiple times in quick succession
   if (inFlight) return;
   inFlight = true;
 
@@ -46,6 +41,17 @@ export async function prewarmCache() {
   let failed = 0;
 
   try {
+    // Force a fresh JWT before any table queries fire. Without this,
+    // the PostgREST connection pool can randomly return 0 rows for some
+    // tables even though the user has access. One round-trip up front.
+    try {
+      await db.auth.refreshSession();
+    } catch (err) {
+      // If refresh fails (network, already-refreshing, etc.), continue
+      // anyway — the loop may still cache the tables that aren't affected.
+      console.warn("[prewarm] session refresh skipped:", err?.message || err);
+    }
+
     // Tier 1 — the tables a tradesperson needs on site
     for (const table of TIER_1_TABLES) {
       try {
