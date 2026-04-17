@@ -1,25 +1,12 @@
 // ─── writeQueue.js ─────────────────────────────────────────────────────
 //
-// Offline write handling. Captures insert/update/upsert/delete operations
-// that happen while offline, writes an optimistic row to the local cache
-// so the UI reflects the change instantly, then queues the write to
-// IndexedDB for later replay against Supabase on reconnect.
+// Offline write handling.
 //
-// Id strategy per table:
-//   UUID tables — we generate crypto.randomUUID() client-side, so the
-//     offline cache row and the eventually-inserted server row share
-//     the same primary key. No reconciliation needed.
-//   TEXT id tables (jobs, invoices, quotes) — the app is already
-//     responsible for generating the id before calling .insert(), so
-//     no special handling is required.
-//   BIGINT id tables (customers, materials) — the server assigns the
-//     id via identity. Not supported for offline insert in v1.
-//     Inserts fail with a clear error; user must reconnect first.
-//
-// Retry policy: when the drain replays a write and Supabase returns an
-// error, we keep the write as 'pending' and increment attempts. After
-// 3 attempts we mark it 'failed' and stop retrying. A future 4b session
-// will add a manual retry UI.
+// Session 4: core implementation.
+// Session 4.2 (NOW): respect spec.single / spec.maybeSingle when building
+//   the return response. Callers using .insert(x).select().single() need
+//   `data` to be a single object, not an array of one — otherwise they
+//   destructure `data.hours` and get `undefined`.
 
 import {
   isCached,
@@ -44,11 +31,7 @@ const UUID_ID_TABLES = new Set([
   "subcontractor_payments", "workers", "worker_documents", "purchase_orders",
 ]);
 
-// Tables where the caller provides the id as a TEXT string before insert.
-// App.jsx generates these itself (job_<timestamp> etc) so we pass through.
 const TEXT_ID_TABLES = new Set(["jobs", "invoices", "quotes"]);
-
-// Server-generated BIGINT identity — cannot safely insert offline in v1.
 const BIGINT_ID_TABLES = new Set(["customers", "materials"]);
 
 export function canInsertOffline(table) {
@@ -63,7 +46,6 @@ function generateUuid() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  // Fallback for older browsers — simple RFC4122 v4
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === "x" ? r : (r & 0x3) | 0x8;
@@ -87,10 +69,6 @@ function notify() {
 export { countPendingWrites as getPendingCount };
 
 // ─── Filter evaluation (for update/delete offline targeting) ─────────
-//
-// Mirrors the subset of filter ops db.js's readFromCache handles, but
-// scoped to equality-family ops since that's overwhelmingly what writes
-// use (mostly .eq('id', x)).
 
 function matchRow(row, f) {
   const cell = row?.[f.col];
@@ -104,20 +82,53 @@ function matchRow(row, f) {
       if (f.val === null) return cell === null || cell === undefined;
       return cell === f.val;
     default:
-      // Non-equality filters (gt/lt/ilike) aren't typical for writes.
-      // Conservative: treat as match so we don't drop rows accidentally.
       return true;
   }
 }
 
-// ─── The main offline write handler ──────────────────────────────────
+// ─── Response-shape helpers ──────────────────────────────────────────
 //
-// Called from db.js when a write executes while navigator.onLine is
-// false. Returns a Supabase-shaped response so callers don't need to
-// know anything special happened.
+// Supabase's .single() returns { data: object, error }.
+// Supabase's .maybeSingle() returns { data: object|null, error }.
+// Default (neither called) returns { data: array, error, count }.
+// The offline handler must match this or callers that destructure
+// `data.somefield` will see `undefined` when `data` is actually an array.
+
+function buildResponse(rows, { single, maybeSingle }) {
+  if (single) {
+    if (!rows || rows.length === 0) {
+      return {
+        data: null,
+        error: {
+          code: "PGRST116",
+          message: "JSON object requested, multiple (or no) rows returned",
+          details: "Results contain 0 rows",
+        },
+      };
+    }
+    return { data: rows[0], error: null };
+  }
+  if (maybeSingle) {
+    return { data: rows?.[0] ?? null, error: null };
+  }
+  return {
+    data: rows ?? [],
+    error: null,
+    count: rows?.length ?? 0,
+  };
+}
+
+// ─── The main offline write handler ──────────────────────────────────
 
 export async function handleOfflineWrite(spec) {
-  const { table, operation, data, filters = [] } = spec;
+  const {
+    table,
+    operation,
+    data,
+    filters = [],
+    single = false,
+    maybeSingle = false,
+  } = spec;
 
   if (!isCached(table)) {
     return {
@@ -129,8 +140,6 @@ export async function handleOfflineWrite(spec) {
     };
   }
 
-  // Inserts/upserts to BIGINT-id tables can't be safely queued without
-  // temp-id reconciliation, which is v2 territory.
   if ((operation === "insert" || operation === "upsert") &&
       !canInsertOffline(table)) {
     return {
@@ -145,8 +154,6 @@ export async function handleOfflineWrite(spec) {
   try {
     let preparedData = data;
 
-    // For inserts, generate a client-side UUID if the table needs one
-    // and the caller didn't already provide an id.
     if (operation === "insert" || operation === "upsert") {
       const asArray = Array.isArray(data) ? data : [data];
       const prepared = asArray.map((row) => {
@@ -160,14 +167,10 @@ export async function handleOfflineWrite(spec) {
       preparedData = Array.isArray(data) ? prepared : prepared[0];
     }
 
-    // Apply the optimistic change to the local cache so the UI reflects
-    // it instantly — the caller awaits this write, then the UI rerenders
-    // from cache and sees the change.
     await applyOptimisticCacheUpdate({
       table, operation, data: preparedData, filters,
     });
 
-    // Queue the write for replay on reconnect.
     await addPendingWrite({
       table,
       operation,
@@ -177,13 +180,16 @@ export async function handleOfflineWrite(spec) {
 
     notify();
 
-    // Build a Supabase-shaped response. For inserts we return the rows
-    // (callers often chain .select() to get them back). Update returns
-    // the matched rows. Delete returns null/empty.
     const returnRows = await computeReturnRows({
       table, operation, data: preparedData, filters,
     });
-    return { data: returnRows, error: null };
+
+    // Delete doesn't return rows — preserve Supabase's shape.
+    if (operation === "delete") {
+      return { data: null, error: null };
+    }
+
+    return buildResponse(returnRows, { single, maybeSingle });
   } catch (err) {
     console.error("[writeQueue] handleOfflineWrite failed:", err);
     return {
@@ -230,14 +236,14 @@ async function applyOptimisticCacheUpdate({ table, operation, data, filters }) {
 
 async function computeReturnRows({ table, operation, data, filters }) {
   if (operation === "insert" || operation === "upsert") {
-    return Array.isArray(data) ? data : [data];
+    const rows = Array.isArray(data) ? data : [data];
+    return rows;
   }
   if (operation === "update") {
     const all = await readCachedRows(table);
     return all.filter((row) => filters.every((f) => matchRow(row, f)));
   }
-  // delete
-  return null;
+  return [];
 }
 
 // ─── The drain ───────────────────────────────────────────────────────
@@ -245,15 +251,6 @@ async function computeReturnRows({ table, operation, data, filters }) {
 const MAX_ATTEMPTS = 3;
 let draining = false;
 
-/**
- * Replay pending writes to Supabase in FIFO order. Stops on the first
- * write that errors (to preserve causal order — a later write might
- * depend on an earlier one) but keeps the queue intact so next drain
- * retries from the same point.
- *
- * Returns { drained, failed } counts. Safe to call concurrently —
- * a second call while already draining is a no-op.
- */
 export async function drainQueue() {
   if (draining) return { drained: 0, failed: 0 };
   if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -265,9 +262,6 @@ export async function drainQueue() {
   let failed = 0;
 
   try {
-    // Import the raw client lazily to avoid a circular import with db.js.
-    // We use the raw supabase client (not the Proxy) so the replay
-    // doesn't bounce back through this same code path.
     const { supabase } = await import("./db.js");
 
     while (true) {
@@ -297,7 +291,6 @@ export async function drainQueue() {
           });
         }
         notify();
-        // Stop the drain to preserve ordering. Next reconnect will retry.
         break;
       }
     }
@@ -316,12 +309,8 @@ async function replayEntry(entry, supabase) {
     const res = await q.insert(data).select();
     if (res.error) throw res.error;
     if (res.data) {
-      // Replace optimistic rows with server-confirmed rows (drops
-      // _pendingSync flag because the confirmed row doesn't have it).
       const confirmed = Array.isArray(res.data) ? res.data : [res.data];
       await cacheRows(table, confirmed);
-      // Explicitly clear markers for each id in case cacheRows' merge
-      // preserves old flags.
       await clearPendingFlag(table, confirmed.map((r) => r.id));
     }
     return;
@@ -364,17 +353,12 @@ async function replayEntry(entry, supabase) {
     }
     const res = await builder;
     if (res.error) throw res.error;
-    // Cache removal happened during the optimistic phase already.
     return;
   }
 
   throw new Error(`[writeQueue] unknown operation '${operation}'`);
 }
 
-/**
- * Diagnostic — list all queue entries including failed ones. Used by
- * the offline-banner popover and any future Settings diagnostics.
- */
 export async function listAllPending() {
   return await listPendingWrites(null);
 }
