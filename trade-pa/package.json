@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prerender.js",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -16,10 +16,7 @@
     "@twilio/voice-sdk": "^2.10.0"
   },
   "devDependencies": {
-    "@sparticuz/chromium": "^127.0.0",
     "@vitejs/plugin-react": "^4.2.1",
-    "puppeteer-core": "^22.0.0",
-    "serve-handler": "^6.1.5",
     "vite": "^5.0.8",
     "vite-plugin-pwa": "^0.19.0",
     "workbox-window": "^7.0.0"
