@@ -13,7 +13,7 @@
 // Props:
 //   open          — boolean, show/hide
 //   onClose       — callback
-//   supabase      — your supabase client
+//   db      — your db client
 //   user          — current user object (needs .id)
 //   tools         — optional: array of your TOOLS (from App.jsx). If passed, the
 //                   fast-mode command picker shows a menu of available actions.
@@ -63,7 +63,7 @@ const PERSONA_PRESETS = [
 
 export default function AssistantSetup({
   open = false, onClose = () => {},
-  supabase, user,
+  db, user,
   tools = null,
   onSaved = () => {},
   mode = "onboard",
@@ -89,9 +89,9 @@ export default function AssistantSetup({
 
   // Load existing settings when opening
   useEffect(() => {
-    if (!open || !supabase || !user?.id) return;
+    if (!open || !db || !user?.id) return;
     (async () => {
-      const { data: settings } = await supabase
+      const { data: settings } = await db
         .from("user_settings")
         .select("assistant_name, assistant_wake_words, assistant_persona, assistant_voice, assistant_signoff")
         .eq("user_id", user.id)
@@ -107,14 +107,14 @@ export default function AssistantSetup({
           else { setPersonaType("custom"); setCustomPersona(settings.assistant_persona); }
         }
       }
-      const { data: cmds } = await supabase
+      const { data: cmds } = await db
         .from("user_commands")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: true });
       if (cmds) setCommands(cmds);
     })();
-  }, [open, supabase, user?.id]);
+  }, [open, db, user?.id]);
 
   // ESC closes
   useEffect(() => {
@@ -151,7 +151,7 @@ export default function AssistantSetup({
     setError(""); setSaving(true);
     try {
       const finalWakes = resolveWakeWords();
-      const { error: upErr } = await supabase
+      const { error: upErr } = await db
         .from("user_settings")
         .upsert({
           user_id: user.id,
@@ -200,12 +200,12 @@ export default function AssistantSetup({
     };
     if (editingIdx !== null) {
       const existing = commands[editingIdx];
-      const { data, error: err } = await supabase
+      const { data, error: err } = await db
         .from("user_commands").update(payload).eq("id", existing.id).select().single();
       if (err) return setError(err.message);
       setCommands(cs => cs.map((c, i) => i === editingIdx ? data : c));
     } else {
-      const { data, error: err } = await supabase
+      const { data, error: err } = await db
         .from("user_commands").insert(payload).select().single();
       if (err) return setError(err.message);
       setCommands(cs => [...cs, data]);
@@ -217,14 +217,14 @@ export default function AssistantSetup({
   const deleteCommand = async (idx) => {
     const c = commands[idx];
     if (!confirm(`Delete "${c.phrase}"?`)) return;
-    await supabase.from("user_commands").delete().eq("id", c.id);
+    await db.from("user_commands").delete().eq("id", c.id);
     setCommands(cs => cs.filter((_, i) => i !== idx));
   };
 
   const toggleCommand = async (idx) => {
     const c = commands[idx];
     const next = !c.enabled;
-    await supabase.from("user_commands").update({ enabled: next }).eq("id", c.id);
+    await db.from("user_commands").update({ enabled: next }).eq("id", c.id);
     setCommands(cs => cs.map((x, i) => i === idx ? { ...x, enabled: next } : x));
   };
 
