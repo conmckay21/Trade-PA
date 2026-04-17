@@ -1266,7 +1266,7 @@ function buildInvoiceHTML(brand, inv) {
 </body>
 </html>`;;
   return html;
-  } catch(e) { return "<p>Error generating invoice</p>"; }
+  } catch(e) { console.error("[PDF] buildInvoiceHTML CRASHED:", e.message, e.stack); return "<p>Error generating invoice</p>"; }
 }
 
 function downloadInvoicePDF(brand, inv) {
