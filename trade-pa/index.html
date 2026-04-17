@@ -3,26 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-
-    <!-- SEO — page title and description -->
-    <title>Trade PA — The AI admin assistant that runs your business while you run the jobs</title>
-    <meta name="description" content="Trade PA is the voice-first, inbox-monitored AI admin assistant built for UK tradespeople. Reads every email 24/7, drafts every action, chases every unpaid invoice — one tap to approve. Quotes, invoices, CIS, certificates, and a business phone, all in one app." />
-    <link rel="canonical" href="https://tradespa.co.uk/" />
-
-    <!-- Open Graph (Facebook, LinkedIn, WhatsApp, iMessage, Slack) -->
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://tradespa.co.uk/" />
-    <meta property="og:title" content="Trade PA — Your AI admin assistant for UK trades" />
-    <meta property="og:description" content="Reads every email 24/7. Drafts every action. Chases every unpaid invoice. Voice-controlled for when you're on the tools. Built for UK tradespeople." />
-    <meta property="og:image" content="https://tradespa.co.uk/icon-512.png" />
-    <meta property="og:site_name" content="Trade PA" />
-
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://tradespa.co.uk/" />
-    <meta name="twitter:title" content="Trade PA — Your AI admin assistant for UK trades" />
-    <meta name="twitter:description" content="Reads every email 24/7. Drafts every action. Chases every unpaid invoice. Voice-controlled. Built for UK tradespeople." />
-    <meta name="twitter:image" content="https://tradespa.co.uk/icon-512.png" />
+    <title>Trade PA</title>
 
     <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />
@@ -41,30 +22,9 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
+    <!-- SEO / sharing -->
+    <meta name="description" content="AI-powered admin tool for tradespeople. Scheduling, invoicing, voice notes and more." />
     <meta name="mobile-web-app-capable" content="yes" />
-
-    <!-- JSON-LD: SoftwareApplication schema for Google rich snippets -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "Trade PA",
-      "description": "AI-powered admin assistant built for UK tradespeople. Voice-first, inbox-monitored. Handles quotes, invoices, jobs, CIS, certificates, payment chasing and a business phone.",
-      "url": "https://tradespa.co.uk/",
-      "applicationCategory": "BusinessApplication",
-      "operatingSystem": "Web, iOS, Android",
-      "offers": [
-        { "@type": "Offer", "name": "Solo", "price": "49", "priceCurrency": "GBP" },
-        { "@type": "Offer", "name": "Team", "price": "89", "priceCurrency": "GBP" },
-        { "@type": "Offer", "name": "Pro",  "price": "129", "priceCurrency": "GBP" }
-      ],
-      "provider": {
-        "@type": "Organization",
-        "name": "Trade PA",
-        "url": "https://tradespa.co.uk/"
-      }
-    }
-    </script>
 
     <style>
       *, *::before, *::after { box-sizing: border-box; }
@@ -84,156 +44,10 @@
         background: #0f0f0f;
         overflow-x: hidden;
       }
-
-      /* ─── SEO FALLBACK ──────────────────────────────────────────
-         This content is visible to crawlers and no-JS users.
-         When React loads, it replaces #root contents with the real
-         interactive app. Flash-of-static-content lasts <500ms on
-         typical connections, imperceptible on fast ones. */
-      .seo-fallback {
-        max-width: 860px;
-        margin: 0 auto;
-        padding: 48px 24px 72px;
-        color: #d4d4d4;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        line-height: 1.65;
-      }
-      .seo-fallback .logo {
-        display: inline-block;
-        font-weight: 800;
-        letter-spacing: 0.06em;
-        color: #f59e0b;
-        margin-bottom: 32px;
-        font-size: 14px;
-      }
-      .seo-fallback .eyebrow {
-        color: #f59e0b;
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        margin-bottom: 16px;
-        font-weight: 700;
-      }
-      .seo-fallback h1 {
-        font-size: clamp(32px, 6vw, 56px);
-        line-height: 1.08;
-        color: #f5f5f5;
-        margin: 0 0 20px;
-        font-weight: 800;
-        letter-spacing: -0.02em;
-      }
-      .seo-fallback h1 span { color: #f59e0b; }
-      .seo-fallback h2 {
-        font-size: 26px;
-        color: #f5f5f5;
-        margin: 56px 0 16px;
-        font-weight: 800;
-        letter-spacing: -0.01em;
-      }
-      .seo-fallback p { margin: 0 0 16px; color: #a8a8a8; }
-      .seo-fallback ul { padding-left: 20px; margin: 0 0 16px; color: #a8a8a8; }
-      .seo-fallback li { margin-bottom: 8px; }
-      .seo-fallback a.cta {
-        display: inline-block;
-        background: #f59e0b;
-        color: #000;
-        padding: 14px 28px;
-        border-radius: 10px;
-        text-decoration: none;
-        font-weight: 700;
-        margin: 16px 0 12px;
-        font-size: 15px;
-      }
-      .seo-fallback .trust {
-        font-size: 12px;
-        color: #666;
-        letter-spacing: 0.04em;
-      }
-      .seo-fallback footer {
-        margin-top: 64px;
-        padding-top: 24px;
-        border-top: 1px solid #222;
-        font-size: 12px;
-        color: #666;
-      }
-      .seo-fallback footer a {
-        color: #888;
-        margin-right: 16px;
-        text-decoration: none;
-      }
     </style>
   </head>
   <body>
-    <div id="root">
-      <!-- ────────────────────────────────────────────────────────────
-           Static fallback content for crawlers, link previews, and
-           no-JS users. React replaces this when the app loads.
-           Keep the key SEO copy here so Google, LinkedIn, WhatsApp
-           etc. see real content regardless of JS execution.
-           ──────────────────────────────────────────────────────────── -->
-      <div class="seo-fallback">
-        <div class="logo">TRADE PA</div>
-
-        <div class="eyebrow">Voice-first · Inbox-monitored · UK-built</div>
-        <h1>Your PA works<br /><span>when you can&rsquo;t.</span></h1>
-        <p>Trade PA reads every email 24/7, drafts every action, chases every unpaid invoice &mdash; and waits for one tap to approve. Voice-controlled for when you&rsquo;re on the tools. The admin assistant that runs your business while you run the jobs.</p>
-        <a class="cta" href="/signup.html">Get started &mdash; from &pound;49/month</a>
-        <p class="trust">Works with Gmail &amp; Outlook &middot; 4 UK Patents Pending &middot; Built for UK Trades</p>
-
-        <h2>An inbox that works while you sleep</h2>
-        <p>16 email types. 3 trigger paths. 1 learning loop that gets smarter with every tap.</p>
-        <ul>
-          <li><strong>Voice or chat to instant send:</strong> say &ldquo;Send Glenn his invoice&rdquo; &mdash; branded PDF fires from your Gmail or Outlook.</li>
-          <li><strong>Inbox monitoring to approve:</strong> checks inbox hourly, analyses every email against 10 pattern rules, drafts an action. One tap executes and auto-replies.</li>
-          <li><strong>Daily automation to proactive outbound:</strong> 8am loop queries the database for follow-up candidates. Sends once. Marks the timestamp so it never sends twice.</li>
-        </ul>
-        <p><em>Learning loop: every approved action teaches the system &mdash; known suppliers, customers, job types. Rejected actions teach it harder.</em></p>
-
-        <h2>Voice that thinks like a PA</h2>
-        <p>Talk once. Done. Next job. Not dictation &mdash; direction. One spoken sentence, multiple actions completed while you carry the tools, not the phone.</p>
-        <ul>
-          <li><strong>&ldquo;Hey Trade PA&rdquo;</strong> wake word with continuous hands-free loop. Phase-aware safety timers. Built for vans, roofs, lofts and plant rooms.</li>
-          <li><strong>Voice on every form:</strong> 43 features accept voice dictation &mdash; quotes, invoices, certificates, RAMS, time logs. Tuned for UK, Irish and regional accents.</li>
-          <li><strong>Multi-action conversational AI:</strong> 93 tools the AI can call autonomously. Several actions per spoken sentence.</li>
-        </ul>
-
-        <h2>Everything else included</h2>
-        <ul>
-          <li><strong>All-trades certificates:</strong> CP12, EICR, EIC, PAT, Pressure Test, Unvented HW, CD/11, CD/12, Fire Alarm, Emergency Lighting, Part P.</li>
-          <li><strong>Deep CIS support:</strong> Domestic Reverse Charge invoicing, UTR on all documents, CIS monthly statement logging with PDF storage.</li>
-          <li><strong>Quotes &amp; invoices:</strong> professional branded documents sent from your Gmail or Outlook. Xero and QuickBooks sync built in.</li>
-          <li><strong>Jobs &amp; scheduling:</strong> full job cards with notes, photos, time logs, variation orders, daywork sheets and customer sign-off.</li>
-          <li><strong>Business phone, built in:</strong> dedicated number that rings inside the app. Every call recorded, transcribed and AI-logged against the job. No second SIM.</li>
-          <li><strong>GPS job tracking:</strong> auto-arrives when you reach site, auto-logs departure. Time tracked in the background &mdash; no timesheets to fill in.</li>
-        </ul>
-
-        <h2>Plans for every tradesperson</h2>
-        <ul>
-          <li><strong>Solo &mdash; &pound;49/month:</strong> 1 user, 500 AI conversations/month, 5 hours hands-free/month, all 43 features.</li>
-          <li><strong>Team &mdash; &pound;89/month:</strong> up to 5 users, 2,000 AI conversations/month, 20 hours hands-free/month, team scheduling, GPS tracking.</li>
-          <li><strong>Pro &mdash; &pound;129/month:</strong> up to 10 users, unlimited AI conversations, unlimited hands-free, priority support.</li>
-          <li><strong>Business Phone add-on:</strong> from &pound;20/month for a dedicated UK number with AI call logging.</li>
-        </ul>
-        <p>All plans include every feature. Start as a sole trader, scale as you grow.</p>
-
-        <p><a class="cta" href="/signup.html">Get started</a></p>
-
-        <footer>
-          <a href="/about.html">About</a>
-          <a href="/privacy-policy.html">Privacy</a>
-          <a href="/terms.html">Terms</a>
-          <span>&copy; 2026 Trade PA</span>
-        </footer>
-      </div>
-    </div>
+    <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <script>
-      // Kill any existing service workers completely
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(regs => {
-          regs.forEach(r => r.unregister());
-        });
-      }
-    </script>
   </body>
 </html>
