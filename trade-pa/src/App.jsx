@@ -4676,7 +4676,7 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, us
       </div>
       {expanded && (
         <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={() => cycleStatus(i)} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12 }}>
               {m.status === "to_order" ? "✓ Mark Ordered" : m.status === "ordered" ? "✓ Mark Collected" : "↺ Reset Status"}
             </button>
@@ -11711,10 +11711,8 @@ Do not include fields that aren't being changed.`,
 // Works with any form — pass fieldDescriptions like:
 // "customer (full name), address, type (job type e.g. Boiler Service), value (£ amount), notes"
 function VoiceFillButton({ form, setForm, fieldDescriptions, color }) {
-  const [recording, setRecording] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const mediaRef = useRef(null);
-  const chunksRef = useRef([]);
+  // Voice-fill via floating mic + context hints now — Dictate button removed from all forms
+  return null;
   const accentColor = color || C.amber;
 
   const start = async () => {
@@ -17484,6 +17482,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
 function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoices, setInvoices, brand, user, setView, setContextHint }) {
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingEnquiry, setEditingEnquiry] = useState(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", source: "Phone", msg: "", urgent: false });
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -17535,6 +17534,22 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
 
   function deleteEnquiry(id) {
     setEnquiries(prev => (prev || []).filter(e => e.id !== id));
+    setSelected(null);
+  }
+
+  function updateEnquiry() {
+    if (!form.name) return;
+    setEnquiries(prev => (prev || []).map(e => e.id === editingEnquiry.id ? { ...e, name: form.name, phone: form.phone, email: form.email, address: form.address, source: form.source, msg: form.msg, urgent: form.urgent } : e));
+    setEditingEnquiry(null);
+    setShowAdd(false);
+    setSelected(null);
+    setForm({ name: "", phone: "", email: "", address: "", source: "Phone", msg: "", urgent: false });
+  }
+
+  function openEditEnquiry(enq) {
+    setForm({ name: enq.name || "", phone: enq.phone || "", email: enq.email || "", address: enq.address || "", source: enq.source || "Phone", msg: enq.msg || "", urgent: !!enq.urgent });
+    setEditingEnquiry(enq);
+    setShowAdd(true);
     setSelected(null);
   }
 
@@ -17617,15 +17632,15 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
         ))
       }
 
-      {/* Add Enquiry Modal */}
+      {/* Add/Edit Enquiry Modal */}
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
           <div style={{ ...S.card, maxWidth: 460, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>New Enquiry</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{editingEnquiry ? "Edit Enquiry" : "New Enquiry"}</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="name (full name), phone (phone number), email (email address), address (address where work is needed), msg (what they want e.g. extension quote, boiler service), source (how they got in touch: Phone/Email/Website/Referral)" />
-                <button aria-label="Close" onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+                <button aria-label="Close" onClick={() => { setShowAdd(false); setEditingEnquiry(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -17656,7 +17671,7 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 600 }}>Mark as urgent</div>
               </div>
-              <button style={S.btn("primary", !form.name)} disabled={!form.name} onClick={addEnquiry}>Add Enquiry →</button>
+              <button style={S.btn("primary", !form.name)} disabled={!form.name} onClick={editingEnquiry ? updateEnquiry : addEnquiry}>{editingEnquiry ? "Save Changes" : "Add Enquiry →"}</button>
             </div>
           </div>
         </div>
@@ -17721,6 +17736,7 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
               </div>
             </div>
 
+            <button style={{ ...S.btn("ghost"), width: "100%", justifyContent: "center", padding: "12px", marginBottom: 8 }} onClick={() => openEditEnquiry(selected)}>Edit Enquiry</button>
             <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "12px", marginBottom: 8 }} onClick={() => convertToQuote(selected)}>→ Convert to Quote</button>
             <div style={{ display: "flex", gap: 8 }}>
               <a href={selected.phone ? `tel:${selected.phone}` : "#"} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", textDecoration: "none", opacity: selected.phone ? 1 : 0.4, pointerEvents: selected.phone ? "auto" : "none" }}>📞 Call</a>
@@ -21281,6 +21297,7 @@ function MileageTab({ user, setContextHint }) {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingTrip, setEditingTrip] = useState(null);
 
   useEffect(() => {
     if (!setContextHint) return;
@@ -21327,6 +21344,29 @@ function MileageTab({ user, setContextHint }) {
     await supabase.from("mileage_logs").delete().eq("id", id).eq("user_id", user.id);
     setTrips(p => p.filter(t => t.id !== id));
     setYearMiles(y => y - parseFloat(miles || 0));
+  };
+
+  const updateTrip = async () => {
+    if (!form.miles || !form.date || !editingTrip) return;
+    const oldMiles = parseFloat(editingTrip.miles || 0);
+    const newMiles = parseFloat(form.miles);
+    const value = calcValue(newMiles, yearMiles - oldMiles);
+    const { error } = await supabase.from("mileage_logs").update({
+      date: form.date, from_location: form.from, to_location: form.to,
+      miles: newMiles, job_ref: form.job, purpose: form.purpose, value,
+    }).eq("id", editingTrip.id).eq("user_id", user.id);
+    if (!error) {
+      setTrips(p => p.map(t => t.id === editingTrip.id ? { ...t, date: form.date, from_location: form.from, to_location: form.to, miles: newMiles, job_ref: form.job, purpose: form.purpose, value } : t));
+      setYearMiles(y => y - oldMiles + newMiles);
+      setEditingTrip(null); setShowAdd(false);
+      setForm({ date: new Date().toISOString().split("T")[0], from: "", to: "", miles: "", job: "", purpose: "" });
+    }
+  };
+
+  const openEditTrip = (t) => {
+    setForm({ date: t.date || "", from: t.from_location || "", to: t.to_location || "", miles: String(t.miles || ""), job: t.job_ref || "", purpose: t.purpose || "" });
+    setEditingTrip(t);
+    setShowAdd(true);
   };
 
   const yearValue = calcValue(yearMiles);
@@ -21412,18 +21452,25 @@ function MileageTab({ user, setContextHint }) {
             <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>{t.miles} mi</div>
             <div style={{ fontSize: 11, color: C.green, fontFamily: "'DM Mono',monospace" }}>£{(t.value || 0).toFixed(2)}</div>
           </div>
-          <button onClick={() => del(t.id, t.miles)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "0 4px", flexShrink: 0 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+            <button onClick={(e) => { e.stopPropagation(); openEditTrip(t); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "2px 4px" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button onClick={() => del(t.id, t.miles)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "2px 4px" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
         </div>
       ))}
 
       {showAdd && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => setShowAdd(false)}>
+        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px,env(safe-area-inset-top,52px))", overflowY: "auto" }} onClick={() => { setShowAdd(false); setEditingTrip(null); }}>
           <div onClick={e => e.stopPropagation()} style={{ ...S.card, maxWidth: 480, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Log Trip</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{editingTrip ? "Edit Trip" : "Log Trip"}</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="date (YYYY-MM-DD), from (start location e.g. Home), to (destination), miles (number), purpose (e.g. site visit)" />
-                <button aria-label="Close" onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+                <button aria-label="Close" onClick={() => { setShowAdd(false); setEditingTrip(null); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -21444,8 +21491,8 @@ function MileageTab({ user, setContextHint }) {
               <div><label style={S.label}>Job / Purpose</label><input style={S.input} value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} placeholder="e.g. Boiler service — J. Smith" /></div>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={save} disabled={!form.miles}>Save Trip</button>
-              <button style={S.btn("ghost")} onClick={() => setShowAdd(false)}>Cancel</button>
+              <button style={{ ...S.btn("primary"), flex: 1, justifyContent: "center" }} onClick={editingTrip ? updateTrip : save} disabled={!form.miles}>{editingTrip ? "Save Changes" : "Save Trip"}</button>
+              <button style={S.btn("ghost")} onClick={() => { setShowAdd(false); setEditingTrip(null); }}>Cancel</button>
             </div>
           </div>
         </div>
