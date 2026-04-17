@@ -5,6 +5,7 @@ import HelpCentre from "./HelpCentre.jsx";
 import AssistantSetup from "./AssistantSetup.jsx";
 import FieldMic from "./components/FieldMic.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
+import { prewarmCache } from "./lib/prewarm.js";
 
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
@@ -25065,6 +25066,20 @@ function AppInner() {
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, []);
+
+  // Pre-warm the offline cache shortly after login — fetches every
+  // cached table in the background so the user has everything available
+  // if they go offline immediately. 2s delay lets the app's own initial
+  // loads go first. Fire-and-forget; no UI feedback.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      if (!cancelled) prewarmCache();
+    }, 2000);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [user?.id]);
+
   const [pdfHtml, setPdfHtml] = useState(null);
   const [viewRaw, setViewRaw] = useState(() => {
     const params = new URLSearchParams(window.location.search);
