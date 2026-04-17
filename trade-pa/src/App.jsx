@@ -25871,8 +25871,9 @@ function AppInner() {
     <div style={S.app}>
       {/* ── ONBOARDING OVERLAYS ──────────────────────────────────────── */}
 
-      {/* Step 4: Install prompt */}
-      {onboardingStep === 4 && (
+      {/* Step 4: Install prompt — skip on desktop */}
+      {onboardingStep === 4 && isDesktopBrowser && (() => { advanceOnboarding(5); return null; })()}
+      {onboardingStep === 4 && !isDesktopBrowser && (
         <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
           <div style={{ maxWidth: 340, width: "100%", textAlign: "center" }}>
             <div style={{ width: 64, height: 64, borderRadius: 16, background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
@@ -25912,7 +25913,7 @@ function AppInner() {
           <div style={{ maxWidth: 340, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 10, color: "#888", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>Last step</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: "#f0f0f0", marginBottom: 8 }}>Try your first command</div>
-            <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7, marginBottom: 28 }}>Tap the mic and say...</div>
+            <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7, marginBottom: 28 }}>{isDesktopBrowser ? "Type this in the chat box..." : "Tap the mic and say..."}</div>
             <div style={{ background: "#f59e0b0a", border: "1px solid #f59e0b33", borderRadius: 14, padding: "18px 22px", marginBottom: 28 }}>
               <div style={{ fontSize: 16, color: "#f59e0b", fontFamily: "'DM Mono',monospace", lineHeight: 1.6 }}>"Add a customer called John Smith, 07700 900456"</div>
             </div>
@@ -25933,38 +25934,85 @@ function AppInner() {
         </div>
       )}
 
-      {/* Step 6: Navigation tour overlay */}
+      {/* Step 6: Navigation tour overlay — device-aware */}
       {onboardingStep === 6 && (() => {
-        const TOUR = [
-          { tab: "Home", label: "This is home", desc: "Your PA lives here. Tap the mic to get started.", tabIndex: 0 },
-          { tab: "Jobs", label: "Your jobs", desc: "Job cards, materials, labour, photos, certs, and daywork.", tabIndex: 1 },
-          { tab: "Diary", label: "Your diary", desc: "Your schedule. Book jobs by voice or tap to add.", tabIndex: 2 },
-          { tab: "Accounts", label: "Accounts", desc: "Invoices, quotes, expenses, mileage, CIS — all your money stuff.", tabIndex: 3 },
-          { tab: "People", label: "People", desc: "Customers, subcontractors, and your team.", tabIndex: 4 },
-          { tab: "Settings", label: "Settings", desc: "Tap your avatar to open Settings. Bank details, logo, trade registrations.", tabIndex: -1 },
-          { tab: "Mic", label: "Speak from anywhere", desc: "This mic button follows you to every screen. Tap it — hands-free, no touching your phone.", tabIndex: -2 },
+        const MOBILE_TOUR = [
+          { label: "This is home", desc: "Your PA lives here. Tap the mic to get started.", tabIndex: 0 },
+          { label: "Your jobs", desc: "Job cards, materials, labour, photos, certs, and daywork.", tabIndex: 1 },
+          { label: "Your diary", desc: "Your schedule. Book jobs by voice or tap to add.", tabIndex: 2 },
+          { label: "Accounts", desc: "Invoices, quotes, expenses, mileage, CIS — all your money stuff.", tabIndex: 3 },
+          { label: "People", desc: "Customers, subcontractors, and your team.", tabIndex: 4 },
+          { label: "Settings", desc: "Tap your avatar to open Settings. Bank details, logo, trade registrations.", tabIndex: -1 },
+          { label: "Speak from anywhere", desc: "This mic button follows you to every screen. Tap it — hands-free, no touching your phone.", tabIndex: -2 },
         ];
+        const DESKTOP_TOUR = [
+          { label: "Home", desc: "Your PA lives here. Type commands or use the mic.", group: "home", itemIndex: 0 },
+          { label: "Jobs", desc: "Enquiries, job cards, materials, stock, RAMS, and documents.", group: "work", itemIndex: -1 },
+          { label: "Diary", desc: "Your schedule and reminders. Book jobs by voice or click to add.", group: "diary", itemIndex: -1 },
+          { label: "Accounts", desc: "Invoices, quotes, expenses, mileage, payments, CIS, and reports.", group: "money", itemIndex: -1 },
+          { label: "People", desc: "Customers, subcontractors, and your team.", group: "people", itemIndex: -1 },
+          { label: "Settings", desc: "Click your avatar in the top right. Bank details, logo, trade registrations.", group: "admin", itemIndex: -1 },
+        ];
+        const TOUR = isDesktopBrowser ? DESKTOP_TOUR : MOBILE_TOUR;
         const current = TOUR[navTourStep];
         if (!current) return null;
         const advance = () => { if (navTourStep < TOUR.length - 1) setNavTourStep(s => s + 1); else completeOnboarding(); };
+        const dotRow = (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 5 }}>
+              {TOUR.map((_, i) => <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: i === navTourStep ? "#f59e0b" : "#444" }} />)}
+            </div>
+            <span style={{ fontSize: 12, color: navTourStep < TOUR.length - 1 ? "#f59e0b" : "#4ade80", fontWeight: 600 }}>
+              {navTourStep < TOUR.length - 1 ? (isDesktopBrowser ? "Click to continue" : "Tap to continue") : "Done — let's go!"}
+            </span>
+          </div>
+        );
+        const tooltip = (
+          <div style={{ background: "#1a1a1a", border: "1.5px solid #f59e0b", borderRadius: 14, padding: "14px 18px", maxWidth: 280, cursor: "pointer" }} onClick={advance}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>{current.label}</div>
+            <div style={{ fontSize: 12, color: "#aaa", lineHeight: 1.6, marginBottom: 10 }}>{current.desc}</div>
+            {dotRow}
+          </div>
+        );
+
+        if (isDesktopBrowser) {
+          // Desktop: highlight sidebar groups
+          const sidebarGroups = ["home", "work", "diary", "money", "people", "admin"];
+          const highlightIndex = sidebarGroups.indexOf(current.group);
+          return (
+            <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#000c", display: "flex" }} onClick={advance}>
+              {/* Fake sidebar with highlighted group */}
+              <div style={{ width: 220, flexShrink: 0, padding: "16px 8px", background: "#111", borderRight: "1px solid #333" }}>
+                {sidebarGroups.map((gId, gi) => {
+                  const isActive = gi === highlightIndex;
+                  const labels = { home: "Home", work: "Jobs", diary: "Diary", money: "Accounts", people: "People", admin: "Admin" };
+                  return (
+                    <div key={gId} style={{ marginBottom: 14, opacity: isActive ? 1 : 0.15 }}>
+                      <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 12px 6px", fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>{labels[gId]}</div>
+                      {isActive && (
+                        <div style={{ padding: "7px 12px", borderRadius: 10, background: "#f59e0b", color: "#000", fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono',monospace", boxShadow: "0 0 0 2px #f59e0b66" }}>
+                          {labels[gId] === "Home" ? "Home" : labels[gId]}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Tooltip positioned next to sidebar */}
+              <div style={{ flex: 1, display: "flex", alignItems: highlightIndex <= 2 ? "flex-start" : "center", justifyContent: "flex-start", padding: "80px 40px" }} onClick={e => e.stopPropagation()}>
+                {tooltip}
+              </div>
+            </div>
+          );
+        }
+
+        // Mobile: highlight bottom tabs
         return (
           <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#000c", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
             onClick={advance}>
             {/* Tooltip */}
             <div style={{ position: "absolute", bottom: current.tabIndex === -2 ? 90 : current.tabIndex === -1 ? "auto" : 66, top: current.tabIndex === -1 ? 56 : "auto", left: 16, right: 16, display: "flex", justifyContent: current.tabIndex === -1 ? "flex-end" : current.tabIndex === -2 ? "flex-end" : "center" }} onClick={e => e.stopPropagation()}>
-              <div style={{ background: "#1a1a1a", border: "1.5px solid #f59e0b", borderRadius: 14, padding: "14px 18px", maxWidth: 280 }}
-                onClick={advance}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>{current.label}</div>
-                <div style={{ fontSize: 12, color: "#aaa", lineHeight: 1.6, marginBottom: 10 }}>{current.desc}</div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ display: "flex", gap: 5 }}>
-                    {TOUR.map((_, i) => <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: i === navTourStep ? "#f59e0b" : "#444" }} />)}
-                  </div>
-                  <span style={{ fontSize: 12, color: navTourStep < TOUR.length - 1 ? "#f59e0b" : "#4ade80", fontWeight: 600 }}>
-                    {navTourStep < TOUR.length - 1 ? "Tap to continue" : "Done — let's go!"}
-                  </span>
-                </div>
-              </div>
+              {tooltip}
             </div>
             {/* Highlighted nav bar */}
             {current.tabIndex >= 0 && (
