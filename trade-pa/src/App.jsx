@@ -1022,6 +1022,11 @@ function buildInvoiceHTML(brand, inv) {
   const rawDesc = inv.desc || inv.description || "Service";
 
   // Parse line items — support stored lineItems array, or pipe-separated "desc|amount" format, or plain text
+  // Safety: lineItems may arrive as a JSON string from Supabase — parse it first
+  let rawLineItems = inv.lineItems || inv.line_items;
+  if (typeof rawLineItems === "string") { try { rawLineItems = JSON.parse(rawLineItems); } catch { rawLineItems = null; } }
+  if (!Array.isArray(rawLineItems)) rawLineItems = null;
+
   let lineItems;
   if (cisEnabled) {
     // CIS invoices: labour as single line, materials as individual items
@@ -1032,8 +1037,8 @@ function buildInvoiceHTML(brand, inv) {
       : cisMaterials > 0 ? [{ description: "Materials", amount: cisMaterials }] : [];
     matItems.forEach(m => lineItems.push({ description: m.description || m.desc, amount: parseFloat(m.amount) || 0 }));
     if (lineItems.length === 0) lineItems.push({ description: rawDesc, amount: grossAmount });
-  } else if (inv.lineItems && inv.lineItems.length > 0) {
-    lineItems = inv.lineItems.map(l => ({
+  } else if (rawLineItems && rawLineItems.length > 0) {
+    lineItems = rawLineItems.map(l => ({
       description: l.description || l.desc || "",
       amount: l.amount !== "" && l.amount != null && !isNaN(parseFloat(l.amount)) ? parseFloat(l.amount) : null,
     })).filter(l => l.description);
