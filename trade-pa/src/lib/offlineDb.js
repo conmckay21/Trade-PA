@@ -2,16 +2,9 @@
 //
 // IndexedDB store for the offline read-cache and pending-writes queue.
 //
-// Phase 1 Session 1: schema defined, no data flows through yet.
-// Phase 1 Session 2 (NOW): cache read/write/merge helpers added, used
-//   by db.js when queries hit cached tables.
-// Phase 1 Session 4: pending_writes queue wired up.
-//
-// Schema:
-//   One object store per cached Supabase table (Tier 1 + Tier 2).
-//     Keyed on `id`. Indexed on `user_id` and `updated_at`.
-//   One `pending_writes` store for the offline write queue (dormant).
-//   One `_cache_meta` store for bookkeeping.
+// Phase 1 Session 1: schema defined.
+// Phase 1 Session 2: cache read/write/merge helpers added.
+// Phase 1 Session 4 (NOW): pending_writes helpers activated.
 
 import { openDB } from "idb";
 
@@ -98,21 +91,7 @@ export function isCached(table) {
 }
 
 // ─── Row-level cache helpers ─────────────────────────────────────────
-//
-// Session 2 uses these from db.js to mirror Supabase reads into IDB
-// and to serve reads from IDB when offline.
 
-/**
- * Write rows to the cache. If a row with the same id already exists,
- * merges the columns (new row's fields overwrite old ones, but any
- * columns missing in the new row are preserved from the old row).
- *
- * This merge behaviour matters because different queries select
- * different column subsets. Without merge, cache rows would keep
- * losing columns as narrower queries overwrote them.
- *
- * Silently no-ops for non-cached tables and when IDB is unavailable.
- */
 export async function cacheRows(table, rows) {
   if (!isCached(table)) return;
   if (!Array.isArray(rows)) rows = [rows];
@@ -125,7 +104,7 @@ export async function cacheRows(table, rows) {
     const tx = idb.transaction(table, "readwrite");
     const store = tx.objectStore(table);
     for (const row of rows) {
-      if (!row || row.id == null) continue; // skip rows without id
+      if (!row || row.id == null) continue;
       const existing = await store.get(row.id);
       const merged = existing ? { ...existing, ...row } : row;
       await store.put(merged);
@@ -133,16 +112,10 @@ export async function cacheRows(table, rows) {
     await tx.done;
     await writeMeta(`${table}:last_cached`, Date.now());
   } catch (err) {
-    // Cache is a performance/reliability layer — a write failure here
-    // must never break the caller. Log and move on.
     console.warn(`[offlineDb] cacheRows(${table}) failed:`, err);
   }
 }
 
-/**
- * Read every row from a cached table. Caller applies filter/order/limit
- * in-memory afterwards (see applyQuerySpec in db.js).
- */
 export async function readCachedRows(table) {
   if (!isCached(table)) return [];
   const idb = await getOfflineDb();
@@ -155,10 +128,6 @@ export async function readCachedRows(table) {
   }
 }
 
-/**
- * Delete specific row ids from the cache. Called on successful Supabase
- * deletes, so subsequent offline reads don't return zombie rows.
- */
 export async function deleteCachedRows(table, ids) {
   if (!isCached(table)) return;
   if (!Array.isArray(ids)) ids = [ids];
@@ -172,6 +141,34 @@ export async function deleteCachedRows(table, ids) {
     await tx.done;
   } catch (err) {
     console.warn(`[offlineDb] deleteCachedRows(${table}) failed:`, err);
+  }
+}
+
+/**
+ * Clear the _pendingSync marker on specific cached rows. Used after a
+ * queued write successfully syncs to Supabase — the row is now confirmed
+ * on the server, so the UI's pending-indicator can be removed.
+ */
+export async function clearPendingFlag(table, ids) {
+  if (!isCached(table)) return;
+  if (!Array.isArray(ids)) ids = [ids];
+  if (ids.length === 0) return;
+
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    const tx = idb.transaction(table, "readwrite");
+    const store = tx.objectStore(table);
+    for (const id of ids) {
+      const row = await store.get(id);
+      if (row && row._pendingSync) {
+        delete row._pendingSync;
+        await store.put(row);
+      }
+    }
+    await tx.done;
+  } catch (err) {
+    console.warn(`[offlineDb] clearPendingFlag(${table}) failed:`, err);
   }
 }
 
@@ -198,7 +195,6 @@ export async function readMeta(key) {
   }
 }
 
-/** Used on logout — clears every cached row. Preserves schema. */
 export async function clearAllCache() {
   const idb = await getOfflineDb();
   if (!idb) return;
@@ -214,7 +210,6 @@ export async function clearAllCache() {
   await tx.done;
 }
 
-/** Row counts per store — used in diagnostics. */
 export async function getCacheStats() {
   const idb = await getOfflineDb();
   if (!idb) return null;
@@ -224,4 +219,82 @@ export async function getCacheStats() {
   }
   stats.pending_writes = await idb.count("pending_writes");
   return stats;
+}
+
+// ─── Pending writes queue helpers ─────────────────────────────────────
+//
+// Activated in Session 4. Wraps IDB operations on the pending_writes
+// store so writeQueue.js can stay focused on the replay logic rather
+// than IDB ceremony.
+
+/**
+ * Append a new pending write. Returns the auto-incremented queue id.
+ */
+export async function addPendingWrite(entry) {
+  const idb = await getOfflineDb();
+  if (!idb) throw new Error("[offlineDb] IndexedDB unavailable");
+  const id = await idb.add("pending_writes", {
+    ...entry,
+    status: entry.status || "pending",
+    attempts: entry.attempts || 0,
+    created_at: entry.created_at || new Date().toISOString(),
+  });
+  return id;
+}
+
+/**
+ * List pending writes. `statusFilter` defaults to "pending" — pass null
+ * to get everything (including 'failed' for diagnostic views).
+ * Sorted oldest-first so callers replay in the order writes happened.
+ */
+export async function listPendingWrites(statusFilter = "pending") {
+  const idb = await getOfflineDb();
+  if (!idb) return [];
+  try {
+    const all = await idb.getAll("pending_writes");
+    const filtered = statusFilter == null
+      ? all
+      : all.filter((e) => e.status === statusFilter);
+    filtered.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return filtered;
+  } catch (err) {
+    console.warn("[offlineDb] listPendingWrites failed:", err);
+    return [];
+  }
+}
+
+/**
+ * Count pending writes — used for banner display. Cheap call, but we
+ * swallow errors because a count failure shouldn't break the UI.
+ */
+export async function countPendingWrites() {
+  const idb = await getOfflineDb();
+  if (!idb) return 0;
+  try {
+    return await idb.countFromIndex("pending_writes", "status", "pending");
+  } catch {
+    return 0;
+  }
+}
+
+export async function updatePendingWrite(id, updates) {
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    const existing = await idb.get("pending_writes", id);
+    if (!existing) return;
+    await idb.put("pending_writes", { ...existing, ...updates });
+  } catch (err) {
+    console.warn(`[offlineDb] updatePendingWrite(${id}) failed:`, err);
+  }
+}
+
+export async function deletePendingWrite(id) {
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    await idb.delete("pending_writes", id);
+  } catch (err) {
+    console.warn(`[offlineDb] deletePendingWrite(${id}) failed:`, err);
+  }
 }
