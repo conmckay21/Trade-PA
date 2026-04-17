@@ -6,6 +6,7 @@ import AssistantSetup from "./AssistantSetup.jsx";
 import FieldMic from "./components/FieldMic.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
 import { prewarmCache } from "./lib/prewarm.js";
+import { drainQueue } from "./lib/writeQueue.js";
 
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
@@ -25078,6 +25079,17 @@ function AppInner() {
       if (!cancelled) prewarmCache();
     }, 2000);
     return () => { cancelled = true; clearTimeout(t); };
+  }, [user?.id]);
+
+  // Drain any pending writes queued from a previous session. Covers the
+  // case where the user wrote offline, then closed the tab before signal
+  // returned. OfflineBanner handles the live offline→online transition;
+  // this handles "user already online when app starts up".
+  useEffect(() => {
+    if (!user?.id) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    const t = setTimeout(() => { drainQueue(); }, 3000);
+    return () => clearTimeout(t);
   }, [user?.id]);
 
   const [pdfHtml, setPdfHtml] = useState(null);
