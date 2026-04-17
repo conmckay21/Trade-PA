@@ -7,14 +7,10 @@
 // Session 2.1: Proxy re-wrap fix.
 // Session 4: offline write queue.
 // Session 4.1: network-failure detection (status:0 + 'Failed to fetch').
-// Session 4.2 (NOW): pass spec.single / spec.maybeSingle through to the
-//   offline handler so .insert(x).select().single() returns the row as
-//   an object, not an array. Without this, callers that destructure
-//   `data.id` or `data.hours` saw `undefined` for every field because
-//   `data` was actually an array.
-//
-// Kill switch: `localStorage.tradepa_disable_cache = "1"` bypasses the
-// entire caching+queue layer.
+// Session 4.2: .single() / .maybeSingle() response-shape fix.
+// Session 4b: no changes in this file — BIGINT temp-id handling lives
+//   entirely in writeQueue.js. db.js just routes writes there; writeQueue
+//   now accepts customers/materials inserts and handles them.
 
 import { supabase } from "../supabase.js";
 import {
@@ -24,8 +20,6 @@ import {
   deleteCachedRows,
 } from "./offlineDb.js";
 import { handleOfflineWrite } from "./writeQueue.js";
-
-// ─── Kill switch ─────────────────────────────────────────────────────
 
 function cacheDisabled() {
   try {
@@ -52,8 +46,6 @@ function isNetworkFailure(result) {
   return false;
 }
 
-// ─── Query spec tracking ──────────────────────────────────────────────
-
 function makeSpec(table) {
   return {
     table,
@@ -72,8 +64,6 @@ const FILTER_METHODS = new Set([
   "eq", "neq", "gt", "gte", "lt", "lte",
   "like", "ilike", "is", "in",
 ]);
-
-// ─── Filter application in-memory (for offline reads) ────────────────
 
 function matchValue(row, col, op, val) {
   const cell = row?.[col];
@@ -134,9 +124,6 @@ function applyQuerySpec(rows, spec) {
   return out;
 }
 
-// Build the full offline-write payload including chain modifiers. Used
-// everywhere we route to the offline handler so .single()/.maybeSingle()
-// are honoured consistently.
 function buildOfflineSpec(spec) {
   return {
     table: spec.table,
@@ -148,14 +135,9 @@ function buildOfflineSpec(spec) {
   };
 }
 
-// ─── The main execution step ──────────────────────────────────────────
-
 async function executeWithCache(realBuilder, spec) {
-  // ── Writes ──────────────────────────────────────────────────────
   if (spec.operation !== "select") {
-    if (cacheDisabled()) {
-      return await realBuilder;
-    }
+    if (cacheDisabled()) return await realBuilder;
 
     if (isOnline()) {
       let result;
@@ -197,7 +179,6 @@ async function executeWithCache(realBuilder, spec) {
     return await handleOfflineWrite(buildOfflineSpec(spec));
   }
 
-  // ── Reads ───────────────────────────────────────────────────────
   if (!isCached(spec.table) || cacheDisabled()) {
     return await realBuilder;
   }
@@ -248,8 +229,6 @@ async function readFromCache(spec) {
   }
   return { data: filtered, error: null, count: filtered.length };
 }
-
-// ─── Builder proxy ────────────────────────────────────────────────────
 
 function wrapBuilder(realBuilder, spec) {
   const proxy = new Proxy(realBuilder, {
@@ -313,8 +292,6 @@ function wrapBuilder(realBuilder, spec) {
 
   return proxy;
 }
-
-// ─── db client ────────────────────────────────────────────────────────
 
 export const db = new Proxy(supabase, {
   get(target, prop) {
