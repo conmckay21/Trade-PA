@@ -6992,7 +6992,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (dupEnq) return ""; // Silent dedup
           const enq = { name: input.name, source: input.source, msg: input.message, time: "Just now", urgent: input.urgent || false };
           setEnquiries(prev => [enq, ...(prev || [])]);
-          setLastAction({ type: "enquiry", label: `${input.name} via ${input.source}`, view: "Dashboard" });
+          setLastAction({ type: "enquiry", label: `${input.name} via ${input.source}`, view: "Enquiries" });
           return `Enquiry logged from ${input.name} via ${input.source}.`;
         }
         case "set_reminder": {
@@ -7086,7 +7086,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const match = (enquiries || []).find(e => e.name.toLowerCase().includes(input.name.toLowerCase()));
           if (!match) return `Couldn't find an enquiry from "${input.name}".`;
           setEnquiries(prev => (prev || []).filter(e => e !== match));
-          setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Dashboard" });
+          setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Enquiries" });
           return `Enquiry from ${match.name} deleted.`;
         }
         case "delete_customer": {
@@ -24207,11 +24207,12 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
 
 
 const NAV_GROUPS = [
-  { id: "work",  label: "Work",   icon: "📋", views: ["AI Assistant", "Dashboard", "Schedule", "Enquiries", "Jobs", "Customers"] },
-  { id: "money", label: "Accounts",  icon: "£",  views: ["Invoices", "Quotes", "Payments", "Expenses", "CIS", "Reports"] },
-  { id: "people",label: "People", icon: "👷", views: ["Subcontractors", "Reviews"] },
-  { id: "site",  label: "Site",   icon: "🏗", views: ["Materials", "Stock", "Mileage", "RAMS", "Documents"] },
-  { id: "admin", label: "Admin",  icon: "⚙️", views: ["Inbox", "Reminders", "Settings"] },
+  { id: "home",   label: "Home",     views: ["AI Assistant"] },
+  { id: "work",   label: "Jobs",     views: ["Enquiries", "Jobs", "Materials", "Stock", "RAMS", "Documents"] },
+  { id: "diary",  label: "Diary",    views: ["Schedule", "Reminders"] },
+  { id: "money",  label: "Accounts", views: ["Invoices", "Quotes", "Expenses", "Mileage", "Payments", "CIS", "Reports"] },
+  { id: "people", label: "People",   views: ["Customers", "Subcontractors", "Reviews"] },
+  { id: "admin",  label: "Admin",    views: ["Inbox", "Settings"] },
 ];
 // Flat list still used for permissions checks
 const VIEWS = NAV_GROUPS.flatMap(g => g.views);
@@ -25350,7 +25351,7 @@ function AppInner() {
     setJobsRaw([]); setInvoicesRaw([]); setEnquiriesRaw([]);
     setMaterialsRaw([]); setCustomersRaw([]);
     setCompanyId(null); setCompanyName(""); setMembers([]);
-    setUser(null); setView("Dashboard");
+    setUser(null); setView("AI Assistant");
   };
 
   // ── State declarations ────────────────────────────────────────────────────
@@ -26313,18 +26314,42 @@ function AppInner() {
                 return !perms || perms[v] !== false;
               });
               if (!allowed.length) return null;
+              const SIDEBAR_ICONS = {
+                "AI Assistant": "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z",
+                "Enquiries": "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z",
+                "Jobs": "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 3h6v4H9V3z",
+                "Materials": "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+                "Stock": "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z",
+                "RAMS": "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
+                "Documents": "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M16 13H8M16 17H8M10 9H8",
+                "Schedule": "M3 5a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V5zM16 2v4M8 2v4M3 10h18",
+                "Reminders": "M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0",
+                "Invoices": "M2 6a2 2 0 012-2h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM12 8v8M8 12h8",
+                "Quotes": "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
+                "Expenses": "M12 1v22M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6",
+                "Mileage": "M12 22s-8-4.5-8-11.8A8 8 0 0112 2a8 8 0 018 8.2c0 7.3-8 11.8-8 11.8zM12 7v5l3 2",
+                "Payments": "M2 6a2 2 0 012-2h16a2 2 0 012 2v4H2V6zM2 14h20v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z",
+                "CIS": "M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2zM9 7h6M9 11h6M9 15h4",
+                "Reports": "M18 20V10M12 20V4M6 20v-6",
+                "Customers": "M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M8.5 3a4 4 0 110 8 4 4 0 010-8zM20 8v6M23 11h-6",
+                "Subcontractors": "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 3a4 4 0 110 8 4 4 0 010-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
+                "Reviews": "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
+                "Inbox": "M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+                "Settings": "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z",
+              };
               return (
                 <div key={g.id} style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 12px 6px", fontWeight: 700 }}>{g.label}</div>
+                  <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 12px 6px", fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>{g.label}</div>
                   {allowed.map(v => {
                     const active = view === v;
+                    const label = v === "AI Assistant" ? "Home" : v;
                     return (
                       <button
                         key={v}
                         onClick={() => { setActiveCategory(g.id); setView(v); }}
                         style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          width: "100%", padding: "8px 12px", marginBottom: 1,
+                          display: "flex", alignItems: "center", gap: 10,
+                          width: "100%", padding: "7px 12px", marginBottom: 1,
                           border: "none", borderRadius: 10,
                           background: active ? C.amber : "transparent",
                           color: active ? "#000" : C.text,
@@ -26336,8 +26361,8 @@ function AppInner() {
                         onMouseEnter={e => { if (!active) e.currentTarget.style.background = C.surfaceHigh; }}
                         onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
                       >
-                        <span style={{ fontSize: 13, opacity: active ? 1 : 0.85 }}>{g.icon}</span>
-                        <span>{v === "AI Assistant" ? "🏠 Home" : v}</span>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={active ? "#000" : C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d={SIDEBAR_ICONS[v] || "M4 6h16M4 12h16M4 18h16"}/></svg>
+                        <span>{label}</span>
                       </button>
                     );
                   })}
