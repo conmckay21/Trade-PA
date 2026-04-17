@@ -9,17 +9,16 @@
 //     filter / order / limit spec the caller requested.
 //   - Writes pass through unchanged. Session 4 will queue them offline.
 //
-// Design choice: intercepts at .from() only. Supabase's query builder is
-// then Proxy-wrapped so chained methods (.select/.eq/.order/...) record
-// a spec, and at .then() we decide: execute against Supabase, or replay
-// the spec against the IndexedDB cache.
+// Session 2.1 FIX: re-wrap any new builder returned by a chained call.
+// Supabase's .select() returns a different builder class than .from(),
+// so `result === target` is false on that boundary. Previous version
+// handed control back to the raw builder on this transition, which meant
+// the cache code never fired for queries that used .select(). The fix
+// re-wraps any thenable builder so the Proxy stays active through the
+// entire chain, with the shared spec carrying across.
 //
-// Everything outside .from() — auth, storage, rpc — passes through
-// directly on the raw client.
-//
-// Kill switch: set `localStorage.tradepa_disable_cache = "1"` in DevTools
-// to bypass the entire caching layer and revert to raw Supabase behaviour.
-// Useful if Session 2 ever causes a production issue — one line, no deploy.
+// Kill switch: `localStorage.tradepa_disable_cache = "1"` in DevTools
+// bypasses the caching layer entirely.
 
 import { supabase } from "../supabase.js";
 import {
@@ -47,26 +46,20 @@ function isOnline() {
 }
 
 // ─── Query spec tracking ──────────────────────────────────────────────
-//
-// As the caller chains methods on the builder, we accumulate a spec
-// that describes the query. At .then() time we either execute the real
-// query (online) or replay the spec against the local cache (offline).
 
 function makeSpec(table) {
   return {
     table,
-    operation: null,   // 'select' | 'insert' | 'update' | 'upsert' | 'delete'
-    filters: [],       // [{ op, col, val }]
-    order: null,       // { col, ascending }
+    operation: null,
+    filters: [],
+    order: null,
     limit: null,
-    range: null,       // { from, to }
+    range: null,
     single: false,
     maybeSingle: false,
   };
 }
 
-// Methods that accumulate spec state (for cache replay).
-// Everything else is passed straight through to Supabase.
 const FILTER_METHODS = new Set([
   "eq", "neq", "gt", "gte", "lt", "lte",
   "like", "ilike", "is", "in",
@@ -84,7 +77,6 @@ function matchValue(row, col, op, val) {
     case "lt": return cell < val;
     case "lte": return cell <= val;
     case "is":
-      // `.is(col, null)` / `.is(col, true)` / `.is(col, false)`
       if (val === null) return cell === null || cell === undefined;
       return cell === val;
     case "in":
@@ -103,7 +95,7 @@ function matchValue(row, col, op, val) {
       }
     }
     default:
-      return true; // unknown op — don't filter out
+      return true;
   }
 }
 
@@ -137,12 +129,8 @@ function applyQuerySpec(rows, spec) {
 // ─── The main execution step ──────────────────────────────────────────
 
 async function executeWithCache(realBuilder, spec) {
-  // Writes always go to Supabase. Offline writes fail for now (Session 4
-  // will queue them).
   if (spec.operation !== "select") {
     const result = await realBuilder;
-    // After successful writes, keep the cache in sync so subsequent
-    // offline reads don't return stale data.
     if (!result.error && isCached(spec.table)) {
       if (spec.operation === "insert" || spec.operation === "upsert" || spec.operation === "update") {
         if (result.data) {
@@ -150,9 +138,6 @@ async function executeWithCache(realBuilder, spec) {
           await cacheRows(spec.table, rows);
         }
       } else if (spec.operation === "delete") {
-        // We don't know the ids that were deleted (Supabase doesn't
-        // always return them). Best-effort: if any filter is eq on id,
-        // evict that id from the cache.
         const idFilter = spec.filters.find(
           f => f.op === "eq" && (f.col === "id" || f.col.endsWith("_id"))
         );
@@ -162,25 +147,19 @@ async function executeWithCache(realBuilder, spec) {
     return result;
   }
 
-  // Reads of non-cached tables pass through (AI context, subscriptions,
-  // email connections, etc.).
   if (!isCached(spec.table) || cacheDisabled()) {
     return await realBuilder;
   }
 
-  // Reads of cached tables: always-fresh-when-online, cache-as-fallback.
   if (isOnline()) {
     try {
       const result = await realBuilder;
       if (!result.error && result.data) {
         const rows = Array.isArray(result.data) ? result.data : [result.data];
-        // Fire-and-forget cache write — don't block the caller.
         cacheRows(spec.table, rows);
       }
       return result;
     } catch (err) {
-      // Network hiccup even though navigator says online — fall through
-      // to cache rather than propagating the failure.
       return await readFromCache(spec);
     }
   }
@@ -194,8 +173,6 @@ async function readFromCache(spec) {
 
   if (spec.single) {
     if (filtered.length === 0) {
-      // Match Supabase's "no rows" error shape so callers that branch
-      // on error.code still work.
       return {
         data: null,
         error: {
@@ -214,11 +191,15 @@ async function readFromCache(spec) {
 }
 
 // ─── Builder proxy ────────────────────────────────────────────────────
+//
+// FIX: re-wrap any thenable builder returned by a chained method.
+// Supabase returns a new builder class from .select() etc., so we can't
+// just rely on identity check — we have to detect "this is a query
+// builder" and keep the Proxy active across the transition.
 
 function wrapBuilder(realBuilder, spec) {
   const proxy = new Proxy(realBuilder, {
     get(target, prop) {
-      // The await moment — execute against cache or network
       if (prop === "then") {
         return (onFulfilled, onRejected) =>
           executeWithCache(target, spec).then(onFulfilled, onRejected);
@@ -237,7 +218,6 @@ function wrapBuilder(realBuilder, spec) {
         else if (FILTER_METHODS.has(prop)) {
           spec.filters.push({ op: prop, col: args[0], val: args[1] });
         } else if (prop === "match") {
-          // .match({ col: val, ... }) — shorthand for multiple eq
           const obj = args[0] || {};
           for (const [col, val] of Object.entries(obj)) {
             spec.filters.push({ op: "eq", col, val });
@@ -258,9 +238,19 @@ function wrapBuilder(realBuilder, spec) {
         }
 
         const result = value.apply(target, args);
-        // Supabase builder methods return `this` for chaining. Keep
-        // callers on the proxy so chain interception continues.
-        return result === target ? proxy : result;
+
+        // Same builder returned — stay on the current proxy.
+        if (result === target) return proxy;
+
+        // New thenable builder (e.g. .select() returning FilterBuilder).
+        // Re-wrap so the Proxy stays active for the rest of the chain,
+        // with the same accumulated spec.
+        if (result && typeof result === "object" && typeof result.then === "function") {
+          return wrapBuilder(result, spec);
+        }
+
+        // Anything else (unusual) — return as-is.
+        return result;
       };
     },
   });
@@ -269,10 +259,6 @@ function wrapBuilder(realBuilder, spec) {
 }
 
 // ─── db client ────────────────────────────────────────────────────────
-//
-// Proxies the top-level supabase client. `.from()` returns a wrapped
-// builder; everything else (.auth, .storage, .rpc, .channel, ...) passes
-// through to the raw client unchanged.
 
 export const db = new Proxy(supabase, {
   get(target, prop) {
@@ -286,6 +272,4 @@ export const db = new Proxy(supabase, {
   },
 });
 
-// Escape hatch for code that must deliberately bypass the wrapper
-// (auth listeners, realtime channels, anything that shouldn't be cached).
 export { supabase };
