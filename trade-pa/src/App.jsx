@@ -5533,7 +5533,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 500, hf_hours: 5 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 500, hf_hours: 5 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {} }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -5591,6 +5591,8 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   }, [user?.id]);
   const [supportMode, setSupportMode] = useState(false);
   const ttsEnabledRef = useRef(true);
+  const onboardingStepRef = useRef(onboardingStep);
+  useEffect(() => { onboardingStepRef.current = onboardingStep; }, [onboardingStep]);
   const ttsAudioRef = useRef(null);
   const audioUnlockedRef = useRef(false);
   // Single persistent Audio element — iOS unlocks per-element, not globally.
@@ -6626,9 +6628,19 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           phone: { type: "string", description: "Phone number" },
           email: { type: "string", description: "Email address" },
           address: { type: "string", description: "Business address" },
-          tradeType: { type: "string", description: "What trade they do e.g. plumber, electrician, builder" },
+          tradeType: { type: "string", description: "What trade they do e.g. plumber, electrician, builder, gas, multi-trade" },
           vatNumber: { type: "string", description: "VAT number if registered" },
           vatEnabled: { type: "boolean", description: "Whether they are VAT registered" },
+          gasSafeNumber: { type: "string", description: "Gas Safe register number — gas engineers only" },
+          niceicNumber: { type: "string", description: "NICEIC number — electricians only" },
+          napitNumber: { type: "string", description: "NAPIT number — electricians only (alternative to NICEIC)" },
+          oftecNumber: { type: "string", description: "OFTEC number — oil heating engineers only" },
+          mcsNumber: { type: "string", description: "MCS number — renewable energy installers only" },
+          fensaNumber: { type: "string", description: "FENSA number — window/door installers only" },
+          bankName: { type: "string", description: "Bank name e.g. Barclays" },
+          accountName: { type: "string", description: "Account holder name" },
+          sortCode: { type: "string", description: "Sort code e.g. 20-45-67" },
+          accountNumber: { type: "string", description: "Account number e.g. 12345678" },
         },
       },
     },
@@ -7238,7 +7250,21 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (input.tradeType) updates.tradeType = input.tradeType;
           if (input.vatNumber) updates.vatNumber = input.vatNumber;
           if (typeof input.vatEnabled === "boolean") updates.vatEnabled = input.vatEnabled;
+          if (input.gasSafeNumber) updates.gasSafeNumber = input.gasSafeNumber;
+          if (input.niceicNumber) updates.niceicNumber = input.niceicNumber;
+          if (input.napitNumber) updates.napitNumber = input.napitNumber;
+          if (input.oftecNumber) updates.oftecNumber = input.oftecNumber;
+          if (input.mcsNumber) updates.mcsNumber = input.mcsNumber;
+          if (input.fensaNumber) updates.fensaNumber = input.fensaNumber;
+          if (input.bankName) updates.bankName = input.bankName;
+          if (input.accountName) updates.accountName = input.accountName;
+          if (input.sortCode) updates.sortCode = input.sortCode;
+          if (input.accountNumber) updates.accountNumber = input.accountNumber;
           setBrand(b => ({ ...b, ...updates }));
+          // Advance onboarding if business details just got saved
+          if (updates.tradingName && onboardingStepRef.current === 2) {
+            setTimeout(() => advanceOnboarding(3), 1500);
+          }
           return `Business details saved: ${Object.keys(updates).join(", ")}.`;
         }
         case "list_invoices": {
@@ -8979,7 +9005,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   const isNewUser = !brand.tradingName || brand.tradingName === "" || brand.tradingName === "Your Business";
 
   const onboardingBlock = isNewUser
-    ? "ONBOARDING MODE: This is a new user who has not set up their business yet. Your FIRST job is to welcome them warmly and learn about their business through natural conversation. Ask ONE question at a time. Collect: their name, business/trading name, what trade they do, phone number, whether they are VAT registered, and their address. After collecting these, use the update_brand tool to save everything. Be warm and human. Example opening: Hi! I am Trade PA, your new business assistant. I am going to make running your business a lot easier. First things first, what is your name?"
+    ? "ONBOARDING MODE: This is a brand new user setting up their business. Your job is to welcome them and collect their business details through natural conversation. Ask ONE question at a time — never batch multiple questions.\n\nCOLLECTION ORDER:\n1. Their name (\"What's your name?\")\n2. Trading name (\"And the name of your business — the one that goes on invoices?\")\n3. Trade type (\"What trade are you in? Gas, plumbing, electrical, building, oil, renewables, or a mix?\")\n4. TRADE-CONDITIONAL CERTS — ask ONLY what's relevant to their trade:\n   - Gas / heating → \"What's your Gas Safe register number?\"\n   - Electrical → \"Are you NICEIC or NAPIT? What's your number?\"\n   - Oil heating → \"What's your OFTEC registration number?\"\n   - Renewables / solar → \"What's your MCS number?\"\n   - Windows / doors → \"What's your FENSA number?\"\n   - Plumber / builder / decorator / landscaper → SKIP certs entirely. Do NOT ask.\n   - Multi-trade → ask each relevant one, e.g. gas+electrical = Gas Safe + NICEIC\n   CRITICAL: NEVER ask a tradesperson for a certification that doesn't apply to their trade.\n5. Phone number (\"What's your business phone number?\")\n6. Email (\"And the email you want on invoices and quotes?\")\n7. Business address\n8. VAT status (\"Are you VAT registered?\" → if yes: \"What's the number?\")\n\nIf the user volunteers multiple details at once (e.g. \"I'm Connor from CR Heating, gas and plumbing\"), extract everything they said and only ask for what's still missing.\n\nAfter collecting all details, call the update_brand tool to save everything. Include gasSafeNumber, niceicNumber, napitNumber, oftecNumber, mcsNumber, fensaNumber in the tool call if collected.\n\nAfter saving, say: \"All saved! When you send your first invoice I'll ask for your bank details. Everything else you can update in Settings or just tell me.\"\n\nBe warm, natural, and concise. Use UK English. No corporate speak."
     : ("You are assisting " + (brand.tradingName || "this business") + ". Be warm, concise, and proactive — like a PA who knows the business well.");
 
   // ─────────────────────────────────────────────────────────────────────
@@ -9162,15 +9188,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     + (overlayContext ? `\n\nCURRENT SCREEN CONTEXT (user invoked you from a specific screen — act on THIS record first unless they say otherwise):\n${overlayContext}\n` : "");
 
 
-  // Auto-trigger onboarding for new users — placed here so isNewUser and send are both defined
+  // Auto-trigger onboarding for new users — only fires when onboarding step is 2 (AI chat)
   useEffect(() => {
-    if (isNewUser && messages.length === 0 && !loading) {
+    if (isNewUser && onboardingStepRef.current === 2 && messages.length === 0 && !loading) {
       const timer = setTimeout(() => {
         send("__onboarding_start__");
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [onboardingStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const send = async (text) => {
     if (!text.trim() || loading) return;
@@ -24836,6 +24862,51 @@ function AppInner() {
   const [userCommands, setUserCommands] = useState([]);
   const now = Date.now();
 
+  // ── Onboarding flow ────────────────────────────────────────────────
+  const [onboardingStep, setOnboardingStep] = useState(0); // 0=check, 1=welcome, 2=ai-chat, 3=assistant-setup, 4=install, 5=try-voice, 6=nav-tour, 99=complete
+  const onboardingStepRef = useRef(0);
+  useEffect(() => { onboardingStepRef.current = onboardingStep; }, [onboardingStep]);
+
+  // Persist onboarding step
+  useEffect(() => {
+    if (!user?.id || onboardingStep === 0) return;
+    try { localStorage.setItem(`trade-pa-onboarding-${user.id}`, String(onboardingStep)); } catch {}
+  }, [onboardingStep, user?.id]);
+
+  // Load onboarding step on login
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const saved = localStorage.getItem(`trade-pa-onboarding-${user.id}`);
+      if (saved === "99") { setOnboardingStep(99); return; }
+      if (saved && parseInt(saved) > 0) { setOnboardingStep(parseInt(saved)); return; }
+    } catch {}
+    // No saved step — check if this is genuinely a new user
+    // (brand hasn't been set up yet)
+  }, [user?.id]);
+
+  // After brand loads, determine if onboarding is needed
+  const brandLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!user?.id || brandLoadedRef.current || onboardingStep === 99) return;
+    // Wait for brand to load from localStorage/Supabase
+    const timer = setTimeout(() => {
+      brandLoadedRef.current = true;
+      if (onboardingStep > 0) return; // already set from persisted state
+      const isNew = !brand.tradingName || brand.tradingName === "" || brand.tradingName === "Your Business" || brand.tradingName.endsWith("'s Trades");
+      if (isNew) {
+        setOnboardingStep(1);
+      } else {
+        setOnboardingStep(99);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [user?.id, brand.tradingName, onboardingStep]);
+
+  const advanceOnboarding = (toStep) => { setOnboardingStep(toStep); };
+  const completeOnboarding = () => { setOnboardingStep(99); };
+  const [navTourStep, setNavTourStep] = useState(0);
+
   // Load assistant persona + custom commands on login
   useEffect(() => {
     if (!user?.id) return;
@@ -25759,8 +25830,173 @@ function AppInner() {
     </div>
   );
 
+  // ── ONBOARDING: Step 0 — detecting if onboarding needed ─────────────
+  if (onboardingStep === 0) return (
+    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13, gap: 12 }}>
+      <div style={{ width: 48, height: 48, borderRadius: 12, background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: "#000" }}>TP</div>
+    </div>
+  );
+
+  // ── ONBOARDING: Step 1 — Welcome screen ────────────────────────────
+  if (onboardingStep === 1) return (
+    <div style={{ minHeight: "100dvh", background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans', sans-serif", color: "#f0f0f0" }}>
+      <div style={{ maxWidth: 340, width: "100%", textAlign: "center" }}>
+        <div style={{ width: 72, height: 72, borderRadius: 18, background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 900, color: "#000", margin: "0 auto 28px", fontFamily: "'DM Mono',monospace" }}>TP</div>
+        <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 8 }}>Welcome to Trade PA</div>
+        <div style={{ fontSize: 14, color: "#888", lineHeight: 1.7, marginBottom: 32 }}>Your AI-powered business assistant.<br/>Let's get you set up — takes about 2 minutes.</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, textAlign: "left", marginBottom: 32 }}>
+          {[
+            { icon: "M19 11a7 7 0 01-14 0M12 18v4M8 22h8M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3z", label: "Tell me about your business" },
+            { icon: "M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3zM19 10v2a7 7 0 01-14 0v-2", label: "Name your assistant" },
+            { icon: "M13 10V3L4 14h7v7l9-11h-7z", label: "Try your first voice command" },
+          ].map((item, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, background: "#1a1a1a", border: "1px solid #333", borderRadius: 12, padding: "12px 16px" }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: i === 0 ? "#f59e0b22" : "#1a1a1a", border: `1px solid ${i === 0 ? "#f59e0b44" : "#333"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={i === 0 ? "#f59e0b" : "#888"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={item.icon}/></svg>
+              </div>
+              <span style={{ fontSize: 13, color: i === 0 ? "#f0f0f0" : "#888" }}>{item.label}</span>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => { advanceOnboarding(2); setView("AI Assistant"); }}
+          style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: "#f59e0b", color: "#000", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}
+        >Let's go</button>
+      </div>
+    </div>
+  );
+
   return (
     <div style={S.app}>
+      {/* ── ONBOARDING OVERLAYS ──────────────────────────────────────── */}
+
+      {/* Step 4: Install prompt */}
+      {onboardingStep === 4 && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
+          <div style={{ maxWidth: 340, width: "100%", textAlign: "center" }}>
+            <div style={{ width: 64, height: 64, borderRadius: 16, background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#f0f0f0", marginBottom: 8 }}>Add to your home screen</div>
+            <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7, marginBottom: 28 }}>Trade PA works best as a home screen app. No app store needed — it installs in seconds.</div>
+            {isIos ? (
+              <div style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 14, padding: "16px 18px", textAlign: "left", marginBottom: 24 }}>
+                {[
+                  { n: "1", text: <>Tap the <strong style={{ color: "#f59e0b" }}>Share</strong> button in Safari</> },
+                  { n: "2", text: <>Scroll down and tap <strong style={{ color: "#f59e0b" }}>Show More</strong></> },
+                  { n: "3", text: <>Tap <strong style={{ color: "#f59e0b" }}>Add to Home Screen</strong></> },
+                ].map(({ n, text }) => (
+                  <div key={n} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: n !== "3" ? "1px solid #333" : "none" }}>
+                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#000", flexShrink: 0 }}>{n}</div>
+                    <span style={{ fontSize: 13, color: "#ccc" }}>{text}</span>
+                  </div>
+                ))}
+              </div>
+            ) : pwaPrompt ? (
+              <button onClick={async () => { pwaPrompt.prompt(); const { outcome } = await pwaPrompt.userChoice; if (outcome === "accepted") advanceOnboarding(5); }} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: "#f59e0b", color: "#000", fontSize: 15, fontWeight: 600, cursor: "pointer", marginBottom: 24 }}>Install app</button>
+            ) : (
+              <div style={{ fontSize: 12, color: "#666", marginBottom: 24 }}>Open in Chrome or Safari for the best install experience.</div>
+            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => advanceOnboarding(5)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid #333", background: "transparent", color: "#888", fontSize: 13, cursor: "pointer" }}>I'll do it later</button>
+              <button onClick={() => advanceOnboarding(5)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: "#f59e0b", color: "#000", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Done — next</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 5: Try your first voice command */}
+      {onboardingStep === 5 && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
+          <div style={{ maxWidth: 340, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: "#888", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>Last step</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#f0f0f0", marginBottom: 8 }}>Try your first command</div>
+            <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7, marginBottom: 28 }}>Tap the mic and say...</div>
+            <div style={{ background: "#f59e0b0a", border: "1px solid #f59e0b33", borderRadius: 14, padding: "18px 22px", marginBottom: 28 }}>
+              <div style={{ fontSize: 16, color: "#f59e0b", fontFamily: "'DM Mono',monospace", lineHeight: 1.6 }}>"Add a customer called John Smith, 07700 900456"</div>
+            </div>
+            <button
+              onClick={() => {
+                advanceOnboarding(6);
+                setView("AI Assistant");
+                // Send the command in background — AI processes while nav tour plays
+                setTimeout(() => voiceHandle.current?.sendText?.("Add a customer called John Smith, phone 07700 900456"), 400);
+              }}
+              style={{ width: 110, height: 110, borderRadius: "50%", background: "#f59e0b", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}
+            >
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+            </button>
+            <div style={{ fontSize: 12, color: "#666", marginBottom: 20 }}>Or type it — whatever's easier right now</div>
+            <button onClick={() => advanceOnboarding(6)} style={{ padding: "8px 18px", borderRadius: 10, border: "1px solid #333", background: "transparent", color: "#666", fontSize: 12, cursor: "pointer" }}>Skip — show me around first</button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 6: Navigation tour overlay */}
+      {onboardingStep === 6 && (() => {
+        const TOUR = [
+          { tab: "Home", label: "This is home", desc: "Your PA lives here. Tap the mic to get started.", tabIndex: 0 },
+          { tab: "Jobs", label: "Your jobs", desc: "Job cards, materials, labour, photos, certs, and daywork.", tabIndex: 1 },
+          { tab: "Diary", label: "Your diary", desc: "Your schedule. Book jobs by voice or tap to add.", tabIndex: 2 },
+          { tab: "Accounts", label: "Accounts", desc: "Invoices, quotes, expenses, mileage, CIS — all your money stuff.", tabIndex: 3 },
+          { tab: "People", label: "People", desc: "Customers, subcontractors, and your team.", tabIndex: 4 },
+          { tab: "Settings", label: "Settings", desc: "Tap your avatar to open Settings. Bank details, logo, trade registrations.", tabIndex: -1 },
+          { tab: "Mic", label: "Speak from anywhere", desc: "This mic button follows you to every screen. Tap it — hands-free, no touching your phone.", tabIndex: -2 },
+        ];
+        const current = TOUR[navTourStep];
+        if (!current) return null;
+        const advance = () => { if (navTourStep < TOUR.length - 1) setNavTourStep(s => s + 1); else completeOnboarding(); };
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#000c", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
+            onClick={advance}>
+            {/* Tooltip */}
+            <div style={{ position: "absolute", bottom: current.tabIndex === -2 ? 90 : current.tabIndex === -1 ? "auto" : 66, top: current.tabIndex === -1 ? 56 : "auto", left: 16, right: 16, display: "flex", justifyContent: current.tabIndex === -1 ? "flex-end" : current.tabIndex === -2 ? "flex-end" : "center" }} onClick={e => e.stopPropagation()}>
+              <div style={{ background: "#1a1a1a", border: "1.5px solid #f59e0b", borderRadius: 14, padding: "14px 18px", maxWidth: 280 }}
+                onClick={advance}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>{current.label}</div>
+                <div style={{ fontSize: 12, color: "#aaa", lineHeight: 1.6, marginBottom: 10 }}>{current.desc}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {TOUR.map((_, i) => <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: i === navTourStep ? "#f59e0b" : "#444" }} />)}
+                  </div>
+                  <span style={{ fontSize: 12, color: navTourStep < TOUR.length - 1 ? "#f59e0b" : "#4ade80", fontWeight: 600 }}>
+                    {navTourStep < TOUR.length - 1 ? "Tap to continue" : "Done — let's go!"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {/* Highlighted nav bar */}
+            {current.tabIndex >= 0 && (
+              <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", padding: "10px 12px 20px", background: "#111" }}>
+                {["Home", "Jobs", "Diary", "Accounts", "People"].map((t, i) => (
+                  <div key={t} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 8px", borderRadius: 10, opacity: i === current.tabIndex ? 1 : 0.2, background: i === current.tabIndex ? "#f59e0b11" : "transparent", boxShadow: i === current.tabIndex ? "0 0 0 2px #f59e0b66" : "none" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={i === current.tabIndex ? "#f59e0b" : "#888"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      {i === 0 && <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>}
+                      {i === 1 && <><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></>}
+                      {i === 2 && <><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></>}
+                      {i === 3 && <><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></>}
+                      {i === 4 && <><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/></>}
+                    </svg>
+                    <span style={{ fontSize: 10, color: i === current.tabIndex ? "#f59e0b" : "#888" }}>{t}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Settings highlight */}
+            {current.tabIndex === -1 && (
+              <div style={{ position: "absolute", top: 10, right: 14, padding: 4, borderRadius: "50%", boxShadow: "0 0 0 3px #f59e0b66", background: "#f59e0b11" }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#000" }}>{brand.ownerName?.[0] || "U"}</div>
+              </div>
+            )}
+            {/* Mic highlight */}
+            {current.tabIndex === -2 && (
+              <div style={{ position: "absolute", right: 16, bottom: 24, width: 56, height: 56, borderRadius: "50%", background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 4px #f59e0b66" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {pdfHtml && <PDFOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
       {incomingCall?.call && <IncomingCallScreen callerName={incomingCall.callerName} callerNumber={incomingCall.callerNumber} onAnswer={answerCall} onDecline={declineCall} />}
       {activeCall?.call && <ActiveCallScreen callerName={activeCall.callerName} callerNumber={activeCall.callerNumber} direction={activeCall.direction} startTime={activeCall.startTime} muted={callMuted} onMute={toggleMute} onHangUp={hangUp} speaker={callSpeaker} onSpeaker={toggleSpeaker} />}
@@ -26141,7 +26377,7 @@ function AppInner() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} setContextHint={setContextHint} />}
         {view === "Expenses" && <ExpensesTab user={user} setContextHint={setContextHint} />}
         {view === "CIS" && <CISStatementsTab user={user} setContextHint={setContextHint} />}
-        <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} /></div>
+        <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} setContextHint={setContextHint} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} setContextHint={setContextHint} />}
@@ -26156,21 +26392,21 @@ function AppInner() {
         </div>
       </main>
       </div>
-      <BottomTabBar view={view} setView={setView} isDesktopBrowser={isDesktopBrowser} />
-      <FloatingMicButton
+      {(onboardingStep === 99 || onboardingStep === 0) ? <BottomTabBar view={view} setView={setView} isDesktopBrowser={isDesktopBrowser} /> : null}
+      {(onboardingStep >= 99 || onboardingStep === 0) && <FloatingMicButton
         visible={view !== "AI Assistant" && !aiOverlay}
         handsFree={aiHandsFree}
         onTap={() => setAiOverlay({ context: contextHint || `Viewing: ${view}` })}
-      />
+      />}
       <HelpCentre open={helpOpen} openSlug={helpSlug} onClose={() => { setHelpOpen(false); setHelpSlug(null); }} />
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} user={user} brand={brand} currentView={view} />
       <AssistantSetup
-        open={assistantSetupOpen}
-        onClose={() => setAssistantSetupOpen(false)}
+        open={assistantSetupOpen || onboardingStep === 3}
+        onClose={() => { setAssistantSetupOpen(false); if (onboardingStepRef.current === 3) advanceOnboarding(4); }}
         supabase={supabase}
         user={user}
         tools={null}
-        mode="edit"
+        mode={onboardingStep === 3 ? "onboard" : "edit"}
         onSaved={(s) => {
           setAssistantName(s.assistant_name);
           setAssistantWakeWords(s.assistant_wake_words);
