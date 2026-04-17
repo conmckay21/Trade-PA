@@ -4,6 +4,7 @@ import { Device } from "@twilio/voice-sdk";
 import HelpCentre from "./HelpCentre.jsx";
 import AssistantSetup from "./AssistantSetup.jsx";
 import FieldMic from "./components/FieldMic.jsx";
+import OfflineBanner from "./components/OfflineBanner.jsx";
 
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
@@ -26138,6 +26139,8 @@ function AppInner() {
 
   return (
     <div style={S.app}>
+      <OfflineBanner />
+
       {/* ── ONBOARDING OVERLAYS ──────────────────────────────────────── */}
 
       {/* Step 4: Install prompt — skip on desktop */}
