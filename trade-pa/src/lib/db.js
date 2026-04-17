@@ -5,9 +5,13 @@
 // Session 1: pass-through.
 // Session 2: read caching.
 // Session 2.1: Proxy re-wrap fix.
-// Session 4 (NOW): offline write queue. When offline, writes go through
-//   writeQueue.handleOfflineWrite — which applies an optimistic cache
-//   update and enqueues the write for replay on reconnect.
+// Session 4: offline write queue.
+// Session 4.1 (NOW): network-failure detection. navigator.onLine isn't
+//   always accurate — Chrome DevTools' Offline mode doesn't flip it,
+//   and real-world flaky networks can leave it stuck at true while
+//   fetches silently fail. Supabase returns { status: 0, error } in
+//   those cases rather than throwing, so we explicitly check for that
+//   and route to the offline handler (writes) or cache (reads).
 //
 // Kill switch: `localStorage.tradepa_disable_cache = "1"` bypasses the
 // entire caching+queue layer.
@@ -38,13 +42,27 @@ function isOnline() {
   return typeof navigator === "undefined" ? true : navigator.onLine;
 }
 
+// Supabase returns status 0 when a fetch fails at the network layer
+// (offline, DNS failure, connection refused, CORS block). Treat this as
+// if we were offline — queue writes, serve reads from cache.
+function isNetworkFailure(result) {
+  if (!result) return false;
+  if (result.status === 0) return true;
+  // Supabase v2 sometimes surfaces these messages on error.message
+  const msg = result.error?.message || "";
+  if (/Failed to fetch/i.test(msg)) return true;
+  if (/Network\s*Error/i.test(msg)) return true;
+  if (/TypeError.*fetch/i.test(msg)) return true;
+  return false;
+}
+
 // ─── Query spec tracking ──────────────────────────────────────────────
 
 function makeSpec(table) {
   return {
     table,
     operation: null,
-    data: null,       // captured arg for insert/update/upsert
+    data: null,
     filters: [],
     order: null,
     limit: null,
@@ -123,15 +141,56 @@ function applyQuerySpec(rows, spec) {
 // ─── The main execution step ──────────────────────────────────────────
 
 async function executeWithCache(realBuilder, spec) {
-  // Writes: online path runs the real query and syncs cache. Offline
-  // path queues the write and optimistically updates cache.
+  // ── Writes ──────────────────────────────────────────────────────
   if (spec.operation !== "select") {
     if (cacheDisabled()) {
       return await realBuilder;
     }
 
+    // Helper: route to offline queue for cached tables, otherwise
+    // propagate the original error to the caller.
+    const queueOffline = async (originalErr) => {
+      if (isCached(spec.table)) {
+        console.log(
+          `[db] network unreachable — queueing ${spec.operation} on ${spec.table}`
+        );
+        return await handleOfflineWrite({
+          table: spec.table,
+          operation: spec.operation,
+          data: spec.data,
+          filters: spec.filters,
+        });
+      }
+      return originalErr;
+    };
+
     if (isOnline()) {
-      const result = await realBuilder;
+      let result;
+      try {
+        result = await realBuilder;
+      } catch (err) {
+        // The fetch threw (rare — Supabase usually returns, not throws).
+        // Treat as offline for cached tables.
+        if (isCached(spec.table)) {
+          return await handleOfflineWrite({
+            table: spec.table,
+            operation: spec.operation,
+            data: spec.data,
+            filters: spec.filters,
+          });
+        }
+        throw err;
+      }
+
+      // Status 0 = fetch-level failure that Supabase normalised into a
+      // response. navigator.onLine lied (or is lying right now). Treat
+      // as offline.
+      if (isNetworkFailure(result)) {
+        return await queueOffline(result);
+      }
+
+      // Normal success/validation-error path — mirror cache if it was
+      // a real write that touched a cached table.
       if (!result.error && isCached(spec.table)) {
         if (spec.operation === "insert" || spec.operation === "upsert" || spec.operation === "update") {
           if (result.data) {
@@ -148,7 +207,7 @@ async function executeWithCache(realBuilder, spec) {
       return result;
     }
 
-    // Offline — route to writeQueue
+    // navigator.onLine says offline — route straight to queue.
     return await handleOfflineWrite({
       table: spec.table,
       operation: spec.operation,
@@ -157,15 +216,23 @@ async function executeWithCache(realBuilder, spec) {
     });
   }
 
-  // Reads: passthrough for non-cached tables
+  // ── Reads ───────────────────────────────────────────────────────
   if (!isCached(spec.table) || cacheDisabled()) {
     return await realBuilder;
   }
 
-  // Cached-table reads: always-fresh-when-online, cache-as-fallback
   if (isOnline()) {
     try {
       const result = await realBuilder;
+
+      // Network failure that didn't throw — fall back to cache
+      if (isNetworkFailure(result)) {
+        console.log(
+          `[db] network unreachable — serving ${spec.table} from cache`
+        );
+        return await readFromCache(spec);
+      }
+
       if (!result.error && result.data) {
         const rows = Array.isArray(result.data) ? result.data : [result.data];
         cacheRows(spec.table, rows);
@@ -216,7 +283,6 @@ function wrapBuilder(realBuilder, spec) {
       if (typeof value !== "function") return value;
 
       return (...args) => {
-        // Record spec state for cache replay and offline queueing
         if (prop === "select") {
           spec.operation = spec.operation ?? "select";
         } else if (prop === "insert") {
