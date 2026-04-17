@@ -191,7 +191,7 @@ export default function HelpCentre({ open = false, openSlug = null, onClose = ()
 // ─── Browse view ────────────────────────────────────────────────────────────
 const POPULAR_SEARCHES = ["mileage", "voice", "invoice", "RAMS", "hands-free"];
 const VOICE_COMMANDS = [
-  { phrase: '"Hey Trade PA"', desc: "Wake word" },
+  { phrase: '"Add customer John Smith"', desc: "New customer" },
   { phrase: '"Book a job for Monday"', desc: "Create job" },
   { phrase: '"Invoice John £200"', desc: "New invoice" },
   { phrase: '"Log 12 miles to site"', desc: "Mileage" },
@@ -767,7 +767,7 @@ const ARTICLES = [
       "Open the AI Assistant.",
       "Switch on hands-free mode (toggle on the assistant).",
       "Wait for the prompt sound, then speak.",
-      "It reads the answer back. Say \"Hey Trade PA\" to start the next request.",
+      "It reads the answer back and keeps listening — just speak when you're ready.",
     ],
     tips: [
       "Best for in the van or on site when your hands are full.",
