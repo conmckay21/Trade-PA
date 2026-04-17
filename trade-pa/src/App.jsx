@@ -1234,7 +1234,7 @@ function buildInvoiceHTML(brand, inv) {
   <a onclick="try{window.parent.postMessage('close-pdf','*')}catch(e){}; try{if(window.opener||window.history.length<=1){window.close();}else{window.history.back();}}catch(e){}">← Back to Trade PA</a>
   <a onclick="window.print()" style="color:#aaa;">🖨 Print / Save PDF</a>
 </div>
-<div class="page">
+<div class="page" style="color:#1a1a1a;">
   <div class="header">
     <div class="header-left">
       ${brand.logo ? `<img src="${brand.logo}" class="logo" alt="logo"/>` : `<div class="biz-name">${brand.tradingName}</div>`}
@@ -1246,36 +1246,36 @@ function buildInvoiceHTML(brand, inv) {
     </div>
   </div>
 
-  <div class="infobar">
+  <div class="infobar" style="color:#1a1a1a;">
     <div class="infobar-left">
-      <div><span>Date:</span>${date}</div>
-      <div><span>${isQuote ? "Valid for:" : "Payment due:"}</span>${isQuote ? (inv.due || "30 days") : (inv.due || `${brand.paymentTerms || 30} days`)}</div>
+      <div style="color:#1a1a1a;"><span>Date:</span>${date}</div>
+      <div style="color:#1a1a1a;"><span>${isQuote ? "Valid for:" : "Payment due:"}</span>${isQuote ? (inv.due || "30 days") : (inv.due || `${brand.paymentTerms || 30} days`)}</div>
     </div>
     <div class="infobar-right">
-      ${inv.jobRef ? `<div><span>Job Ref:</span>${inv.jobRef}</div>` : ""}
-      ${inv.poNumber ? `<div><span>PO:</span>${inv.poNumber}</div>` : ""}
-      ${(brand.vatNumber && (brand._exemptBypass || brand.registrationVerifications?.vatNumber?.verified)) ? `<div><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
+      ${inv.jobRef ? `<div style="color:#1a1a1a;"><span>Job Ref:</span>${inv.jobRef}</div>` : ""}
+      ${inv.poNumber ? `<div style="color:#1a1a1a;"><span>PO:</span>${inv.poNumber}</div>` : ""}
+      ${(brand.vatNumber && (brand._exemptBypass || brand.registrationVerifications?.vatNumber?.verified)) ? `<div style="color:#1a1a1a;"><span>VAT No:</span>${brand.vatNumber}</div>` : ""}
     </div>
   </div>
 
   <div class="addresses">
     <div>
       <div class="addr-label">From</div>
-      <div class="addr-name">${brand.tradingName}</div>
-      <div class="addr-detail" style="white-space:pre-line">${brand.address || ""}</div>
-      ${brand.phone ? `<div class="addr-detail">${brand.phone}</div>` : ""}
+      <div class="addr-name" style="color:#1a1a1a;">${brand.tradingName}</div>
+      <div class="addr-detail" style="white-space:pre-line;color:#555;">${brand.address || ""}</div>
+      ${brand.phone ? `<div class="addr-detail" style="color:#555;">${brand.phone}</div>` : ""}
       ${brand.email ? `<div class="addr-detail addr-accent">${brand.email}</div>` : ""}
       ${brand.gasSafeNumber ? `<div class="addr-detail" style="font-size:11px;color:#999;margin-top:6px">Gas Safe: ${brand.gasSafeNumber}</div>` : ""}
       ${brand.utrNumber ? `<div class="addr-detail" style="font-size:11px;color:#999;margin-top:2px">UTR: ${brand.utrNumber}</div>` : ""}
     </div>
     <div>
       <div class="addr-label">To</div>
-      <div class="addr-name">${inv.customer}</div>
-      <div class="addr-detail" style="white-space:pre-line">${inv.address || ""}</div>
+      <div class="addr-name" style="color:#1a1a1a;">${inv.customer}</div>
+      <div class="addr-detail" style="white-space:pre-line;color:#555;">${inv.address || ""}</div>
     </div>
   </div>
 
-  <div class="items">
+  <div class="items" style="color:#1a1a1a;">
     <table>
       <thead>
         <tr>
@@ -1291,14 +1291,14 @@ function buildInvoiceHTML(brand, inv) {
           const lineVat = !cisEnabled && vatEnabled && lineAmt !== null ? parseFloat((lineAmt - lineNet).toFixed(2)) : null;
           return `
         <tr>
-          <td>${line.description || line}</td>
+          <td style="color:#1a1a1a;">${line.description || line}</td>
           ${cisEnabled
-            ? `<td class="right">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
+            ? `<td class="right" style="color:#1a1a1a;">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
             : vatEnabled
-              ? `<td class="right">${lineNet !== null ? fmtCurrency(lineNet) : "—"}</td>
-                 <td class="right">${lineVat !== null ? fmtCurrency(lineVat) : "—"}</td>
-                 <td class="right">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
-              : `<td class="right">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
+              ? `<td class="right" style="color:#1a1a1a;">${lineNet !== null ? fmtCurrency(lineNet) : "—"}</td>
+                 <td class="right" style="color:#1a1a1a;">${lineVat !== null ? fmtCurrency(lineVat) : "—"}</td>
+                 <td class="right" style="color:#1a1a1a;">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
+              : `<td class="right" style="color:#1a1a1a;">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
           }
         </tr>`;
         }).join("")}
