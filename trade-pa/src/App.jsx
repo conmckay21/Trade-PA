@@ -1074,7 +1074,7 @@ function buildInvoiceHTML(brand, inv) {
 <style>
   *{box-sizing:border-box;margin:0;padding:0;}
   body{font-family:Arial,sans-serif;color:#1a1a1a;background:#fff;padding:0;}
-  .page{max-width:800px;margin:0 auto;padding:0;}
+  .page{max-width:800px;margin:0 auto;padding:0;color:#1a1a1a;font-family:Arial,sans-serif;}
   .header{background:${accent};padding:28px 36px;display:flex;justify-content:space-between;align-items:flex-start;}
   .header-left .biz-name{font-size:22px;font-weight:700;color:#fff;margin-bottom:4px;}
   .header-left .tagline{font-size:12px;color:rgba(255,255,255,0.8);}
@@ -1082,20 +1082,20 @@ function buildInvoiceHTML(brand, inv) {
   .header-right .doc-type{font-size:24px;font-weight:700;color:#fff;letter-spacing:0.05em;}
   .header-right .doc-id{font-size:14px;color:rgba(255,255,255,0.8);margin-top:4px;}
   .logo{max-height:60px;max-width:180px;object-fit:contain;margin-bottom:6px;display:block;}
-  .infobar{background:#f8f8f8;padding:12px 28px;display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;border-bottom:1px solid #eee;font-size:12px;}
+  .infobar{background:#f8f8f8;padding:12px 28px;display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;border-bottom:1px solid #eee;font-size:12px;color:#1a1a1a;}
   .infobar span{color:#999;margin-right:4px;}
   .infobar-left{display:flex;flex-direction:column;gap:4px;}
   .infobar-right{display:flex;flex-direction:column;gap:4px;text-align:right;}
   .addresses{padding:24px 36px;display:grid;grid-template-columns:1fr 1fr;gap:28px;border-bottom:1px solid #eee;}
   .addr-label{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px;}
-  .addr-name{font-size:14px;font-weight:700;margin-bottom:4px;}
+  .addr-name{font-size:14px;font-weight:700;margin-bottom:4px;color:#1a1a1a;}
   .addr-detail{font-size:12px;color:#555;line-height:1.7;}
   .addr-accent{color:${accent};}
-  .items{padding:0 36px;}
+  .items{padding:0 36px;color:#1a1a1a;}
   table{width:100%;border-collapse:collapse;}
   th{text-align:left;padding:12px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#999;font-weight:400;border-bottom:2px solid ${accent};}
   th.right,td.right{text-align:right;}
-  td{padding:11px 0;font-size:13px;border-bottom:1px solid #f0f0f0;}
+  td{padding:11px 0;font-size:13px;border-bottom:1px solid #f0f0f0;color:#1a1a1a;}
   td.muted{color:#999;}
   .totals{padding:12px 36px 0;display:flex;flex-direction:column;align-items:flex-end;gap:5px;border-top:2px solid ${accent};margin:0 36px;}
   .total-row{display:flex;gap:40px;font-size:13px;color:#888;}
@@ -1109,7 +1109,7 @@ function buildInvoiceHTML(brand, inv) {
   .pay-grid strong{color:#1a1a1a;}
   .ref-box{margin-top:10px;padding:8px 12px;background:${accent}18;border-radius:4px;border:1px solid ${accent}44;font-size:12px;}
   .ref-box span{color:#999;}
-  .ref-box strong{letter-spacing:0.04em;}
+  .ref-box strong{letter-spacing:0.04em;color:#1a1a1a;}
   .ref-box small{color:#bbb;margin-left:8px;}
   .stripe-btn{display:inline-block;padding:8px 20px;background:#635bff;border-radius:5px;font-size:12px;font-weight:700;color:#fff;margin-top:10px;}
   .stripe-url{font-size:10px;color:#bbb;margin-top:6px;}
@@ -6773,7 +6773,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     console.log("[PDF DEBUG] amount:", inv.grossAmount || inv.gross_amount || inv.amount);
 
     const container = document.createElement("div");
-    container.style.cssText = "position:absolute;top:0;left:0;width:794px;background:#fff;pointer-events:none;z-index:-1;";
+    container.style.cssText = "position:absolute;top:0;left:0;width:794px;background:#fff;color:#1a1a1a;pointer-events:none;z-index:-1;";
     container.innerHTML = html;
     container.querySelectorAll(".back-bar,.no-print").forEach(el => el.remove());
     document.body.appendChild(container);
