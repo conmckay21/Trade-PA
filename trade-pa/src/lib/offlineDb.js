@@ -3,8 +3,9 @@
 // IndexedDB store for the offline read-cache and pending-writes queue.
 //
 // Phase 1 Session 1: schema defined.
-// Phase 1 Session 2: cache read/write/merge helpers added.
-// Phase 1 Session 4 (NOW): pending_writes helpers activated.
+// Phase 1 Session 2: cache read/write/merge helpers.
+// Phase 1 Session 4: pending_writes helpers activated.
+// Phase 1 Session 4b (NOW): retry / discard helpers for failed writes.
 
 import { openDB } from "idb";
 
@@ -144,11 +145,6 @@ export async function deleteCachedRows(table, ids) {
   }
 }
 
-/**
- * Clear the _pendingSync marker on specific cached rows. Used after a
- * queued write successfully syncs to Supabase — the row is now confirmed
- * on the server, so the UI's pending-indicator can be removed.
- */
 export async function clearPendingFlag(table, ids) {
   if (!isCached(table)) return;
   if (!Array.isArray(ids)) ids = [ids];
@@ -161,8 +157,9 @@ export async function clearPendingFlag(table, ids) {
     const store = tx.objectStore(table);
     for (const id of ids) {
       const row = await store.get(id);
-      if (row && row._pendingSync) {
+      if (row && (row._pendingSync || row._tempId)) {
         delete row._pendingSync;
+        delete row._tempId;
         await store.put(row);
       }
     }
@@ -210,26 +207,29 @@ export async function clearAllCache() {
   await tx.done;
 }
 
+/**
+ * Full stats for the diagnostics panel.
+ * Returns { perTable: { <table>: { rows, lastCached }}, pending, failed }.
+ */
 export async function getCacheStats() {
   const idb = await getOfflineDb();
   if (!idb) return null;
-  const stats = {};
+
+  const perTable = {};
   for (const t of CACHED_TABLES) {
-    stats[t] = await idb.count(t);
+    const rows = await idb.count(t);
+    const lastCached = await readMeta(`${t}:last_cached`);
+    perTable[t] = { rows, lastCached };
   }
-  stats.pending_writes = await idb.count("pending_writes");
-  return stats;
+  const allPw = await idb.getAll("pending_writes");
+  const pending = allPw.filter((e) => e.status === "pending").length;
+  const failed = allPw.filter((e) => e.status === "failed").length;
+
+  return { perTable, pending, failed };
 }
 
 // ─── Pending writes queue helpers ─────────────────────────────────────
-//
-// Activated in Session 4. Wraps IDB operations on the pending_writes
-// store so writeQueue.js can stay focused on the replay logic rather
-// than IDB ceremony.
 
-/**
- * Append a new pending write. Returns the auto-incremented queue id.
- */
 export async function addPendingWrite(entry) {
   const idb = await getOfflineDb();
   if (!idb) throw new Error("[offlineDb] IndexedDB unavailable");
@@ -242,11 +242,6 @@ export async function addPendingWrite(entry) {
   return id;
 }
 
-/**
- * List pending writes. `statusFilter` defaults to "pending" — pass null
- * to get everything (including 'failed' for diagnostic views).
- * Sorted oldest-first so callers replay in the order writes happened.
- */
 export async function listPendingWrites(statusFilter = "pending") {
   const idb = await getOfflineDb();
   if (!idb) return [];
@@ -263,10 +258,6 @@ export async function listPendingWrites(statusFilter = "pending") {
   }
 }
 
-/**
- * Count pending writes — used for banner display. Cheap call, but we
- * swallow errors because a count failure shouldn't break the UI.
- */
 export async function countPendingWrites() {
   const idb = await getOfflineDb();
   if (!idb) return 0;
@@ -296,5 +287,20 @@ export async function deletePendingWrite(id) {
     await idb.delete("pending_writes", id);
   } catch (err) {
     console.warn(`[offlineDb] deletePendingWrite(${id}) failed:`, err);
+  }
+}
+
+/**
+ * Used during temp-id reconciliation — replaces an entry wholesale.
+ * Safe to call while iterating listPendingWrites since each call opens
+ * its own tx.
+ */
+export async function putPendingWrite(id, entry) {
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    await idb.put("pending_writes", { ...entry, id });
+  } catch (err) {
+    console.warn(`[offlineDb] putPendingWrite(${id}) failed:`, err);
   }
 }
