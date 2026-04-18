@@ -13782,7 +13782,7 @@ function ImportContacts({ onImport, currentCustomers }) {
 }
 
 // ─── Customers ────────────────────────────────────────────────────────────────
-function Customers({ customers, setCustomers, customerContacts, setCustomerContacts, jobs, invoices, setView, user, makeCall, hasTwilio, setContextHint }) {
+function Customers({ customers, setCustomers, customerContacts, setCustomerContacts, jobs, invoices, setView, user, makeCall, hasTwilio, setContextHint, companyId }) {
   const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState(null);
 
@@ -13837,7 +13837,7 @@ function Customers({ customers, setCustomers, customerContacts, setCustomerConta
       .then(({ data }) => setCallLogs(data || []));
   }, [selected, user?.id]);
 
-  const save = () => {
+  const save = async () => {
     if (!form.name) return;
     if (editing) {
       // Edit flow — updates the customer row's convenience fields only.
@@ -13846,21 +13846,27 @@ function Customers({ customers, setCustomers, customerContacts, setCustomerConta
       setSelected({ ...selected, ...form });
       setEditing(false);
     } else {
-      // Add flow. Create customer row with is_company flag, then create contacts.
-      const customerId = Date.now();
+      // Add flow. Insert the customer FIRST so we have a real ID (or offline
+      // temp ID) before building contacts. Previously used Date.now() as a
+      // placeholder id which never matched a server row, causing contacts to
+      // fail with FK violations both online (silently) and offline (visibly).
       const isCompany = !!form.isCompany;
-      // For domestic: sync customer.phone/email/address from the single contact details
-      // For company: contacts array carries the real data; customer row gets company name + address only
-      const newCustomer = {
-        id: customerId,
+      const { data: inserted, error } = await db.from("customers").insert({
+        company_id: companyId,
+        user_id: user.id,
         name: form.name,
         phone: isCompany ? "" : (form.phone || ""),
         email: isCompany ? "" : (form.email || ""),
         address: form.address || "",
         notes: form.notes || "",
         is_company: isCompany,
-      };
-      setCustomers(prev => [...prev, newCustomer]);
+      }).select().single();
+      if (error || !inserted) {
+        alert(`Couldn't save customer: ${error?.message || "unknown error"}`);
+        return;
+      }
+      const customerId = inserted.id;
+      setCustomers(prev => [...prev, inserted]);
 
       // Build the contacts we need to create
       let contactsToCreate = [];
@@ -25937,6 +25943,11 @@ function AppInner() {
           }
           for (const c of next) {
             if (!prevIds.has(c.id)) {
+              // Skip rows already inserted directly via db.from('customers').insert(...)
+              // — those carry a created_at from the server or offline handler.
+              // Without this, the Add Customer flow (which now pre-inserts to get
+              // a real id before building contacts) would cause a duplicate insert.
+              if (c.created_at) continue;
               await db.from("customers").insert({
                 company_id: companyId, user_id: user.id,
                 name: c.name, phone: c.phone || "", email: c.email || "",
@@ -26746,7 +26757,7 @@ function AppInner() {
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} setContextHint={setContextHint} />}
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} setContextHint={setContextHint} />}
         {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} setContextHint={setContextHint} />}
-        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} customerContacts={customerContacts} setCustomerContacts={setCustomerContacts} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} setContextHint={setContextHint} />}
+        {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} customerContacts={customerContacts} setCustomerContacts={setCustomerContacts} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} setContextHint={setContextHint} companyId={companyId} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}
         {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} setContextHint={setContextHint} />}
