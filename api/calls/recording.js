@@ -181,6 +181,40 @@ Respond ONLY with JSON:
     });
     console.log("recording.js: ✓ Call log saved");
 
+    // ─── Increment phone-plan minutes used this month ───────────────────────
+    // Uses increment_phone_minutes RPC (atomic, SECURITY DEFINER).
+    // Silently no-ops for users without a phone_plan set in call_tracking.
+    try {
+      const minutes = Math.ceil(parseInt(RecordingDuration || 0) / 60);
+      if (minutes > 0) {
+        const rpcRes = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/rpc/increment_phone_minutes`, {
+          method: "POST",
+          headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ p_user_id: userId, p_minutes: minutes }),
+        });
+        if (rpcRes.ok) {
+          const quotaResult = await rpcRes.json();
+          console.log(`recording.js: Minutes incremented — ${JSON.stringify(quotaResult)}`);
+
+          // If crossed soft cap, notify user
+          if (quotaResult?.over_soft_cap && !quotaResult?.over_hard_cap) {
+            fetch(`${process.env.APP_URL}/api/push/send`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId,
+                title: "📞 Call allowance running low",
+                body: `You've used ${quotaResult.minutes_used_month}/${quotaResult.monthly_minute_quota} minutes on your ${quotaResult.phone_plan} plan. Upgrade to avoid hitting the cap.`,
+                url: "/", type: "phone_quota", tag: "phone-quota-warn",
+              }),
+            }).catch(() => {});
+          }
+        }
+      }
+    } catch (mErr) {
+      console.error("recording.js: Failed to increment minutes:", mErr.message);
+    }
+
     // 6. Add job note if job identified
     if (classification.job_id) {
       await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/job_notes`, {
