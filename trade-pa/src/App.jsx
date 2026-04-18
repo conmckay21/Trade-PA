@@ -1782,11 +1782,20 @@ function InvoicePreview({ brand, invoice }) {
 function CallTrackingSettings({ user }) {
   const [callTracking, setCallTracking] = useState(null);
   const [forwardTo, setForwardTo] = useState("");
+  const [selectedPhonePlan, setSelectedPhonePlan] = useState("phone_300"); // default to popular tier
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [showPortInfo, setShowPortInfo] = useState(false);
   const [micStatus, setMicStatus] = useState(null); // granted | denied | prompt | unknown
+
+  // Phone plan tiers (display only — pricing authoritative server-side)
+  const PHONE_TIERS = [
+    { key: "phone_100",       mins: "100 mins",   price: "£20",  desc: "Occasional use" },
+    { key: "phone_300",       mins: "300 mins",   price: "£40",  desc: "Most popular", popular: true },
+    { key: "phone_600",       mins: "600 mins",   price: "£65",  desc: "Busy tradesperson" },
+    { key: "phone_unlimited", mins: "Unlimited",  price: "£104", desc: "Fair use — 3,000 mins" },
+  ];
 
   useEffect(() => {
     if (!user?.id) return;
@@ -1814,12 +1823,12 @@ function CallTrackingSettings({ user }) {
 
   const activate = async () => {
     if (!forwardTo.trim()) { setError("Please enter your mobile number for missed call fallback"); return; }
+    if (!selectedPhonePlan) { setError("Please choose a plan"); return; }
 
-    // Request microphone permission before provisioning
-    // This ensures the user grants access upfront rather than failing silently on first call
+    // Request microphone permission upfront so it's ready when calls arrive
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => t.stop()); // release immediately
+      stream.getTracks().forEach(t => t.stop());
     } catch (err) {
       setError("Microphone access is required to receive calls. Please tap Allow when your browser asks, or enable it in your browser settings.");
       return;
@@ -1827,14 +1836,25 @@ function CallTrackingSettings({ user }) {
 
     setSaving(true); setError("");
     try {
-      const res = await fetch("/api/calls/provision", {
+      const res = await fetch("/api/stripe/create-phone-subscription", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, forwardTo: forwardTo.trim() }),
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          phone_plan: selectedPhonePlan,
+          forward_to: forwardTo.trim(),
+        }),
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setCallTracking({ twilio_number: data.twilioNumber, forwarding_code: data.forwardingCode, disable_code: data.disableCode, forward_to: forwardTo.trim() });
+      if (data.error) throw new Error(data.message || data.error);
+      setCallTracking({
+        twilio_number: data.twilio_number,
+        forwarding_code: data.forwarding_code,
+        disable_code: data.disable_code,
+        forward_to: forwardTo.trim(),
+        phone_plan: data.phone_plan,
+        monthly_minute_quota: data.monthly_minute_quota,
+        minutes_used_month: 0,
+      });
     } catch (err) {
       setError(err.message);
     }
@@ -1843,58 +1863,79 @@ function CallTrackingSettings({ user }) {
 
   if (!loaded) return <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>;
 
-  if (callTracking?.twilio_number) return (
-    <div>
-      {/* Microphone blocked warning */}
-      {micStatus === "denied" && (
-        <div style={{ background: "#ef444418", border: "1px solid #ef444444", borderRadius: 8, padding: 12, marginBottom: 14, display: "flex", gap: 10, alignItems: "flex-start" }}>
-          <span style={{ fontSize: 16, flexShrink: 0 }}>🎙️</span>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", marginBottom: 4 }}>Microphone access blocked</div>
-            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>Calls can't come through without microphone access. On iPhone: Settings → Safari → Microphone → Allow. On desktop: click the lock icon in your browser address bar and allow microphone.</div>
+  if (callTracking?.twilio_number) {
+    const minsUsed = callTracking.minutes_used_month ?? 0;
+    const minsQuota = callTracking.monthly_minute_quota ?? null;
+    const pct = minsQuota ? Math.min(1, minsUsed / minsQuota) : 0;
+    const planLabel = callTracking.phone_plan
+      ? PHONE_TIERS.find(t => t.key === callTracking.phone_plan)?.mins || callTracking.phone_plan
+      : null;
+
+    return (
+      <div>
+        {/* Microphone blocked warning */}
+        {micStatus === "denied" && (
+          <div style={{ background: "#ef444418", border: "1px solid #ef444444", borderRadius: 8, padding: 12, marginBottom: 14, display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>🎙️</span>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", marginBottom: 4 }}>Microphone access blocked</div>
+              <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>Calls can't come through without microphone access. On iPhone: Settings → Safari → Microphone → Allow. On desktop: click the lock icon in your browser address bar and allow microphone.</div>
+            </div>
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <div style={S.badge(C.green)}>✓ Active</div>
+          <div style={{ fontSize: 12, color: C.muted }}>Business phone is live{planLabel ? ` · ${planLabel}` : ""}</div>
+        </div>
+        <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Your business number</div>
+          <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: C.amber, marginBottom: 4 }}>{callTracking.twilio_number}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>Give this number to customers — all calls ring inside the Trade PA app</div>
+        </div>
+        {minsQuota && (
+          <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>This month</div>
+              <div style={{ fontSize: 12, color: C.text, fontFamily: "'DM Mono',monospace" }}>{minsUsed} / {minsQuota} mins</div>
+            </div>
+            <div style={{ width: "100%", height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ width: `${pct * 100}%`, height: "100%", background: pct >= 1 ? C.red : pct >= 0.8 ? C.amber : C.green, transition: "width 0.3s" }} />
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Resets with your monthly billing. Manage plan via Stripe billing portal in Settings.</div>
+          </div>
+        )}
+        <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>How calls work</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[
+              { icon: "📱", label: "Rings in Trade PA app", desc: "Answer directly — no second SIM needed" },
+              { icon: "⏱️", label: "30s fallback", desc: `If you don't answer, rings ${callTracking.forward_to || "your mobile"}` },
+              { icon: "🎙️", label: "Auto-recorded", desc: "Known customers are recorded, transcribed & logged" },
+              { icon: "🤖", label: "AI classified", desc: "Every call summarised and actioned automatically" },
+            ].map(({ icon, label, desc }) => (
+              <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{label}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{desc}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      )}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-        <div style={S.badge(C.green)}>✓ Active</div>
-        <div style={{ fontSize: 12, color: C.muted }}>Business phone is live</div>
-      </div>
-      <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
-        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Your business number</div>
-        <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: C.amber, marginBottom: 4 }}>{callTracking.twilio_number}</div>
-        <div style={{ fontSize: 11, color: C.muted }}>Give this number to customers — all calls ring inside the Trade PA app</div>
-      </div>
-      <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
-        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>How calls work</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {[
-            { icon: "📱", label: "Rings in Trade PA app", desc: "Answer directly — no second SIM needed" },
-            { icon: "⏱️", label: "30s fallback", desc: `If you don't answer, rings ${callTracking.forward_to || "your mobile"}` },
-            { icon: "🎙️", label: "Auto-recorded", desc: "Known customers are recorded, transcribed & logged" },
-            { icon: "🤖", label: "AI classified", desc: "Every call summarised and actioned automatically" },
-          ].map(({ icon, label, desc }) => (
-            <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-              <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{icon}</span>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{label}</div>
-                <div style={{ fontSize: 11, color: C.muted }}>{desc}</div>
-              </div>
-            </div>
-          ))}
+        <div onClick={() => setShowPortInfo(p => !p)} style={{ background: C.surfaceHigh, borderRadius: 8, padding: 12, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 12, color: C.muted }}>Want to use your existing number?</div>
+          <div style={{ fontSize: 11, color: C.amber }}>{showPortInfo ? "▲ Hide" : "▼ Show"}</div>
         </div>
+        {showPortInfo && (
+          <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginTop: 2, borderTop: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 12, color: C.text, lineHeight: 1.7, marginBottom: 8 }}>You can port your existing mobile or landline number into Trade PA so customers keep calling the same number they always have.</div>
+            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>UK number porting typically takes 2–4 weeks. Contact us at <span style={{ color: C.amber }}>thetradepa@gmail.com</span> to get started — we'll handle the process with you.</div>
+          </div>
+        )}
       </div>
-      <div onClick={() => setShowPortInfo(p => !p)} style={{ background: C.surfaceHigh, borderRadius: 8, padding: 12, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 12, color: C.muted }}>Want to use your existing number?</div>
-        <div style={{ fontSize: 11, color: C.amber }}>{showPortInfo ? "▲ Hide" : "▼ Show"}</div>
-      </div>
-      {showPortInfo && (
-        <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginTop: 2, borderTop: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.7, marginBottom: 8 }}>You can port your existing mobile or landline number into Trade PA so customers keep calling the same number they always have.</div>
-          <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>UK number porting typically takes 2–4 weeks. Contact us at <span style={{ color: C.amber }}>thetradepa@gmail.com</span> to get started — we'll handle the process with you.</div>
-        </div>
-      )}
-    </div>
-  );
+    );
+  }
 
   return (
     <div>
@@ -1915,14 +1956,46 @@ function CallTrackingSettings({ user }) {
           ))}
         </div>
       </div>
-      <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
+
+      {/* Phone plan picker — 4 tiers */}
+      <label style={{ ...S.label, marginBottom: 10 }}>Choose your plan</label>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+        {PHONE_TIERS.map(tier => {
+          const isSelected = selectedPhonePlan === tier.key;
+          return (
+            <div
+              key={tier.key}
+              onClick={() => setSelectedPhonePlan(tier.key)}
+              style={{
+                background: isSelected ? `${C.amber}14` : C.surfaceHigh,
+                border: `1.5px solid ${isSelected ? C.amber : C.border}`,
+                borderRadius: 8,
+                padding: "10px 12px",
+                cursor: "pointer",
+                position: "relative",
+                transition: "all 0.15s",
+              }}
+            >
+              {tier.popular && <div style={{ position: "absolute", top: -7, right: 8, background: C.amber, color: "#000", fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 100, fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>POPULAR</div>}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, fontFamily: "'DM Mono',monospace" }}>{tier.mins}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: isSelected ? C.amber : C.text, fontFamily: "'DM Mono',monospace" }}>{tier.price}</div>
+              </div>
+              <div style={{ fontSize: 10, color: C.muted }}>{tier.desc}</div>
+              <div style={{ fontSize: 9, color: C.muted, marginTop: 2, fontFamily: "'DM Mono',monospace" }}>/month</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, lineHeight: 1.6 }}>
         Enter your personal mobile as a fallback. If you don't answer in the app within 30 seconds, the call will ring your mobile instead so you never miss anything.
       </div>
       <label style={S.label}>Fallback mobile number</label>
       <input style={{ ...S.input, marginBottom: 10 }} placeholder="e.g. 07700 900123" value={forwardTo} onChange={e => setForwardTo(e.target.value)} />
       {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{error}</div>}
-      <button style={S.btn("primary")} disabled={saving} onClick={activate}>{saving ? "Setting up your number..." : "Activate Business Phone →"}</button>
-      <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>100 mins £20/mo · 300 mins £40/mo · 600 mins £65/mo · Unlimited £104/mo</div>
+      <button style={S.btn("primary")} disabled={saving} onClick={activate}>{saving ? "Setting up your number..." : "Subscribe & activate →"}</button>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>Uses your existing Trade PA payment method · Cancel anytime from Stripe billing portal</div>
       <div style={{ marginTop: 14, padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
         <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>Already have a business number? You can port it across so customers keep calling the same number. Email <span style={{ color: C.amber }}>thetradepa@gmail.com</span> to get started.</div>
       </div>
@@ -25661,17 +25734,12 @@ function AppInner() {
       if (!data?.length) { setSubscriptionStatus("none"); return; }
       const sub = data[0];
 
-      // Determine plan tier from price ID
-      const PRICE_TO_PLAN = {
-        "price_1THMbUDV8Bu1hOo8Snbfozpl": "solo",
-        "price_1THMc0DV8Bu1hOo8BJlaRmjl": "solo",
-        "price_1THUQFDV8Bu1hOo8VygjgUMK": "team",
-        "price_1THUQbDV8Bu1hOo8uEp3IgBI": "team",
-        "price_1THUQsDV8Bu1hOo8b2MXyh1r": "pro",
-        "price_1THUR9DV8Bu1hOo8bhrLfaYf": "pro",
-      };
+      // Determine plan tier from DB's plan column (set by create-subscription.js)
+      // solo_founding is treated as "solo" for UI purposes — founding status is tracked separately
+      // via sub.is_founding_member if Path C adds a dedicated founding badge
+      const rawPlan = sub.plan || "solo";
+      const detectedPlan = rawPlan === "solo_founding" ? "solo" : rawPlan;
       const PLAN_USER_LIMITS = { solo: 1, team: 5, pro: 10 };
-      const detectedPlan = PRICE_TO_PLAN[sub.stripe_price_id] || sub.plan || "solo";
       setPlanTier(detectedPlan);
       setUserLimit(PLAN_USER_LIMITS[detectedPlan] || 1);
 
