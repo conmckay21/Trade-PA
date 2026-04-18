@@ -1,40 +1,70 @@
 // api/transcribe.js
 // Server-side transcription endpoint — keeps API keys off the client
-// Accepts audio as base64 or multipart, calls Anthropic for transcription
-// Replace OpenAI Whisper — uses Deepgram which is cheaper, faster, no leaked key risk
+// Accepts audio as base64, calls Deepgram with Whisper fallback.
+// Deepgram preferred for UK/Irish/regional accent accuracy.
+//
+// ENFORCEMENT LAYER (added April 2026):
+// - Requires Authorization: Bearer <Supabase access token>
+// - NO rate limiting or allowance check: tap-to-talk is "never capped" per pricing.
+// - Handsfree time tracking happens elsewhere (client-side session timer,
+//   and eventually a handsfree-heartbeat endpoint).
+
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false } }
+);
+
+async function getUserIdFromRequest(req) {
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  if (!authHeader) return null;
+  const token = authHeader.replace(/^Bearer\s+/i, '');
+  if (!token) return null;
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data?.user) return null;
+    return data.user.id;
+  } catch { return null; }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  // ─── AUTH GATE ───────────────────────────────────────────────────────────
+  const userId = await getUserIdFromRequest(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'unauthorised', message: 'Valid auth token required.' });
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   try {
     const { audio, mimeType = 'audio/webm' } = req.body;
     if (!audio) return res.status(400).json({ error: 'No audio provided' });
 
-    // Convert base64 to buffer
     const audioBuffer = Buffer.from(audio, 'base64');
-
-    // Use Deepgram for transcription — fast, accurate, cheap (~$0.0043/min)
-    // Key stored server-side only — never exposed to browser
     const deepgramKey = process.env.DEEPGRAM_API_KEY;
 
     if (!deepgramKey) {
-      // Fallback to OpenAI Whisper if Deepgram not configured
       return await transcribeWithWhisper(audioBuffer, mimeType, res);
     }
 
-    const dgRes = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&language=en-GB&smart_format=true&punctuate=true', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${deepgramKey}`,
-        'Content-Type': mimeType,
-      },
-      body: audioBuffer,
-    });
+    const dgRes = await fetch(
+      'https://api.deepgram.com/v1/listen?model=nova-2&language=en-GB&smart_format=true&punctuate=true',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${deepgramKey}`,
+          'Content-Type': mimeType,
+        },
+        body: audioBuffer,
+      }
+    );
 
     if (!dgRes.ok) {
       const errText = await dgRes.text();
       console.error('Deepgram error:', errText);
-      // Fall back to Whisper if Deepgram fails
       return await transcribeWithWhisper(audioBuffer, mimeType, res);
     }
 
@@ -50,7 +80,7 @@ export default async function handler(req, res) {
 }
 
 async function transcribeWithWhisper(audioBuffer, mimeType, res) {
-  const openAiKey = process.env.OPENAI_API_KEY; // server-side only, no VITE_ prefix
+  const openAiKey = process.env.OPENAI_API_KEY;
   if (!openAiKey) {
     return res.status(500).json({ error: 'No transcription service configured' });
   }
