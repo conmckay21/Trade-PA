@@ -2887,105 +2887,33 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         </a>
       )}
 
-      {/* Manage subscription — Stripe Customer Portal */}
-      {/* On iOS native builds (Capacitor), hide the portal button and */}
-      {/* direct users to the web — Apple requires IAP for in-app sub */}
-      {/* management. Web PWA + Android are fine. */}
-      {(() => {
-        const isIOSNative = typeof window !== "undefined"
-          && window.Capacitor?.isNativePlatform?.()
-          && window.Capacitor?.getPlatform?.() === "ios";
-
-        const openPortal = async () => {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
-            if (!token) {
-              alert("Please log in again to manage your subscription.");
-              return;
-            }
-            const res = await fetch("/api/stripe/portal", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-            });
-            const data = await res.json();
-            if (!res.ok) {
-              alert(data.message || data.error || "Couldn't open billing portal.");
-              return;
-            }
-            window.location.href = data.url;
-          } catch (err) {
-            console.error("[stripe-portal]", err);
-            alert("Couldn't open billing portal. Please try again or email hello@tradespa.co.uk");
-          }
-        };
-
-        return (
-          <div style={{
-            background: C.surfaceHigh,
-            border: `1px solid ${C.border}`,
-            borderRadius: 12,
-            padding: "12px 14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>
-                Manage subscription
-              </div>
-              <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>
-                {isIOSNative
-                  ? "Update payment, invoices, cancellation on the web"
-                  : "Update payment, download invoices, cancel or switch plan"}
-              </div>
-            </div>
-            {isIOSNative ? (
-              <a
-                href="https://www.tradespa.co.uk"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  fontFamily: "'DM Mono', monospace",
-                  fontSize: 10,
-                  color: C.amber,
-                  letterSpacing: "0.08em",
-                  fontWeight: 700,
-                  textDecoration: "none",
-                  textTransform: "uppercase",
-                  flexShrink: 0,
-                }}
-              >
-                Open web →
-              </a>
-            ) : (
-              <button
-                onClick={openPortal}
-                style={{
-                  fontFamily: "'DM Mono', monospace",
-                  fontSize: 10,
-                  color: C.amber,
-                  letterSpacing: "0.08em",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  background: "transparent",
-                  border: `1px solid ${C.amber}`,
-                  borderRadius: 6,
-                  padding: "6px 12px",
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
-              >
-                Manage →
-              </button>
-            )}
-          </div>
-        );
-      })()}
+      {/* Manage subscription row — placeholder until Stripe customer portal is wired */}
+      <div style={{
+        background: C.surfaceHigh,
+        border: `1px solid ${C.border}`,
+        borderRadius: 12,
+        padding: "12px 14px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>Manage subscription</div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>Email us to change payment details or cancel</div>
+        </div>
+        <a href="mailto:hello@tradespa.co.uk?subject=Trade%20PA%20subscription" style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 10,
+          color: C.amber,
+          letterSpacing: "0.08em",
+          fontWeight: 700,
+          textDecoration: "none",
+          textTransform: "uppercase",
+          flexShrink: 0,
+        }}>Email</a>
+      </div>
+      </>)}
 
       {subview === "branding" && (
       <div style={S.card}>
