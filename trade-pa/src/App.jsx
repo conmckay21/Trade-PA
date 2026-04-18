@@ -121,7 +121,7 @@ function LandingPage({ onAuth }) {
         <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => setScreen("login")} style={{ ...LP.btnGhost, padding: "8px 18px", fontSize: 13 }} className="lp-btn-ghost">Log in</button>
-          <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, padding: "8px 20px", fontSize: 13 }} className="lp-btn-primary">Get started →</button>
+          <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, padding: "8px 20px", fontSize: 13 }} className="lp-btn-primary">Start free trial →</button>
         </div>
       </nav>
 
@@ -136,10 +136,11 @@ function LandingPage({ onAuth }) {
           </div>
           <h1 style={LP.h1}>Your PA works<br/><span style={{ color: "#f59e0b" }}>when you can't.</span></h1>
           <p style={LP.sub}>Trade PA reads every email 24/7, drafts every action, chases every unpaid invoice — and waits for one tap to approve. Voice-controlled for when you're on the tools. The admin assistant that runs your business while you run the jobs.</p>
-          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 16 }}>
-            <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Get started — from £49/month →</button>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 12 }}>
+            <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Start 30-day free trial →</button>
             <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
           </div>
+          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
           <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail &amp; Outlook · 4 UK Patents Pending · Built for UK Trades</p>
         </div>
       </div>
@@ -377,7 +378,7 @@ function LandingPage({ onAuth }) {
         <div style={{ maxWidth: 1040, margin: "0 auto" }}>
           <div style={{ ...LP.sectionLabel, textAlign: "center" }}>Pricing</div>
           <h2 style={{ ...LP.h2, textAlign: "center" }}>Plans for every tradesperson.</h2>
-          <p style={{ fontSize: 17, color: "#666", margin: "0 auto 48px", maxWidth: 520, lineHeight: 1.7, textAlign: "center" }}>Start as a sole trader, scale as you grow. All plans include every feature.</p>
+          <p style={{ fontSize: 17, color: "#666", margin: "0 auto 48px", maxWidth: 520, lineHeight: 1.7, textAlign: "center" }}>Start with a 30-day free trial on any plan. No charge until day 31. Cancel anytime. All plans include every feature.</p>
 
           {/* Three plan cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 32 }}>
@@ -402,7 +403,7 @@ function LandingPage({ onAuth }) {
                     </li>
                   ))}
                 </ul>
-                <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, width: "100%", justifyContent: "center", fontSize: 14, padding: 14 }} className="lp-btn-primary">Get started →</button>
+                <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, width: "100%", justifyContent: "center", fontSize: 14, padding: 14 }} className="lp-btn-primary">Start free trial →</button>
               </div>
             ))}
           </div>
@@ -467,8 +468,9 @@ function LandingPage({ onAuth }) {
         <div style={{ position: "relative" }}>
           <h2 style={{ ...LP.h2, marginBottom: 20 }}>Stop doing admin<br/>after hours.</h2>
           <p style={{ fontSize: 17, color: "#888", marginBottom: 40, maxWidth: 500, margin: "0 auto 40px", lineHeight: 1.7 }}>Trade PA runs your inbox while you're on the tools, and chases your money while you sleep. One tap to approve. That's it.</p>
-          <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, fontSize: 16, padding: "16px 40px" }} className="lp-btn-primary">Get started →</button>
-          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 16 }}>Works with Gmail · Works with Outlook · Built-in business phone · UK-built for UK trades</p>
+          <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, fontSize: 16, padding: "16px 40px" }} className="lp-btn-primary">Start 30-day free trial →</button>
+          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", marginTop: 16, letterSpacing: "0.06em" }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
+          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 8 }}>Works with Gmail · Works with Outlook · Built-in business phone · UK-built for UK trades</p>
         </div>
       </div>
 
