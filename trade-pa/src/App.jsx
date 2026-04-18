@@ -2200,6 +2200,45 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
   const [reportText, setReportText] = useState(null);
   const [reportError, setReportError] = useState(null);
 
+  // ─── Add-on purchase (Plan & billing subview) ────────────────────────────
+  const [addonConfirm, setAddonConfirm] = useState(null); // addon_type key being confirmed
+  const [addonBusy, setAddonBusy] = useState(false);
+  const [addonResult, setAddonResult] = useState(null);   // { type, message, displayName? }
+  const ADDON_DISPLAY = {
+    conversations: { title: "+500 conversations", subtitle: "500 extra AI conversations, active right away. Expires end of this month.", pricePence: 3900 },
+    handsfree:     { title: "+10 hands-free hours", subtitle: "10 extra hours of hands-free mic time, active right away. Expires end of this month.", pricePence: 1900 },
+    combo:         { title: "+500 conversations & +10 hands-free hours", subtitle: "Both combined — 500 conversations and 10 hands-free hours, active right away. Expires end of this month.", pricePence: 5500 },
+  };
+  const purchaseAddon = async (addonType) => {
+    setAddonBusy(true);
+    setAddonResult(null);
+    try {
+      const { data: { session } } = await window._supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setAddonResult({ type: "error", message: "Please log in again to buy add-ons." });
+        return;
+      }
+      const res = await fetch("/api/stripe/purchase-addon", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ addon_type: addonType }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAddonResult({ type: "error", message: data.message || "Add-on purchase failed. Please try again." });
+      } else {
+        setAddonResult({ type: "success", displayName: data.display_name, message: "Active now — extra allowance available this month." });
+      }
+    } catch (err) {
+      console.error("[purchase-addon]", err);
+      setAddonResult({ type: "error", message: "Couldn't complete purchase. Please try again or email hello@tradespa.co.uk" });
+    } finally {
+      setAddonBusy(false);
+      setAddonConfirm(null);
+    }
+  };
+
   const generateReport = async () => {
     setReportLoading(true);
     setReportText(null);
@@ -3095,6 +3134,272 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         );
       })()}
+
+      {/* ── Monthly Usage (moved from AI Assistant subview) ─────────────── */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>Monthly Usage</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+          Your allowance resets on the 1st of each month.
+        </div>
+        {(() => {
+          const convUsed = usageData?.conversations_used || 0;
+          const convCap = usageCaps?.convos || 500;
+          const convUnlimited = convCap === Infinity;
+          const convPct = convUnlimited ? 0 : Math.min(1, convUsed / convCap);
+          const hfUsed = Math.round((usageData?.handsfree_seconds_used || 0) / 60);
+          const hfCap = usageCaps?.hf_hours === Infinity ? Infinity : (usageCaps?.hf_hours || 5) * 60;
+          const hfUnlimited = hfCap === Infinity;
+          const hfPct = hfUnlimited ? 0 : Math.min(1, hfUsed / hfCap);
+          const barStyle = () => ({
+            height: 8, borderRadius: 4, background: C.surfaceHigh, overflow: "hidden", marginTop: 6, marginBottom: 14,
+          });
+          const fillStyle = (pct) => ({
+            height: "100%", borderRadius: 4, width: (pct * 100) + "%",
+            background: pct >= 1 ? "#ef4444" : pct >= 0.8 ? C.amber : C.green,
+            transition: "width 0.3s ease",
+          });
+          const unlimitedPill = (
+            <span style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              color: C.green,
+              background: `${C.green}1a`,
+              border: `1px solid ${C.green}40`,
+              padding: "3px 8px",
+              borderRadius: 4,
+            }}>UNLIMITED</span>
+          );
+          const renderRow = (label, usedText, unlimited, pct) => (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, marginBottom: unlimited ? 14 : 0 }}>
+                <span style={{ color: C.text, fontWeight: 600 }}>{label}</span>
+                {unlimited ? unlimitedPill : (
+                  <span style={{ color: pct >= 0.8 ? C.amber : C.muted, fontFamily: "'DM Mono',monospace" }}>
+                    {usedText}
+                  </span>
+                )}
+              </div>
+              {!unlimited && <div style={barStyle()}><div style={fillStyle(pct)} /></div>}
+            </>
+          );
+          return (<>
+            {renderRow("AI Conversations", `${convUsed} / ${convCap}`, convUnlimited, convPct)}
+            {renderRow("Hands-free time",  `${hfUsed} / ${hfCap} min`, hfUnlimited,   hfPct)}
+            <div style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              color: C.muted,
+              letterSpacing: "0.1em",
+              textAlign: "center",
+              paddingTop: 10,
+              borderTop: `1px solid ${C.border}`,
+              fontWeight: 600,
+            }}>
+              {planTier === "solo" ? "SOLO PLAN" : planTier === "team" ? "TEAM PLAN" : "PRO PLAN"} · RESETS 1ST OF EACH MONTH
+            </div>
+          </>);
+        })()}
+      </div>
+
+      {/* ── Add-ons (iOS Level B: neutral link, no prices/no "buy") ─────── */}
+      {(() => {
+        const isIOSNative = typeof window !== "undefined"
+          && window.Capacitor?.isNativePlatform?.()
+          && window.Capacitor?.getPlatform?.() === "ios";
+
+        if (isIOSNative) {
+          return (
+            <div style={S.card}>
+              <div style={S.sectionTitle}>Running low?</div>
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                Manage your plan on the web at{" "}
+                <a href="https://www.tradespa.co.uk" target="_blank" rel="noopener noreferrer" style={{ color: C.amber, textDecoration: "none", fontWeight: 600 }}>
+                  tradespa.co.uk
+                </a>.
+              </div>
+            </div>
+          );
+        }
+
+        const items = [
+          { key: "conversations", label: "+500 conversations",          price: "£39 one-off",            highlight: false },
+          { key: "handsfree",     label: "+10 hands-free hours",        price: "£19 one-off",            highlight: false },
+          { key: "combo",         label: "+500 conv & +10 hands-free",  price: "£55 one-off · save £3",  highlight: true  },
+        ];
+
+        return (
+          <div style={S.card}>
+            <div style={S.sectionTitle}>Add-ons</div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.6 }}>
+              Top up this month's allowance. Charged to your saved card, expires end of month.
+            </div>
+            {addonResult && (
+              <div style={{
+                marginBottom: 12,
+                padding: "10px 12px",
+                borderRadius: 6,
+                fontSize: 12,
+                lineHeight: 1.5,
+                background: addonResult.type === "success" ? `${C.green}1a` : `${C.red}1a`,
+                border: `1px solid ${addonResult.type === "success" ? `${C.green}40` : `${C.red}40`}`,
+                color: addonResult.type === "success" ? C.green : C.red,
+              }}>
+                {addonResult.type === "success"
+                  ? `✓ ${addonResult.displayName || "Add-on"} — ${addonResult.message}`
+                  : `✕ ${addonResult.message}`}
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {items.map(item => (
+                <div key={item.key} style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "11px 12px",
+                  background: C.surfaceHigh,
+                  borderRadius: 6,
+                  border: item.highlight ? `1px solid ${C.amber}40` : `1px solid transparent`,
+                }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.label}</div>
+                    <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono',monospace", marginTop: 2 }}>{item.price}</div>
+                  </div>
+                  <button
+                    onClick={() => setAddonConfirm(item.key)}
+                    disabled={addonBusy}
+                    style={{
+                      padding: "6px 12px",
+                      border: `1px solid ${C.amber}`,
+                      background: item.highlight ? C.amber : "transparent",
+                      color: item.highlight ? "#412402" : C.amber,
+                      fontSize: 10,
+                      fontFamily: "'DM Mono', monospace",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      fontWeight: 700,
+                      borderRadius: 4,
+                      cursor: addonBusy ? "not-allowed" : "pointer",
+                      opacity: addonBusy ? 0.5 : 1,
+                      flexShrink: 0,
+                    }}
+                  >Buy →</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Confirmation modal (custom styled) ─────────────────────────── */}
+      {addonConfirm && ADDON_DISPLAY[addonConfirm] && (
+        <div
+          onClick={() => !addonBusy && setAddonConfirm(null)}
+          style={{
+            position: "fixed",
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 12,
+              padding: "20px 20px 18px",
+              width: "100%",
+              maxWidth: 340,
+            }}
+          >
+            <div style={{
+              fontSize: 10,
+              color: C.textDim,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              fontFamily: "'DM Mono', monospace",
+              marginBottom: 10,
+            }}>Confirm add-on</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>
+              {ADDON_DISPLAY[addonConfirm].title}
+            </div>
+            <div style={{ fontSize: 13, color: C.textDim, margin: "6px 0 16px", lineHeight: 1.55 }}>
+              We'll charge{" "}
+              <span style={{ color: C.amber, fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>
+                £{(ADDON_DISPLAY[addonConfirm].pricePence / 100).toFixed(2)}
+              </span>
+              {" "}to your card on file.
+            </div>
+            <div style={{
+              background: C.surfaceHigh,
+              borderRadius: 6,
+              padding: "11px 12px",
+              marginBottom: 18,
+            }}>
+              <div style={{
+                fontSize: 10,
+                color: C.textDim,
+                fontFamily: "'DM Mono', monospace",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                marginBottom: 4,
+              }}>You'll get</div>
+              <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
+                {ADDON_DISPLAY[addonConfirm].subtitle}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => setAddonConfirm(null)}
+                disabled={addonBusy}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  border: `1px solid ${C.border}`,
+                  background: "transparent",
+                  color: C.text,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  fontFamily: "'DM Mono', monospace",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  cursor: addonBusy ? "not-allowed" : "pointer",
+                  opacity: addonBusy ? 0.5 : 1,
+                }}
+              >Cancel</button>
+              <button
+                onClick={() => purchaseAddon(addonConfirm)}
+                disabled={addonBusy}
+                style={{
+                  flex: 1.6,
+                  padding: 10,
+                  border: `1px solid ${C.amber}`,
+                  background: C.amber,
+                  color: "#412402",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  borderRadius: 6,
+                  fontFamily: "'DM Mono', monospace",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  cursor: addonBusy ? "not-allowed" : "pointer",
+                  opacity: addonBusy ? 0.5 : 1,
+                }}
+              >
+                {addonBusy ? "Processing..." : `Confirm · £${Math.round(ADDON_DISPLAY[addonConfirm].pricePence / 100)}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       </>)}
 
       {subview === "branding" && (
@@ -3687,85 +3992,6 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         <button onClick={() => openAssistantSetup && openAssistantSetup()} style={{ ...S.btn("primary"), width: "100%", justifyContent: "center" }}>
           ⚙ Manage assistant
         </button>
-      </div>
-
-      {/* Usage — fair-use caps */}
-      <div style={S.card}>
-        <div style={S.sectionTitle}>Monthly Usage</div>
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
-          Your allowance resets on the 1st of each month. Upgrade for higher limits.
-        </div>
-        {(() => {
-          const convUsed = usageData?.conversations_used || 0;
-          const convCap = usageCaps?.convos || 500;
-          const convUnlimited = convCap === Infinity;
-          const convPct = convUnlimited ? 0 : Math.min(1, convUsed / convCap);
-          const hfUsed = Math.round((usageData?.handsfree_seconds_used || 0) / 60);
-          const hfCap = usageCaps?.hf_hours === Infinity ? Infinity : (usageCaps?.hf_hours || 5) * 60;
-          const hfUnlimited = hfCap === Infinity;
-          const hfPct = hfUnlimited ? 0 : Math.min(1, hfUsed / hfCap);
-          const barStyle = () => ({
-            height: 8, borderRadius: 4, background: C.surfaceHigh, overflow: "hidden", marginTop: 6, marginBottom: 14,
-          });
-          const fillStyle = (pct) => ({
-            height: "100%", borderRadius: 4, width: (pct * 100) + "%",
-            background: pct >= 1 ? "#ef4444" : pct >= 0.8 ? C.amber : C.green,
-            transition: "width 0.3s ease",
-          });
-          // Unlimited pill (mockup-style) used when a cap is Infinity — no dead grey bar
-          const unlimitedPill = (
-            <span style={{
-              fontFamily: "'DM Mono', monospace",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.1em",
-              color: C.green,
-              background: `${C.green}1a`,
-              border: `1px solid ${C.green}40`,
-              padding: "3px 8px",
-              borderRadius: 4,
-            }}>UNLIMITED</span>
-          );
-          // Row renderer — unlimited plans skip the progress bar entirely
-          const renderRow = (label, usedText, unlimited, pct) => (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, marginBottom: unlimited ? 14 : 0 }}>
-                <span style={{ color: C.text, fontWeight: 600 }}>{label}</span>
-                {unlimited ? unlimitedPill : (
-                  <span style={{ color: pct >= 0.8 ? C.amber : C.muted, fontFamily: "'DM Mono',monospace" }}>
-                    {usedText}
-                  </span>
-                )}
-              </div>
-              {!unlimited && <div style={barStyle()}><div style={fillStyle(pct)} /></div>}
-            </>
-          );
-          return (<>
-            {renderRow("AI Conversations", `${convUsed} / ${convCap}`, convUnlimited, convPct)}
-            {renderRow("Hands-free time",  `${hfUsed} / ${hfCap} min`, hfUnlimited,   hfPct)}
-            <div style={{
-              fontFamily: "'DM Mono',monospace",
-              fontSize: 11,
-              color: C.textDim,
-              marginTop: 14,
-              textAlign: "center",
-            }}>
-              Running low? Usage add-ons from £19 — <span style={{ color: C.amber, opacity: 0.7 }}>coming soon</span>
-            </div>
-            <div style={{
-              fontFamily: "'DM Mono', monospace",
-              fontSize: 10,
-              color: C.muted,
-              letterSpacing: "0.1em",
-              textAlign: "center",
-              paddingTop: 10,
-              borderTop: `1px solid ${C.border}`,
-              fontWeight: 600,
-            }}>
-              {planTier === "solo" ? "SOLO PLAN" : planTier === "team" ? "TEAM PLAN" : "PRO PLAN"} · RESETS 1ST OF EACH MONTH
-            </div>
-          </>);
-        })()}
       </div>
       </>)}
 
