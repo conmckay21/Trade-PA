@@ -2945,7 +2945,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               </div>
             </div>
             {isIOSNative ? (
-              
+              <a
                 href="https://www.tradespa.co.uk"
                 target="_blank"
                 rel="noopener noreferrer"
