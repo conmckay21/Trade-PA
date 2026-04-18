@@ -170,7 +170,7 @@
 
     <div class="billing-toggle">
       <button class="billing-btn active" id="btnMonthly" onclick="setBilling('monthly')">Monthly</button>
-      <button class="billing-btn" id="btnAnnual" onclick="setBilling('annual')">Annual <span class="save-badge">Save 2 months</span></button>
+      <button class="billing-btn" id="btnAnnual" onclick="setBilling('annual')">Annual <span class="save-badge">Save ~10%</span></button>
     </div>
 
     <div class="plan-cards">
@@ -191,7 +191,8 @@
           <span class="plan-feature">Jobs & invoices</span>
           <span class="plan-feature">CIS & DRC</span>
           <span class="plan-feature">Xero & QuickBooks</span>
-          <span class="plan-feature">Unlimited everything</span>
+          <span class="plan-feature">All features included</span>
+          <span class="plan-feature">500 AI conv · 5h hands-free</span>
         </div>
       </div>
 
@@ -212,6 +213,7 @@
           <span class="plan-feature">Team scheduling</span>
           <span class="plan-feature">Permission controls</span>
           <span class="plan-feature">Staff timesheets</span>
+          <span class="plan-feature">1,500 AI conv · 15h hands-free</span>
         </div>
       </div>
 
@@ -227,8 +229,8 @@
         </div>
         <div class="plan-features">
           <span class="plan-feature">Everything in Team</span>
-          <span class="plan-feature">Up to 10 users</span>
           <span class="plan-feature">Priority support</span>
+          <span class="plan-feature">2,500 AI conv · 25h hands-free</span>
         </div>
       </div>
     </div>
@@ -242,7 +244,7 @@
   <!-- RIGHT: Form -->
   <div class="form-card">
     <div class="form-title">Create your account</div>
-    <div class="form-sub">Your card is charged today. Cancel anytime.</div>
+    <div class="form-sub"><strong style="color:#f59e0b">Free for 30 days</strong> — card required, no charge until day 31. Cancel anytime.</div>
 
     <div class="selected-plan-summary">
       <div class="selected-plan-name" id="summaryName">Solo Plan</div>
@@ -298,11 +300,11 @@
       <div class="success-msg" id="successMsg"></div>
 
       <button type="submit" class="submit-btn" id="submitBtn">
-        <span id="submitText">Subscribe & Get Started →</span>
+        <span id="submitText">Start 30-day free trial →</span>
       </button>
 
       <p class="legal">
-        By subscribing you agree to our <a href="https://www.tradespa.co.uk/terms.html">Terms</a> and <a href="https://www.tradespa.co.uk/privacy-policy.html">Privacy Policy</a>. Renews automatically. Cancel anytime.
+        By starting your trial you agree to our <a href="https://www.tradespa.co.uk/terms.html">Terms</a> and <a href="https://www.tradespa.co.uk/privacy-policy.html">Privacy Policy</a>. Your card is held but not charged during the 30-day trial. After that, your plan renews automatically — cancel anytime before day 31 to avoid being charged.
       </p>
       <div class="secure-badge">🔒 Secured by Stripe · PCI compliant</div>
     </form>
@@ -318,15 +320,15 @@
   };
 
   const PLAN_INFO = {
-    solo:  { name: 'Solo Plan',  monthly: '£49/mo',  annual: '£500/yr' },
-    team:  { name: 'Team Plan',  monthly: '£89/mo',  annual: '£890/yr' },
-    pro:   { name: 'Pro Plan',   monthly: '£129/mo', annual: '£1,290/yr' },
+    solo:  { name: 'Solo Plan',  monthly: '£49/mo',  annual: '£529/yr' },
+    team:  { name: 'Team Plan',  monthly: '£89/mo',  annual: '£961/yr' },
+    pro:   { name: 'Pro Plan',   monthly: '£129/mo', annual: '£1,393/yr' },
   };
 
   const PLAN_PRICES = {
-    solo:  { monthly: '£49<span>/month</span>',  annual: '£500<span>/year</span>' },
-    team:  { monthly: '£89<span>/month</span>',  annual: '£890<span>/year</span>' },
-    pro:   { monthly: '£129<span>/month</span>', annual: '£1,290<span>/year</span>' },
+    solo:  { monthly: '£49<span>/month</span>',  annual: '£529<span>/year</span>' },
+    team:  { monthly: '£89<span>/month</span>',  annual: '£961<span>/year</span>' },
+    pro:   { monthly: '£129<span>/month</span>', annual: '£1,393<span>/year</span>' },
   };
 
   let selectedPlan = 'solo';
