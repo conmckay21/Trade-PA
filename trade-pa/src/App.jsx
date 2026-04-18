@@ -2898,7 +2898,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
         const openPortal = async () => {
           try {
-            const { data: { session } } = await supabase.auth.getSession();
+            const { data: { session } } = await window._supabase.auth.getSession();
             const token = session?.access_token;
             if (!token) {
               alert("Please log in again to manage your subscription.");
