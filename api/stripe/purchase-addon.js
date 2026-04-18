@@ -13,27 +13,31 @@ const supabaseAdmin = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
+// Field names MUST match addon_purchases table columns exactly — the INSERT
+// below spreads these values directly into the row. handsfree is in seconds,
+// not hours, because that's what check_usage_allowance reads against
+// usage_tracking.handsfree_seconds_used.
 const ADDON_CATALOGUE = {
   conversations: {
     priceEnv: "STRIPE_PRICE_ADDON_CONV_500",
     display_name: "+500 AI conversations",
-    amount_pence: 3900,
-    extra_conversations: 500,
-    extra_handsfree_hours: 0,
+    price_paid_pence: 3900,
+    conversations_added: 500,
+    handsfree_seconds_added: 0,
   },
   handsfree: {
     priceEnv: "STRIPE_PRICE_ADDON_HF_10",
     display_name: "+10 hands-free hours",
-    amount_pence: 1900,
-    extra_conversations: 0,
-    extra_handsfree_hours: 10,
+    price_paid_pence: 1900,
+    conversations_added: 0,
+    handsfree_seconds_added: 36000, // 10 hours × 3600
   },
   combo: {
     priceEnv: "STRIPE_PRICE_ADDON_COMBO",
     display_name: "+500 conversations & +10 hands-free hours",
-    amount_pence: 5500,
-    extra_conversations: 500,
-    extra_handsfree_hours: 10,
+    price_paid_pence: 5500,
+    conversations_added: 500,
+    handsfree_seconds_added: 36000,
   },
 };
 
@@ -93,6 +97,10 @@ export default async function handler(req, res) {
 
     // 3. Create pending addon_purchases row (webhook will flip to active)
     const expiresAt = sub.current_period_end || new Date(Date.now() + 30 * 86400 * 1000).toISOString();
+    // applies_to_month is what check_usage_allowance matches against.
+    // Current UTC calendar month — intentionally matches the RPC which also
+    // uses to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM').
+    const appliesToMonth = new Date().toISOString().slice(0, 7);
 
     const { data: pendingRow, error: insertErr } = await supabaseAdmin
       .from("addon_purchases")
@@ -100,9 +108,10 @@ export default async function handler(req, res) {
         user_id: userId,
         subscription_id: sub.id,
         addon_type,
-        amount_pence: addonConfig.amount_pence,
-        extra_conversations: addonConfig.extra_conversations,
-        extra_handsfree_hours: addonConfig.extra_handsfree_hours,
+        price_paid_pence: addonConfig.price_paid_pence,
+        conversations_added: addonConfig.conversations_added,
+        handsfree_seconds_added: addonConfig.handsfree_seconds_added,
+        applies_to_month: appliesToMonth,
         expires_at: expiresAt,
         status: "pending",
       })
@@ -118,7 +127,7 @@ export default async function handler(req, res) {
     let paymentIntent;
     try {
       paymentIntent = await stripe.paymentIntents.create({
-        amount: addonConfig.amount_pence,
+        amount: addonConfig.price_paid_pence,
         currency: "gbp",
         customer: sub.stripe_customer_id,
         payment_method: paymentMethodId,
@@ -170,7 +179,7 @@ export default async function handler(req, res) {
       success: true,
       addon_type,
       display_name: addonConfig.display_name,
-      amount_pence: addonConfig.amount_pence,
+      amount_pence: addonConfig.price_paid_pence,
       payment_intent_id: paymentIntent.id,
       payment_status: paymentIntent.status,
       expires_at: expiresAt,
