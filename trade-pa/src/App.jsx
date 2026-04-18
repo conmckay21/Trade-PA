@@ -25748,11 +25748,12 @@ function AppInner() {
         const cid = await getOrCreateCompany(user.id);
         if (!cid) { setDbLoading(false); return; }
 
-        // Load members for team management
-        const { data: mem } = await db
-          .from("company_members")
-          .select("*, users:user_id(email)")
-          .eq("company_id", cid);
+        // Load members for team management via the get_company_members
+        // RPC — a SECURITY DEFINER function that safely exposes
+        // auth.users.email for members of the caller's own company.
+        // Returns rows with a user_email column alongside the normal
+        // company_members fields.
+        const { data: mem } = await db.rpc("get_company_members", { p_company_id: cid });
         if (mem) setMembers(mem);
 
         const [j, inv, enq, mat, cust, contacts] = await Promise.all([
