@@ -5,7 +5,10 @@
 // Phase 1 Session 1: schema defined.
 // Phase 1 Session 2: cache read/write/merge helpers.
 // Phase 1 Session 4: pending_writes helpers activated.
-// Phase 1 Session 4b (NOW): retry / discard helpers for failed writes.
+// Phase 1 Session 4b: retry / discard helpers for failed writes.
+// Phase 1 Session 4b.1 (NOW): removed 'quotes' from TIER_2 — Trade PA
+//   uses the invoices table with is_quote flag rather than a separate
+//   quotes table. Prewarm was logging '1 failed' every login for no reason.
 
 import { openDB } from "idb";
 
@@ -33,7 +36,6 @@ export const TIER_1_TABLES = [
 
 export const TIER_2_TABLES = [
   "invoices",
-  "quotes",
   "compliance_docs",
   "documents",
   "subcontractors",
@@ -207,10 +209,6 @@ export async function clearAllCache() {
   await tx.done;
 }
 
-/**
- * Full stats for the diagnostics panel.
- * Returns { perTable: { <table>: { rows, lastCached }}, pending, failed }.
- */
 export async function getCacheStats() {
   const idb = await getOfflineDb();
   if (!idb) return null;
@@ -290,11 +288,6 @@ export async function deletePendingWrite(id) {
   }
 }
 
-/**
- * Used during temp-id reconciliation — replaces an entry wholesale.
- * Safe to call while iterating listPendingWrites since each call opens
- * its own tx.
- */
 export async function putPendingWrite(id, entry) {
   const idb = await getOfflineDb();
   if (!idb) return;
