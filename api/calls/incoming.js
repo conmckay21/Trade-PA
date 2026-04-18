@@ -1,13 +1,4 @@
 // api/calls/incoming.js
-// Conference bridge approach — Twilio stays in the middle of EVERY call
-// Whether answered on app or mobile, the call is always recorded and transcribed
-// Call flow:
-// 1. Caller rings Twilio number
-// 2. Twilio creates a named conference room
-// 3. Twilio dials app client into conference (push notification fires simultaneously)
-// 4. If app doesn't answer in 20s, Twilio dials mobile into conference too
-// 5. Recording happens at conference level — always captured regardless of answer method
-
 import { createClient } from '@supabase/supabase-js';
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
@@ -24,8 +15,42 @@ export default async function handler(req, res) {
   const appUrl = process.env.APP_URL;
   const identity = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
 
+  // ─── Quota check — reject calls over hard_cap to voicemail ────────────────
   try {
-    // Fetch call_tracking settings (forward_to mobile)
+    const ctQuotaRes = await fetch(
+      `${process.env.VITE_SUPABASE_URL}/rest/v1/call_tracking?user_id=eq.${userId}&select=phone_plan,hard_cap_minutes,minutes_used_month,active&limit=1`,
+      { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+    );
+    const ctQuotaData = await ctQuotaRes.json();
+    const ctRow = ctQuotaData?.[0];
+
+    if (ctRow) {
+      if (ctRow.active === false) {
+        res.setHeader('Content-Type', 'text/xml');
+        return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice" language="en-GB">Sorry, this number is no longer in service.</Say>
+  <Hangup/>
+</Response>`);
+      }
+
+      if (ctRow.phone_plan && ctRow.hard_cap_minutes != null
+          && ctRow.minutes_used_month >= ctRow.hard_cap_minutes) {
+        console.log(`[incoming] User ${userId} over hard cap (${ctRow.minutes_used_month}/${ctRow.hard_cap_minutes}) — voicemail`);
+        res.setHeader('Content-Type', 'text/xml');
+        return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice" language="en-GB">Thank you for calling. The subscriber has reached their monthly call allowance. Please leave a message after the beep and they will get back to you.</Say>
+  <Record maxLength="120" playBeep="true" transcribe="false"/>
+  <Hangup/>
+</Response>`);
+      }
+    }
+  } catch (quotaErr) {
+    console.error('[incoming] Quota check failed, proceeding:', quotaErr.message);
+  }
+
+  try {
     const ctRes = await fetch(
       `${process.env.VITE_SUPABASE_URL}/rest/v1/call_tracking?user_id=eq.${userId}&select=forward_to&limit=1`,
       { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
@@ -33,7 +58,6 @@ export default async function handler(req, res) {
     const ctData = await ctRes.json();
     const forwardTo = ctData?.[0]?.forward_to || '';
 
-    // Look up caller name from customers
     const last10 = normalised.slice(-10);
     const custRes = await fetch(
       `${process.env.VITE_SUPABASE_URL}/rest/v1/customers?user_id=eq.${userId}&select=id,name,phone&limit=200`,
@@ -43,11 +67,8 @@ export default async function handler(req, res) {
     const matched = customers.find(c => c.phone && c.phone.replace(/\s/g, '').slice(-10) === last10);
     const customerName = matched?.name || 'Unknown caller';
 
-    // Create a unique conference room name for this call
-    // Use timestamp + callerNumber to make it unique
     const confName = `tradpa_${userId.slice(0,8)}_${Date.now()}`;
 
-    // Fire push notification immediately to wake app
     fetch(`${appUrl}/api/push/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -61,7 +82,6 @@ export default async function handler(req, res) {
       }),
     }).catch(() => {});
 
-    // Build conference status callback URLs (& must be &amp; in XML)
     const confStatusCallback = [
       `${appUrl}/api/calls/conf-status`,
       `?userId=${encodeURIComponent(userId)}`,
@@ -80,9 +100,6 @@ export default async function handler(req, res) {
 
     console.log(`Conference bridge: ${normalised} (${customerName}) → conf: ${confName}`);
 
-    // Put caller into conference room first (they hear hold music while we connect the other party)
-    // The conference is set to start recording immediately
-    // conf-status webhook fires when participant count changes — that's when we dial mobile fallback
     res.setHeader('Content-Type', 'text/xml');
     return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -106,7 +123,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('Incoming call error:', err.message);
-    // Fallback — direct dial to app client if conference setup fails
     res.setHeader('Content-Type', 'text/xml');
     return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
