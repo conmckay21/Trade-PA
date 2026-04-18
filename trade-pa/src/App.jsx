@@ -28,6 +28,19 @@ class ErrorBoundary extends Component {
 }
 window._supabase = db;
 
+// ─── Auth header helper for all /api fetch calls ──────────────────────────────
+// Returns the headers object with Authorization: Bearer <token> attached.
+// All /api/claude and /api/transcribe routes require this.
+async function authHeaders(extra = {}) {
+  const { data: { session } } = await window._supabase.auth.getSession();
+  const token = session?.access_token || '';
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`,
+    ...extra,
+  };
+}
+
 // ─── Sync invoice to accounting software ─────────────────────────────────────
 async function syncInvoiceToAccounting(userId, invoice) {
   if (!userId || !invoice) return;
@@ -369,9 +382,9 @@ function LandingPage({ onAuth }) {
           {/* Three plan cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 32 }}>
             {[
-              { name: "Solo", price: "£49", period: "/month", annual: "£500/year", users: "1 user", features: ["500 AI conversations / month","5 hours hands-free / month","Tap-to-talk voice — never capped","All 43 features included","Allowance resets 1st of month"], popular: false },
-              { name: "Team", price: "£89", period: "/month", annual: "£890/year", users: "Up to 5 users", features: ["2,000 AI conversations / month","20 hours hands-free / month","Team scheduling & permissions","Staff timesheets & GPS tracking","All 43 features included"], popular: true },
-              { name: "Pro", price: "£129", period: "/month", annual: "£1,290/year", users: "Up to 10 users", features: ["Unlimited AI conversations","Unlimited hands-free","Priority support","All 43 features included","Everything in Team, unlimited"], popular: false },
+              { name: "Solo", price: "£49", period: "/month", annual: "£529/year", users: "1 user", features: ["500 AI conversations / month","5 hours hands-free / month","Tap-to-talk voice — never capped","All 43 features included","Allowance resets 1st of month"], popular: false },
+              { name: "Team", price: "£89", period: "/month", annual: "£961/year", users: "Up to 5 users", features: ["1,500 AI conversations / month","15 hours hands-free / month","Team scheduling & permissions","Staff timesheets & GPS tracking","All 43 features included"], popular: true },
+              { name: "Pro", price: "£129", period: "/month", annual: "£1,393/year", users: "Up to 10 users", features: ["2,500 AI conversations / month","25 hours hands-free / month","Priority support","All 43 features included","Everything in Team, more capacity"], popular: false },
             ].map(plan => (
               <div key={plan.name} style={{ ...LP.pricingCard, maxWidth: "100%", border: plan.popular ? "2px solid #f59e0b" : "1px solid #222", position: "relative" }}>
                 {plan.popular && <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: "#f59e0b", color: "#000", fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 700, padding: "3px 14px", borderRadius: 100, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>MOST POPULAR</div>}
@@ -392,6 +405,27 @@ function LandingPage({ onAuth }) {
                 <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, width: "100%", justifyContent: "center", fontSize: 14, padding: 14 }} className="lp-btn-primary">Get started →</button>
               </div>
             ))}
+          </div>
+
+          {/* Usage add-ons */}
+          <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: "32px 28px", textAlign: "center", marginBottom: 16 }}>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>⚡ Add-on · Any Plan</div>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Need more mid-month?</div>
+            <p style={{ color: "#666", fontSize: 14, maxWidth: 560, margin: "0 auto 24px", lineHeight: 1.7 }}>Busy month? Top up any plan with one-off usage add-ons. No subscription change, no commitment — just a boost for the current billing period.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, maxWidth: 700, margin: "0 auto 16px" }}>
+              {[
+                { label: "+500 AI conversations", price: "£39", desc: "Extra allowance for a busy month" },
+                { label: "+10 hours hands-free", price: "£19", desc: "Extra hands-free time, top-up only" },
+                { label: "+500 conv & +10h combo", price: "£55", desc: "Save £3 vs buying both separately" },
+              ].map(({ label, price, desc }) => (
+                <div key={label} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 12px", textAlign: "left" }}>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, color: "#f0f0f0", marginBottom: 6 }}>{label}</div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{price}</div>
+                  <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{desc}</div>
+                </div>
+              ))}
+            </div>
+            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555" }}>One-off · Available to all plans · Expires at billing rollover</p>
           </div>
 
           {/* Business Phone add-on */}
@@ -712,7 +746,7 @@ function useWhisper(onTranscript, onSilence) {
           });
           const res = await fetch("/api/transcribe", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: await authHeaders(),
             body: JSON.stringify({ audio: audioBase64, mimeType }),
           });
           const data = await res.json();
@@ -2832,7 +2866,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               lineHeight: 1.1,
             }}>Trade PA {planTier === "pro" ? "Pro" : planTier === "team" ? "Team" : "Solo"}</div>
             <div style={{ fontSize: 12, color: C.textDim, marginTop: 3 }}>
-              {planTier === "solo" ? "1 user · £29/mo" : planTier === "team" ? "Up to 5 users · £89/mo" : "Up to 10 users · £129/mo"}
+              {planTier === "solo" ? "1 user · £49/mo" : planTier === "team" ? "Up to 5 users · £89/mo" : "Up to 10 users · £129/mo"}
             </div>
           </div>
           <span style={{
@@ -3634,6 +3668,15 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           return (<>
             {renderRow("AI Conversations", `${convUsed} / ${convCap}`, convUnlimited, convPct)}
             {renderRow("Hands-free time",  `${hfUsed} / ${hfCap} min`, hfUnlimited,   hfPct)}
+            <div style={{
+              fontFamily: "'DM Mono',monospace",
+              fontSize: 11,
+              color: C.textDim,
+              marginTop: 14,
+              textAlign: "center",
+            }}>
+              Running low? Usage add-ons from £19 — <span style={{ color: C.amber, opacity: 0.7 }}>coming soon</span>
+            </div>
             <div style={{
               fontFamily: "'DM Mono', monospace",
               fontSize: 10,
@@ -4999,9 +5042,7 @@ function Materials({ materials, setMaterials, user, setContextHint }) {
 
       const response = await fetch("/api/claude", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          },
+        headers: await authHeaders(),
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 1000,
@@ -5950,12 +5991,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
       const res = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
           max_tokens: 350,
           system: "Analyse tradesperson PA conversations. Return ONLY valid JSON, no markdown.",
-          messages: [{ role: "user", content: prompt }]
+          messages: [{ role: "user", content: prompt }],
+          background: true
         })
       });
       if (!res.ok) return;
@@ -9440,7 +9482,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     // Fair-use cap: check conversation allowance
     const _caps = usageCapsRef.current || {};
     if (_caps.convos !== Infinity && (usageDataRef.current?.conversations_used || 0) >= _caps.convos) {
-      const capMsg = `You've used all ${_caps.convos} AI conversations for this month. Your allowance resets on the 1st. Upgrade your plan for a higher limit.`;
+      const capMsg = `You've used all ${_caps.convos} AI conversations for this month. Your allowance resets on the 1st. Upgrade your plan, or buy a +500 conversations add-on for £39.`;
       setMessages(prev => [...prev, { role: "user", content: text }, { role: "assistant", content: capMsg }]);
       if (handsFreeRef.current) speak(capMsg);
       return;
@@ -9508,7 +9550,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
         const res = await fetch("/api/claude", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: await authHeaders(),
           body: JSON.stringify({
             model: "claude-sonnet-4-6",
             max_tokens: 1000,
@@ -10048,7 +10090,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
       const resp = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 1500,
@@ -11922,7 +11964,7 @@ function MicButton({ form, setForm, accentColor }) {
           });
           const transcribeRes = await fetch("/api/transcribe", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: await authHeaders(),
             body: JSON.stringify({ audio: audioBase64, mimeType: "audio/webm" }),
           });
           const { text } = await transcribeRes.json();
@@ -11931,7 +11973,7 @@ function MicButton({ form, setForm, accentColor }) {
           // Ask Claude to interpret the voice and return updated fields
           const res = await fetch("/api/claude", {
             method: "POST",
-            headers: { "Content-Type": "application/json", },
+            headers: await authHeaders(),
             body: JSON.stringify({
               model: "claude-sonnet-4-6",
               max_tokens: 400,
@@ -12002,7 +12044,7 @@ function VoiceFillButton({ form, setForm, fieldDescriptions, color }) {
           });
           const transcribeRes = await fetch("/api/transcribe", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: await authHeaders(),
             body: JSON.stringify({ audio: audioBase64, mimeType: "audio/webm" }),
           });
           const { text } = await transcribeRes.json();
@@ -12010,7 +12052,7 @@ function VoiceFillButton({ form, setForm, fieldDescriptions, color }) {
 
           const res = await fetch("/api/claude", {
             method: "POST",
-            headers: { "Content-Type": "application/json", },
+            headers: await authHeaders(),
             body: JSON.stringify({
               model: "claude-sonnet-4-6",
               max_tokens: 400,
@@ -13152,7 +13194,7 @@ Rules:
     try {
       const res = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json", },
+        headers: await authHeaders(),
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 200,
@@ -15418,7 +15460,7 @@ function CustomerForm({ form, set, onSave, onCancel }) {
           });
           const transcribeRes = await fetch("/api/transcribe", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: await authHeaders(),
             body: JSON.stringify({ audio: audioBase64, mimeType: "audio/webm" }),
           });
           const { text } = await transcribeRes.json();
@@ -15428,7 +15470,7 @@ function CustomerForm({ form, set, onSave, onCancel }) {
           }
           const claudeRes = await fetch("/api/claude", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: await authHeaders(),
             body: JSON.stringify({
               model: "claude-sonnet-4-6",
               max_tokens: 200,
@@ -17241,7 +17283,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
               // Use Claude to extract CIS data from the PDF
               const parseRes = await fetch("/api/claude", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", },
+                headers: await authHeaders(),
                 body: JSON.stringify({
                   model: "claude-sonnet-4-6",
                   max_tokens: 400,
@@ -21918,7 +21960,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
         : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
       const resp = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 1500,
@@ -24017,7 +24059,7 @@ function RAMSTab({ user, brand, setContextHint }) {
     try {
       const response = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json", },
+        headers: await authHeaders(),
         body: JSON.stringify({
           model: "claude-sonnet-4-6", max_tokens: 800,
           messages: [{ role: "user", content: `For this UK trade work: "${form.scope}", return ONLY JSON: {"hazard_ids": ["list of relevant hazard ids from: wah1,wah2,wah3,wah4,wah5,elec1,elec2,elec3,elec4,gas1,gas2,gas3,gas4,gas5,plumb1,plumb2,plumb3,plumb4,mh1,mh2,mh3,pt1,pt2,pt3,pt4,pt5,dust1,dust2,dust3,dust4,stf1,stf2,stf3,fire1,fire2,cs1,cs2,site1,site2,site3,site4"], "method_steps": ["up to 8 specific work steps"]}` }],
@@ -25223,9 +25265,11 @@ function AppInner() {
   const currentMonth = new Date().toISOString().slice(0, 7); // "2026-04"
   const [usageData, setUsageData] = useState({ conversations_used: 0, handsfree_seconds_used: 0 });
   const USAGE_CAPS = {
-    solo: { convos: 500, hf_hours: 5 },
-    team: { convos: 2000, hf_hours: 20 },
-    pro:  { convos: Infinity, hf_hours: Infinity },
+    trial:         { convos: 500,  hf_hours: 5 },   // trial limits = Solo level regardless of plan
+    solo:          { convos: 500,  hf_hours: 5 },
+    solo_founding: { convos: 500,  hf_hours: 5 },   // founding member — same caps as Solo
+    team:          { convos: 1500, hf_hours: 15 },
+    pro:           { convos: 2500, hf_hours: 25 },
   };
   const usageCaps = USAGE_CAPS[planTier] || USAGE_CAPS.solo;
   // Custom assistant persona — state here in App (passed to AIAssistant as props)
@@ -26141,7 +26185,7 @@ function AppInner() {
       : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
     const resp = await fetch("/api/claude", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await authHeaders(),
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 1000,
