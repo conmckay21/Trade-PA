@@ -2,6 +2,7 @@
 // Handles Stripe webhooks for main subscriptions, phone subscriptions, and add-on payments.
 
 import Stripe from "stripe";
+import { sendWelcome, sendTrialEnding, sendPaymentFailed } from "../_lib/resend.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -35,6 +36,30 @@ async function getSubscriptionRow(stripeSubscriptionId) {
 
 function isPhoneSubscription(subscription) {
   return subscription.metadata?.type === "phone_subscription";
+}
+
+// Retrieve customer email + first name for transactional email sends.
+// Safe: returns nulls on failure, never throws. Email send will skip if no address.
+async function getSubscriptionCustomer(subscription) {
+  try {
+    const customerId = typeof subscription.customer === "string"
+      ? subscription.customer
+      : subscription.customer?.id;
+    if (!customerId) return { email: null, firstName: null };
+    const customer = await stripe.customers.retrieve(customerId);
+    if (customer?.deleted) return { email: null, firstName: null };
+    const firstName = (customer.name || "").split(" ")[0] || null;
+    return { email: customer.email || null, firstName };
+  } catch (err) {
+    console.error("[webhook] failed to retrieve Stripe customer:", err.message);
+    return { email: null, firstName: null };
+  }
+}
+
+// Friendly plan label from plan_code metadata.
+function planLabel(planCode) {
+  const labels = { solo: "Solo", team: "Team", pro: "Pro" };
+  return labels[planCode] || "Trade PA";
 }
 
 async function releaseTwilioNumber(numberSid) {
@@ -201,6 +226,20 @@ export default async function handler(req, res) {
         } else {
           await patchSubscription(subscriptionId, { status: "past_due" });
           console.log(`[webhook] ⚠ main sub ${subscriptionId} marked past_due`);
+
+          // ---- send payment-failed email (billing@) -----------------------
+          const { email, firstName } = await getSubscriptionCustomer(subscription);
+          if (email) {
+            await sendPaymentFailed({
+              to: email,
+              firstName,
+              amount: invoice.amount_due,
+              currency: invoice.currency,
+              nextRetryDate: invoice.next_payment_attempt
+                ? new Date(invoice.next_payment_attempt * 1000)
+                : null,
+            });
+          }
         }
         break;
       }
@@ -218,6 +257,26 @@ export default async function handler(req, res) {
           }
           break;
         }
+
+        // ---- send welcome email BEFORE the row-existence early-exit ------
+        // create-subscription.js always inserts the row first, so by the time
+        // we get here the row exists. We still want the welcome to fire once
+        // per subscription.created event (Stripe won't re-send the same event
+        // unless our handler returns non-200).
+        {
+          const { email, firstName } = await getSubscriptionCustomer(subscription);
+          if (email) {
+            await sendWelcome({
+              to: email,
+              firstName,
+              planName: planLabel(subscription.metadata?.plan_code),
+              trialEndsAt: subscription.trial_end
+                ? new Date(subscription.trial_end * 1000)
+                : null,
+            });
+          }
+        }
+
         const existing = await getSubscriptionRow(subscription.id);
         if (existing) break;
         const { isInTrial, trialEndsAt } = deriveTrialState(subscription);
@@ -282,7 +341,45 @@ export default async function handler(req, res) {
       }
 
       case "customer.subscription.trial_will_end": {
-        console.log(`[webhook] ⏰ trial ending soon — sub ${event.data.object.id}`);
+        const subscription = event.data.object;
+        console.log(`[webhook] ⏰ trial ending soon — sub ${subscription.id}`);
+
+        // Phone subscriptions don't have trials — skip.
+        if (isPhoneSubscription(subscription)) break;
+
+        // ---- send trial-ending email (hello@) ----------------------------
+        const { email, firstName } = await getSubscriptionCustomer(subscription);
+        if (email) {
+          // Fetch the latest upcoming invoice to know the charge amount.
+          let amount = null;
+          let currency = "gbp";
+          try {
+            const upcoming = await stripe.invoices.retrieveUpcoming({
+              customer: typeof subscription.customer === "string"
+                ? subscription.customer
+                : subscription.customer?.id,
+            });
+            amount = upcoming?.amount_due || null;
+            currency = upcoming?.currency || "gbp";
+          } catch (err) {
+            // 404 just means no upcoming invoice — not an error, carry on.
+            if (err?.code !== "invoice_upcoming_none") {
+              console.warn(`[webhook] upcoming invoice lookup failed: ${err.message}`);
+            }
+          }
+
+          await sendTrialEnding({
+            to: email,
+            firstName,
+            trialEndsAt: subscription.trial_end
+              ? new Date(subscription.trial_end * 1000)
+              : null,
+            planName: planLabel(subscription.metadata?.plan_code),
+            amount,
+            currency,
+            hasPaymentMethod: Boolean(subscription.default_payment_method),
+          });
+        }
         break;
       }
 
