@@ -77,6 +77,299 @@ async function syncInvoiceToAccounting(userId, invoice) {
 }
 
 // ─── Auth Screen ──────────────────────────────────────────────────────────────
+// ─── Voice Hero Card (cycling live voice → action demo) ──────────────────────
+function VoiceHeroCard() {
+  const [phase, setPhase] = useState("LISTENING");
+  const [timer, setTimer] = useState("00:00");
+  const [transcript, setTranscript] = useState([]);   // array of { text, entity }
+  const [actions, setActions] = useState([]);          // revealed actions
+  const [scenarioIdx, setScenarioIdx] = useState(0);
+
+  const scenarios = [
+    {
+      segments: [
+        { t: "Book ", entity: false },
+        { t: "Lisa Thompson", entity: true },
+        { t: " in for a ", entity: false },
+        { t: "boiler service Thursday", entity: true },
+        { t: ", add two metres of ", entity: false },
+        { t: "22mm copper", entity: true },
+        { t: " from City Plumbing to the quote I did last week, and chase the invoice from the ", entity: false },
+        { t: "Maple Avenue", entity: true },
+        { t: " job.", entity: false },
+      ],
+      actions: [
+        ["Booked Lisa Thompson", "Thursday 11:30 — boiler service"],
+        ["Materials added", "£59.40 of 22mm copper to Maple Ave quote"],
+        ["Chase email sent", "Maple Ave — gentle reminder"],
+      ],
+    },
+    {
+      segments: [
+        { t: "Raise an invoice for the ", entity: false },
+        { t: "Wilson bathroom refit", entity: true },
+        { t: " — ", entity: false },
+        { t: "£2,400 labour", entity: true },
+        { t: ", materials off the receipts, and send ", entity: false },
+        { t: "Dave", entity: true },
+        { t: " a gentle chase on last week's quote.", entity: false },
+      ],
+      actions: [
+        ["Invoice #INV-091 raised", "Wilson bathroom refit — £2,712.40"],
+        ["Materials matched", "£312.40 pulled from receipts"],
+        ["Chase sent to Dave", "Gentle reminder — 3 days since quote"],
+      ],
+    },
+    {
+      segments: [
+        { t: "Draft a ", entity: false },
+        { t: "RAMS", entity: true },
+        { t: " for tomorrow — ", entity: false },
+        { t: "working at height", entity: true },
+        { t: ", pitched roof, scaffold tower — and send the ", entity: false },
+        { t: "CP12", entity: true },
+        { t: " for the Patel job.", entity: false },
+      ],
+      actions: [
+        ["RAMS drafted", "Working at height — 7 hazards, 6 steps"],
+        ["PDF generated", "Ready to share with client"],
+        ["CP12 sent to Patel", "Branded PDF — Gmail"],
+      ],
+    },
+  ];
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  useEffect(() => {
+    let cancelled = false;
+    let timerInt = null;
+    const start = Date.now();
+
+    const run = async () => {
+      const s = scenarios[scenarioIdx];
+
+      setPhase("LISTENING");
+      setTranscript([]);
+      setActions([]);
+
+      timerInt = setInterval(() => {
+        if (cancelled) return;
+        const sec = Math.floor((Date.now() - start) / 1000);
+        setTimer(`00:${String(sec).padStart(2, "0")}`);
+      }, 100);
+
+      await sleep(700); if (cancelled) return;
+      setPhase("TRANSCRIBING");
+
+      // typewriter
+      const built = [];
+      for (const seg of s.segments) {
+        built.push({ text: "", entity: seg.entity });
+        for (let i = 0; i < seg.t.length; i++) {
+          built[built.length - 1].text += seg.t[i];
+          setTranscript([...built]);
+          await sleep(18 + Math.random() * 20);
+          if (cancelled) return;
+        }
+      }
+
+      await sleep(400); if (cancelled) return;
+      setPhase("THINKING");
+      await sleep(600); if (cancelled) return;
+      setPhase("EXECUTING");
+
+      for (let i = 0; i < s.actions.length; i++) {
+        if (cancelled) return;
+        setActions(s.actions.slice(0, i + 1));
+        await sleep(280);
+      }
+
+      await sleep(300); if (cancelled) return;
+      setPhase("DONE");
+      clearInterval(timerInt); timerInt = null;
+
+      await sleep(3400); if (cancelled) return;
+      setScenarioIdx((i) => (i + 1) % scenarios.length);
+    };
+
+    run();
+    return () => { cancelled = true; if (timerInt) clearInterval(timerInt); };
+  }, [scenarioIdx]);
+
+  const barHeights = [30, 60, 45, 80, 35, 70, 25, 55, 75, 40, 65, 30, 80, 50, 90, 35, 60, 70, 40, 55, 25, 65, 45, 75, 30, 50, 80, 60, 35, 70];
+
+  return (
+    <div style={{
+      background: "linear-gradient(180deg, #1a1a1a, #141414)",
+      border: "1px solid #2a2a2a",
+      borderRadius: 16,
+      overflow: "hidden",
+      boxShadow: "0 40px 100px -40px rgba(0,0,0,0.9), 0 0 0 1px rgba(245,158,11,0.08)",
+      position: "relative",
+      fontFamily: "'DM Mono',monospace",
+      maxWidth: 520,
+      margin: "0 auto",
+    }}>
+      <div style={{ position: "absolute", inset: -1, borderRadius: 16, background: "linear-gradient(180deg, rgba(245,158,11,0.3), transparent 35%)", pointerEvents: "none", zIndex: 0 }} />
+      <div style={{ position: "relative", zIndex: 1 }}>
+
+        {/* Head */}
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid #1e1e1e", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", animation: "vc-pulse 1.6s ease-in-out infinite" }} />
+            <span style={{ fontSize: 10, letterSpacing: "0.14em", fontWeight: 700, color: "#f59e0b" }}>{phase}</span>
+          </div>
+          <span style={{ fontSize: 10, letterSpacing: "0.14em", color: "#666" }}>{timer}</span>
+        </div>
+
+        {/* Waveform */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, height: 56, padding: "12px 16px 8px" }}>
+          {barHeights.map((h, i) => (
+            <div key={i} className="vc-bar" style={{
+              width: 3,
+              background: "#f59e0b",
+              borderRadius: 2,
+              "--h": h + "%",
+              animationDelay: (i * 40) + "ms",
+              animationDuration: (0.6 + (i % 5) * 0.12) + "s",
+            }} />
+          ))}
+        </div>
+
+        {/* Transcript */}
+        <div style={{ padding: "4px 20px 16px", minHeight: 80, fontSize: 14, lineHeight: 1.4, letterSpacing: "-0.01em", color: "#f0f0f0", fontStyle: "italic" }}>
+          {transcript.map((seg, i) => (
+            <span key={i} style={seg.entity ? { color: "#f59e0b", fontWeight: 700 } : {}}>{seg.text}</span>
+          ))}
+          <span className="vc-caret" style={{ display: "inline-block", width: 2, height: "0.85em", background: "#f59e0b", marginLeft: 2, verticalAlign: "middle" }} />
+        </div>
+
+        {/* Actions */}
+        <div style={{ borderTop: "1px solid #1e1e1e", padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: 8, minHeight: 146 }}>
+          {actions.map((a, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, animation: "vc-reveal 0.4s cubic-bezier(0.2,0.7,0.2,1) both" }}>
+              <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#10b981", color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>✓</div>
+              <div style={{ fontSize: 11.5, lineHeight: 1.45, color: "#ccc" }}>
+                <span style={{ color: "#f0f0f0", fontWeight: 700 }}>{a[0]}</span> — {a[1]}
+              </div>
+            </div>
+          ))}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ─── Inbox Demo Card (cycling AI actions queue) ───────────────────────────────
+function InboxDemoCard() {
+  const [items, setItems] = useState([]);
+  const [scenarioIdx, setScenarioIdx] = useState(0);
+
+  const scenarios = [
+    [
+      { e: "📧", t: "New booking — Mrs. Patel", color: "#3b82f6", d: "Hi, please book me in for the boiler service on Thursday morning.", state: "pending" },
+      { e: "🧾", t: "Invoice paid — Wilson Job #084", color: "#f59e0b", d: "BACS £1,240.00 received. Reference: INV-084-WILSON.", state: "done" },
+      { e: "🔧", t: "Material receipt — Plumbase", color: "#10b981", d: "2× 22mm elbow, 1× PTFE tape — £17.88 inc VAT.", state: "pending" },
+      { e: "📋", t: "Quote request — 14 Grange Rd", color: "#3b82f6", d: "Looking for a new combi install quote, gas safe required.", state: "pending" },
+    ],
+    [
+      { e: "🏗", t: "CIS statement — ABC Construction", color: "#10b981", d: "Gross £4,200 · Deduction £840 · Net £3,360 — PDF attached.", state: "pending" },
+      { e: "📅", t: "Reschedule — Mr. Davies", color: "#f59e0b", d: "Can we push Tuesday's appointment to next Friday morning instead?", state: "pending" },
+      { e: "💬", t: "Review request sent — Burns job", color: "#3b82f6", d: "Auto-sent 24h after completion. Awaiting response.", state: "done" },
+      { e: "⛽", t: "Quote chase — 22 Linden Close", color: "#f59e0b", d: "Gentle reminder auto-drafted — 3 days since initial quote.", state: "pending" },
+    ],
+  ];
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const s = scenarios[scenarioIdx];
+      setItems([]);
+      await sleep(200);
+
+      // staggered reveal
+      for (let i = 0; i < s.length; i++) {
+        if (cancelled) return;
+        setItems(s.slice(0, i + 1).map((it, idx) => ({ ...it, shown: true })));
+        await sleep(340);
+      }
+
+      // auto-approve first pending after brief hold
+      await sleep(1400); if (cancelled) return;
+      const firstPendingIdx = s.findIndex(it => it.state === "pending");
+      if (firstPendingIdx !== -1) {
+        const updated = s.map((it, idx) => idx === firstPendingIdx ? { ...it, state: "done", shown: true } : { ...it, shown: true });
+        setItems(updated);
+      }
+
+      await sleep(3600); if (cancelled) return;
+      setScenarioIdx(i => (i + 1) % scenarios.length);
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [scenarioIdx]);
+
+  return (
+    <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: 20, boxShadow: "0 32px 80px rgba(0,0,0,0.5)", fontFamily: "'DM Mono',monospace" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 14, borderBottom: "1px solid #1e1e1e", marginBottom: 12 }}>
+        <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444" }} />
+        <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#f59e0b" }} />
+        <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#10b981" }} />
+        <span style={{ fontSize: 10, color: "#444", marginLeft: 8 }}>Trade PA — AI Actions</span>
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 9, letterSpacing: "0.14em", color: "#f59e0b" }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#f59e0b", animation: "vc-pulse 2s ease-in-out infinite" }} /> LIVE
+        </span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 320 }}>
+        {items.map((item, i) => {
+          const isPending = item.state === "pending";
+          const isDone = item.state === "done";
+          return (
+            <div key={`${scenarioIdx}-${i}`} style={{
+              display: "grid",
+              gridTemplateColumns: "28px 1fr auto",
+              gap: 12,
+              alignItems: "center",
+              padding: "12px 14px",
+              borderRadius: 10,
+              background: isDone ? "rgba(16,185,129,0.06)" : "rgba(245,158,11,0.04)",
+              border: isDone ? "1px solid rgba(16,185,129,0.25)" : "1px solid rgba(245,158,11,0.18)",
+              animation: "vc-reveal 0.5s cubic-bezier(0.2,0.7,0.2,1) both",
+            }}>
+              <div style={{ fontSize: 18 }}>{item.e}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: item.color, marginBottom: 2, lineHeight: 1.3 }}>{item.t}</div>
+                <div style={{ fontSize: 11.5, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.d}</div>
+              </div>
+              <div style={{
+                padding: "5px 11px",
+                borderRadius: 999,
+                fontSize: 10.5,
+                fontWeight: 700,
+                background: isDone ? "rgba(16,185,129,0.2)" : "rgba(245,158,11,0.15)",
+                color: isDone ? "#10b981" : "#f59e0b",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                whiteSpace: "nowrap",
+              }}>
+                {isDone ? "✓ Approved" : "Pending"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ padding: "12px 4px 0", marginTop: 10, borderTop: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 9.5, color: "#555", letterSpacing: "0.1em" }}>
+        <span>INBOX · SCANNED 14s AGO</span>
+        <span style={{ color: "#10b981" }}>✓ 3 drafted · 1 waiting</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Landing Page ─────────────────────────────────────────────────────────────
 function LandingPage({ onAuth }) {
   const [screen, setScreen] = useState("landing"); // landing | login | signup
@@ -114,6 +407,24 @@ function LandingPage({ onAuth }) {
         .lp-feature:hover{background:#111!important;}
         .lp-trade-pill:hover{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,0.08);}
         .lp-plan-btn.active{border-color:#f59e0b!important;background:rgba(245,158,11,0.06)!important;}
+
+        /* Responsive hero two-column grid */
+        .lp-hero-grid{display:grid;grid-template-columns:1fr;gap:48px;max-width:1180px;margin:0 auto;align-items:center;text-align:center;}
+        .lp-hero-left{text-align:center;}
+        .lp-hero-ctas{justify-content:center;}
+        @media (min-width: 960px){
+          .lp-hero-grid{grid-template-columns:1.05fr 1fr;gap:56px;text-align:left;}
+          .lp-hero-left{text-align:left;}
+          .lp-hero-ctas{justify-content:flex-start;}
+        }
+
+        /* Voice card animations */
+        @keyframes vc-pulse{0%,100%{opacity:0.4;box-shadow:0 0 0 0 rgba(245,158,11,0.4);}50%{opacity:1;box-shadow:0 0 0 5px transparent;}}
+        @keyframes vc-wave{0%,100%{height:8%;}50%{height:var(--h,60%);}}
+        @keyframes vc-reveal{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+        .vc-bar{animation:vc-wave 1s ease-in-out infinite;}
+        .vc-caret{animation:vc-caret 0.8s steps(1) infinite;}
+        @keyframes vc-caret{50%{opacity:0;}}
       `}</style>
 
       {/* NAV */}
@@ -130,18 +441,25 @@ function LandingPage({ onAuth }) {
         <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(245,158,11,0.04) 1px, transparent 1px),linear-gradient(90deg,rgba(245,158,11,0.04) 1px,transparent 1px)", backgroundSize: "56px 56px", WebkitMaskImage: "radial-gradient(ellipse at center, black 0%, transparent 70%)", maskImage: "radial-gradient(ellipse at center, black 0%, transparent 70%)", pointerEvents: "none" }} />
         <div style={{ position: "absolute", width: 500, height: 500, background: "radial-gradient(circle, rgba(245,158,11,0.1) 0%, transparent 70%)", top: "50%", left: "50%", transform: "translate(-50%,-60%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 100, padding: "6px 16px", fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 28 }}>
-            <div style={{ width: 6, height: 6, background: "#f59e0b", borderRadius: "50%", animation: "pulse 2s infinite" }} />
-            Voice-first · Inbox-monitored · UK-built
+          <div className="lp-hero-grid">
+            <div className="lp-hero-left">
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 100, padding: "6px 16px", fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 28 }}>
+                <div style={{ width: 6, height: 6, background: "#f59e0b", borderRadius: "50%", animation: "pulse 2s infinite" }} />
+                Voice-first · Inbox-monitored · UK-built
+              </div>
+              <h1 style={LP.h1}>Your PA works<br/><span style={{ color: "#f59e0b" }}>when you can't.</span></h1>
+              <p style={{ ...LP.sub, margin: "0 0 40px" }}>Trade PA reads every email 24/7, drafts every action, chases every unpaid invoice — and waits for one tap to approve. Voice-controlled for when you're on the tools. The admin assistant that runs your business while you run the jobs.</p>
+              <div className="lp-hero-ctas" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+                <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Start 30-day free trial →</button>
+                <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
+              </div>
+              <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
+              <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail &amp; Outlook · Built for UK Trades</p>
+            </div>
+            <div>
+              <VoiceHeroCard />
+            </div>
           </div>
-          <h1 style={LP.h1}>Your PA works<br/><span style={{ color: "#f59e0b" }}>when you can't.</span></h1>
-          <p style={LP.sub}>Trade PA reads every email 24/7, drafts every action, chases every unpaid invoice — and waits for one tap to approve. Voice-controlled for when you're on the tools. The admin assistant that runs your business while you run the jobs.</p>
-          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 12 }}>
-            <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Start 30-day free trial →</button>
-            <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
-          </div>
-          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
-          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail &amp; Outlook · 4 UK Patents Pending · Built for UK Trades</p>
         </div>
       </div>
 
@@ -156,28 +474,7 @@ function LandingPage({ onAuth }) {
 
           {/* AI Actions demo mockup */}
           <div style={{ maxWidth: 680, margin: "0 auto 56px" }}>
-            <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: 20, boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 14, borderBottom: "1px solid #1e1e1e", marginBottom: 14 }}>
-                <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444" }} />
-                <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#f59e0b" }} />
-                <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#10b981" }} />
-                <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#444", marginLeft: 8 }}>Trade PA — AI Actions</span>
-              </div>
-              {[
-                { icon: "📋", title: "Create an invoice & create a job — Lisa Thompson", body: "Is happy with quote for 42 Maple Avenue and would like to go ahead.", color: "#3b82f6" },
-                { icon: "🔧", title: "Material — City Plumbing", body: "2× copper tube 22mm × 3m @ £29.70 — total £59.40. Upload invoice and create material note.", color: "#f59e0b" },
-                { icon: "🏗", title: "CIS statement — ABC Construction", body: "Gross £4,200 · Deduction £840 · Net £3,360 — PDF attached.", color: "#10b981" },
-              ].map((item, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.12)", borderRadius: 10, marginBottom: i < 2 ? 8 : 0 }}>
-                  <div style={{ fontSize: 20, flexShrink: 0 }}>{item.icon}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: item.color, marginBottom: 2 }}>{item.title}</div>
-                    <div style={{ fontSize: 12, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.body}</div>
-                  </div>
-                  <div style={{ background: "#10b981", color: "#000", padding: "5px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>✓ Approve</div>
-                </div>
-              ))}
-            </div>
+            <InboxDemoCard />
           </div>
 
           {/* 3 Pathway cards */}
@@ -265,8 +562,8 @@ function LandingPage({ onAuth }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
             {[
               { title: "Wake word + hands-free loop", body: "\"Hey Trade PA\" wakes it. Continuous voice loop with silence detection. Phase-aware safety timers — never dies silently. Built for vans, roofs, lofts and plant rooms." },
-              { title: "Voice on every form", body: "43 features accept voice dictation. Quotes, invoices, certificates, RAMS, time logs. Deepgram Nova-2 — tuned for UK, Irish and regional accents. No menus. Just talk." },
-              { title: "Multi-action conversational AI", body: "93 tools the AI can call autonomously. Several actions per spoken sentence. Conversational RAMS builder. Asks follow-ups only when it needs to." },
+              { title: "Voice on every form", body: "43 features accept voice dictation. Quotes, invoices, certificates, RAMS, time logs. Tuned for UK, Irish and regional accents. No menus. Just talk." },
+              { title: "Multi-action conversational AI", body: "Several actions per spoken sentence. Conversational RAMS builder. Asks follow-ups only when it needs to." },
             ].map((f) => (
               <div key={f.title} style={{ background: "#141414", border: "1px solid #222", borderRadius: 14, padding: "24px 22px", position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 3, background: "#f59e0b" }} />
