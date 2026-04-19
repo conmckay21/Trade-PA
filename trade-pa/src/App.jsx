@@ -6407,6 +6407,55 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
       .then(({ data }) => { if (data?.length) setExpiryAlerts(data); });
   }, [user?.id]);
   const [supportMode, setSupportMode] = useState(false);
+
+  // ─── Limit-reached modal (sub-item 3) ──────────────────────────────────
+  // Opens when the client-side cap check pre-empts a send, OR when /api/claude
+  // returns 402 limit_reached / 403 account_locked mid-conversation.
+  // `reason` is one of: 'limit_reached' | 'account_locked' | 'no_subscription'
+  //                   | 'rate_limit_minute' | 'rate_limit_hour' | 'rate_limit_day'
+  const [limitModal, setLimitModal] = useState(null); // { reason, message?, pendingText? } | null
+  const [limitBusy, setLimitBusy] = useState(false);
+  const [limitError, setLimitError] = useState(null);
+
+  const buyAddonAndRetry = async (addonType) => {
+    setLimitBusy(true);
+    setLimitError(null);
+    try {
+      const { data: { session } } = await window._supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setLimitError("Please log in again to buy an add-on.");
+        return;
+      }
+      const res = await fetch("/api/stripe/purchase-addon", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ addon_type: addonType }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setLimitError(data.message || "Add-on purchase failed. Please try again.");
+        return;
+      }
+      // Charge succeeded. The payment_intent.succeeded webhook flips the row
+      // to status='active', which makes check_usage_allowance sum it into the cap.
+      // Small delay so the webhook has a chance to land before we retry the
+      // user's pending message — if the retry races the webhook, it'll still
+      // fail and the modal stays up for them to tap retry.
+      const pending = limitModal?.pendingText;
+      setLimitModal(null);
+      setLimitError(null);
+      if (pending) {
+        setTimeout(() => { send(pending); }, 1000);
+      }
+    } catch (err) {
+      console.error("[buyAddonAndRetry]", err);
+      setLimitError("Couldn't complete purchase. Please try again or email hello@tradespa.co.uk");
+    } finally {
+      setLimitBusy(false);
+    }
+  };
+
   const ttsEnabledRef = useRef(true);
   const onboardingStepRef = useRef(onboardingStep);
   useEffect(() => { onboardingStepRef.current = onboardingStep; }, [onboardingStep]);
@@ -10040,12 +10089,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   const send = async (text) => {
     if (!text.trim() || loading) return;
 
-    // Fair-use cap: check conversation allowance
+    // Fair-use cap: client-side pre-check. Open the limit modal instead of
+    // inserting a plain-text message, so the user has a direct path to buy
+    // an add-on or upgrade without leaving the conversation.
     const _caps = usageCapsRef.current || {};
     if (_caps.convos !== Infinity && (usageDataRef.current?.conversations_used || 0) >= _caps.convos) {
-      const capMsg = `You've used all ${_caps.convos} AI conversations for this month. Your allowance resets on the 1st. Upgrade your plan, or buy a +500 conversations add-on for £39.`;
-      setMessages(prev => [...prev, { role: "user", content: text }, { role: "assistant", content: capMsg }]);
-      if (handsFreeRef.current) speak(capMsg);
+      setLimitError(null);
+      setLimitModal({ reason: "limit_reached", pendingText: text });
       return;
     }
     const isOnboardingTrigger = text === "__onboarding_start__";
@@ -10125,6 +10175,55 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         });
 
         data = await res.json();
+
+        // ── Server-side cap / lock / rate-limit interception ──────────────
+        // /api/claude returns 402 limit_reached when the monthly allowance is
+        // exhausted, 403 account_locked if the abuse system has frozen the
+        // account, or 429 for rate-limit breaches. These are expected states,
+        // not crashes — route them to the limit modal rather than the generic
+        // error path. The user's message is already in `messages` state from
+        // send(), so roll that back and stash the text for retry.
+        const LIMIT_REASONS = [
+          "limit_reached",
+          "account_locked",
+          "no_subscription",
+          "rate_limit_minute",
+          "rate_limit_hour",
+          "rate_limit_day",
+        ];
+        if (res.status === 402 || res.status === 403 || res.status === 429) {
+          const reason = (data && data.error) ? String(data.error) : "limit_reached";
+          if (LIMIT_REASONS.includes(reason)) {
+            // Roll back the user message we optimistically inserted in send().
+            // Identify by role + content from the pending text — the last user
+            // message in state is the one we just added.
+            const pendingText = (() => {
+              const m = messagesRef.current;
+              for (let i = m.length - 1; i >= 0; i--) {
+                if (m[i].role === "user" && typeof m[i].content === "string") return m[i].content;
+              }
+              return "";
+            })();
+            setMessages(prev => {
+              const copy = prev.slice();
+              for (let i = copy.length - 1; i >= 0; i--) {
+                if (copy[i].role === "user" && copy[i].content === pendingText) {
+                  copy.splice(i, 1);
+                  break;
+                }
+              }
+              return copy;
+            });
+            setLimitError(null);
+            setLimitModal({
+              reason,
+              message: data?.message || null,
+              pendingText,
+            });
+            setLoading(false);
+            return; // Exit the whole send() — don't fall into loopError path
+          }
+        }
 
         // Surface API errors clearly
         if (data.error) {
@@ -12155,6 +12254,205 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           :                               "🎙"}</button>
         <button onClick={() => { unlockAudio(); send(input); }} style={{ ...S.btn("primary"), padding: "11px 16px", flexShrink: 0 }} disabled={loading || !input.trim()}>Send</button>
       </div>
+
+      {/* ── Limit-reached modal (sub-item 3) ──────────────────────────── */}
+      {limitModal && (() => {
+        const isIOSNative = typeof window !== "undefined"
+          && window.Capacitor?.isNativePlatform?.()
+          && window.Capacitor?.getPlatform?.() === "ios";
+
+        // Title / subtitle per reason
+        const COPY = {
+          limit_reached: {
+            title: "You've hit your monthly limit",
+            subtitle: `You've used all ${usageCaps?.convos ?? 500} AI conversations for this billing period. Your allowance resets on your next billing date.`,
+            showAddons: true,
+          },
+          no_subscription: {
+            title: "No active subscription",
+            subtitle: "Your subscription isn't active. Reactivate from Settings → Plan & billing to continue.",
+            showAddons: false,
+          },
+          account_locked: {
+            title: "Account access paused",
+            subtitle: "Your account access has been paused. Email hello@tradespa.co.uk and we'll sort this out quickly.",
+            showAddons: false,
+          },
+          rate_limit_minute: {
+            title: "Slow down a moment",
+            subtitle: "You're sending messages faster than the rate limit. Wait 30 seconds and try again.",
+            showAddons: false,
+          },
+          rate_limit_hour: {
+            title: "Hourly rate limit reached",
+            subtitle: "You've hit the hourly request limit. Try again shortly.",
+            showAddons: false,
+          },
+          rate_limit_day: {
+            title: "Daily rate limit reached",
+            subtitle: "You've hit today's request limit. Resets tomorrow.",
+            showAddons: false,
+          },
+        };
+        const copy = COPY[limitModal.reason] || COPY.limit_reached;
+        const subtitle = limitModal.message || copy.subtitle;
+        const showBuy = copy.showAddons && !isIOSNative;
+        const showUpgrade = copy.showAddons; // upgrade link works on iOS too (it's a nav, not a purchase)
+
+        return (
+          <div
+            onClick={() => !limitBusy && setLimitModal(null)}
+            style={{
+              position: "fixed",
+              top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: 16,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: C.surface,
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                padding: "20px 20px 18px",
+                width: "100%",
+                maxWidth: 360,
+                maxHeight: "90vh",
+                overflowY: "auto",
+              }}
+            >
+              <div style={{
+                fontSize: 10, color: C.textDim, letterSpacing: "0.1em",
+                textTransform: "uppercase", fontFamily: "'DM Mono', monospace", marginBottom: 10,
+              }}>{copy.showAddons ? "Limit reached" : "Can't continue"}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{copy.title}</div>
+              <div style={{ fontSize: 13, color: C.textDim, margin: "6px 0 16px", lineHeight: 1.55 }}>
+                {subtitle}
+              </div>
+
+              {limitModal.pendingText && (
+                <div style={{
+                  background: C.surfaceHigh,
+                  borderRadius: 6,
+                  padding: "10px 12px",
+                  marginBottom: 14,
+                }}>
+                  <div style={{
+                    fontSize: 10, color: C.textDim, fontFamily: "'DM Mono', monospace",
+                    letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4,
+                  }}>Your message</div>
+                  <div style={{
+                    fontSize: 12, color: C.text, lineHeight: 1.5,
+                    display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}>"{limitModal.pendingText}"</div>
+                  {copy.showAddons && (
+                    <div style={{ fontSize: 10.5, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>
+                      We'll send this automatically once your allowance is topped up.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {limitError && (
+                <div style={{
+                  marginBottom: 14,
+                  padding: "8px 10px",
+                  borderRadius: 6,
+                  fontSize: 11.5,
+                  lineHeight: 1.5,
+                  background: `${C.red}1a`,
+                  border: `1px solid ${C.red}40`,
+                  color: C.red,
+                }}>✕ {limitError}</div>
+              )}
+
+              {/* Actions */}
+              {showBuy && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                  <button
+                    onClick={() => buyAddonAndRetry("conversations")}
+                    disabled={limitBusy}
+                    style={{
+                      padding: "12px 14px",
+                      border: `1px solid ${C.amber}`,
+                      background: C.amber,
+                      color: "#412402",
+                      fontSize: 12, fontWeight: 700,
+                      borderRadius: 6,
+                      fontFamily: "'DM Mono', monospace",
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      cursor: limitBusy ? "not-allowed" : "pointer",
+                      opacity: limitBusy ? 0.6 : 1,
+                    }}
+                  >{limitBusy ? "Processing..." : "+500 conversations · £39"}</button>
+                  <button
+                    onClick={() => buyAddonAndRetry("combo")}
+                    disabled={limitBusy}
+                    style={{
+                      padding: "10px 14px",
+                      border: `1px solid ${C.amber}`,
+                      background: "transparent",
+                      color: C.amber,
+                      fontSize: 11, fontWeight: 700,
+                      borderRadius: 6,
+                      fontFamily: "'DM Mono', monospace",
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      cursor: limitBusy ? "not-allowed" : "pointer",
+                      opacity: limitBusy ? 0.6 : 1,
+                    }}
+                  >Combo · +500 conv & +10 hrs · £55</button>
+                </div>
+              )}
+              {showUpgrade && (
+                <button
+                  onClick={() => { setLimitModal(null); if (setView) setView("Settings"); }}
+                  disabled={limitBusy}
+                  style={{
+                    width: "100%",
+                    padding: 10,
+                    border: `1px solid ${C.border}`,
+                    background: "transparent",
+                    color: C.text,
+                    fontSize: 11, fontWeight: 600,
+                    borderRadius: 6,
+                    fontFamily: "'DM Mono', monospace",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    cursor: limitBusy ? "not-allowed" : "pointer",
+                    opacity: limitBusy ? 0.6 : 1,
+                    marginBottom: 8,
+                  }}
+                >{isIOSNative ? "Manage plan →" : "Upgrade plan →"}</button>
+              )}
+              <button
+                onClick={() => setLimitModal(null)}
+                disabled={limitBusy}
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  border: "none",
+                  background: "transparent",
+                  color: C.textDim,
+                  fontSize: 11,
+                  fontFamily: "'DM Mono', monospace",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  cursor: limitBusy ? "not-allowed" : "pointer",
+                  opacity: limitBusy ? 0.6 : 1,
+                }}
+              >Close</button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 
