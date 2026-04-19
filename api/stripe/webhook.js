@@ -2,7 +2,7 @@
 // Handles Stripe webhooks for main subscriptions, phone subscriptions, and add-on payments.
 
 import Stripe from "stripe";
-import { sendWelcome, sendTrialEnding, sendPaymentFailed } from "../_lib/resend.js";
+import { sendWelcome, sendTrialEnding, sendPaymentFailed } from "../lib/resend.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
