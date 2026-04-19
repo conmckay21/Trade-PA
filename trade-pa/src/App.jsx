@@ -1861,6 +1861,48 @@ function CallTrackingSettings({ user }) {
     setSaving(false);
   };
 
+  // ─── In-app phone plan switch (existing subscribers) ───────────────────
+  // changePlan state: null (closed) | 'picker' (tier list) | phone_plan key (confirming switch to this)
+  const [changePlan, setChangePlan] = useState(null);
+  const [changeBusy, setChangeBusy] = useState(false);
+  const [changeResult, setChangeResult] = useState(null); // { type, message }
+
+  const switchPlan = async (targetPlan) => {
+    setChangeBusy(true);
+    setChangeResult(null);
+    try {
+      const res = await fetch("/api/stripe/update-phone-plan", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify({ phone_plan: targetPlan }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setChangeResult({ type: "error", message: data.message || "Plan change failed." });
+      } else {
+        setChangeResult({ type: "success", message: data.message || "Plan updated." });
+        // Refresh call_tracking from DB — webhook will have updated it server-side.
+        // Tiny delay so webhook has a chance to land.
+        setTimeout(() => {
+          if (!user?.id) return;
+          db.from("call_tracking")
+            .select("*")
+            .eq("user_id", user.id)
+            .limit(1)
+            .then(({ data: rows }) => {
+              if (rows?.[0]) setCallTracking(rows[0]);
+            });
+        }, 1200);
+      }
+    } catch (err) {
+      console.error("[switch-phone-plan]", err);
+      setChangeResult({ type: "error", message: "Couldn't change plan. Please try again or email hello@tradespa.co.uk" });
+    } finally {
+      setChangeBusy(false);
+      setChangePlan(null);
+    }
+  };
+
   if (!loaded) return <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>;
 
   if (callTracking?.twilio_number) {
@@ -1901,9 +1943,52 @@ function CallTrackingSettings({ user }) {
             <div style={{ width: "100%", height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
               <div style={{ width: `${pct * 100}%`, height: "100%", background: pct >= 1 ? C.red : pct >= 0.8 ? C.amber : C.green, transition: "width 0.3s" }} />
             </div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Resets with your monthly billing. Manage plan via Stripe billing portal in Settings.</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Resets with your monthly billing.</div>
           </div>
         )}
+
+        {/* ── Change plan (in-app) ─────────────────────────────────────── */}
+        <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Need more minutes?</div>
+              <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>Switch plan instantly. Prorated against your next invoice.</div>
+            </div>
+            <button
+              onClick={() => { setChangeResult(null); setChangePlan("picker"); }}
+              disabled={changeBusy}
+              style={{
+                padding: "6px 12px",
+                border: `1px solid ${C.amber}`,
+                background: "transparent",
+                color: C.amber,
+                fontSize: 10,
+                fontFamily: "'DM Mono', monospace",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                fontWeight: 700,
+                borderRadius: 4,
+                cursor: changeBusy ? "not-allowed" : "pointer",
+                opacity: changeBusy ? 0.5 : 1,
+                flexShrink: 0,
+              }}
+            >Change →</button>
+          </div>
+          {changeResult && (
+            <div style={{
+              marginTop: 10,
+              padding: "8px 10px",
+              borderRadius: 6,
+              fontSize: 11.5,
+              lineHeight: 1.5,
+              background: changeResult.type === "success" ? `${C.green}1a` : `${C.red}1a`,
+              border: `1px solid ${changeResult.type === "success" ? `${C.green}40` : `${C.red}40`}`,
+              color: changeResult.type === "success" ? C.green : C.red,
+            }}>
+              {changeResult.type === "success" ? `✓ ${changeResult.message}` : `✕ ${changeResult.message}`}
+            </div>
+          )}
+        </div>
         <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
           <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>How calls work</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1931,6 +2016,181 @@ function CallTrackingSettings({ user }) {
           <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginTop: 2, borderTop: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 12, color: C.text, lineHeight: 1.7, marginBottom: 8 }}>You can port your existing mobile or landline number into Trade PA so customers keep calling the same number they always have.</div>
             <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>UK number porting typically takes 2–4 weeks. Contact us at <span style={{ color: C.amber }}>thetradepa@gmail.com</span> to get started — we'll handle the process with you.</div>
+          </div>
+        )}
+
+        {/* ── Plan change modal (picker + confirm, single modal, two states) ── */}
+        {changePlan && (
+          <div
+            onClick={() => !changeBusy && setChangePlan(null)}
+            style={{
+              position: "fixed",
+              top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: 16,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: C.surface,
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                padding: "20px 20px 18px",
+                width: "100%",
+                maxWidth: 360,
+                maxHeight: "90vh",
+                overflowY: "auto",
+              }}
+            >
+              {changePlan === "picker" ? (
+                <>
+                  <div style={{
+                    fontSize: 10, color: C.textDim, letterSpacing: "0.1em",
+                    textTransform: "uppercase", fontFamily: "'DM Mono', monospace", marginBottom: 10,
+                  }}>Change phone plan</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>Pick your new plan</div>
+                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 16, lineHeight: 1.5 }}>
+                    Prorated charge applies to your next invoice. New allowance is live immediately.
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                    {PHONE_TIERS.map(tier => {
+                      const isCurrent = tier.key === callTracking.phone_plan;
+                      return (
+                        <button
+                          key={tier.key}
+                          onClick={() => !isCurrent && setChangePlan(tier.key)}
+                          disabled={isCurrent}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "11px 12px",
+                            background: C.surfaceHigh,
+                            borderRadius: 6,
+                            border: isCurrent ? `1px solid ${C.green}60` : `1px solid transparent`,
+                            cursor: isCurrent ? "default" : "pointer",
+                            textAlign: "left",
+                            opacity: isCurrent ? 0.75 : 1,
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{tier.mins}</div>
+                            <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono',monospace", marginTop: 2 }}>{tier.price} · {tier.desc}</div>
+                          </div>
+                          {isCurrent ? (
+                            <span style={{
+                              fontSize: 9, fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em",
+                              textTransform: "uppercase", color: C.green, fontWeight: 700,
+                              background: `${C.green}1a`, border: `1px solid ${C.green}40`,
+                              padding: "3px 8px", borderRadius: 4, flexShrink: 0,
+                            }}>CURRENT</span>
+                          ) : (
+                            <span style={{
+                              fontSize: 10, fontFamily: "'DM Mono', monospace", letterSpacing: "0.08em",
+                              textTransform: "uppercase", color: C.amber, fontWeight: 700, flexShrink: 0,
+                            }}>Switch →</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setChangePlan(null)}
+                    style={{
+                      width: "100%",
+                      padding: 10,
+                      border: `1px solid ${C.border}`,
+                      background: "transparent",
+                      color: C.text,
+                      fontSize: 11, fontWeight: 600,
+                      borderRadius: 6,
+                      fontFamily: "'DM Mono', monospace",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >Cancel</button>
+                </>
+              ) : (() => {
+                const currentTier = PHONE_TIERS.find(t => t.key === callTracking.phone_plan);
+                const targetTier  = PHONE_TIERS.find(t => t.key === changePlan);
+                if (!targetTier) return null;
+                return (
+                  <>
+                    <div style={{
+                      fontSize: 10, color: C.textDim, letterSpacing: "0.1em",
+                      textTransform: "uppercase", fontFamily: "'DM Mono', monospace", marginBottom: 10,
+                    }}>Confirm switch</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>
+                      {currentTier?.mins || "current"} → {targetTier.mins}
+                    </div>
+                    <div style={{ fontSize: 13, color: C.textDim, margin: "6px 0 16px", lineHeight: 1.55 }}>
+                      New price:{" "}
+                      <span style={{ color: C.amber, fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>
+                        {targetTier.price}/mo
+                      </span>.
+                    </div>
+                    <div style={{
+                      background: C.surfaceHigh,
+                      borderRadius: 6,
+                      padding: "11px 12px",
+                      marginBottom: 18,
+                    }}>
+                      <div style={{
+                        fontSize: 10, color: C.textDim, fontFamily: "'DM Mono', monospace",
+                        letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4,
+                      }}>What happens</div>
+                      <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
+                        Your allowance changes to <strong>{targetTier.mins}</strong> right away. A prorated charge (or credit) for the rest of this billing period is added to your next invoice. Your Trade PA number stays the same.
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={() => setChangePlan("picker")}
+                        disabled={changeBusy}
+                        style={{
+                          flex: 1,
+                          padding: 10,
+                          border: `1px solid ${C.border}`,
+                          background: "transparent",
+                          color: C.text,
+                          fontSize: 11, fontWeight: 600,
+                          borderRadius: 6,
+                          fontFamily: "'DM Mono', monospace",
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          cursor: changeBusy ? "not-allowed" : "pointer",
+                          opacity: changeBusy ? 0.5 : 1,
+                        }}
+                      >Back</button>
+                      <button
+                        onClick={() => switchPlan(changePlan)}
+                        disabled={changeBusy}
+                        style={{
+                          flex: 1.6,
+                          padding: 10,
+                          border: `1px solid ${C.amber}`,
+                          background: C.amber,
+                          color: "#412402",
+                          fontSize: 11, fontWeight: 700,
+                          borderRadius: 6,
+                          fontFamily: "'DM Mono', monospace",
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          cursor: changeBusy ? "not-allowed" : "pointer",
+                          opacity: changeBusy ? 0.5 : 1,
+                        }}
+                      >{changeBusy ? "Switching..." : `Confirm · ${targetTier.price}/mo`}</button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
           </div>
         )}
       </div>
@@ -10498,6 +10758,51 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           100% { transform: translateY(0);   opacity: 1; }
         }
       `}</style>
+
+      {/* ── Compact monthly-usage strip ─────────────────────────────────────
+           Always visible at the top of AI Assistant (home + chat views).
+           Tap to jump to Settings. Reads usageData/usageCaps already in props. */}
+      {(() => {
+        const convUsed = usageData?.conversations_used || 0;
+        const convCap = usageCaps?.convos || 500;
+        const convUnlimited = convCap === Infinity;
+        const hfUsedMin = Math.round((usageData?.handsfree_seconds_used || 0) / 60);
+        const hfCapMin = usageCaps?.hf_hours === Infinity ? Infinity : (usageCaps?.hf_hours || 5) * 60;
+        const hfUnlimited = hfCapMin === Infinity;
+        const worstPct = Math.max(
+          convUnlimited ? 0 : convUsed / convCap,
+          hfUnlimited   ? 0 : hfUsedMin / hfCapMin
+        );
+        const tintColor = worstPct >= 1 ? C.red : worstPct >= 0.8 ? C.amber : C.muted;
+        return (
+          <div
+            onClick={() => setView && setView("Settings")}
+            title="Tap to manage plan & billing"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 10px",
+              background: C.surfaceHigh,
+              borderRadius: 6,
+              fontSize: 10.5,
+              fontFamily: "'DM Mono', monospace",
+              cursor: "pointer",
+              letterSpacing: "0.02em",
+              color: tintColor,
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+              {convUnlimited ? "UNLIMITED" : `${convUsed}/${convCap}`} convos
+              {" · "}
+              {hfUnlimited ? "UNLIMITED" : `${hfUsedMin}/${hfCapMin} min`} hands-free
+            </span>
+            <span style={{ opacity: 0.7, flexShrink: 0 }}>MANAGE →</span>
+          </div>
+        );
+      })()}
 
       {/* ── HOME SCREEN ─────────────────────────────────────────────────── */}
       {isHome && (() => {
