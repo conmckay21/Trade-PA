@@ -373,91 +373,36 @@ function LandingPage({ onAuth }) {
         </div>
       </div>
 
-      {/* PRICING */}
-      <div style={{ padding: "72px 24px", background: "#0d0d0d", borderTop: "1px solid #1a1a1a", borderBottom: "1px solid #1a1a1a" }}>
-        <div style={{ maxWidth: 1040, margin: "0 auto" }}>
+      {/* PRICING — full breakdown lives on /pricing.html (SEO-indexable).
+          Homepage keeps a compact CTA only, so there's one source of truth
+          for plan prices. */}
+      <div style={{ padding: "72px 24px", background: "#0d0d0d", borderTop: "1px solid #1a1a1a", borderBottom: "1px solid #1a1a1a", textAlign: "center" }}>
+        <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <div style={{ ...LP.sectionLabel, textAlign: "center" }}>Pricing</div>
-          <h2 style={{ ...LP.h2, textAlign: "center" }}>Plans for every tradesperson.</h2>
-          <p style={{ fontSize: 17, color: "#666", margin: "0 auto 48px", maxWidth: 520, lineHeight: 1.7, textAlign: "center" }}>Start with a 30-day free trial on any plan. No charge until day 31. Cancel anytime. All plans include every feature.</p>
-
-          {/* Three plan cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 32 }}>
-            {[
-              { name: "Solo", price: "£49", period: "/month", annual: "£529/year", users: "1 user", features: ["500 AI conversations / month","5 hours hands-free / month","Tap-to-talk voice — never capped","All 43 features included","Allowance resets 1st of month"], popular: false },
-              { name: "Team", price: "£89", period: "/month", annual: "£961/year", users: "Up to 5 users", features: ["1,500 AI conversations / month","15 hours hands-free / month","Team scheduling & permissions","Staff timesheets & GPS tracking","All 43 features included"], popular: true },
-              { name: "Pro", price: "£129", period: "/month", annual: "£1,393/year", users: "Up to 10 users", features: ["2,500 AI conversations / month","25 hours hands-free / month","Priority support","All 43 features included","Everything in Team, more capacity"], popular: false },
-            ].map(plan => (
-              <div key={plan.name} style={{ ...LP.pricingCard, maxWidth: "100%", border: plan.popular ? "2px solid #f59e0b" : "1px solid #222", position: "relative" }}>
-                {plan.popular && <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: "#f59e0b", color: "#000", fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 700, padding: "3px 14px", borderRadius: 100, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>MOST POPULAR</div>}
-                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#f59e0b" }} />
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>{plan.name}</div>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 52, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em", color: "#f59e0b", marginBottom: 4 }}>
-                  {plan.price}<span style={{ fontSize: 16, color: "#666", fontWeight: 400 }}>{plan.period}</span>
-                </div>
-                <p style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>{plan.annual}</p>
-                <p style={{ color: "#f59e0b", fontSize: 12, fontFamily: "'DM Mono',monospace", marginBottom: 20 }}>{plan.users}</p>
-                <ul style={{ listStyle: "none", textAlign: "left", display: "flex", flexDirection: "column", gap: 8, marginBottom: 28 }}>
-                  {plan.features.map(f => (
-                    <li key={f} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#ccc" }}>
-                      <span style={{ color: "#10b981", fontWeight: 700, flexShrink: 0 }}>✓</span>{f}
-                    </li>
-                  ))}
-                </ul>
-                <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, width: "100%", justifyContent: "center", fontSize: 14, padding: 14 }} className="lp-btn-primary">Start free trial →</button>
-              </div>
-            ))}
-          </div>
-
-          {/* Usage add-ons */}
-          <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: "32px 28px", textAlign: "center", marginBottom: 16 }}>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>⚡ Add-on · Any Plan</div>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Need more mid-month?</div>
-            <p style={{ color: "#666", fontSize: 14, maxWidth: 560, margin: "0 auto 24px", lineHeight: 1.7 }}>Busy month? Top up any plan with one-off usage add-ons. No subscription change, no commitment — just a boost for the current billing period.</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, maxWidth: 700, margin: "0 auto 16px" }}>
-              {[
-                { label: "+500 AI conversations", price: "£39", desc: "Extra allowance for a busy month" },
-                { label: "+10 hours hands-free", price: "£19", desc: "Extra hands-free time, top-up only" },
-                { label: "+500 conv & +10h combo", price: "£55", desc: "Save £3 vs buying both separately" },
-              ].map(({ label, price, desc }) => (
-                <div key={label} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 12px", textAlign: "left" }}>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, color: "#f0f0f0", marginBottom: 6 }}>{label}</div>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{price}</div>
-                  <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{desc}</div>
-                </div>
-              ))}
-            </div>
-            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555" }}>One-off · Available to all plans · Expires at billing rollover</p>
-          </div>
-
-          {/* Business Phone add-on */}
-          <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: "32px 28px", textAlign: "center" }}>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📞 Add-on · Any Plan</div>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Business Phone, Built In</div>
-            <p style={{ color: "#666", fontSize: 14, maxWidth: 560, margin: "0 auto 24px", lineHeight: 1.7 }}>Get a dedicated business number that rings directly inside the Trade PA app — no second SIM, no extra hardware. Every call from a known customer is recorded, transcribed and automatically logged against their job. Missed a call? It falls back to your mobile so you never lose a lead.</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, maxWidth: 700, margin: "0 auto 24px" }}>
-              {[
-                { icon: "📱", label: "Rings in Trade PA app", desc: "Answer without a second SIM" },
-                { icon: "🎙️", label: "Auto-recorded & transcribed", desc: "AI logs every conversation" },
-                { icon: "🔗", label: "Linked to jobs & customers", desc: "Full call history in one place" },
-                { icon: "📲", label: "30s mobile fallback", desc: "Never miss a call on site" },
-              ].map(({ icon, label, desc }) => (
-                <div key={label} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 12px", textAlign: "left" }}>
-                  <div style={{ fontSize: 20, marginBottom: 6 }}>{icon}</div>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, color: "#f0f0f0", marginBottom: 3 }}>{label}</div>
-                  <div style={{ fontSize: 11, color: "#555" }}>{desc}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, maxWidth: 640, margin: "0 auto 16px" }}>
-              {[["100 mins","£20"],["300 mins","£40"],["600 mins","£65"],["Unlimited","£104"]].map(([mins, price]) => (
-                <div key={mins} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 12px" }}>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#666", marginBottom: 6 }}>{mins}/month</div>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{price}</div>
-                  <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>per month</div>
-                </div>
-              ))}
-            </div>
-            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555" }}>Dedicated UK number included · Want to keep your existing number? We support porting · UK GDPR compliant</p>
+          <h2 style={{ ...LP.h2, textAlign: "center" }}>Plans from £49/mo.<br />30-day free trial.</h2>
+          <p style={{ fontSize: 17, color: "#666", margin: "0 auto 32px", maxWidth: 520, lineHeight: 1.7, textAlign: "center" }}>
+            Solo, Team and Pro tiers — every plan includes every feature. No charge until day 31. Cancel anytime.
+          </p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <a
+              href="/pricing.html"
+              style={{
+                background: "#f59e0b", color: "#000",
+                padding: "14px 28px", borderRadius: 10,
+                fontWeight: 700, fontSize: 14, textDecoration: "none",
+                display: "inline-block",
+              }}
+              className="lp-btn-primary"
+            >See full pricing →</a>
+            <a
+              href="/signup.html"
+              style={{
+                background: "transparent", color: "#f59e0b",
+                padding: "14px 28px", borderRadius: 10,
+                fontWeight: 700, fontSize: 14, textDecoration: "none",
+                border: "1px solid #f59e0b", display: "inline-block",
+              }}
+            >Start free trial →</a>
           </div>
         </div>
       </div>
