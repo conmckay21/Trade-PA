@@ -2332,7 +2332,7 @@ function CallTrackingSettings({ user }) {
         {showPortInfo && (
           <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginTop: 2, borderTop: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 12, color: C.text, lineHeight: 1.7, marginBottom: 8 }}>You can port your existing mobile or landline number into Trade PA so customers keep calling the same number they always have.</div>
-            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>UK number porting typically takes 2–4 weeks. Contact us at <span style={{ color: C.amber }}>thetradepa@gmail.com</span> to get started — we'll handle the process with you.</div>
+            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>UK number porting typically takes 2–4 weeks. Contact us at <span style={{ color: C.amber }}>hello@tradespa.co.uk</span> to get started — we'll handle the process with you.</div>
           </div>
         )}
 
@@ -2574,7 +2574,7 @@ function CallTrackingSettings({ user }) {
       <button style={S.btn("primary")} disabled={saving} onClick={activate}>{saving ? "Setting up your number..." : "Subscribe & activate →"}</button>
       <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>Uses your existing Trade PA payment method · Cancel anytime from Stripe billing portal</div>
       <div style={{ marginTop: 14, padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>Already have a business number? You can port it across so customers keep calling the same number. Email <span style={{ color: C.amber }}>thetradepa@gmail.com</span> to get started.</div>
+        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>Already have a business number? You can port it across so customers keep calling the same number. Email <span style={{ color: C.amber }}>hello@tradespa.co.uk</span> to get started.</div>
       </div>
     </div>
   );
@@ -13481,7 +13481,7 @@ function FeedbackModal({ open, onClose, user, brand, currentView }) {
       setSent(true);
       setTimeout(() => onClose(), 1800);
     } catch (e) {
-      setError("Couldn't send: " + (e.message || "unknown error") + ". You can email thetradepa@gmail.com directly.");
+      setError("Couldn't send: " + (e.message || "unknown error") + ". You can email support@tradespa.co.uk directly.");
     }
     setSending(false);
   };
@@ -25860,6 +25860,7 @@ function nextQuoteId(invoices) {
 // Exempt accounts — bypass all verification gates (test/owner accounts)
 const EXEMPT_EMAILS = [
   "thetradepa@gmail.com",
+  "connor@tradespa.co.uk",
   "connor_mckay777@hotmail.com",
   "connor_mckay777@hotmail.co.uk",
   "landbheating@outlook.com",
@@ -26867,7 +26868,7 @@ function AppInner() {
     if (!user) { setSubscriptionStatus(null); return; }
 
     // Exempt accounts skip subscription check entirely
-    const EXEMPT = ["thetradepa@gmail.com", "connor_mckay777@hotmail.com", "connor_mckay777@hotmail.co.uk", "landbheating@outlook.com", "shannonandrewsimpson@gmail.com"];
+    const EXEMPT = ["thetradepa@gmail.com", "connor@tradespa.co.uk", "connor_mckay777@hotmail.com", "connor_mckay777@hotmail.co.uk", "landbheating@outlook.com", "shannonandrewsimpson@gmail.com"];
     if (EXEMPT.includes(user.email?.toLowerCase())) {
       setSubscriptionStatus("active");
       setPlanTier("pro");
