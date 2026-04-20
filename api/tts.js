@@ -57,7 +57,9 @@ async function tryGrokTTS(text) {
   const safeText = text.length > 14500 ? text.slice(0, 14500) + '...' : text;
 
   try {
-    const res = await fetch('https://api.x.ai/v1/tts', {
+    // Pin to EU-West-1 regional endpoint — same reasoning as in transcribe.js.
+    // Keeps the Vercel Dublin function → xAI round trip inside Europe.
+    const res = await fetch('https://eu-west-1.api.x.ai/v1/tts', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
