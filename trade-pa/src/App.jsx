@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, Component } from "react";
+import * as Sentry from "@sentry/react";
 import { db } from "./lib/db.js";
 import { Device } from "@twilio/voice-sdk";
 import HelpCentre from "./HelpCentre.jsx";
@@ -8795,10 +8796,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           try {
             [notes, , timeLogs, materials, drawings, vos, docs] = await Promise.all([
               db.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
-              db.from("job_photos").select("id,filename,created_at").eq("job_id", job.id),
+              db.from("job_photos").select("id,created_at").eq("job_id", job.id),
               db.from("time_logs").select("*").eq("job_id", job.id),
               db.from("materials").select("*").eq("job_id", job.id),
-              db.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
+              db.from("job_drawings").select("id,filename,created_at").eq("job_id", job.id),
               db.from("variation_orders").select("*").eq("job_id", job.id),
               db.from("compliance_docs").select("*").eq("job_id", job.id),
             ]);
@@ -9050,10 +9051,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           try {
             [jNotes, , jTimeLogs, jMats, jDrawings, jVos, jDocs] = await Promise.all([
               db.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
-              db.from("job_photos").select("id,filename,created_at").eq("job_id", job.id),
+              db.from("job_photos").select("id,created_at").eq("job_id", job.id),
               db.from("time_logs").select("*").eq("job_id", job.id),
               db.from("materials").select("*").eq("job_id", job.id),
-              db.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
+              db.from("job_drawings").select("id,filename,created_at").eq("job_id", job.id),
               db.from("variation_orders").select("*").eq("job_id", job.id),
               db.from("compliance_docs").select("*").eq("job_id", job.id),
             ]);
@@ -9915,7 +9916,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             db.from("job_notes").select("*").eq("job_id", job.id).order("created_at", { ascending: false }),
             db.from("time_logs").select("*").eq("job_id", job.id),
             db.from("materials").select("*").eq("job_id", job.id),
-            db.from("job_drawings").select("id,file_name,created_at").eq("job_id", job.id),
+            db.from("job_drawings").select("id,filename,created_at").eq("job_id", job.id),
             db.from("variation_orders").select("*").eq("job_id", job.id),
             db.from("compliance_docs").select("*").eq("job_id", job.id),
           ]);
@@ -10454,6 +10455,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- Tool calls can be mixed types. You can log an expense, create an invoice, add a reminder and delete a job all in the same response.\n"
   + "- ONLY ASK if critical info is missing for any specific action. For the others that ARE complete, DO them — don't block the whole batch on one missing field. Example: \"Invoice Patel £900 and log some miles\" → invoice Patel straight away, then ask \"How many miles, and where to?\"\n"
   + "- SUMMARISE AT THE END, DON'T NARRATE EACH STEP. After executing the batch, one clean summary: \"Done. Invoiced Patel £900, marked Smith complete, logged 4hr on Wilson, reminder set for Thompson tomorrow 9am. Anything else?\"\n"
+  + "- ALWAYS ACKNOWLEDGE EVERY TOOL that successfully ran. If you logged 20 miles, mention \"logged 20 miles\" in your reply. If you added a reminder, mention it. Never silently execute a tool — the user relies on your confirmation to know it worked, especially on voice where they can't see the screen easily. A good PA always repeats back what they just did.\n"
   + "- Don't be afraid of 5, 7, 10 tools in one turn. If they asked for it, do it.\n"
   + "- Respect dependencies: if one action feeds into the next (e.g. \"create a customer for Tim Jones and book him in for Tuesday\"), call them in the right order — create_customer first, then create_job referencing the new customer.\n"
   + "- One exception: DESTRUCTIVE actions in a batch still need confirmation. \"Delete the Smith invoice and log 20 miles\" → log the miles straight away, but ask \"Delete the Smith £450 invoice — you sure?\" before deleting.\n"
@@ -21395,7 +21397,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                     if (!file) return;
                     const reader = new FileReader();
                     reader.onload = async ev => {
-                      const { data } = await db.from("job_photos").insert({ job_id: selected.id, user_id: user.id, photo_data: ev.target.result, filename: file.name, created_at: new Date().toISOString() }).select().single();
+                      const { data } = await db.from("job_photos").insert({ job_id: selected.id, user_id: user.id, data: ev.target.result, caption: file.name, created_at: new Date().toISOString() }).select().single();
                       if (data) setPhotos(prev => [data, ...prev]);
                     };
                     reader.readAsDataURL(file);
@@ -21405,7 +21407,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {photos.map(p => (
                       <div key={p.id} style={{ borderRadius: 8, overflow: "hidden", background: C.surfaceHigh }}>
-                        <img src={p.photo_data} alt={p.filename} style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
+                        <img src={p.data} alt={p.caption} style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
                         <div style={{ padding: "4px 8px", fontSize: 10, color: C.muted }}>{new Date(p.created_at).toLocaleDateString("en-GB")}</div>
                       </div>
                     ))}
@@ -27298,9 +27300,28 @@ function AppInner() {
     db.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setAuthLoading(false);
+      // Tag Sentry errors with the current user so we can see who hit what
+      try {
+        if (window.Sentry) {
+          if (session?.user) {
+            window.Sentry.setUser({ id: session.user.id, email: session.user.email });
+          } else {
+            window.Sentry.setUser(null);
+          }
+        }
+      } catch {}
     });
     const { data: { subscription } } = db.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      try {
+        if (window.Sentry) {
+          if (session?.user) {
+            window.Sentry.setUser({ id: session.user.id, email: session.user.email });
+          } else {
+            window.Sentry.setUser(null);
+          }
+        }
+      } catch {}
     });
     return () => subscription.unsubscribe();
   }, []);
