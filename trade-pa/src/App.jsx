@@ -7268,6 +7268,19 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     speakWebSpeech(clean, wrappedEnd);
   };
 
+  // Normalize text before sending to TTS. Grok TTS tokenizes "63.3%" oddly
+  // (reported 20 Apr 2026 — reads as "63, three percent" or similar). Pre-expanding
+  // decimals-in-percentages and percent signs makes pronunciation reliable.
+  // Defined BEFORE speakQueue so the closure reference is safe in prod bundles.
+  const normalizeForTts = (text) => {
+    if (!text) return text;
+    return text
+      // Decimals in percentages: "63.3%" → "63 point 3 percent"
+      .replace(/(\d+)\.(\d+)\s*%/g, "$1 point $2 percent")
+      // Plain percentages: "75%" → "75 percent"
+      .replace(/(\d+)\s*%/g, "$1 percent");
+  };
+
   // ─── Sentence-split parallel-TTS queue ────────────────────────────────
   // Phase 2 Stage 3+4 (20 Apr 2026): for multi-sentence replies, split on
   // sentence boundaries, fire TTS requests for ALL sentences in parallel,
@@ -7292,7 +7305,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   const speakQueue = async (fullText) => {
     if (!ttsEnabledRef.current) return;
 
-    const clean = fullText.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim();
+    const clean = normalizeForTts(
+      fullText.replace(/[*#_~`•]/g, "").replace(/\n+/g, " ").trim()
+    );
     if (!clean) return;
 
     // Dedup check (same 3s window as speak()). We DO NOT update lastSpokenRef
@@ -7373,6 +7388,23 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     }
   };
 
+  // Abort any in-flight speech: pauses current audio, flags the queue as aborted
+  // so its for-loop bails on the next iteration, cancels Web Speech fallback, and
+  // clears the isSpeaking UI state. Safe to call anytime — no-op if nothing is speaking.
+  const abortSpeech = () => {
+    if (speakQueueRef.current) speakQueueRef.current.aborted = true;
+    if (ttsAudioRef.current) {
+      try { ttsAudioRef.current.pause(); } catch {}
+      ttsAudioRef.current = null;
+    }
+    try { window.speechSynthesis?.cancel(); } catch {}
+    setIsSpeaking(false);
+  };
+
+  // Normalize text before sending to TTS: see definition near speakQueue above.
+  // (This comment retains the location marker for future diffing — the function
+  // itself lives earlier because speakQueue references it.)
+
   const toggleTts = () => {
     const newVal = !ttsEnabledRef.current;
     setTtsEnabled(newVal);
@@ -7411,6 +7443,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         recognition.stop();
         speechRecognitionRef.current = null;
         setWakeWordListening(false);
+        abortSpeech(); // Stage 5: cut off any in-flight TTS before mic opens
         startRecording(true);
       }
     };
@@ -11723,7 +11756,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 }} />
               )}
               <button
-                onClick={() => recording ? stopRecording() : startRecording(true)}
+                onClick={() => { abortSpeech(); recording ? stopRecording() : startRecording(true); }}
                 disabled={transcribing}
                 aria-label={vt.label}
                 style={{
@@ -12898,7 +12931,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           rows={2}
         />
         <button
-          onClick={() => { unlockAudio(); recording ? stopRecording() : startRecording(true); }}
+          onClick={() => { unlockAudio(); abortSpeech(); recording ? stopRecording() : startRecording(true); }}
           disabled={transcribing}
           aria-label={vt.label}
           style={{
@@ -19408,7 +19441,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                       <label style={{ fontSize: 11, color: IC.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Message</label>
                       <button
-                        onClick={() => recording ? stopRecording() : startRecording(true)}
+                        onClick={() => { abortSpeech(); recording ? stopRecording() : startRecording(true); }}
                         style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, background: recording ? IC.red : IC.amber, color: recording ? "#fff" : "#000" }}>
                         {transcribing ? "⏳ Transcribing..." : recording ? "⏹ Stop" : "🎙 Dictate"}
                       </button>
