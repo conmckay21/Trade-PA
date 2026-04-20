@@ -7117,7 +7117,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
       }
     } else {
-      setInput(text);
+      // Phase 1 (20 Apr 2026): auto-send on manual mic — voice-first UX means
+      // users shouldn't have to tap send after dictating. Hands-free adds the
+      // mic reopen loop on top of this; manual mode just doesn't reopen.
+      send(text);
     }
   };
 
