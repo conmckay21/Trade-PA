@@ -1,9 +1,9 @@
 // api/claude.js
-// Server-side proxy for all Claude API calls
-// Keeps ANTHROPIC_API_KEY off the client — never in browser bundle
+// Server-side proxy for all Claude API calls.
+// Keeps ANTHROPIC_API_KEY off the client — never in browser bundle.
 // All AI features in Trade PA route through here.
 //
-// ENFORCEMENT LAYER (added April 2026):
+// ENFORCEMENT LAYER:
 // - Requires Authorization: Bearer <Supabase access token>
 // - Rate-limits every call via check_rate_limit RPC (30/min, 300/hr, 1000/day)
 // - Checks monthly allowance via check_usage_allowance RPC (unless background:true)
@@ -11,6 +11,16 @@
 //   but still requires auth and hits rate limits.
 // - Does NOT increment usage counters — the client already does that via increment_usage RPC.
 //   Adding server-side increment here would cause double-counting.
+//
+// STREAMING (added 20 Apr 2026 — Phase 2 Stage 1):
+// - Request body { stream: true } → response is text/event-stream (SSE) forwarding
+//   Anthropic's native streaming format verbatim. Events: message_start,
+//   content_block_start, content_block_delta, content_block_stop, message_delta,
+//   message_stop, plus a custom 'error' event on mid-stream failure.
+// - Request body WITHOUT stream flag → response is JSON (legacy behaviour unchanged).
+//   Background Haiku extraction and other non-voice callers keep working as-is.
+// - Enforcement (auth/rate/allowance) runs BEFORE streaming begins. Rejections are
+//   always a normal JSON error response with the right status — never half-streamed.
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -57,12 +67,15 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: 'AI service not configured' });
 
   // ─── ENFORCEMENT ────────────────────────────────────────────────────────
+  // Runs BEFORE any streaming begins. If we reject here, it's always a clean
+  // JSON error response — we never half-open an SSE stream and then fail.
   const userId = await getUserIdFromRequest(req);
   if (!userId) {
     return res.status(401).json({ error: 'unauthorised', message: 'Valid auth token required.' });
   }
 
   const isBackground = req.body?.background === true;
+  const isStreaming = req.body?.stream === true;
   const exempt = await isExemptUser(userId);
 
   if (!exempt) {
@@ -130,6 +143,7 @@ export default async function handler(req, res) {
   try {
     const { model, max_tokens, messages, system, tools, mcp_servers } = req.body;
 
+    // Build the Anthropic API body — identical for streaming and non-streaming
     const body = {
       model: model || 'claude-sonnet-4-6',
       max_tokens: max_tokens || 1000,
@@ -180,7 +194,10 @@ export default async function handler(req, res) {
 
     if (mcp_servers) body.mcp_servers = mcp_servers;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Tell Anthropic we want streaming when the client asked for it
+    if (isStreaming) body.stream = true;
+
+    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -191,14 +208,83 @@ export default async function handler(req, res) {
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      console.error('Claude API error:', data);
-      return res.status(response.status).json({ error: data.error?.message || 'AI request failed' });
+    // ─── NON-STREAMING PATH (unchanged) ──────────────────────────────────
+    if (!isStreaming) {
+      const data = await upstream.json();
+      if (!upstream.ok) {
+        console.error('Claude API error:', data);
+        return res.status(upstream.status).json({ error: data.error?.message || 'AI request failed' });
+      }
+      return res.status(200).json(data);
     }
-    return res.status(200).json(data);
+
+    // ─── STREAMING PATH (new) ────────────────────────────────────────────
+    // If Anthropic itself errored before streaming started, we get a JSON
+    // error body here (not an SSE stream). Surface it cleanly to the client.
+    if (!upstream.ok) {
+      let errPayload = null;
+      try { errPayload = await upstream.json(); } catch {}
+      console.error('Claude streaming init error:', upstream.status, errPayload);
+      return res.status(upstream.status).json({
+        error: errPayload?.error?.message || 'AI request failed',
+        status: upstream.status,
+      });
+    }
+
+    // Set up SSE response headers. Once we write even a single byte below,
+    // status and headers are committed — so all error-check paths above this
+    // line must have already run successfully.
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    // Disable Vercel's response buffering for true streaming
+    res.setHeader('X-Accel-Buffering', 'no');
+    // Flush headers immediately so the client can start receiving
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+    // Pipe Anthropic's raw SSE body straight through to our client.
+    // Their body is already formatted as Server-Sent Events — we just forward
+    // bytes. No parse/re-serialise needed, which keeps us forwards-compatible
+    // with any new event types Anthropic adds.
+    try {
+      const reader = upstream.body.getReader();
+      // Client aborts (e.g. user interrupts a reply mid-stream) should stop us
+      // reading from Anthropic so we don't keep burning their quota.
+      let clientAborted = false;
+      req.on('close', () => {
+        clientAborted = true;
+        try { reader.cancel(); } catch {}
+      });
+
+      while (!clientAborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value && value.length) {
+          // Write raw bytes — Node res.write handles Uint8Array natively.
+          // If a previous write failed (client disconnected), res.write returns false
+          // but doesn't throw; the 'close' handler above will break us out shortly.
+          res.write(Buffer.from(value));
+        }
+      }
+      res.end();
+    } catch (streamErr) {
+      // Mid-stream error — we can't set headers anymore, so emit a custom
+      // SSE 'error' event and close the connection cleanly. The client should
+      // listen for 'error' events and handle gracefully (e.g. fallback to
+      // retrying as a non-streaming call, or show "connection lost").
+      console.error('[claude] streaming pipe error:', streamErr);
+      try {
+        const errEvent = `event: error\ndata: ${JSON.stringify({ message: streamErr.message || 'stream interrupted' })}\n\n`;
+        res.write(errEvent);
+      } catch {}
+      try { res.end(); } catch {}
+    }
   } catch (err) {
     console.error('Claude proxy error:', err.message);
-    return res.status(500).json({ error: err.message });
+    // If headers haven't been sent yet we can still return a clean JSON error.
+    // If they have (mid-stream), the streaming-path catch above handles it.
+    if (!res.headersSent) {
+      return res.status(500).json({ error: err.message });
+    }
   }
 }
