@@ -4651,7 +4651,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           const email = m.invited_email || m.users?.email || "Team member";
           const initials = email[0].toUpperCase();
           const perms = m.permissions || {};
-          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "RAMS"];
+          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Workers", "Subcontractors", "Documents", "Reviews", "Stock", "RAMS"];
 
           return (
             <div key={i} style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 14, marginBottom: 14 }}>
@@ -7579,7 +7579,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           date_iso: { type: "string", description: "ISO date string for the job e.g. 2026-03-30" },
           time: { type: "string", description: "Time in HH:MM format e.g. 09:00" },
           value: { type: "number", description: "Job value in pounds" },
-          status: { type: "string", enum: ["confirmed", "pending", "quote_sent"], description: "Job status" },
+          status: { type: "string", enum: ["enquiry", "quoted", "accepted", "in_progress", "on_hold", "completed", "cancelled"], description: "Job status — defaults to accepted for newly-booked work" },
         },
         required: ["customer", "type", "date_iso", "time"],
       },
@@ -7782,13 +7782,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "update_job_status",
-      description: "Change a job's status. Triggers: \"mark [job] as in progress\", \"that one's done now\", \"confirm the [customer] job\", \"put [job] on hold\". Statuses: enquiry, quoted, accepted, in_progress, completed, on_hold. If ambiguous which job, list recent jobs for that customer. AFTER: \"[Customer] job marked as [status].\"",
+      description: "Change a job's status. Triggers: \"mark [job] as in progress\", \"that one's done now\", \"confirm the [customer] job\", \"put [job] on hold\", \"cancel the [customer] job\". Statuses: enquiry, quoted, accepted, in_progress, on_hold, completed, cancelled. If ambiguous which job, list recent jobs for that customer. AFTER: \"[Customer] job marked as [status].\"",
       input_schema: {
         type: "object",
         properties: {
           customer: { type: "string", description: "Customer name to identify the job" },
           job_type: { type: "string", description: "Job type to help identify it" },
-          status: { type: "string", enum: ["confirmed", "pending", "quote_sent"], description: "New status for the job" },
+          status: { type: "string", enum: ["enquiry", "quoted", "accepted", "in_progress", "on_hold", "completed", "cancelled"], description: "New status for the job" },
         },
         required: ["customer", "status"],
       },
@@ -7830,7 +7830,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           address: { type: "string", description: "Job site address" },
           type: { type: "string", description: "Type of work e.g. Plumbing, Gas, Electrical" },
           value: { type: "number", description: "Job value in pounds" },
-          status: { type: "string", enum: ["enquiry", "quoted", "accepted", "in_progress", "completed"], description: "Job status, default accepted" },
+          status: { type: "string", enum: ["enquiry", "quoted", "accepted", "in_progress", "on_hold", "completed", "cancelled"], description: "Job status — defaults to accepted" },
           notes: { type: "string", description: "Any notes about the job" },
           scope_of_work: { type: "string", description: "Detailed description of work to be done" },
         },
@@ -8052,7 +8052,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "approve_inbox_action", description: "Approve a pending inbox action (executes the suggested action). Triggers: \"approve that\", \"do it\", \"yes go ahead\" when context is an inbox action. Confirms by showing what was done.", input_schema: { type: "object", properties: { action_id: { type: "string" }, description: { type: "string" } } } },
     { name: "reject_inbox_action", description: "Reject/dismiss a pending inbox action. Triggers: \"no\", \"dismiss that\", \"reject it\", \"not needed\" when context is an inbox action.", input_schema: { type: "object", properties: { action_id: { type: "string" } } } },
     { name: "generate_subcontractor_statement", description: "Generate a CIS statement PDF for a subcontractor for a given tax month. Triggers: \"generate [name]'s CIS statement\", \"send [subbie] their CIS for [month]\". ASK IF MISSING: subbie name and month/period. DEFAULTS: month → last month if unstated. AFTER: \"Statement generated for [name] — [month]. Email or download?\"", input_schema: { type: "object", properties: { name: { type: "string" }, month: { type: "string", description: "YYYY-MM" } }, required: ["name"] } },
-    { name: "update_job_card", description: "Update any field on a job card — title, customer, address, value, status, scope, PO number. Triggers: \"change the value on [job] to £X\", \"update the address on the [customer] job\", \"set the PO number to ABC123\". ASK IF MISSING: which field to update, if unclear. For repeat customers with multiple jobs, always confirm which job.", input_schema: { type: "object", properties: { customer: { type: "string", description: "Current customer name to find the job" }, title: { type: "string", description: "Current job title to find the job" }, new_title: { type: "string" }, new_customer: { type: "string" }, new_address: { type: "string" }, new_value: { type: "string" }, new_status: { type: "string", enum: ["enquiry","quoted","accepted","in_progress","completed","on_hold"] }, new_notes: { type: "string" }, new_scope: { type: "string" }, new_po_number: { type: "string" } } } },
+    { name: "update_job_card", description: "Update any field on a job card — title, customer, address, value, status, scope, PO number. Triggers: \"change the value on [job] to £X\", \"update the address on the [customer] job\", \"set the PO number to ABC123\". ASK IF MISSING: which field to update, if unclear. For repeat customers with multiple jobs, always confirm which job.", input_schema: { type: "object", properties: { customer: { type: "string", description: "Current customer name to find the job" }, title: { type: "string", description: "Current job title to find the job" }, new_title: { type: "string" }, new_customer: { type: "string" }, new_address: { type: "string" }, new_value: { type: "string" }, new_status: { type: "string", enum: ["enquiry","quoted","accepted","in_progress","on_hold","completed","cancelled"] }, new_notes: { type: "string" }, new_scope: { type: "string" }, new_po_number: { type: "string" } } } },
     { name: "update_invoice", description: "Update an invoice — change customer, amount, due date, status, payment method, VAT, or add/remove line items. Triggers: \"change the [customer] invoice to £X\", \"update the due date on [customer]'s invoice\", \"add a line to [customer]'s bill\". ASK IF MISSING: which field to change.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_due: { type: "string" }, new_status: { type: "string" }, new_address: { type: "string" }, new_payment_method: { type: "string", enum: ["bacs","card","both"], description: "bacs = bank transfer only, card = Stripe only, both = show both options" }, new_vat_enabled: { type: "string", description: "true or false" }, add_line_item: { type: "string", description: "Add a line item as 'description|amount' e.g. 'Extra labour|150'" }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
     { name: "list_quotes", description: "Show a list of quotes inline. Triggers: \"show my quotes\", \"what quotes are out\", \"list all estimates\", \"what's awaiting approval\". Filter by status if mentioned.", input_schema: { type: "object", properties: {} } },
     { name: "delete_expense", description: "Delete an expense. Triggers: \"delete that expense\", \"remove the £[X] [category]\", \"scrap that fuel claim\". If multiple match, list them. CONFIRM FIRST.", input_schema: { type: "object", properties: { description: { type: "string" } }, required: ["description"] } },
@@ -8246,7 +8246,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             type: input.type,
             date: dateObj.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + " " + input.time,
             dateObj: dateObj.toISOString(),
-            status: input.status || "confirmed",
+            status: input.status || "accepted",
             value: input.value || 0,
           };
           // Dedup: same customer + type + same date+time = duplicate scheduled job
@@ -21379,7 +21379,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                     />
                     <button style={S.btn("primary")} onClick={addNoteToJob}>Add</button>
                   </div>
-                  {notes.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No notes yet.</div>}
+                  {notes.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No notes yet — type one above or say "add a note to this job".</div>}
                   {notes.map(n => (
                     <div key={n.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 14px", marginBottom: 8 }}>
                       <div style={{ fontSize: 13 }}>{n.note}</div>
@@ -21403,7 +21403,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                     reader.readAsDataURL(file);
                   }} />
                   <button style={{ ...S.btn("ghost"), marginBottom: 14 }} onClick={() => photoRef.current?.click()}>📷 Add Photo</button>
-                  {photos.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No photos yet.</div>}
+                  {photos.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No photos yet — capture before/after shots or evidence using the upload button above.</div>}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {photos.map(p => (
                       <div key={p.id} style={{ borderRadius: 8, overflow: "hidden", background: C.surfaceHigh }}>
@@ -21511,7 +21511,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                     );
                   })}
 
-                  {timeLogs.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "16px 0" }}>No labour logged yet</div>}
+                  {timeLogs.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "16px 0" }}>No labour logged yet — tap + Log Time above, or say "log 4 hours on this job today".</div>}
                 </div>
             )}
 
@@ -22307,7 +22307,13 @@ function ExpensesTab({ user, setContextHint }) {
       <div style={S.card}>
         <div style={S.sectionTitle}>Expense Log ({filtered.length})</div>
         {loading && <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>}
-        {!loading && expenses.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No expenses logged yet.</div>}
+        {!loading && expenses.length === 0 && (
+          <div style={{ textAlign: "center", padding: "32px 16px" }}>
+            <div style={{ fontSize: 28, marginBottom: 10 }}>🧾</div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No expenses logged yet</div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Tap <strong style={{ color: C.amber }}>+ Log Expense</strong> above, scan a receipt, or just tell Trade PA: "log £42 for diesel today".</div>
+          </div>
+        )}
         {!loading && expenses.length > 0 && filtered.length === 0 && <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "16px 8px" }}>{search ? `No expenses match "${search}".` : "No expenses this period."}</div>}
         {filtered.map(e => (
           <div key={e.id} style={S.row}>
@@ -22492,7 +22498,13 @@ function CISStatementsTab({ user, setContextHint }) {
       <div style={S.card}>
         <div style={S.sectionTitle}>Statements ({visibleStatements.length})</div>
         {loading && <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>}
-        {!loading && statements.length === 0 && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No statements logged yet.</div>}
+        {!loading && statements.length === 0 && (
+          <div style={{ textAlign: "center", padding: "32px 16px" }}>
+            <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No CIS statements yet</div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>When a contractor sends you a CIS statement, log it here so the deductions count toward your tax bill. Or ask Trade PA: "log a CIS statement from Bilfinger for March".</div>
+          </div>
+        )}
         {!loading && statements.length > 0 && visibleStatements.length === 0 && <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "12px 8px" }}>{search ? `No statements match "${search}".` : `No statements in ${yearFilter}.`}</div>}
         {visibleStatements.map(s => (
           <div key={s.id} style={S.row}>
@@ -23588,7 +23600,7 @@ function MileageTab({ user, setContextHint }) {
   );
 }
 // ─── SUBCONTRACTOR CIS MANAGEMENT ────────────────────────────────────────────
-function SubcontractorsTab({ user, brand, setContextHint }) {
+function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
   const [subs, setSubs] = useState([]);
   const [payments, setPayments] = useState([]);
   const [workers, setWorkers] = useState([]);
@@ -23915,23 +23927,23 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {/* Row 1: title + action buttons */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>Subcontractors</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{mode === "workers" ? "Workers" : "Subcontractors"}</div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setView("add_worker")} style={S.btn("primary")}>+ Add Worker / Sub</button>
-            <button onClick={() => setView("add_payment")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Payment</button>
+            <button onClick={() => setView("add_worker")} style={S.btn("primary")}>{mode === "workers" ? "+ Add Worker" : "+ Add Worker / Sub"}</button>
+            {mode !== "workers" && <button onClick={() => setView("add_payment")} style={{ ...S.btn("ghost"), fontSize: 12 }}>+ Payment</button>}
           </div>
         </div>
-        {/* Row 2: scan buttons */}
-        <div style={{ display: "flex", gap: 8 }}>
+        {/* Row 2: scan buttons (subs only) */}
+        {mode !== "workers" && <div style={{ display: "flex", gap: 8 }}>
           <input ref={subScanFileRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleSubInvoiceScan(f); e.target.value = ""; }} />
           <input ref={subScanUploadRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleSubInvoiceScan(f); e.target.value = ""; }} />
           <button onClick={() => subScanFileRef.current?.click()} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: C.amber }}>📷 Scan Invoice</button>
           <button onClick={() => subScanUploadRef.current?.click()} style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: C.amber }}>📎 Upload Invoice</button>
-        </div>
+        </div>}
       </div>
 
-      {/* Summary */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
+      {/* Summary (subs only) */}
+      {mode !== "workers" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
         {(() => {
           const outstanding = payments.filter(p => !p.paid).reduce((s,p) => s + parseFloat(p.net||0), 0);
           const paidNet = payments.filter(p => p.paid).reduce((s,p) => s + parseFloat(p.net||0), 0);
@@ -23949,7 +23961,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
             <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{sub}</div>
           </div>
         ))}
-      </div>
+      </div>}
 
       {/* Scanning spinner */}
       {scanning && (
@@ -23966,8 +23978,8 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
         </div>
       )}
 
-      {/* Scanned invoice review banner */}
-      {subScanResult && !scanning && (
+      {/* Scanned invoice review banner (subs only) */}
+      {mode !== "workers" && subScanResult && !scanning && (
         <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.green }}>✓ Invoice scanned — payment form pre-filled</div>
@@ -23981,7 +23993,7 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       )}
 
       {/* Workers Section */}
-      {workers.length > 0 && (() => {
+      {(mode === "workers" || workers.length > 0) && (() => {
         const wq = workerSearch.trim().toLowerCase();
         const visibleWorkers = wq ? workers.filter(w =>
           (w.name || "").toLowerCase().includes(wq)
@@ -24006,7 +24018,11 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {visibleWorkers.length === 0 ? (
-              <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 12 }}>No workers match "{workerSearch}".</div>
+              <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 20 }}>
+                {workers.length === 0
+                  ? <>No workers added yet. Tap <strong>+ Add Worker</strong> above to get started — for PAYE staff or self-employed labour on your team.</>
+                  : <>No workers match "{workerSearch}".</>}
+              </div>
             ) : visibleWorkers.map(w => {
               const wDocs = workerDocs.filter(d => d.worker_id === w.id);
               const today = new Date().toISOString().slice(0,10);
@@ -24065,8 +24081,8 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
         </div>
       )}
 
-      {/* Subcontractor cards */}
-      {subs.length > 0 && (
+      {/* Subcontractor cards (subs only) */}
+      {mode !== "workers" && subs.length > 0 && (
         <div style={{ ...S.card }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Your Subcontractors</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -24104,8 +24120,8 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
         </div>
       )}
 
-      {/* Payment history */}
-      {payments.length > 0 && (
+      {/* Payment history (subs only) */}
+      {mode !== "workers" && payments.length > 0 && (
         <div style={{ ...S.card }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
             <div style={{ fontSize: 13, fontWeight: 700 }}>Payment History</div>
@@ -24181,7 +24197,11 @@ function SubcontractorsTab({ user, brand, setContextHint }) {
       )}
 
       {subs.length === 0 && !loading && (
-        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No subcontractors added yet</div>
+        <div style={{ textAlign: "center", padding: "32px 16px" }}>
+          <div style={{ fontSize: 28, marginBottom: 10 }}>👷</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No subcontractors yet</div>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Tap <strong style={{ color: C.amber }}>+ Add Worker / Sub</strong> above to add a subbie with their UTR + CIS rate. Then scan their invoices and log payments — Trade PA handles the CIS deductions.</div>
+        </div>
       )}
 
       {/* Add Subcontractor Modal */}
@@ -25017,7 +25037,11 @@ function ReviewsTab({ user, brand, customers, setContextHint }) {
       )}
 
       {completedJobs.length === 0 && !loading && (
-        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No completed jobs yet</div>
+        <div style={{ textAlign: "center", padding: "32px 16px" }}>
+          <div style={{ fontSize: 28, marginBottom: 10 }}>⭐</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No completed jobs yet</div>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Once you mark a job as completed, it'll appear here. From here you can send the customer a quick review request (Google, Trustpilot, etc.) — or just say "send a review request to Harrison".</div>
+        </div>
       )}
 
       {/* Send modal — choose platforms */}
@@ -25217,7 +25241,11 @@ function StockTab({ user, setContextHint }) {
       )}
 
       {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : items.length === 0 ? (
-        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No stock items yet</div>
+        <div style={{ textAlign: "center", padding: "32px 16px" }}>
+          <div style={{ fontSize: 28, marginBottom: 10 }}>📦</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No stock items yet</div>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Tap <strong style={{ color: C.amber }}>+ Add Item</strong> above to track what you carry in the van. Set a reorder level and Trade PA will flag low stock. Or say: "add 5 boxes of 22mm copper to stock".</div>
+        </div>
       ) : filtered.length === 0 ? (
         <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>{search ? `No stock matches "${search}".` : filter === "low" ? "No items below reorder level — all stocked up." : "No items."}</div>
       ) : filtered.map(item => {
@@ -26266,7 +26294,7 @@ const NAV_GROUPS = [
   { id: "work",   label: "Jobs",     views: ["Enquiries", "Jobs", "Materials", "Stock", "RAMS", "Documents"] },
   { id: "diary",  label: "Diary",    views: ["Schedule", "Reminders"] },
   { id: "money",  label: "Accounts", views: ["Invoices", "Quotes", "Expenses", "Mileage", "Payments", "CIS", "Reports"] },
-  { id: "people", label: "People",   views: ["Customers", "Subcontractors", "Reviews"] },
+  { id: "people", label: "People",   views: ["Customers", "Workers", "Subcontractors", "Reviews"] },
   { id: "admin",  label: "Admin",    views: ["Inbox", "Settings"] },
 ];
 // Flat list still used for permissions checks
@@ -28564,6 +28592,7 @@ function AppInner() {
         {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} brand={brand} user={user} setContextHint={setContextHint} />}
         {view === "Mileage" && <MileageTab user={user} setContextHint={setContextHint} />}
         {view === "Subcontractors" && <SubcontractorsTab user={user} brand={brand} setContextHint={setContextHint} />}
+        {view === "Workers" && <SubcontractorsTab user={user} brand={brand} setContextHint={setContextHint} mode="workers" />}
         {view === "Documents" && <DocumentsTab user={user} customers={customers} setContextHint={setContextHint} />}
         {view === "Reviews" && <ReviewsTab user={user} brand={brand} customers={customers} setContextHint={setContextHint} />}
         {view === "Stock" && <StockTab user={user} setContextHint={setContextHint} />}
