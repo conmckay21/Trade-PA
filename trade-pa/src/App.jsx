@@ -7367,18 +7367,40 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         audio.src = url;
         ttsAudioRef.current = audio;
 
+        // Track whether play() promise rejection caused us to route to Web Speech fallback
+        let usedFallback = false;
+
         await new Promise((resolve) => {
-          audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-          audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+          let done = false;
+          const finish = () => {
+            if (done) return;
+            done = true;
+            try { URL.revokeObjectURL(url); } catch {}
+            state.currentResolver = null;
+            resolve();
+          };
+          audio.onended = finish;
+          audio.onerror = finish;
+          // Expose finish() so abortSpeech() can resolve this Promise immediately
+          // when pausing the audio — otherwise onended never fires on pause() and
+          // the for-loop hangs forever.
+          state.currentResolver = finish;
+
           audio.play().catch(() => {
-            URL.revokeObjectURL(url);
-            // Playback blocked (e.g. iOS lost gesture) — fall back to Web Speech
-            speakWebSpeech(sentences[i], resolve);
+            usedFallback = true;
+            finish();
           });
         });
+
+        // play() was blocked (e.g. iOS lost gesture) — run Web Speech inline so
+        // we still speak the sentence. Skipped if the queue was aborted meanwhile.
+        if (usedFallback && !state.aborted) {
+          await new Promise((resolve) => speakWebSpeech(sentences[i], resolve));
+        }
       }
     } finally {
       state.active = false;
+      state.currentResolver = null;
       ttsAudioRef.current = null;
       setIsSpeaking(false);
       // Only restart mic if WE finished normally (not aborted by another speak request)
@@ -7392,9 +7414,23 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   // so its for-loop bails on the next iteration, cancels Web Speech fallback, and
   // clears the isSpeaking UI state. Safe to call anytime — no-op if nothing is speaking.
   const abortSpeech = () => {
-    if (speakQueueRef.current) speakQueueRef.current.aborted = true;
+    if (speakQueueRef.current) {
+      speakQueueRef.current.aborted = true;
+      // Resolve any hung per-sentence Promise so the queue's for-loop can
+      // iterate to its abort check and exit the finally block cleanly.
+      if (speakQueueRef.current.currentResolver) {
+        try { speakQueueRef.current.currentResolver(); } catch {}
+        speakQueueRef.current.currentResolver = null;
+      }
+    }
     if (ttsAudioRef.current) {
-      try { ttsAudioRef.current.pause(); } catch {}
+      try {
+        // Mute FIRST so there's no audible tail — iOS has a small buffer
+        // that plays out after pause() alone, which leaks into the mic
+        // when the user is interrupting.
+        ttsAudioRef.current.muted = true;
+        ttsAudioRef.current.pause();
+      } catch {}
       ttsAudioRef.current = null;
     }
     try { window.speechSynthesis?.cancel(); } catch {}
