@@ -12257,7 +12257,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                               </div>}
                               {job.drawings?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>DRAWINGS ({job.drawings.length})</div>
-                                {job.drawings.map((d,di) => <div key={di} style={{ fontSize: 12, color: C.amber, paddingBottom: 4 }}>📐 {d.file_name}</div>)}
+                                {job.drawings.map((d,di) => <div key={di} style={{ fontSize: 12, color: C.amber, paddingBottom: 4 }}>📐 {d.filename}</div>)}
                               </div>}
                               {job.vos?.length > 0 && <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                                 <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>VARIATION ORDERS ({job.vos.length} · £{job.vos.reduce((s,v) => s + parseFloat(v.amount||0), 0).toFixed(2)})</div>
@@ -27302,24 +27302,20 @@ function AppInner() {
       setAuthLoading(false);
       // Tag Sentry errors with the current user so we can see who hit what
       try {
-        if (window.Sentry) {
-          if (session?.user) {
-            window.Sentry.setUser({ id: session.user.id, email: session.user.email });
-          } else {
-            window.Sentry.setUser(null);
-          }
+        if (session?.user) {
+          Sentry.setUser({ id: session.user.id, email: session.user.email });
+        } else {
+          Sentry.setUser(null);
         }
       } catch {}
     });
     const { data: { subscription } } = db.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       try {
-        if (window.Sentry) {
-          if (session?.user) {
-            window.Sentry.setUser({ id: session.user.id, email: session.user.email });
-          } else {
-            window.Sentry.setUser(null);
-          }
+        if (session?.user) {
+          Sentry.setUser({ id: session.user.id, email: session.user.email });
+        } else {
+          Sentry.setUser(null);
         }
       } catch {}
     });
