@@ -8034,7 +8034,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "add_variation_order", description: "Add a variation order (extra work/scope change) to a job. Triggers: \"VO on [job] for [work], £[X]\", \"variation on [customer] — extra [work]\", \"log a change on [job]\". ASK IF MISSING: description and amount are required. For repeat customers, confirm which job. AFTER: \"VO added to [customer]'s [job] — [description], £[amount].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, description: { type: "string" }, amount: { type: "string" }, vo_number: { type: "string" } }, required: ["description","amount"] } },
     { name: "log_daywork", description: "Log a daywork sheet on a job — for ad-hoc work outside the original scope. Triggers: \"log dayworks on [job]\", \"daywork sheet for [customer] — [hours] at [£rate]\", \"add daywork to [job]\". ASK IF MISSING: hours and rate are required. Worker name — default to user if unclear. DEFAULTS: date → today. AFTER: \"Daywork logged — [hours]hr at £[rate]. Total £[amount].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, date: { type: "string" }, worker_name: { type: "string" }, hours: { type: "string" }, rate: { type: "string" }, description: { type: "string" }, contractor_name: { type: "string" } }, required: ["hours","rate"] } },
     { name: "send_review_request", description: "Send a review request email to a customer. Triggers: \"ask [customer] for a review\", \"send a review request to [customer]\", \"get [customer] to leave a review\". ASK IF MISSING: no email on file → ask. AFTER: \"Review request sent to [customer] — [platforms].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, email: { type: "string" } }, required: ["customer"] } },
-    { name: "get_report", description: "Show a financial report inline — income, expenses, profit by job, mileage, customer breakdown. Triggers: \"how am I doing\", \"what have I earned\", \"revenue summary\", \"last 3 months\", \"this year so far\", \"top customers\". DEFAULTS: period → this month unless stated. AFTER: brief summary and the report inline.", input_schema: { type: "object", properties: { period: { type: "string", enum: ["this_month","last_month","last_3_months","last_6_months","this_quarter","last_quarter","this_year","last_year"] } } } },
+    { name: "get_report", description: "Show a financial report inline — summary, VAT, outstanding/aged debt, job profitability, customer activity, materials, CIS, or tax year. Triggers: \"how am I doing\", \"what have I earned\", \"revenue summary\", \"VAT this quarter\", \"who owes me money\", \"outstanding invoices\", \"top jobs by profit\", \"top customers\", \"materials spend\", \"CIS this year\", \"tax year summary\". DEFAULTS: report_type → summary, period → this_month unless stated. For self-assessment / tax-return queries always pick report_type:\"summary\" with period:\"tax_year\" (current) or \"last_tax_year\". AFTER: brief spoken summary and the full report opens in the Reports tab.", input_schema: { type: "object", properties: { report_type: { type: "string", enum: ["summary","vat","outstanding","jobprofit","customers","materials","cis"], description: "Which report to compute. summary = P&L overview (default)." }, period: { type: "string", enum: ["this_month","last_month","last_3_months","last_6_months","this_quarter","last_quarter","this_year","last_year","tax_year","last_tax_year"] } } } },
     { name: "list_reminders", description: "Show active reminders inline. Triggers: \"what have I got to do\", \"show my reminders\", \"what's coming up\". AFTER: \"[N] active reminders — [next one due at time].\"", input_schema: { type: "object", properties: {} } },
     { name: "list_enquiries", description: "Show recent enquiries inline. Triggers: \"show my enquiries\", \"any new leads\", \"list pending enquiries\". AFTER: \"[N] open enquiries — [next action for each].\"", input_schema: { type: "object", properties: {} } },
     { name: "list_customers", description: "Show the customer list inline. Triggers: \"show my customers\", \"who's on my books\", \"list all clients\", \"who do I work for\". No follow-up needed. If empty, say \"No customers saved yet — want me to add one?\"", input_schema: { type: "object", properties: {} } },
@@ -9467,7 +9467,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "get_report": {
           const period = input.period || "this_month";
+          const reportType = input.report_type || "summary";
           const now = new Date();
+          // UK tax year runs 6 April → 5 April
+          const taxStartYr = (now.getMonth() > 3 || (now.getMonth() === 3 && now.getDate() >= 6))
+            ? now.getFullYear()
+            : now.getFullYear() - 1;
           let fromDate, toDate, label;
           if (period === "this_month") {
             fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -9495,6 +9500,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           } else if (period === "last_year") {
             fromDate = new Date(now.getFullYear()-1, 0, 1);
             toDate = new Date(now.getFullYear()-1, 11, 31); label = "Last Year";
+          } else if (period === "tax_year") {
+            fromDate = new Date(taxStartYr, 3, 6);
+            toDate = now; label = `Tax Year ${String(taxStartYr).slice(-2)}/${String(taxStartYr+1).slice(-2)}`;
+          } else if (period === "last_tax_year") {
+            fromDate = new Date(taxStartYr-1, 3, 6);
+            toDate = new Date(taxStartYr, 3, 5); label = `Tax Year ${String(taxStartYr-1).slice(-2)}/${String(taxStartYr).slice(-2)}`;
           } else {
             fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
             toDate = now; label = "This Month";
@@ -9507,6 +9518,65 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const outstanding = unpaidInvoices.reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
           const jobsInPeriod = (jobs||[]).filter(j => inPeriod(j.date_obj || j.dateObj));
           const matCost = (materials||[]).filter(m => inPeriod(m.created_at)).reduce((s,m) => s + ((m.unitPrice||0)*(m.qty||1)), 0);
+
+          // ── Non-summary report types: compute a one-shot text answer + open in Reports
+          // We don't render bespoke chat widgets for each report — instead the user
+          // gets the headline numbers spoken back, plus a button to see the full
+          // breakdown in the Reports tab where the existing rich UI lives.
+          if (reportType === "vat") {
+            const vatPaid = paidInvoices.filter(i => i.vatEnabled && !i.vatZeroRated);
+            const outVat = vatPaid.reduce((s,i) => { const g = parseFloat(i.amount||0); const r = parseFloat(i.vatRate||20)/100; return s + g - g/(1+r); }, 0);
+            const inVat = (materials||[]).filter(m => inPeriod(m.created_at) && m.vatEnabled).reduce((s,m) => { const net = (m.unitPrice||0)*(m.qty||1); const r = parseFloat(m.vatRate||20)/100; return s + net*r; }, 0);
+            const netV = outVat - inVat;
+            pendingWidgetRef.current = { type: "report", data: { label: `${label} — VAT`, totalRevenue: outVat, outstanding: inVat, paidCount: vatPaid.length, unpaidCount: 0, jobsCount: 0, matCost: 0, grossProfit: netV, topCustomers: [] } };
+            return `${label} VAT: output £${outVat.toFixed(0)}, input £${inVat.toFixed(0)}. Net ${netV >= 0 ? `payable to HMRC: £${netV.toFixed(0)}` : `reclaimable: £${Math.abs(netV).toFixed(0)}`}.`;
+          }
+          if (reportType === "outstanding") {
+            const allOutstanding = (invoices||[]).filter(i => !i.isQuote && ["sent","overdue","due"].includes(i.status));
+            const total = allOutstanding.reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+            const aged = allOutstanding.map(i => ({...i, daysOld: Math.floor((Date.now() - new Date(i.created_at || i.date || Date.now()))/86400000)}));
+            const over90 = aged.filter(i => i.daysOld > 90).reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+            const over60 = aged.filter(i => i.daysOld > 60 && i.daysOld <= 90).reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+            pendingWidgetRef.current = { type: "report", data: { label: "Outstanding", totalRevenue: total, outstanding: over90, paidCount: 0, unpaidCount: allOutstanding.length, jobsCount: 0, matCost: over60, grossProfit: total - over90 - over60, topCustomers: aged.slice(0,5).map(i => [`${i.customer} (${i.daysOld}d)`, parseFloat(i.amount)||0]) } };
+            return `£${total.toFixed(0)} outstanding across ${allOutstanding.length} invoice${allOutstanding.length===1?"":"s"}${over90>0 ? `. £${over90.toFixed(0)} is over 90 days old — worth chasing` : ""}.`;
+          }
+          if (reportType === "jobprofit") {
+            const jobsRanked = (jobs||[])
+              .filter(j => j.status === "completed" && inPeriod(j.date_obj || j.dateObj))
+              .map(j => {
+                const rev = (invoices||[]).filter(i => !i.isQuote && i.status === "paid" && (i.customer||"").toLowerCase() === (j.customer||"").toLowerCase()).reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+                const costs = (materials||[]).filter(m => (m.job||"").toLowerCase().includes((j.customer||"").toLowerCase()) || m.job === j.title).reduce((s,m) => s + ((m.unitPrice||0)*(m.qty||1)), 0);
+                return { name: j.customer || j.title || "Unknown", profit: rev - costs };
+              })
+              .filter(j => j.profit !== 0)
+              .sort((a,b) => b.profit - a.profit)
+              .slice(0, 5);
+            pendingWidgetRef.current = { type: "report", data: { label: `${label} — Top Jobs by Profit`, totalRevenue: jobsRanked.reduce((s,j) => s + Math.max(0,j.profit), 0), outstanding: 0, paidCount: jobsRanked.length, unpaidCount: 0, jobsCount: jobsRanked.length, matCost: 0, grossProfit: jobsRanked.reduce((s,j) => s + j.profit, 0), topCustomers: jobsRanked.map(j => [j.name, j.profit]) } };
+            return jobsRanked.length === 0 ? `No completed jobs with revenue/costs in ${label.toLowerCase()}.` : `Top job by profit ${label.toLowerCase()}: ${jobsRanked[0].name} at £${jobsRanked[0].profit.toFixed(0)}. ${jobsRanked.length} ranked overall.`;
+          }
+          if (reportType === "customers") {
+            const byCustomer = paidInvoices.reduce((acc,i) => { acc[i.customer] = (acc[i.customer]||0) + (parseFloat(i.amount)||0); return acc; }, {});
+            const top = Object.entries(byCustomer).sort((a,b)=>b[1]-a[1]).slice(0,5);
+            pendingWidgetRef.current = { type: "report", data: { label: `${label} — Top Customers`, totalRevenue: top.reduce((s,[,v]) => s + v, 0), outstanding: 0, paidCount: paidInvoices.length, unpaidCount: 0, jobsCount: 0, matCost: 0, grossProfit: 0, topCustomers: top } };
+            return top.length === 0 ? `No customer revenue in ${label.toLowerCase()}.` : `Top customer ${label.toLowerCase()}: ${top[0][0]} at £${top[0][1].toFixed(0)}.`;
+          }
+          if (reportType === "materials") {
+            const periodMats = (materials||[]).filter(m => inPeriod(m.created_at));
+            const bySupplier = periodMats.reduce((acc,m) => { const s = m.supplier || "Unknown"; acc[s] = (acc[s]||0) + ((m.unitPrice||0)*(m.qty||1)); return acc; }, {});
+            const top = Object.entries(bySupplier).sort((a,b)=>b[1]-a[1]).slice(0,5);
+            const total = Object.values(bySupplier).reduce((s,v) => s+v, 0);
+            pendingWidgetRef.current = { type: "report", data: { label: `${label} — Materials`, totalRevenue: 0, outstanding: 0, paidCount: 0, unpaidCount: 0, jobsCount: 0, matCost: total, grossProfit: -total, topCustomers: top } };
+            return total === 0 ? `No materials logged in ${label.toLowerCase()}.` : `£${total.toFixed(0)} on materials ${label.toLowerCase()}${top.length ? `, biggest supplier ${top[0][0]} at £${top[0][1].toFixed(0)}` : ""}.`;
+          }
+          if (reportType === "cis") {
+            const cisPaid = paidInvoices.filter(i => i.cisEnabled);
+            const cisG = cisPaid.reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+            const cisD = cisPaid.reduce((s,i) => s + (parseFloat(i.cisDeduction)||0), 0);
+            pendingWidgetRef.current = { type: "report", data: { label: `${label} — CIS`, totalRevenue: cisG, outstanding: cisD, paidCount: cisPaid.length, unpaidCount: 0, jobsCount: 0, matCost: 0, grossProfit: cisG - cisD, topCustomers: [] } };
+            return cisPaid.length === 0 ? `No CIS invoices in ${label.toLowerCase()}.` : `${label} CIS: £${cisG.toFixed(0)} gross, £${cisD.toFixed(0)} deducted, £${(cisG-cisD).toFixed(0)} net across ${cisPaid.length} invoice${cisPaid.length===1?"":"s"}.`;
+          }
+
+          // Default: P&L summary (existing behaviour)
           const reportData = { label, totalRevenue, outstanding, paidCount: paidInvoices.length, unpaidCount: unpaidInvoices.length, jobsCount: jobsInPeriod.length, matCost, grossProfit: totalRevenue - matCost, topCustomers: Object.entries(paidInvoices.reduce((acc,i) => { acc[i.customer]=(acc[i.customer]||0)+(parseFloat(i.amount)||0); return acc; }, {})).sort((a,b)=>b[1]-a[1]).slice(0,5) };
           pendingWidgetRef.current = { type: "report", data: reportData };
           return `Here's your ${label.toLowerCase()} report:`;
@@ -22570,6 +22640,12 @@ function ReportsTab({ invoices, jobs, materials, customers, enquiries, brand, us
   const fmtDate = d => d.toISOString().split("T")[0];
 
   // Period presets
+  // UK tax year runs 6 April → 5 April. If today is on/after April 6, current
+  // tax year started this April; otherwise it started last April.
+  const taxYearStartYear = (today.getMonth() > 3 || (today.getMonth() === 3 && today.getDate() >= 6))
+    ? today.getFullYear()
+    : today.getFullYear() - 1;
+  const taxYearLabel = (startYr) => `${String(startYr).slice(-2)}/${String(startYr + 1).slice(-2)}`;
   const periods = [
     { label: "This Month", from: fmtDate(new Date(today.getFullYear(), today.getMonth(), 1)), to: fmtDate(today) },
     { label: "Last Month", from: fmtDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)), to: fmtDate(new Date(today.getFullYear(), today.getMonth(), 0)) },
@@ -22578,6 +22654,8 @@ function ReportsTab({ invoices, jobs, materials, customers, enquiries, brand, us
     { label: "Last 6 Months", from: fmtDate(new Date(today.getFullYear(), today.getMonth() - 6, 1)), to: fmtDate(today) },
     { label: "This Year", from: fmtDate(new Date(today.getFullYear(), 0, 1)), to: fmtDate(today) },
     { label: "Last Year", from: fmtDate(new Date(today.getFullYear() - 1, 0, 1)), to: fmtDate(new Date(today.getFullYear() - 1, 11, 31)) },
+    { label: `Tax Year ${taxYearLabel(taxYearStartYear)}`, from: fmtDate(new Date(taxYearStartYear, 3, 6)), to: fmtDate(today) },
+    { label: `Tax Year ${taxYearLabel(taxYearStartYear - 1)}`, from: fmtDate(new Date(taxYearStartYear - 1, 3, 6)), to: fmtDate(new Date(taxYearStartYear, 3, 5)) },
     { label: "Custom", from: "", to: "" },
   ];
 
@@ -22927,12 +23005,149 @@ ${generateReportHTML()}
     return "";
   };
 
+  // ── CSV export ────────────────────────────────────────────────────────────
+  // Reuses the same in-memory data the screen renders, but emits CSV rows.
+  // Each report has its own shape so its own builder. Common helpers escape
+  // commas/quotes/newlines safely. Numbers come out unformatted so accountants
+  // can sum them in Excel without stripping currency symbols.
+  const downloadCSV = () => {
+    const csv = generateReportCSV();
+    if (!csv) return;
+    const reportName = reports.find(r => r.id === activeReport)?.label || "Report";
+    const periodLabel = isCustom ? `${customFrom}_to_${customTo}` : (periods[periodIdx]?.label || "").replace(/[^A-Za-z0-9]+/g, "_");
+    const filename = `${reportName.replace(/[^A-Za-z0-9]+/g, "_")}_${periodLabel}.csv`;
+    // BOM so Excel auto-detects UTF-8 (avoids £ rendering as Â£)
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  };
+
+  const generateReportCSV = () => {
+    // Escape any field that contains a comma, quote, or newline
+    const esc = v => {
+      if (v == null) return "";
+      const s = String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const row = cells => cells.map(esc).join(",") + "\n";
+    const num = n => (parseFloat(n) || 0).toFixed(2);
+    const reportName = reports.find(r => r.id === activeReport)?.label || activeReport;
+    const periodLabel = isCustom ? `${customFrom} to ${customTo}` : (periods[periodIdx]?.label || "");
+    const businessName = brand?.tradingName || "Trade PA";
+
+    let csv = "";
+    csv += row([businessName]);
+    csv += row([reportName]);
+    csv += row([`Period: ${periodLabel}`]);
+    csv += row([`Generated: ${new Date().toLocaleDateString("en-GB")}`]);
+    csv += "\n";
+
+    if (activeReport === "pl") {
+      csv += row(["Summary"]);
+      csv += row(["Metric", "Value", "Detail"]);
+      csv += row(["Total Revenue", num(totalRevenue), `${paidInvoices.length} paid invoices`]);
+      csv += row(["Materials Cost", num(totalMaterialCost), `${periodMaterials.length} items`]);
+      csv += row(["Gross Profit", num(grossProfit), `${grossMargin.toFixed(1)}% margin`]);
+      csv += row(["Outstanding", num(totalOutstanding), `${outstandingInvoices.length} invoices`]);
+      csv += "\n";
+      csv += row(["Paid Invoices"]);
+      csv += row(["Invoice", "Customer", "Date", "Amount"]);
+      paidInvoices.forEach(i => csv += row([i.id, i.customer, i.paidDate || i.created_at || i.date, num(i.grossAmount || i.amount)]));
+    } else if (activeReport === "vat") {
+      csv += row(["VAT Summary"]);
+      csv += row(["Description", "Net", "VAT"]);
+      csv += row(["Sales (Output VAT)", num(totalRevenue - outputVat), num(outputVat)]);
+      csv += row(["Purchases (Input VAT)", num(totalMaterialCost), num(inputVat)]);
+      csv += row(["Net VAT payable to HMRC", "", num(netVat)]);
+      csv += "\n";
+      csv += row(["VAT Invoices"]);
+      csv += row(["Invoice", "Customer", "Net", "VAT", "Gross", "Date"]);
+      vatInvoices.forEach(i => {
+        const gross = parseFloat(i.grossAmount || i.amount || 0);
+        const rate = parseFloat(i.vatRate || 20) / 100;
+        const vat = gross - gross / (1 + rate);
+        csv += row([i.id, i.customer, num(gross - vat), num(vat), num(gross), i.paidDate || i.created_at || i.date]);
+      });
+    } else if (activeReport === "outstanding") {
+      csv += row(["Outstanding Invoices"]);
+      csv += row(["Bucket", "Invoice", "Customer", "Amount", "Days Old", "Created"]);
+      [["0-30 days", 0, 30], ["31-60 days", 31, 60], ["61-90 days", 61, 90], ["90+ days", 91, 9999]].forEach(([label, min, max]) => {
+        const bucket = agedDebtors.filter(i => i.daysOld >= min && i.daysOld <= max);
+        bucket.forEach(i => csv += row([label, i.id, i.customer, num(i.grossAmount || i.amount), i.daysOld, i.created_at || i.date]));
+      });
+    } else if (activeReport === "jobprofit") {
+      csv += row(["Job Profitability"]);
+      csv += row(["Job", "Type", "Revenue", "Costs", "Profit", "Margin %"]);
+      jobProfitData.forEach(j => csv += row([j.name, j.type, num(j.revenue), num(j.costs), num(j.profit), j.margin.toFixed(1)]));
+    } else if (activeReport === "customers") {
+      csv += row(["Customer Activity"]);
+      csv += row(["Customer", "Total Spend", "Invoices Paid", "Outstanding", "Last Job"]);
+      customerData.forEach(c => csv += row([c.name, num(c.totalSpend), c.invoiceCount, num(c.outstanding), c.lastJobDate ? new Date(c.lastJobDate).toLocaleDateString("en-GB") : ""]));
+    } else if (activeReport === "materials") {
+      csv += row(["Materials Spend by Supplier"]);
+      csv += row(["Supplier", "Total Spend", "Items"]);
+      supplierList.forEach(s => csv += row([s.name, num(s.total), s.items]));
+      csv += "\n";
+      csv += row(["All Material Lines"]);
+      csv += row(["Item", "Supplier", "Qty", "Unit Price", "Total", "Job", "Date"]);
+      periodMaterials.forEach(m => {
+        const total = parseFloat(m.unitPrice || 0) * parseFloat(m.qty || 1);
+        csv += row([m.item, m.supplier || "", m.qty || 1, num(m.unitPrice), num(total), m.job || "", m.receiptDate || m.created_at || ""]);
+      });
+    } else if (activeReport === "cis") {
+      csv += row(["CIS Summary"]);
+      csv += row(["Metric", "Value"]);
+      csv += row(["Gross", num(cisGross)]);
+      csv += row(["Deductions", num(cisDeductions)]);
+      csv += row(["Net", num(cisNet)]);
+      csv += "\n";
+      csv += row(["CIS Invoices"]);
+      csv += row(["Invoice", "Customer", "Gross", "Deduction", "Net", "Date"]);
+      cisInvoices.forEach(i => {
+        const gross = parseFloat(i.grossAmount || i.amount || 0);
+        const ded = parseFloat(i.cisDeduction || 0);
+        csv += row([i.id, i.customer, num(gross), num(ded), num(gross - ded), i.paidDate || i.created_at || i.date]);
+      });
+    } else if (activeReport === "jobs") {
+      csv += row(["Jobs Overview"]);
+      csv += row(["Total Jobs", periodJobs.length]);
+      csv += row(["Completed", completedJobs.length]);
+      csv += "\n";
+      csv += row(["Jobs"]);
+      csv += row(["Customer", "Type", "Status", "Value", "Date"]);
+      periodJobs.forEach(j => csv += row([j.customer, j.type || j.title || "", j.status || "", num(j.value), j.dateObj || j.date || ""]));
+    } else if (activeReport === "quoteconv") {
+      csv += row(["Quote Conversion"]);
+      // The screen has its own logic for these; mirror it lightly.
+      const quotes = (invoices || []).filter(i => i.isQuote && inRange(i.created_at || i.date));
+      const accepted = quotes.filter(q => q.status === "accepted" || q.status === "won");
+      csv += row(["Total Quotes", quotes.length]);
+      csv += row(["Accepted", accepted.length]);
+      csv += row(["Conversion Rate %", quotes.length > 0 ? ((accepted.length / quotes.length) * 100).toFixed(1) : "0"]);
+    } else if (activeReport === "enqconv") {
+      csv += row(["Enquiry to Quote"]);
+      const periodEnq = (enquiries || []).filter(e => inRange(e.created_at || e.date));
+      csv += row(["Total Enquiries", periodEnq.length]);
+    }
+
+    return csv;
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 18, fontWeight: 700 }}>Reports</div>
-        <button onClick={downloadPDF} style={{ ...S.btn("ghost"), fontSize: 12 }}>⬇ Save PDF</button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={downloadCSV} style={{ ...S.btn("ghost"), fontSize: 12 }}>⬇ CSV</button>
+          <button onClick={downloadPDF} style={{ ...S.btn("ghost"), fontSize: 12 }}>⬇ Save PDF</button>
+        </div>
       </div>
 
       {/* Period selector */}
