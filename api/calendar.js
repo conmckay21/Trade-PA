@@ -18,6 +18,11 @@
 //   VITE_SUPABASE_URL (or SUPABASE_URL)                          — project URL
 //   SUPABASE_SERVICE_KEY (or SUPABASE_SERVICE_ROLE_KEY)          — service role key
 //                                                                  ⚠ Server-only.
+//
+// Schema notes (real column names in Trade PA's `jobs` table):
+//   date_obj      — canonical ISO date/datetime used for ordering + calendar events
+//   date          — human-readable display string fallback
+//   customer, address, type, status, value, notes  — event details
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
@@ -91,11 +96,14 @@ function buildICS(jobs, brandName) {
   ];
 
   (jobs || []).forEach((job) => {
-    const dateSrc = job.scheduled_date || job.date_obj || job.dateObj || job.date;
+    // date_obj is the canonical ISO timestamp; fall back to date (display
+    // string) if date_obj is null for any reason.
+    const dateSrc = job.date_obj || job.date;
     const startD = dateSrc ? new Date(dateSrc) : null;
     if (!startD || isNaN(startD.getTime())) return;
-    const durationMin = parseInt(job.duration_minutes || job.duration || 60, 10) || 60;
-    const endD = new Date(startD.getTime() + durationMin * 60 * 1000);
+    // No duration column in the schema — default to 60 min per event.
+    // Users can resize in their calendar app if needed.
+    const endD = new Date(startD.getTime() + 60 * 60 * 1000);
     const summary = `${job.type || "Job"} — ${job.customer || "Unknown"}`;
     const desc = [
       job.notes ? `Notes: ${job.notes}` : null,
@@ -153,10 +161,9 @@ export default async function handler(req, res) {
     const settings = settingsRows[0];
     const brandName = settings.brand_data?.tradingName || "Trade PA";
 
-    // NOTE: schema does not include `title` on jobs. Don't select it.
     const jobs = await supabaseSelect(
       "jobs",
-      `select=id,customer,address,type,scheduled_date,date,status,value,notes,duration_minutes&user_id=eq.${encodeURIComponent(settings.user_id)}&order=scheduled_date.asc&limit=500`
+      `select=id,customer,address,type,date,date_obj,status,value,notes&user_id=eq.${encodeURIComponent(settings.user_id)}&order=date_obj.asc&limit=500`
     );
 
     const ics = buildICS(jobs || [], brandName);
