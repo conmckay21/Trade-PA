@@ -47,6 +47,7 @@
     { "source": "/api/email/actions/approve", "destination": "/api/email" },
     { "source": "/api/email/actions/reject", "destination": "/api/email" },
     { "source": "/api/push/subscribe", "destination": "/api/push/subscribe" },
-    { "source": "/api/push/send", "destination": "/api/push/send" }
+    { "source": "/api/push/send", "destination": "/api/push/send" },
+    { "source": "/api/calendar/:token.ics", "destination": "/api/calendar?token=:token" }
   ]
 }
