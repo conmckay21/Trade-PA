@@ -12,29 +12,29 @@
 // Subscription, which invalidates any subscriptions using the old URL.
 //
 // ⚠ Zero-dependency implementation: uses native fetch() against Supabase's
-// PostgREST API rather than @supabase/supabase-js. Matches the pattern used
-// by other Trade PA serverless functions (api/tts.js etc) and avoids the
-// need for a root-level package.json install step.
+// PostgREST API, matching the pattern of other Trade PA serverless functions.
 //
-// Required env vars on Vercel:
-//   SUPABASE_URL                 — Supabase project URL
-//   SUPABASE_SERVICE_ROLE_KEY    — service role key (bypasses RLS for read)
-//                                  ⚠ Server-only, never expose to client.
-//
-// Output: VCALENDAR with one VEVENT per scheduled job. Times in UTC (Z suffix).
+// Env vars on Vercel (tolerates multiple naming conventions):
+//   VITE_SUPABASE_URL (or SUPABASE_URL)                          — project URL
+//   SUPABASE_SERVICE_KEY (or SUPABASE_SERVICE_ROLE_KEY)          — service role key
+//                                                                  ⚠ Server-only.
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Accept either naming convention — the Trade PA repo uses SUPABASE_SERVICE_KEY
+// and VITE_SUPABASE_URL. Supporting alternates in case env vars are renamed.
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL;
 
-// ─── Supabase REST helpers ──────────────────────────────────────────────────
-// Thin wrapper around PostgREST. We use the service_role key to bypass RLS
-// because the request has no authenticated user — only a calendar token.
+const SUPABASE_SERVICE_KEY =
+  process.env.SUPABASE_SERVICE_KEY ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 async function supabaseSelect(table, query) {
   const url = `${SUPABASE_URL}/rest/v1/${table}?${query}`;
   const res = await fetch(url, {
     headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      apikey: SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
       Accept: "application/json",
     },
   });
@@ -45,8 +45,6 @@ async function supabaseSelect(table, query) {
   return res.json();
 }
 
-// ─── ICS generator (mirrors the client-side one in App.jsx) ─────────────────
-// Kept in sync with the client version; if you edit one, edit the other.
 function esc(s) {
   return String(s || "")
     .replace(/\\/g, "\\\\")
@@ -113,7 +111,6 @@ function buildICS(jobs, brandName) {
   return lines.join("\r\n") + "\r\n";
 }
 
-// ─── Handler ────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD");
@@ -126,14 +123,20 @@ export default async function handler(req, res) {
     return res.status(404).type("text/plain").send("Calendar not found.");
   }
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    console.error("[calendar] missing env vars");
-    return res.status(500).type("text/plain").send("Calendar service unavailable.");
+  // Defensive env check — returns plain text rather than crashing, so
+  // misconfiguration is visible in browser/curl rather than hidden inside
+  // Vercel's generic FUNCTION_INVOCATION_FAILED page.
+  if (!SUPABASE_URL) {
+    console.error("[calendar] missing SUPABASE_URL / VITE_SUPABASE_URL");
+    return res.status(500).type("text/plain").send("Calendar service unavailable: no Supabase URL configured.");
+  }
+  if (!SUPABASE_SERVICE_KEY) {
+    console.error("[calendar] missing SUPABASE_SERVICE_KEY / SUPABASE_SERVICE_ROLE_KEY");
+    return res.status(500).type("text/plain").send("Calendar service unavailable: no service key configured.");
   }
 
   try {
     // PostgREST JSON path equality: brand_data->>calendarToken=eq.<token>
-    // URL-encode the token just in case (it's always alphanumeric but defensive anyway).
     const settingsRows = await supabaseSelect(
       "user_settings",
       `select=user_id,brand_data&brand_data->>calendarToken=eq.${encodeURIComponent(token)}&limit=1`
@@ -160,6 +163,6 @@ export default async function handler(req, res) {
     return res.status(200).send(ics);
   } catch (err) {
     console.error("[calendar] error:", err.message);
-    return res.status(500).type("text/plain").send("Calendar error.");
+    return res.status(500).type("text/plain").send(`Calendar error: ${err.message.slice(0, 200)}`);
   }
 }
