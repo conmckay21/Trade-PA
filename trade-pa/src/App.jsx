@@ -17634,12 +17634,23 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending, cust
   const subject = `${docType} ${doc.id} from ${brand.tradingName} — ${fmtCurrency(doc.amount)}`;
   const accent = brand?.accentColor || "#f59e0b";
   const docAmt = fmtCurrency(doc.amount);
+  // Customer portal CTA — only for quotes that have a portal token. The
+  // portalUrl helper resolves to view.tradespa.co.uk in production and the
+  // current origin elsewhere. PDF stays attached as a fallback for customers
+  // who'd rather print or sign the old-fashioned way.
+  const portalToken = doc.portalToken || doc.portal_token;
+  const portalCTA = (isQuote && portalToken) ? `
+      <p style="text-align:center;margin:20px 0 24px;">
+        <a href="${portalUrl(portalToken)}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.02em;">View &amp; Accept Online &rarr;</a>
+      </p>
+      <p style="text-align:center;color:#888;font-size:12px;margin-top:-12px;margin-bottom:20px;">No login required &middot; one tap to accept</p>` : "";
   const body = buildEmailHTML(brand, {
     heading: `${docType.toUpperCase()} ${doc.id}`,
     showBacs: !isQuote,
     invoiceId: doc.id,
     body: `<p style="font-size:15px;">Dear ${doc.customer},</p>
       <p style="color:#555;">Please find your ${docType.toLowerCase()} ${doc.id} for <strong>${docAmt}</strong> attached.</p>
+      ${portalCTA}
       <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
         <div style="font-size:22px;font-weight:700;color:${accent};">${docAmt}</div>
         <div style="font-size:12px;color:#888;margin-top:4px;">${isQuote ? "Valid for 30 days" : `Due within ${brand.paymentTerms || 30} days`}</div>
@@ -18351,7 +18362,9 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
             )}
             {/* Customer portal link — share this URL with the customer so
                 they can view, accept or decline the quote without logging in.
-                Generated on quote creation or back-filled when viewed. */}
+                Generated on quote creation or back-filled when viewed.
+                URL host comes from the portalUrl helper so subdomain changes
+                only need to happen in one place. */}
             {(selected.portalToken || selected.portal_token) && (
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Customer Portal Link</div>
@@ -18359,18 +18372,17 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
                   <input
                     readOnly
                     style={{ ...S.input, fontFamily: "'DM Mono',monospace", fontSize: 11, flex: 1 }}
-                    value={`${typeof window !== "undefined" ? window.location.origin : "https://www.tradespa.co.uk"}/quote/${selected.portalToken || selected.portal_token}`}
+                    value={portalUrl(selected.portalToken || selected.portal_token)}
                     onClick={e => e.target.select()}
                   />
                   <button
                     onClick={() => {
-                      const url = `${window.location.origin}/quote/${selected.portalToken || selected.portal_token}`;
-                      if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+                      if (navigator.clipboard) navigator.clipboard.writeText(portalUrl(selected.portalToken || selected.portal_token)).catch(() => {});
                     }}
                     style={{ ...S.btn("ghost"), fontSize: 11, flexShrink: 0 }}
                   >Copy</button>
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>Share this link — customer can view, accept or decline without signing up. You'll get a push notification when they respond.</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>Share this link &mdash; customer can view, accept or decline without signing up. You'll get a push notification when they respond. (Also auto-included as a button in your quote emails.)</div>
               </div>
             )}
           </div>
@@ -26721,6 +26733,27 @@ function urlBase64ToUint8Array(base64String) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+// ─── Portal URL helper ───────────────────────────────────────────────────────
+// Centralises the customer portal hostname so changing it (subdomain swap,
+// preview deploys etc) only happens in one place.
+//
+// Behaviour:
+//   - Production (any *.tradespa.co.uk host) → https://view.tradespa.co.uk
+//   - Preview / local / anything else        → window.location.origin
+//
+// The portal endpoint itself is reachable on either host (the /quote/:token
+// rewrite in vercel.json applies project-wide), so preview deploys that
+// point at preview-url.vercel.app/quote/<token> work without any setup.
+function portalUrl(token) {
+  if (!token) return "";
+  let host = "https://view.tradespa.co.uk";
+  if (typeof window !== "undefined" && window.location?.origin) {
+    const origin = window.location.origin;
+    host = origin.includes("tradespa.co.uk") ? "https://view.tradespa.co.uk" : origin;
+  }
+  return `${host}/quote/${token}`;
 }
 
 // ─── iCalendar (.ics) generator ──────────────────────────────────────────────
