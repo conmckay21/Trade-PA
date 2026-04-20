@@ -19,8 +19,6 @@
 //   SUPABASE_SERVICE_KEY (or SUPABASE_SERVICE_ROLE_KEY)          — service role key
 //                                                                  ⚠ Server-only.
 
-// Accept either naming convention — the Trade PA repo uses SUPABASE_SERVICE_KEY
-// and VITE_SUPABASE_URL. Supporting alternates in case env vars are renamed.
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
   process.env.VITE_SUPABASE_URL;
@@ -28,6 +26,15 @@ const SUPABASE_URL =
 const SUPABASE_SERVICE_KEY =
   process.env.SUPABASE_SERVICE_KEY ||
   process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// ─── Response helper ────────────────────────────────────────────────────────
+// Vercel's serverless response object is raw http.ServerResponse — it does NOT
+// have Express-style chainable helpers like res.type(). Using setHeader +
+// status + send separately is the safe pattern across Vercel Node runtimes.
+function sendText(res, status, body) {
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.status(status).send(body);
+}
 
 async function supabaseSelect(table, query) {
   const url = `${SUPABASE_URL}/rest/v1/${table}?${query}`;
@@ -89,7 +96,7 @@ function buildICS(jobs, brandName) {
     if (!startD || isNaN(startD.getTime())) return;
     const durationMin = parseInt(job.duration_minutes || job.duration || 60, 10) || 60;
     const endD = new Date(startD.getTime() + durationMin * 60 * 1000);
-    const summary = `${job.type || job.title || "Job"} — ${job.customer || "Unknown"}`;
+    const summary = `${job.type || "Job"} — ${job.customer || "Unknown"}`;
     const desc = [
       job.notes ? `Notes: ${job.notes}` : null,
       job.value ? `Value: £${parseFloat(job.value).toFixed(2)}` : null,
@@ -120,19 +127,16 @@ export default async function handler(req, res) {
   let token = req.query.token || "";
   if (token.endsWith(".ics")) token = token.slice(0, -4);
   if (!/^[a-z0-9]{20,64}$/i.test(token)) {
-    return res.status(404).type("text/plain").send("Calendar not found.");
+    return sendText(res, 404, "Calendar not found.");
   }
 
-  // Defensive env check — returns plain text rather than crashing, so
-  // misconfiguration is visible in browser/curl rather than hidden inside
-  // Vercel's generic FUNCTION_INVOCATION_FAILED page.
   if (!SUPABASE_URL) {
     console.error("[calendar] missing SUPABASE_URL / VITE_SUPABASE_URL");
-    return res.status(500).type("text/plain").send("Calendar service unavailable: no Supabase URL configured.");
+    return sendText(res, 500, "Calendar service unavailable: no Supabase URL configured.");
   }
   if (!SUPABASE_SERVICE_KEY) {
     console.error("[calendar] missing SUPABASE_SERVICE_KEY / SUPABASE_SERVICE_ROLE_KEY");
-    return res.status(500).type("text/plain").send("Calendar service unavailable: no service key configured.");
+    return sendText(res, 500, "Calendar service unavailable: no service key configured.");
   }
 
   try {
@@ -143,15 +147,16 @@ export default async function handler(req, res) {
     );
 
     if (!Array.isArray(settingsRows) || settingsRows.length === 0) {
-      return res.status(404).type("text/plain").send("Calendar not found.");
+      return sendText(res, 404, "Calendar not found.");
     }
 
     const settings = settingsRows[0];
     const brandName = settings.brand_data?.tradingName || "Trade PA";
 
+    // NOTE: schema does not include `title` on jobs. Don't select it.
     const jobs = await supabaseSelect(
       "jobs",
-      `select=id,customer,address,type,title,scheduled_date,date,status,value,notes,duration_minutes&user_id=eq.${encodeURIComponent(settings.user_id)}&order=scheduled_date.asc&limit=500`
+      `select=id,customer,address,type,scheduled_date,date,status,value,notes,duration_minutes&user_id=eq.${encodeURIComponent(settings.user_id)}&order=scheduled_date.asc&limit=500`
     );
 
     const ics = buildICS(jobs || [], brandName);
@@ -163,6 +168,6 @@ export default async function handler(req, res) {
     return res.status(200).send(ics);
   } catch (err) {
     console.error("[calendar] error:", err.message);
-    return res.status(500).type("text/plain").send(`Calendar error: ${err.message.slice(0, 200)}`);
+    return sendText(res, 500, `Calendar error: ${err.message.slice(0, 200)}`);
   }
 }
