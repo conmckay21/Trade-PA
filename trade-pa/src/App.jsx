@@ -10429,6 +10429,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- NEVER repeat a question you have already asked in the same conversation. If the user has moved on, drop it.\n"
   + "- Do not repeat the SAME action with the SAME data. If mileage from A to B on today's date is already in the session log, do not log it again. But DO log a different route (C to D) — that is a new trip.\n"
   + "- When actioning a new request, only call tools needed for THAT request. Do not bundle in previous unrelated actions from earlier in the conversation — but DO call multiple tools in a single response if the current request contains multiple actions (see MULTI-ACTION REQUESTS).\n"
+  + "- SOCIAL CLOSINGS — brief reply, NO tool calls: When the user sends a pure closing or acknowledgement message (e.g. \"thanks\", \"cheers\", \"that's everything\", \"thank you\", \"perfect\", \"brilliant\", \"appreciate it\"), respond with a short warm acknowledgement only (one or two short sentences) and DO NOT call any tools. They're wrapping up the exchange — don't re-query data that's already visible, don't re-show widgets, don't summarise. Just a friendly sign-off.\n"
   + "\n"
   + "YOU ARE A PERSONAL ASSISTANT ON THE PHONE.\n"
   + "The tradesperson is calling you from a van, a loft, a building site. They speak in fragments. Your job is to understand quickly, fill the gaps, and get the action done.\n"
@@ -10928,7 +10929,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               sessionActionsRef.current = [...sessionActionsRef.current.slice(-9), `${block.name}(${JSON.stringify(block.input).slice(0,60)})`];
             }
             if (pendingWidgetRef.current) {
-              allWidgets.push(pendingWidgetRef.current);
+              // Dedup: skip if an identical widget (same type + same data) was already
+              // added in this turn. Prevents duplicate UI when Claude calls the same
+              // read-only tool twice across iterations (20 Apr 2026 — seen on social closings).
+              const newW = pendingWidgetRef.current;
+              const newDataJson = JSON.stringify(newW.data);
+              const alreadyPresent = allWidgets.some(
+                (w) => w.type === newW.type && JSON.stringify(w.data) === newDataJson
+              );
+              if (!alreadyPresent) {
+                allWidgets.push(newW);
+              }
               pendingWidgetRef.current = null;
             }
             // Build a tool_result block to send back to Claude next iteration.
