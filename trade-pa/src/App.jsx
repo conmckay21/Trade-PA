@@ -8450,6 +8450,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             description: lineItems.map(l => `${l.description}|${l.amount}`).join("\n"),
             lineItems,
             isQuote: true,
+            // Portal token: per-quote random string so customers can view the
+            // quote at /quote/<token> without logging in. Generated here so
+            // the detail view can show the portal URL immediately, no refresh.
+            portalToken: Array.from(crypto.getRandomValues(new Uint8Array(24)))
+              .map(b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join(""),
           };
           setInvoices(prev => [quote, ...(prev || [])]);
           db.from("invoices").upsert({
@@ -8463,6 +8468,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             line_items: JSON.stringify(lineItems),
             job_ref: input.job_ref || "",
             created_at: new Date().toISOString(),
+            portal_token: quote.portalToken,
           }).then(() => {}).catch(() => {});
           setLastAction({ type: "invoice", label: `${id} — ${fmtAmount(totalAmount)} — ${input.customer}`, view: "Quotes" });
           pendingWidgetRef.current = { type: "quote", data: quote };
@@ -18154,6 +18160,20 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
     if (user?.id) db.from("invoices").update({ updated_at: newUpdated }).eq("id", id).eq("user_id", user.id).then(() => {}).catch(() => {});
   };
 
+  // Back-fill portal token for older quotes that were created before this
+  // feature existed. Runs silently whenever the user opens a quote that has
+  // no token yet — generates one and persists to DB so the URL can be shared.
+  useEffect(() => {
+    if (!selected || !selected.isQuote) return;
+    const existingToken = selected.portalToken || selected.portal_token;
+    if (existingToken) return;
+    const t = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+      .map(b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
+    setSelected(s => ({ ...s, portalToken: t }));
+    setInvoices(prev => (prev || []).map(i => i.id === selected.id ? { ...i, portalToken: t } : i));
+    if (user?.id) db.from("invoices").update({ portal_token: t }).eq("id", selected.id).eq("user_id", user.id).then(() => {}).catch(() => {});
+  }, [selected?.id]);
+
   const convertToInvoice = async (quote) => {
     const newId = nextInvoiceId(invoices);
     const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
@@ -18327,6 +18347,30 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
               <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Job Reference</div>
                 <div style={{ fontSize: 13 }}>{selected.jobRef}</div>
+              </div>
+            )}
+            {/* Customer portal link — share this URL with the customer so
+                they can view, accept or decline the quote without logging in.
+                Generated on quote creation or back-filled when viewed. */}
+            {(selected.portalToken || selected.portal_token) && (
+              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Customer Portal Link</div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    readOnly
+                    style={{ ...S.input, fontFamily: "'DM Mono',monospace", fontSize: 11, flex: 1 }}
+                    value={`${typeof window !== "undefined" ? window.location.origin : "https://www.tradespa.co.uk"}/quote/${selected.portalToken || selected.portal_token}`}
+                    onClick={e => e.target.select()}
+                  />
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/quote/${selected.portalToken || selected.portal_token}`;
+                      if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+                    }}
+                    style={{ ...S.btn("ghost"), fontSize: 11, flexShrink: 0 }}
+                  >Copy</button>
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>Share this link — customer can view, accept or decline without signing up. You'll get a push notification when they respond.</div>
               </div>
             )}
           </div>
