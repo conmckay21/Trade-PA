@@ -104,7 +104,11 @@ async function tryGrokSTT(audioBuffer, mimeType) {
     // `file` must be LAST per xAI docs — critical
     form.append('file', new Blob([audioBuffer], { type: mimeType }), filename);
 
-    const res = await fetch('https://api.x.ai/v1/stt', {
+    // Pin to EU-West-1 regional endpoint — our Vercel functions run in Dublin,
+    // so this keeps the hop inside Europe (~200ms faster than default routing
+    // which may land in US-East-1). Regional endpoints don't auto-fallback on
+    // xAI's side, but our Deepgram cascade catches that case.
+    const res = await fetch('https://eu-west-1.api.x.ai/v1/stt', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
