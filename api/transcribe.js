@@ -1,13 +1,13 @@
 // api/transcribe.js
-// Server-side transcription endpoint — keeps API keys off the client
-// Accepts audio as base64, calls Deepgram with Whisper fallback.
-// Deepgram preferred for UK/Irish/regional accent accuracy.
+// Server-side transcription endpoint — keeps API keys off the client.
 //
-// ENFORCEMENT LAYER (added April 2026):
+// Cascade order: Grok STT (primary) → Deepgram (fallback) → Whisper (tertiary).
+// Returns the first successful transcript. If any provider errors or returns
+// empty text, we try the next one — users never see partial failures.
+//
+// ENFORCEMENT LAYER (unchanged from previous version):
 // - Requires Authorization: Bearer <Supabase access token>
 // - NO rate limiting or allowance check: tap-to-talk is "never capped" per pricing.
-// - Handsfree time tracking happens elsewhere (client-side session timer,
-//   and eventually a handsfree-heartbeat endpoint).
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -37,68 +37,192 @@ export default async function handler(req, res) {
   if (!userId) {
     return res.status(401).json({ error: 'unauthorised', message: 'Valid auth token required.' });
   }
-  // ────────────────────────────────────────────────────────────────────────
 
   try {
     const { audio, mimeType = 'audio/webm' } = req.body;
     if (!audio) return res.status(400).json({ error: 'No audio provided' });
 
     const audioBuffer = Buffer.from(audio, 'base64');
-    const deepgramKey = process.env.DEEPGRAM_API_KEY;
 
-    if (!deepgramKey) {
-      return await transcribeWithWhisper(audioBuffer, mimeType, res);
+    // ─── PROVIDER CASCADE ──────────────────────────────────────────────────
+    // Each attempt returns { text } on success or throws / returns null on failure.
+    // We log which provider succeeded for production monitoring via Sentry.
+
+    // 1. GROK STT (primary) — best entity recognition accuracy per xAI benchmarks
+    const grokResult = await tryGrokSTT(audioBuffer, mimeType);
+    if (grokResult !== null) {
+      return res.status(200).json({ text: grokResult, provider: 'grok' });
     }
 
-    const dgRes = await fetch(
+    // 2. DEEPGRAM (fallback) — proven format support + UK accent tuning
+    const deepgramResult = await tryDeepgram(audioBuffer, mimeType);
+    if (deepgramResult !== null) {
+      return res.status(200).json({ text: deepgramResult, provider: 'deepgram' });
+    }
+
+    // 3. WHISPER (tertiary) — last resort
+    const whisperResult = await tryWhisper(audioBuffer, mimeType);
+    if (whisperResult !== null) {
+      return res.status(200).json({ text: whisperResult, provider: 'whisper' });
+    }
+
+    // All three providers failed — return graceful empty transcript
+    console.error('[transcribe] all providers failed');
+    return res.status(200).json({ text: '', provider: 'none' });
+
+  } catch (err) {
+    console.error('[transcribe] fatal error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// ─── GROK STT ─────────────────────────────────────────────────────────────
+// xAI's Speech-to-Text endpoint (launched April 2026). Uses multipart/form-data.
+// Docs: https://docs.x.ai/developers/model-capabilities/audio/speech-to-text
+//
+// Note: xAI officially supports WAV, MP3, OGG, Opus, FLAC, AAC, MP4, M4A, MKV.
+// webm is NOT officially listed but is often accepted (webm is typically Opus-in-Matroska).
+// If Grok rejects the format, we fall through to Deepgram which handles webm natively.
+async function tryGrokSTT(audioBuffer, mimeType) {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) {
+    console.log('[transcribe] XAI_API_KEY not set — skipping Grok');
+    return null;
+  }
+
+  try {
+    // Choose a reasonable filename extension from the incoming mimeType.
+    // Container formats Grok auto-detects — the extension is mostly cosmetic
+    // but using a recognised one helps edge cases.
+    const ext = mimeTypeToExtension(mimeType);
+    const filename = `recording.${ext}`;
+
+    // Build multipart form body. Native FormData (available in Node 18+).
+    const form = new FormData();
+    form.append('language', 'en');              // enables Inverse Text Normalization
+    form.append('format', 'true');              // "£1,240" instead of "one thousand two hundred forty pounds"
+    // `file` must be LAST per xAI docs — critical
+    form.append('file', new Blob([audioBuffer], { type: mimeType }), filename);
+
+    const res = await fetch('https://api.x.ai/v1/stt', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        // Content-Type is set automatically by fetch for FormData (with correct boundary)
+      },
+      body: form,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '<no body>');
+      console.warn(`[transcribe] Grok STT HTTP ${res.status}: ${errText.slice(0, 300)}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const text = (data?.text || '').trim();
+    if (!text) {
+      console.log('[transcribe] Grok returned empty text — falling through');
+      return null;
+    }
+    return text;
+  } catch (err) {
+    console.warn('[transcribe] Grok STT error:', err.message);
+    return null;
+  }
+}
+
+// ─── DEEPGRAM (FALLBACK) ──────────────────────────────────────────────────
+// Unchanged from the prior primary implementation — nova-2 with en-GB hint.
+// Kept as fallback because Grok may reject webm audio from some clients.
+async function tryDeepgram(audioBuffer, mimeType) {
+  const apiKey = process.env.DEEPGRAM_API_KEY;
+  if (!apiKey) {
+    console.log('[transcribe] DEEPGRAM_API_KEY not set — skipping Deepgram');
+    return null;
+  }
+
+  try {
+    const res = await fetch(
       'https://api.deepgram.com/v1/listen?model=nova-2&language=en-GB&smart_format=true&punctuate=true',
       {
         method: 'POST',
         headers: {
-          'Authorization': `Token ${deepgramKey}`,
+          Authorization: `Token ${apiKey}`,
           'Content-Type': mimeType,
         },
         body: audioBuffer,
       }
     );
 
-    if (!dgRes.ok) {
-      const errText = await dgRes.text();
-      console.error('Deepgram error:', errText);
-      return await transcribeWithWhisper(audioBuffer, mimeType, res);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '<no body>');
+      console.warn(`[transcribe] Deepgram HTTP ${res.status}: ${errText.slice(0, 300)}`);
+      return null;
     }
 
-    const dgData = await dgRes.json();
-    const transcript = dgData.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
-
-    return res.status(200).json({ text: transcript });
-
+    const data = await res.json();
+    const text = (data?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
+    if (!text) {
+      console.log('[transcribe] Deepgram returned empty text — falling through');
+      return null;
+    }
+    return text;
   } catch (err) {
-    console.error('Transcription error:', err.message);
-    return res.status(500).json({ error: err.message });
+    console.warn('[transcribe] Deepgram error:', err.message);
+    return null;
   }
 }
 
-async function transcribeWithWhisper(audioBuffer, mimeType, res) {
+// ─── WHISPER (TERTIARY FALLBACK) ─────────────────────────────────────────
+// OpenAI Whisper as last resort. Slower and less accurate on accents than
+// Deepgram, but works when nothing else does.
+async function tryWhisper(audioBuffer, mimeType) {
   const openAiKey = process.env.OPENAI_API_KEY;
   if (!openAiKey) {
-    return res.status(500).json({ error: 'No transcription service configured' });
+    console.log('[transcribe] OPENAI_API_KEY not set — skipping Whisper');
+    return null;
   }
 
-  const FormData = (await import('formdata-node')).FormData;
-  const { Blob } = await import('buffer');
+  try {
+    const ext = mimeTypeToExtension(mimeType);
+    const form = new FormData();
+    form.append('model', 'whisper-1');
+    form.append('language', 'en');
+    form.append('file', new Blob([audioBuffer], { type: mimeType }), `audio.${ext}`);
 
-  const fd = new FormData();
-  fd.set('file', new Blob([audioBuffer], { type: mimeType }), 'audio.webm');
-  fd.set('model', 'whisper-1');
-  fd.set('language', 'en');
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${openAiKey}` },
+      body: form,
+    });
 
-  const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${openAiKey}` },
-    body: fd,
-  });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '<no body>');
+      console.warn(`[transcribe] Whisper HTTP ${res.status}: ${errText.slice(0, 300)}`);
+      return null;
+    }
 
-  const data = await whisperRes.json();
-  return res.status(200).json({ text: data.text || '' });
+    const data = await res.json();
+    const text = (data?.text || '').trim();
+    if (!text) return null;
+    return text;
+  } catch (err) {
+    console.warn('[transcribe] Whisper error:', err.message);
+    return null;
+  }
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────
+function mimeTypeToExtension(mimeType) {
+  const mt = String(mimeType || '').toLowerCase();
+  if (mt.includes('mp4')) return 'mp4';
+  if (mt.includes('m4a')) return 'm4a';
+  if (mt.includes('ogg')) return 'ogg';
+  if (mt.includes('webm')) return 'webm';
+  if (mt.includes('wav')) return 'wav';
+  if (mt.includes('mp3') || mt.includes('mpeg')) return 'mp3';
+  if (mt.includes('flac')) return 'flac';
+  if (mt.includes('aac')) return 'aac';
+  return 'webm'; // sensible default — most browsers record this
 }
