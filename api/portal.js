@@ -63,9 +63,6 @@ async function supabaseRequest(method, path, body) {
 }
 
 // ─── HTML escaping ──────────────────────────────────────────────────────────
-// Every piece of user content must pass through this before going into the
-// template. Customer names, line item descriptions, business names all come
-// from arbitrary user input.
 function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;")
@@ -81,8 +78,55 @@ const fmtDate = (d) => {
   catch { return ""; }
 };
 
+// ─── Line item normalisation ────────────────────────────────────────────────
+// Mirror of the in-app LineItemsDisplay logic. Handles three shapes the DB
+// row may present:
+//   1. line_items JSON array with {description, amount} or {desc, amount}
+//   2. Legacy quotes storing items in the `description` field with "|" separator
+//      (format: "Supply boiler|450\nInstall boiler|350")
+//   3. Single-line quote with line_items=[{description, amount:0}] but the real
+//      total in top-level inv.amount/gross_amount (happens when quote was
+//      created with only a total, not itemised)
+//
+// Returns array of {description, amount?} where amount is null if unknown.
+function parseLineItems(inv) {
+  let items = [];
+
+  // Try structured line_items first
+  try {
+    if (typeof inv.line_items === "string") items = JSON.parse(inv.line_items);
+    else if (Array.isArray(inv.line_items)) items = inv.line_items;
+  } catch { items = []; }
+
+  items = (items || []).map(l => ({
+    description: l.description || l.desc || "",
+    amount: l.amount != null && l.amount !== "" && !isNaN(parseFloat(l.amount)) ? parseFloat(l.amount) : null,
+  })).filter(l => l.description);
+
+  // Fallback: parse the description field with pipe separator
+  if (items.length === 0 && inv.description) {
+    items = String(inv.description).split(/\n|;\s*/).map(s => {
+      const pipeIdx = s.lastIndexOf("|");
+      if (pipeIdx > 0) {
+        const amt = parseFloat(s.slice(pipeIdx + 1));
+        return { description: s.slice(0, pipeIdx).trim(), amount: isNaN(amt) ? null : amt };
+      }
+      return { description: s.trim(), amount: null };
+    }).filter(i => i.description);
+  }
+
+  // Edge case: single itemised line with zero/null amount but a real total exists.
+  // Push the top-level total onto the line item so it displays meaningfully
+  // rather than showing a misleading £0.00.
+  if (items.length === 1 && (items[0].amount == null || items[0].amount === 0)) {
+    const total = parseFloat(inv.gross_amount || inv.amount);
+    if (total > 0) items[0].amount = total;
+  }
+
+  return items;
+}
+
 // ─── Shared page chrome ─────────────────────────────────────────────────────
-// All portal pages share this shell — branded header, content slot, footer.
 function pageShell({ brand, title, bodyHTML }) {
   const accent = brand?.accentColor || "#f59e0b";
   const tradingName = esc(brand?.tradingName || "Trade PA");
@@ -148,7 +192,6 @@ function pageShell({ brand, title, bodyHTML }) {
 </html>`;
 }
 
-// ─── Error page ─────────────────────────────────────────────────────────────
 function errorPage(brand, heading, detail) {
   const body = `
     <h1>${esc(heading)}</h1>
@@ -160,7 +203,6 @@ function errorPage(brand, heading, detail) {
 
 // ─── View quote ─────────────────────────────────────────────────────────────
 async function renderQuoteView(token) {
-  // Fetch the invoice + the brand (user_settings row)
   const invoices = await supabaseRequest("GET", `invoices?portal_token=eq.${encodeURIComponent(token)}&select=*&limit=1`);
   if (!Array.isArray(invoices) || invoices.length === 0) {
     return { status: 404, html: errorPage(null, "Not found", "This link is invalid or has been revoked.") };
@@ -172,7 +214,6 @@ async function renderQuoteView(token) {
 
   const isQuote = inv.is_quote === true;
 
-  // Expiry — quote expires after brand.quoteValidity days from updated_at/created_at
   const validityDays = parseInt(brand.quoteValidity || "30", 10) || 30;
   const refDate = new Date(inv.updated_at || inv.created_at || Date.now());
   const expiresAt = new Date(refDate.getTime() + validityDays * 86400000);
@@ -181,14 +222,9 @@ async function renderQuoteView(token) {
 
   const alreadyResponded = inv.status === "accepted" || inv.status === "declined";
 
-  // Parse line items
-  let lineItems = [];
-  try {
-    if (typeof inv.line_items === "string") lineItems = JSON.parse(inv.line_items);
-    else if (Array.isArray(inv.line_items)) lineItems = inv.line_items;
-  } catch { lineItems = []; }
+  const lineItems = parseLineItems(inv);
 
-  // Build banner
+  // Banner
   let banner = "";
   if (alreadyResponded) {
     const label = inv.status === "accepted" ? "accepted" : "declined";
@@ -199,19 +235,28 @@ async function renderQuoteView(token) {
     banner = `<div class="banner info">This quote expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.</div>`;
   }
 
-  // Line items
+  // Line items table — hide the Amount column entirely if no item has a
+  // known amount (cleaner than showing a column of blanks or £0.00).
+  const anyAmounts = lineItems.some(li => li.amount != null);
   const itemsHTML = lineItems.length > 0 ? `
     <table>
       <thead>
-        <tr><th>Description</th><th>Amount</th></tr>
+        <tr>
+          <th>Description</th>
+          ${anyAmounts ? "<th>Amount</th>" : ""}
+        </tr>
       </thead>
       <tbody>
-        ${lineItems.map(li => `<tr><td>${esc(li.description || li.desc || "")}</td><td>${fmtGBP(li.amount || 0)}</td></tr>`).join("")}
+        ${lineItems.map(li => `
+          <tr>
+            <td>${esc(li.description)}</td>
+            ${anyAmounts ? `<td>${li.amount != null ? fmtGBP(li.amount) : ""}</td>` : ""}
+          </tr>
+        `).join("")}
       </tbody>
     </table>
-  ` : inv.description ? `<p style="font-size:13px;white-space:pre-line;">${esc(inv.description)}</p>` : "";
+  ` : "";
 
-  // Bank details panel (if brand has them) — no Stripe in v1, always show bank transfer
   const bankHTML = (brand.bankName || brand.accountNumber) ? `
     <div class="panel">
       <h2>Pay by bank transfer</h2>
@@ -225,7 +270,8 @@ async function renderQuoteView(token) {
     </div>
   ` : "";
 
-  // Action buttons — only if it's a quote, not expired, and not already responded
+  // Accept / Decline — simpler reassurance copy that doesn't repeat the
+  // tradingName (already shown in the header).
   const actionsHTML = (isQuote && !isExpired && !alreadyResponded) ? `
     <div class="cta-group">
       <form method="POST" action="/api/portal?action=accept" style="flex:1;margin:0;">
@@ -237,7 +283,7 @@ async function renderQuoteView(token) {
         <button type="submit" class="cta ghost">Decline</button>
       </form>
     </div>
-    <p style="font-size:11px;color:#999;text-align:center;margin-top:8px;">Tapping Accept will notify ${esc(brand.tradingName || "the tradesperson")} that you've agreed to proceed.</p>
+    <p style="font-size:11px;color:#999;text-align:center;margin-top:8px;">Tapping Accept confirms you'd like to proceed — the tradesperson will be notified immediately.</p>
   ` : "";
 
   const body = `
@@ -294,7 +340,6 @@ async function readFormBody(req) {
 
 // ─── Accept / decline handlers ──────────────────────────────────────────────
 async function handleResponse(req, res, action) {
-  // Accept token from query OR body (form POST always has it in body)
   let token = req.query.token || "";
   if (!token && req.method === "POST") {
     const form = await readFormBody(req);
@@ -304,7 +349,6 @@ async function handleResponse(req, res, action) {
     return sendHTML(res, 404, errorPage(null, "Not found", "This link is invalid or has expired."));
   }
 
-  // Fetch invoice + brand for validation and notification
   const invoices = await supabaseRequest("GET", `invoices?portal_token=eq.${encodeURIComponent(token)}&select=*&limit=1`);
   if (!Array.isArray(invoices) || invoices.length === 0) {
     return sendHTML(res, 404, errorPage(null, "Not found", "This link is invalid or has been revoked."));
@@ -314,7 +358,6 @@ async function handleResponse(req, res, action) {
   const settingsRows = await supabaseRequest("GET", `user_settings?user_id=eq.${encodeURIComponent(inv.user_id)}&select=brand_data&limit=1`);
   const brand = settingsRows?.[0]?.brand_data || {};
 
-  // Guard: only quotes, not already responded, not expired
   if (!inv.is_quote) return sendHTML(res, 400, errorPage(brand, "Not a quote", "This link is for an invoice, not a quote — nothing to accept or decline."));
 
   const validityDays = parseInt(brand.quoteValidity || "30", 10) || 30;
@@ -325,12 +368,10 @@ async function handleResponse(req, res, action) {
   }
 
   if (inv.status === "accepted" || inv.status === "declined") {
-    // Idempotent — just re-render the view page, which will show the "already responded" banner
     const view = await renderQuoteView(token);
     return sendHTML(res, view.status, view.html);
   }
 
-  // Commit state change
   const newStatus = action === "accept" ? "accepted" : "declined";
   const nowISO = new Date().toISOString();
   await supabaseRequest("PATCH", `invoices?id=eq.${encodeURIComponent(inv.id)}&user_id=eq.${encodeURIComponent(inv.user_id)}`, {
@@ -339,28 +380,22 @@ async function handleResponse(req, res, action) {
     updated_at: nowISO,
   });
 
-  // Fire push notification to the tradesperson. Best-effort — if the push
-  // service is unavailable we still show the customer the success page.
   try {
     const title = action === "accept" ? "Quote accepted ✓" : "Quote declined";
-    const body = action === "accept"
+    const bodyMsg = action === "accept"
       ? `${inv.customer} accepted ${inv.id} — ${fmtGBP(inv.gross_amount || inv.amount)}`
       : `${inv.customer} declined ${inv.id}`;
-    // POST to the same Vercel deployment's push endpoint. Host is taken from
-    // the incoming request so this works across preview deployments too.
     const host = req.headers["x-forwarded-host"] || req.headers.host;
     const proto = req.headers["x-forwarded-proto"] || "https";
     await fetch(`${proto}://${host}/api/push/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: inv.user_id, title, body, tag: `portal-${inv.id}` }),
+      body: JSON.stringify({ userId: inv.user_id, title, body: bodyMsg, tag: `portal-${inv.id}` }),
     }).catch(() => {});
   } catch (e) {
     console.error("[portal] push notify failed:", e.message);
   }
 
-  // Render the success page — same view the customer sees but with the banner
-  // confirming their response. We re-fetch to pick up the updated status.
   const view = await renderQuoteView(token);
   return sendHTML(res, view.status, view.html);
 }
