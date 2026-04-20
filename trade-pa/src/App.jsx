@@ -7240,6 +7240,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         const url = URL.createObjectURL(blob);
         // Reuse the persistent element that was pre-unlocked on user tap — new Audio() fails on iOS
         const audio = persistentAudioRef.current || new Audio();
+        // Fix (20 Apr 2026): reset volume + muted explicitly before playback.
+        // unlockAudio() sets volume=0.001 for the silent priming WAV and never
+        // resets, so without this the first TTS playback can be inaudible on
+        // browsers that don't auto-reset volume on src change.
+        audio.volume = 1.0;
+        audio.muted = false;
         audio.onended = () => { URL.revokeObjectURL(url); wrappedEnd(); };
         audio.onerror = () => { URL.revokeObjectURL(url); setSafety("fallback"); speakWebSpeech(clean, wrappedEnd); };
         audio.src = url;
@@ -10716,6 +10722,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
 
         if (!data.content || data.content.length === 0) {
+          // stop_reason=end_turn with empty content = Claude intentionally said
+          // nothing (e.g. acknowledging a "thank you" as conversation end). Don't
+          // flag as error — just break the loop and skip the message append at
+          // the end (handled by the silent-end guard below).
+          if (data.stop_reason === "end_turn") {
+            break;
+          }
           console.error("Empty response (iter " + iteration + "):", data);
           loopError = `No response received. Stop reason: ${data.stop_reason || "unknown"}`;
           break;
@@ -10797,6 +10810,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       // Hit iteration limit without natural end? Log it but still show what we have
       if (iteration >= MAX_AGENTIC_ITERATIONS && data?.stop_reason === "tool_use") {
         console.warn("Agentic loop hit max iterations (" + MAX_AGENTIC_ITERATIONS + ")");
+      }
+
+      // Silent-end guard (20 Apr 2026): when Claude chose not to respond
+      // (stop_reason=end_turn, no text, no tools) — e.g. after a "thank you"
+      // sign-off — don't append a spurious "Done." message. Just exit cleanly.
+      if (!allReplyText.trim() && allToolResults.length === 0 && data?.stop_reason === "end_turn") {
+        setLoading(false);
+        if (placeholderAdded) {
+          // Defensive: remove any placeholder that sneaked in
+          setMessages(prev => {
+            const copy = prev.slice();
+            for (let i = copy.length - 1; i >= 0; i--) {
+              if (copy[i].streaming) { copy.splice(i, 1); break; }
+            }
+            return copy;
+          });
+        }
+        return;
       }
 
       // Combine Claude text + tool results — but avoid duplicating
@@ -11131,7 +11162,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (!combined.length) combined.push(finalReply);
           spokenReply = combined.join(" ").trim();
         } else {
-          spokenReply = (widget && spokenSummary) ? spokenSummary : finalReply;
+          // Prefer Claude's own written text when it's substantial (>30 chars).
+          // The auto-generated widget summary is a generic readout — Claude's
+          // actual text is usually more contextual and directly answers the
+          // user's specific question. Fall back to widget summary only when
+          // Claude produced trivial text like "Here's the job card:".
+          const useClaudeText = finalReply.trim().length > 30;
+          spokenReply = useClaudeText ? finalReply : ((widget && spokenSummary) ? spokenSummary : finalReply);
         }
       } else {
         spokenReply = finalReply;
