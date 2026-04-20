@@ -10412,6 +10412,139 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     }
   }, [onboardingStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Streaming helper for /api/claude ─────────────────────────────────
+  // Phase 2 Stage 2 (20 Apr 2026): consumes Anthropic-style SSE stream from
+  // our server, assembles content blocks into the SAME shape the non-streaming
+  // response returned, and fires onTextDelta for each text chunk so the UI
+  // can render Claude's reply progressively as it types.
+  //
+  // Return shape mirrors a minimal fetch() Response: { status, ok, data }.
+  // On a server-side rejection (402/403/429 from enforcement), the server
+  // responds with JSON (not SSE) — we detect via content-type and surface it
+  // unchanged so the existing limit-modal interception logic keeps working.
+  //
+  // On mid-stream errors Anthropic/our proxy emits an SSE 'error' event; we
+  // convert it to { status:500, ok:false, data:{error:"..."} } so the caller
+  // handles it the same way as any other failure.
+  const callClaudeStream = async (body, onTextDelta) => {
+    const res = await fetch("/api/claude", {
+      method: "POST",
+      headers: await authHeaders(),
+      body: JSON.stringify({ ...body, stream: true }),
+    });
+
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("text/event-stream")) {
+      // Server returned a plain JSON response (e.g. 402 limit, 500 error before stream).
+      let errData = null;
+      try { errData = await res.json(); } catch {}
+      return { status: res.status, ok: res.ok, data: errData || { error: "Unknown error" } };
+    }
+
+    // Parse SSE frames and assemble content blocks
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const contentBlocks = [];
+    let toolInputJson = "";
+    let currentToolBlockIdx = -1;
+    let stop_reason = null;
+    let stop_sequence = null;
+    let usage = null;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE events are separated by a blank line (\n\n)
+        let sepIdx;
+        while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
+          const raw = buffer.slice(0, sepIdx);
+          buffer = buffer.slice(sepIdx + 2);
+
+          let eventName = null;
+          let dataStr = "";
+          for (const line of raw.split("\n")) {
+            if (line.startsWith("event:")) eventName = line.slice(6).trim();
+            else if (line.startsWith("data:")) {
+              const piece = line.slice(5).trim();
+              dataStr = dataStr ? dataStr + "\n" + piece : piece;
+            }
+          }
+          if (!dataStr) continue;
+
+          let parsed;
+          try { parsed = JSON.parse(dataStr); } catch { continue; }
+
+          const t = parsed.type || eventName;
+
+          if (t === "error") {
+            return {
+              status: 500, ok: false,
+              data: { error: parsed.message || parsed.error?.message || "Stream error" },
+            };
+          }
+
+          if (t === "content_block_start") {
+            const idx = parsed.index;
+            contentBlocks[idx] = { ...parsed.content_block };
+            if (contentBlocks[idx].type === "text" && contentBlocks[idx].text == null) {
+              contentBlocks[idx].text = "";
+            }
+            if (contentBlocks[idx].type === "tool_use") {
+              currentToolBlockIdx = idx;
+              toolInputJson = "";
+              if (contentBlocks[idx].input == null) contentBlocks[idx].input = {};
+            }
+          } else if (t === "content_block_delta") {
+            const idx = parsed.index;
+            const block = contentBlocks[idx];
+            if (!block) continue;
+            const delta = parsed.delta;
+            if (delta?.type === "text_delta" && block.type === "text") {
+              block.text += delta.text || "";
+              if (onTextDelta && delta.text) {
+                try { onTextDelta(delta.text); } catch (e) { console.warn("onTextDelta threw:", e); }
+              }
+            } else if (delta?.type === "input_json_delta") {
+              toolInputJson += delta.partial_json || "";
+            }
+          } else if (t === "content_block_stop") {
+            const idx = parsed.index;
+            const block = contentBlocks[idx];
+            if (block && block.type === "tool_use" && toolInputJson) {
+              try { block.input = JSON.parse(toolInputJson); } catch { block.input = {}; }
+            }
+            if (idx === currentToolBlockIdx) {
+              currentToolBlockIdx = -1;
+              toolInputJson = "";
+            }
+          } else if (t === "message_delta") {
+            if (parsed.delta?.stop_reason) stop_reason = parsed.delta.stop_reason;
+            if (parsed.delta?.stop_sequence !== undefined) stop_sequence = parsed.delta.stop_sequence;
+            if (parsed.usage) usage = parsed.usage;
+          }
+          // message_start / message_stop / ping — no-op
+        }
+      }
+    } catch (err) {
+      console.error("[callClaudeStream] read error:", err);
+      return { status: 500, ok: false, data: { error: err.message || "Stream interrupted" } };
+    }
+
+    return {
+      status: 200, ok: true,
+      data: {
+        content: contentBlocks.filter(Boolean),
+        stop_reason,
+        stop_sequence,
+        ...(usage ? { usage } : {}),
+      },
+    };
+  };
+
   const send = async (text) => {
     if (!text.trim() || loading) return;
 
@@ -10434,6 +10567,31 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     setInput("");
     setLoading(true);
     setLastAction(null);
+
+    // Phase 2 Stage 2: streaming placeholder tracking.
+    // placeholderAdded stays false until the first text_delta arrives, so that
+    // if enforcement rejects the request (402/403/429) or Anthropic fails,
+    // we never leave an empty assistant bubble in the chat. Subsequent deltas
+    // find the placeholder via its streaming:true flag and append.
+    let placeholderAdded = false;
+    const onTextDelta = (deltaText) => {
+      if (!deltaText) return;
+      if (!placeholderAdded) {
+        placeholderAdded = true;
+        setMessages((prev) => [...prev, { role: "assistant", content: deltaText, streaming: true }]);
+      } else {
+        setMessages((prev) => {
+          const copy = prev.slice();
+          for (let i = copy.length - 1; i >= 0; i--) {
+            if (copy[i].streaming) {
+              copy[i] = { ...copy[i], content: (copy[i].content || "") + deltaText };
+              break;
+            }
+          }
+          return copy;
+        });
+      }
+    };
 
     try {
       // Build API messages — deduplicate consecutive same-role messages
@@ -10485,22 +10643,21 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       while (iteration < MAX_AGENTIC_ITERATIONS) {
         iteration += 1;
 
-        const res = await fetch("/api/claude", {
-          method: "POST",
-          headers: await authHeaders(),
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 1000,
-            system: [
-              { type: "text", text: SYSTEM_STABLE, cache: true },
-              { type: "text", text: SYSTEM_VOLATILE },
-            ],
-            tools: TOOLS,
-            messages: workingMessages,
-          }),
-        });
-
-        data = await res.json();
+        // Phase 2 Stage 2: use streaming SSE so text renders as Claude types.
+        // callClaudeStream returns { status, ok, data } so the downstream
+        // limit/error handling below works identically to the non-streaming path.
+        const streamResult = await callClaudeStream({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          system: [
+            { type: "text", text: SYSTEM_STABLE, cache: true },
+            { type: "text", text: SYSTEM_VOLATILE },
+          ],
+          tools: TOOLS,
+          messages: workingMessages,
+        }, onTextDelta);
+        const res = { status: streamResult.status, ok: streamResult.ok };
+        data = streamResult.data;
 
         // ── Server-side cap / lock / rate-limit interception ──────────────
         // /api/claude returns 402 limit_reached when the monthly allowance is
@@ -10615,7 +10772,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
       // Handle loop errors
       if (loopError) {
-        setMessages(prev => [...prev, { role: "assistant", content: loopError }]);
+        // Phase 2 Stage 2: if a streaming placeholder was added before the
+        // error, replace it with the error text (matches pre-streaming behaviour
+        // which discarded any partial text from earlier iterations). Otherwise
+        // append a new error message as before.
+        if (placeholderAdded) {
+          setMessages(prev => {
+            const copy = prev.slice();
+            for (let i = copy.length - 1; i >= 0; i--) {
+              if (copy[i].streaming) {
+                copy[i] = { role: "assistant", content: loopError, streaming: false };
+                break;
+              }
+            }
+            return copy;
+          });
+        } else {
+          setMessages(prev => [...prev, { role: "assistant", content: loopError }]);
+        }
         setLoading(false);
         return;
       }
@@ -10653,7 +10827,25 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
       const widget = displayWidget;
       pendingWidgetRef.current = null;
-      setMessages(prev => [...prev, { role: "assistant", content: finalReply, widget }]);
+      // Phase 2 Stage 2: if we streamed a placeholder, replace it with the
+      // final reply + widget in one atomic update. The content may differ
+      // slightly from what streamed (we combine Claude text + tool summary
+      // text via the dedup logic above) — the visible change should be minor
+      // and happens instantly at the end of the turn.
+      if (placeholderAdded) {
+        setMessages(prev => {
+          const copy = prev.slice();
+          for (let i = copy.length - 1; i >= 0; i--) {
+            if (copy[i].streaming) {
+              copy[i] = { role: "assistant", content: finalReply, widget, streaming: false };
+              break;
+            }
+          }
+          return copy;
+        });
+      } else {
+        setMessages(prev => [...prev, { role: "assistant", content: finalReply, widget }]);
+      }
 
       // Build a verbal summary of widget data for hands-free readout
       const buildSpokenSummary = (w) => {
