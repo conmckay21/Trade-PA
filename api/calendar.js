@@ -11,32 +11,38 @@
 // format". Users rotate the token from Settings → Notifications → Calendar
 // Subscription, which invalidates any subscriptions using the old URL.
 //
-// Output: VCALENDAR with one VEVENT per scheduled job. Times are emitted in
-// UTC (Z suffix) — calendar clients render in the user's local TZ correctly.
+// ⚠ Zero-dependency implementation: uses native fetch() against Supabase's
+// PostgREST API rather than @supabase/supabase-js. Matches the pattern used
+// by other Trade PA serverless functions (api/tts.js etc) and avoids the
+// need for a root-level package.json install step.
 //
 // Required env vars on Vercel:
 //   SUPABASE_URL                 — Supabase project URL
 //   SUPABASE_SERVICE_ROLE_KEY    — service role key (bypasses RLS for read)
 //                                  ⚠ Server-only, never expose to client.
 //
-// Caching: clients (Google/Apple Calendar) refresh every few hours regardless
-// of headers, but we set Cache-Control to give intermediate proxies a hint.
-// 1-hour cache is a reasonable balance between freshness and origin load.
-
-import { createClient } from "@supabase/supabase-js";
+// Output: VCALENDAR with one VEVENT per scheduled job. Times in UTC (Z suffix).
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Lazy singleton — Vercel may reuse the function instance across requests
-let _supabase = null;
-function getSupabase() {
-  if (_supabase) return _supabase;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  _supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
+// ─── Supabase REST helpers ──────────────────────────────────────────────────
+// Thin wrapper around PostgREST. We use the service_role key to bypass RLS
+// because the request has no authenticated user — only a calendar token.
+async function supabaseSelect(table, query) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}?${query}`;
+  const res = await fetch(url, {
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      Accept: "application/json",
+    },
   });
-  return _supabase;
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Supabase ${res.status}: ${errText.slice(0, 200)}`);
+  }
+  return res.json();
 }
 
 // ─── ICS generator (mirrors the client-side one in App.jsx) ─────────────────
@@ -120,30 +126,30 @@ export default async function handler(req, res) {
     return res.status(404).type("text/plain").send("Calendar not found.");
   }
 
-  const supabase = getSupabase();
-  if (!supabase) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("[calendar] missing env vars");
     return res.status(500).type("text/plain").send("Calendar service unavailable.");
   }
 
   try {
-    const { data: settings, error: settingsErr } = await supabase
-      .from("user_settings")
-      .select("user_id, brand_data")
-      .eq("brand_data->>calendarToken", token)
-      .maybeSingle();
+    // PostgREST JSON path equality: brand_data->>calendarToken=eq.<token>
+    // URL-encode the token just in case (it's always alphanumeric but defensive anyway).
+    const settingsRows = await supabaseSelect(
+      "user_settings",
+      `select=user_id,brand_data&brand_data->>calendarToken=eq.${encodeURIComponent(token)}&limit=1`
+    );
 
-    if (settingsErr || !settings) {
+    if (!Array.isArray(settingsRows) || settingsRows.length === 0) {
       return res.status(404).type("text/plain").send("Calendar not found.");
     }
 
+    const settings = settingsRows[0];
     const brandName = settings.brand_data?.tradingName || "Trade PA";
 
-    const { data: jobs } = await supabase
-      .from("jobs")
-      .select("id, customer, address, type, title, scheduled_date, date, status, value, notes, duration_minutes")
-      .eq("user_id", settings.user_id)
-      .order("scheduled_date", { ascending: true })
-      .limit(500);
+    const jobs = await supabaseSelect(
+      "jobs",
+      `select=id,customer,address,type,title,scheduled_date,date,status,value,notes,duration_minutes&user_id=eq.${encodeURIComponent(settings.user_id)}&order=scheduled_date.asc&limit=500`
+    );
 
     const ics = buildICS(jobs || [], brandName);
 
