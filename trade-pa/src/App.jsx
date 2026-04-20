@@ -2588,7 +2588,7 @@ function CallTrackingSettings({ user }) {
 }
 
 function TeamInvite({ companyId, planTier, currentMemberCount }) {
-  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Subcontractors", "Documents", "Reviews", "Stock", "RAMS"];
+  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Workers", "Subcontractors", "Documents", "Reviews", "Stock", "RAMS"];
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [sending, setSending] = useState(false);
@@ -26907,6 +26907,12 @@ function PeopleHub({ setView, customers, enquiries }) {
           onClick: () => setView("Inbox"),
         },
         {
+          name: "Workers",
+          meta: "PAYE staff and self-employed labour on your team",
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
+          onClick: () => setView("Workers"),
+        },
+        {
           name: "Subcontractors",
           meta: "Your go-to people for overflow work",
           icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a3 3 0 015.36-1.857M17 4a3 3 0 100 6 3 3 0 000-6zM12 12a4 4 0 100-8 4 4 0 000 8zM7 4a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
@@ -26982,7 +26988,7 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
       id: "People",
       label: "People",
       view: "PeopleHub",
-      activeOn: ["PeopleHub", "Customers", "Subcontractors", "Reviews", "Inbox"],
+      activeOn: ["PeopleHub", "Customers", "Workers", "Subcontractors", "Reviews", "Inbox"],
       icon: (active) => (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="8" r="4" />
@@ -28730,6 +28736,7 @@ function AppInner() {
                 "CIS": "M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2zM9 7h6M9 11h6M9 15h4",
                 "Reports": "M18 20V10M12 20V4M6 20v-6",
                 "Customers": "M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M8.5 3a4 4 0 110 8 4 4 0 010-8zM20 8v6M23 11h-6",
+                "Workers": "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 3a4 4 0 110 8 4 4 0 010-8z",
                 "Subcontractors": "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 3a4 4 0 110 8 4 4 0 010-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
                 "Reviews": "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
                 "Inbox": "M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
