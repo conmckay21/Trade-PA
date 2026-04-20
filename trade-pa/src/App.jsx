@@ -1032,7 +1032,13 @@ function useWhisper(onTranscript, onSilence) {
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      // Prefer formats Grok STT officially supports (mp4/m4a/ogg) over webm.
+      // Grok falls back to Deepgram if format is rejected, but picking a supported
+      // format maximises Grok hit rate and transcription quality.
+      const mimeType = MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4"
+                     : MediaRecorder.isTypeSupported("audio/ogg") ? "audio/ogg"
+                     : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
+                     : "audio/mp4"; // last-resort default (matches prior Safari branch)
       const recorder = new MediaRecorder(stream, { mimeType });
       // Each session has its own chunk array — immune to cross-session contamination
       const sessionChunks = [];
@@ -13169,7 +13175,12 @@ function MicButton({ form, setForm, accentColor }) {
   const start = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      // Prefer formats Grok STT supports (mp4/m4a/ogg) over webm for best accuracy
+      const recMimeType = MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4"
+                        : MediaRecorder.isTypeSupported("audio/ogg") ? "audio/ogg"
+                        : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
+                        : "audio/mp4";
+      const mr = new MediaRecorder(stream, { mimeType: recMimeType });
       chunksRef.current = [];
       mr.ondataavailable = e => chunksRef.current.push(e.data);
       mr.onstop = async () => {
@@ -13177,7 +13188,7 @@ function MicButton({ form, setForm, accentColor }) {
         setRecording(false);
         setProcessing(true);
         try {
-          const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+          const blob = new Blob(chunksRef.current, { type: recMimeType });
           const audioBase64 = await new Promise((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result.split(",")[1]);
@@ -13186,7 +13197,7 @@ function MicButton({ form, setForm, accentColor }) {
           const transcribeRes = await fetch("/api/transcribe", {
             method: "POST",
             headers: await authHeaders(),
-            body: JSON.stringify({ audio: audioBase64, mimeType: "audio/webm" }),
+            body: JSON.stringify({ audio: audioBase64, mimeType: recMimeType }),
           });
           const { text } = await transcribeRes.json();
           if (!text) { setProcessing(false); return; }
@@ -13249,7 +13260,12 @@ function VoiceFillButton({ form, setForm, fieldDescriptions, color }) {
   const start = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      // Prefer formats Grok STT supports (mp4/m4a/ogg) over webm for best accuracy
+      const recMimeType = MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4"
+                        : MediaRecorder.isTypeSupported("audio/ogg") ? "audio/ogg"
+                        : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
+                        : "audio/mp4";
+      const mr = new MediaRecorder(stream, { mimeType: recMimeType });
       chunksRef.current = [];
       mr.ondataavailable = e => chunksRef.current.push(e.data);
       mr.onstop = async () => {
@@ -13257,7 +13273,7 @@ function VoiceFillButton({ form, setForm, fieldDescriptions, color }) {
         setRecording(false);
         setProcessing(true);
         try {
-          const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+          const blob = new Blob(chunksRef.current, { type: recMimeType });
           const audioBase64 = await new Promise((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result.split(",")[1]);
@@ -13266,7 +13282,7 @@ function VoiceFillButton({ form, setForm, fieldDescriptions, color }) {
           const transcribeRes = await fetch("/api/transcribe", {
             method: "POST",
             headers: await authHeaders(),
-            body: JSON.stringify({ audio: audioBase64, mimeType: "audio/webm" }),
+            body: JSON.stringify({ audio: audioBase64, mimeType: recMimeType }),
           });
           const { text } = await transcribeRes.json();
           if (!text) { setProcessing(false); return; }
@@ -16667,13 +16683,18 @@ function CustomerForm({ form, set, onSave, onCancel }) {
     stopAllMics();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      // Prefer formats Grok STT supports (mp4/m4a/ogg) over webm for best accuracy
+      const recMimeType = MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4"
+                        : MediaRecorder.isTypeSupported("audio/ogg") ? "audio/ogg"
+                        : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
+                        : "audio/mp4";
+      const mr = new MediaRecorder(stream, { mimeType: recMimeType });
       chunksRef.current[fieldKey] = [];
       mr.ondataavailable = (e) => chunksRef.current[fieldKey].push(e.data);
       mr.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         try {
-          const blob = new Blob(chunksRef.current[fieldKey], { type: "audio/webm" });
+          const blob = new Blob(chunksRef.current[fieldKey], { type: recMimeType });
           const audioBase64 = await new Promise(resolve => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result.split(",")[1]);
@@ -16682,7 +16703,7 @@ function CustomerForm({ form, set, onSave, onCancel }) {
           const transcribeRes = await fetch("/api/transcribe", {
             method: "POST",
             headers: await authHeaders(),
-            body: JSON.stringify({ audio: audioBase64, mimeType: "audio/webm" }),
+            body: JSON.stringify({ audio: audioBase64, mimeType: recMimeType }),
           });
           const { text } = await transcribeRes.json();
           if (!text) {
