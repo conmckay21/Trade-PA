@@ -1386,6 +1386,7 @@ const DEFAULT_BRAND = {
   accountName: "",
   accentColor: "#f59e0b",
   paymentTerms: "14",
+  quoteValidity: "30",
   invoiceNote: "Thank you for your business. Payment due within 30 days.",
   refFormat: "invoice_number",
   refPrefix: "",
@@ -4230,6 +4231,30 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
 
           <div style={{ marginBottom: 16 }}>
+            <label style={S.label}>Default Quote Validity</label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {["14", "30", "60", "90"].map(d => (
+                <button key={d} onClick={() => setBrand(b => ({ ...b, quoteValidity: d }))} style={S.pill(brand.accentColor, (brand.quoteValidity || "30") === d)}>{d} days</button>
+              ))}
+              <button onClick={() => setBrand(b => ({ ...b, quoteValidity: "custom" }))} style={S.pill(brand.accentColor, !["14","30","60","90"].includes(brand.quoteValidity || "30"))}>Custom</button>
+            </div>
+            {!["14","30","60","90"].includes(brand.quoteValidity || "30") && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <input
+                  style={{ ...S.input, width: 80 }}
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 45"
+                  value={["14","30","60","90","custom"].includes(brand.quoteValidity || "") ? "" : (brand.quoteValidity || "")}
+                  onChange={e => setBrand(b => ({ ...b, quoteValidity: e.target.value }))}
+                />
+                <span style={{ fontSize: 12, color: C.muted }}>days</span>
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Quotes auto-flag as expired after this many days. You can extend any expired quote from the Quotes tab.</div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
             <label style={S.label}>Payment Method on Invoices</label>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {[
@@ -4628,6 +4653,64 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             </div>
           </div>
         )}
+
+        {/* ── Calendar Subscription (live iCal feed) ─────────────────────────
+            One-time setup — generates a private URL the user adds to Google
+            or Apple Calendar as a "subscribed calendar". Their calendar then
+            auto-refreshes every few hours, so jobs booked in Trade PA appear
+            on their phone calendar without manual export. */}
+        <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
+          <div style={S.sectionTitle}>Calendar Subscription</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+            Sync your Trade PA schedule to Google Calendar, Apple Calendar or any iCal-compatible app. Jobs you book in Trade PA appear automatically — no manual export each time.
+          </div>
+          {brand.calendarToken ? (
+            <>
+              <label style={S.label}>Your private subscription URL</label>
+              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                <input
+                  readOnly
+                  style={{ ...S.input, fontFamily: "'DM Mono',monospace", fontSize: 11 }}
+                  value={`${typeof window !== "undefined" ? window.location.origin : "https://www.tradespa.co.uk"}/api/calendar/${brand.calendarToken}.ics`}
+                  onClick={e => e.target.select()}
+                />
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/api/calendar/${brand.calendarToken}.ics`;
+                    if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+                  }}
+                  style={{ ...S.btn("ghost"), fontSize: 11 }}
+                >Copy</button>
+              </div>
+              <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 14px", fontSize: 11, color: C.textDim, lineHeight: 1.7, marginBottom: 10 }}>
+                <div style={{ fontWeight: 600, color: C.text, marginBottom: 6 }}>How to subscribe</div>
+                <div><strong>Google Calendar:</strong> Settings → Add calendar → From URL → paste the link.</div>
+                <div><strong>Apple (iPhone):</strong> Settings app → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste the link.</div>
+                <div><strong>Apple (Mac):</strong> Calendar app → File → New Calendar Subscription → paste the link.</div>
+                <div style={{ marginTop: 8, color: C.muted }}>Calendars typically refresh every few hours — for instant updates, set the refresh interval to "every hour" in your calendar app's subscription settings.</div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!confirm("Generate a new URL? The old one will stop working — you'll need to update any calendars subscribed to it.")) return;
+                  const t = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+                    .map(b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
+                  setBrand(b => ({ ...b, calendarToken: t }));
+                }}
+                style={{ ...S.btn("ghost"), fontSize: 11, color: C.muted }}
+              >↻ Generate new URL (revoke old)</button>
+            </>
+          ) : (
+            <button
+              onClick={() => {
+                // 24-byte cryptographically random token, 36-char alphanumeric
+                const t = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+                  .map(b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
+                setBrand(b => ({ ...b, calendarToken: t }));
+              }}
+              style={S.btn("primary")}
+            >Generate Subscription URL</button>
+          )}
+        </div>
       </div>
       )}
 
@@ -5554,7 +5637,20 @@ function Schedule({ jobs, setJobs, customers, setContextHint }) {
       {/* Week label + Today button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono',monospace" }}>{weekLabel()}</div>
-        {weekOffset !== 0 && <button onClick={() => { setWeekOffset(0); setSelectedDayIdx(null); }} style={{ ...S.btn("ghost"), fontSize: 10, padding: "4px 10px" }}>Today</button>}
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => {
+            // One-shot snapshot download. For live sync, see Settings → Notifications → Calendar Subscription.
+            const ics = generateICS(jobs, "Trade PA");
+            const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `trade-pa-schedule-${new Date().toISOString().split("T")[0]}.ics`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+          }} style={{ ...S.btn("ghost"), fontSize: 10, padding: "4px 10px" }}>⬇ .ics</button>
+          {weekOffset !== 0 && <button onClick={() => { setWeekOffset(0); setSelectedDayIdx(null); }} style={{ ...S.btn("ghost"), fontSize: 10, padding: "4px 10px" }}>Today</button>}
+        </div>
       </div>
 
       {/* Selected day — header */}
@@ -17966,8 +18062,27 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
   const [editingQuote, setEditingQuote] = useState(null);
   const [sendingId, setSendingId] = useState(null);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all"); // all | pending | accepted | declined
+  const [filter, setFilter] = useState("all"); // all | pending | expired | accepted | declined
   const [sortMode, setSortMode] = useState("recent"); // recent | value | customer
+
+  // ── Expiry calc ─────────────────────────────────────────────────────────
+  // A quote is "expired" if its created_at is older than brand.quoteValidity
+  // days AND it hasn't been accepted/declined yet. We compute on render rather
+  // than persisting status, so changing quoteValidity in Settings retroactively
+  // updates which quotes show as expired (no migration needed).
+  const validityDays = parseInt(brand?.quoteValidity || "30", 10) || 30;
+  const expiryInfo = (q) => {
+    const createdAt = new Date(q.updated_at || q.created_at || Date.now());
+    const expiresAt = new Date(createdAt.getTime() + validityDays * 86400000);
+    const daysLeft = Math.ceil((expiresAt - Date.now()) / 86400000);
+    const settledStatus = q.status === "accepted" || q.status === "declined";
+    return {
+      expiresAt,
+      daysLeft,
+      isExpired: !settledStatus && daysLeft < 0,
+      isExpiringSoon: !settledStatus && daysLeft >= 0 && daysLeft <= 3,
+    };
+  };
 
   useEffect(() => {
     if (!setContextHint) return;
@@ -17982,25 +18097,30 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
   const QUOTE_PILL = {
     accepted: { bg: C.green, label: "Accepted" },
     declined: { bg: C.red, label: "Declined" },
-    sent: { bg: C.blue, label: "Sent" },
-    draft: { bg: C.muted, label: "Draft" },
+    sent:     { bg: C.blue, label: "Sent" },
+    draft:    { bg: C.muted, label: "Draft" },
+    expired:  { bg: C.red, label: "Expired" },
   };
   const pillFor = (q) => {
     if (q.status === "accepted") return QUOTE_PILL.accepted;
     if (q.status === "declined") return QUOTE_PILL.declined;
     if (q.status === "draft") return QUOTE_PILL.draft;
+    if (expiryInfo(q).isExpired) return QUOTE_PILL.expired;
     return QUOTE_PILL.sent;
   };
 
   const allQuotes = (invoices || []).filter(i => i.isQuote);
-  const pending = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
+  const expired = allQuotes.filter(q => expiryInfo(q).isExpired);
+  const pending = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined" && !expiryInfo(q).isExpired);
   const accepted = allQuotes.filter(q => q.status === "accepted");
   const declined = allQuotes.filter(q => q.status === "declined");
 
   // Search + filter + sort
   const qLower = search.trim().toLowerCase();
   const filteredQuotes = allQuotes.filter(q => {
-    if (filter === "pending" && (q.status === "accepted" || q.status === "declined")) return false;
+    const exp = expiryInfo(q);
+    if (filter === "pending"  && (q.status === "accepted" || q.status === "declined" || exp.isExpired)) return false;
+    if (filter === "expired"  && !exp.isExpired) return false;
     if (filter === "accepted" && q.status !== "accepted") return false;
     if (filter === "declined" && q.status !== "declined") return false;
     if (!qLower) return true;
@@ -18021,6 +18141,17 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
   const updateStatus = (id, status) => {
     setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status } : i));
     if (selected && selected.id === id) setSelected(s => ({ ...s, status }));
+  };
+
+  // Reset the validity clock on an expired (or about-to-expire) quote.
+  // Bumps updated_at to now — expiryInfo() uses updated_at first then created_at,
+  // so this gives the customer a fresh window without losing the original
+  // creation timestamp for audit / sort.
+  const extendQuote = (id) => {
+    const newUpdated = new Date().toISOString();
+    setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, updated_at: newUpdated } : i));
+    if (selected && selected.id === id) setSelected(s => ({ ...s, updated_at: newUpdated }));
+    if (user?.id) db.from("invoices").update({ updated_at: newUpdated }).eq("id", id).eq("user_id", user.id).then(() => {}).catch(() => {});
   };
 
   const convertToInvoice = async (quote) => {
@@ -18123,6 +18254,7 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <FilterChip id="all" label="All" count={allQuotes.length} />
           <FilterChip id="pending" label="Pending" count={pending.length} color={C.blue} />
+          <FilterChip id="expired" label="Expired" count={expired.length} color={C.red} />
           <FilterChip id="accepted" label="Accepted" count={accepted.length} color={C.green} />
           <FilterChip id="declined" label="Declined" count={declined.length} color={C.red} />
           <button onClick={nextSort} style={{
@@ -18140,16 +18272,23 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
           <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No quotes yet — tap + New Quote or ask the AI Assistant.</div>
         ) : sortedQuotes.length === 0 ? (
           <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "24px 8px" }}>
-            {search ? `No quotes match "${search}".` : `No ${filter === "pending" ? "pending" : filter === "accepted" ? "accepted" : "declined"} quotes.`}
+            {search ? `No quotes match "${search}".` : `No ${filter === "pending" ? "pending" : filter === "expired" ? "expired" : filter === "accepted" ? "accepted" : "declined"} quotes.`}
           </div>
         ) : sortedQuotes.map(q => {
           const pill = pillFor(q);
+          const exp = expiryInfo(q);
+          // Sub-line: replace the static "Valid for X days" label with live status when relevant
+          const subLine = exp.isExpired
+            ? <span style={{ color: C.red }}>Expired {Math.abs(exp.daysLeft)} day{Math.abs(exp.daysLeft) === 1 ? "" : "s"} ago</span>
+            : exp.isExpiringSoon
+              ? <span style={{ color: C.amber }}>Expires in {exp.daysLeft} day{exp.daysLeft === 1 ? "" : "s"}</span>
+              : <span>{q.due}</span>;
           return (
             <div key={q.id} onClick={() => setSelected(q)} style={{ ...S.row, cursor: "pointer" }}>
               <div style={{ width: 4, height: 44, borderRadius: 2, background: pill.bg, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
-                <div style={{ fontSize: 10, color: C.muted }}>{q.address || q.id} · {q.due}</div>
+                <div style={{ fontSize: 10, color: C.muted }}>{q.address || q.id} · {subLine}</div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>{fmtAmount(q.amount)}</div>
               <div style={{ ...S.badge(pill.bg), marginRight: 8, flexShrink: 0 }}>{pill.label}</div>
@@ -18201,6 +18340,21 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.red }} onClick={() => updateStatus(selected.id, "declined")}>✗ Mark Declined</button>
             </div>
           )}
+
+          {selected.status !== "accepted" && selected.status !== "declined" && (() => {
+            const exp = expiryInfo(selected);
+            if (!exp.isExpired && !exp.isExpiringSoon) return null;
+            return (
+              <div style={{ background: exp.isExpired ? "#ef444412" : C.amber + "12", border: `1px solid ${exp.isExpired ? "#ef444444" : C.amber + "44"}`, borderRadius: 8, padding: "10px 14px", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, color: exp.isExpired ? "#ef4444" : C.amber, flex: 1, minWidth: 180 }}>
+                  {exp.isExpired
+                    ? <>This quote expired {Math.abs(exp.daysLeft)} day{Math.abs(exp.daysLeft) === 1 ? "" : "s"} ago.</>
+                    : <>This quote expires in {exp.daysLeft} day{exp.daysLeft === 1 ? "" : "s"}.</>}
+                </div>
+                <button onClick={() => extendQuote(selected.id)} style={{ ...S.btn("ghost"), fontSize: 11 }}>↻ Extend by {validityDays}d</button>
+              </div>
+            );
+          })()}
 
           <div style={{ display: "flex", gap: 8 }}>
             <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingQuote(selected)}>✏️ Edit</button>
@@ -26523,6 +26677,79 @@ function urlBase64ToUint8Array(base64String) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+// ─── iCalendar (.ics) generator ──────────────────────────────────────────────
+// Builds an RFC 5545 VCALENDAR from a jobs array. Used by both the in-app
+// "Download .ics" button (Schedule tab) and the public subscribable feed
+// (/api/calendar/[token]).
+//
+// Times are emitted in UTC (Z suffix) — simplest, no VTIMEZONE block needed,
+// and Google/Apple Calendar render them in the user's local time correctly.
+// Each event UID is stable per job ID, so re-importing/refreshing doesn't
+// duplicate entries.
+function generateICS(jobs, brandName) {
+  const esc = (s) => String(s || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\r?\n/g, "\\n");
+  // RFC 5545 line folding: any line longer than 75 octets gets folded with CRLF + space
+  const fold = (line) => {
+    if (line.length <= 75) return line;
+    let out = "";
+    let remaining = line;
+    while (remaining.length > 75) {
+      out += remaining.slice(0, 75) + "\r\n ";
+      remaining = remaining.slice(75);
+    }
+    return out + remaining;
+  };
+  const dt = (d) => {
+    const x = new Date(d);
+    if (isNaN(x.getTime())) return "";
+    return x.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  };
+
+  const now = dt(new Date());
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Trade PA//Schedule//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${esc(brandName || "Trade PA")} — Jobs`,
+    "X-WR-TIMEZONE:Europe/London",
+  ];
+
+  (jobs || []).forEach(job => {
+    // Pick the best available date field; skip jobs with no schedulable date
+    const dateSrc = job.dateObj || job.scheduled_date || job.date_obj || job.date;
+    const startD = dateSrc ? new Date(dateSrc) : null;
+    if (!startD || isNaN(startD.getTime())) return;
+    // If a duration field exists treat as minutes; default 60
+    const durationMin = parseInt(job.duration_minutes || job.duration || 60, 10) || 60;
+    const endD = new Date(startD.getTime() + durationMin * 60 * 1000);
+    const summary = `${job.type || job.title || "Job"} — ${job.customer || "Unknown"}`;
+    const desc = [
+      job.notes ? `Notes: ${job.notes}` : null,
+      job.value ? `Value: £${parseFloat(job.value).toFixed(2)}` : null,
+      job.status ? `Status: ${job.status}` : null,
+    ].filter(Boolean).join("\n");
+
+    lines.push("BEGIN:VEVENT");
+    lines.push(fold(`UID:job-${job.id}@tradespa.co.uk`));
+    lines.push(`DTSTAMP:${now}`);
+    lines.push(`DTSTART:${dt(startD)}`);
+    lines.push(`DTEND:${dt(endD)}`);
+    lines.push(fold(`SUMMARY:${esc(summary)}`));
+    if (job.address) lines.push(fold(`LOCATION:${esc(job.address)}`));
+    if (desc) lines.push(fold(`DESCRIPTION:${esc(desc)}`));
+    lines.push("END:VEVENT");
+  });
+
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n") + "\r\n";
 }
 
 // Sequential invoice/quote ID generators
