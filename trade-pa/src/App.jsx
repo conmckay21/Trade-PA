@@ -2961,7 +2961,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
   // Computed status pills for each category (shown on the landing cards)
   const tradeCount = (brand.tradeTypes || []).length;
-  const integrationsConnected = [xeroConnected, qbConnected].filter(Boolean).length;
+  const integrationsConnected = [xeroConnected, qbConnected, !!brand?.stripeAccountId].filter(Boolean).length;
   const memberCount = (members || []).length;
 
   // Categories config — drives the landing page rendering and drill-in routing
@@ -4344,13 +4344,33 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               {xeroConnected ? "Connected — invoices will sync automatically" : "Not connected"}
             </div>
           </div>
-          {xeroConnected
-            ? <div style={S.badge(C.green)}>✓ Connected</div>
-            : <a
-                href={`/api/auth/xero/connect?userId=${user?.id}`}
-                style={{ ...S.btn("primary"), textDecoration: "none", background: "#13B5EA", fontSize: 12 }}
-              >Connect Xero</a>
-          }
+          {xeroConnected ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={S.badge(C.green)}>✓ Connected</div>
+              <button
+                onClick={async () => {
+                  if (!confirm("Disconnect Xero? Invoices will stop syncing. You can reconnect anytime.")) return;
+                  // Client-side disconnect — deletes the connection row directly.
+                  // Keeping it local (no new serverless endpoint) since the
+                  // accounting_connections table is RLS-scoped to user_id and
+                  // delete just means "stop syncing", doesn't revoke Xero tokens.
+                  if (!user?.id) return;
+                  try {
+                    await db.from("accounting_connections").delete().eq("user_id", user.id).eq("provider", "xero");
+                    setXeroConnected(false);
+                  } catch (err) {
+                    alert("Could not disconnect — try again.");
+                  }
+                }}
+                style={{ ...S.btn("ghost"), fontSize: 11, color: C.muted }}
+              >Disconnect</button>
+            </div>
+          ) : (
+            <a
+              href={`/api/auth/xero/connect?userId=${user?.id}`}
+              style={{ ...S.btn("primary"), textDecoration: "none", background: "#13B5EA", fontSize: 12 }}
+            >Connect Xero</a>
+          )}
         </div>
 
         {/* QuickBooks */}
@@ -4364,13 +4384,29 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               {qbConnected ? "Connected — invoices will sync automatically" : "Not connected"}
             </div>
           </div>
-          {qbConnected
-            ? <div style={S.badge(C.green)}>✓ Connected</div>
-            : <a
-                href={`/api/auth/quickbooks/connect?userId=${user?.id}`}
-                style={{ ...S.btn("primary"), textDecoration: "none", background: "#2CA01C", fontSize: 12 }}
-              >Connect QuickBooks</a>
-          }
+          {qbConnected ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={S.badge(C.green)}>✓ Connected</div>
+              <button
+                onClick={async () => {
+                  if (!confirm("Disconnect QuickBooks? Invoices will stop syncing. You can reconnect anytime.")) return;
+                  if (!user?.id) return;
+                  try {
+                    await db.from("accounting_connections").delete().eq("user_id", user.id).eq("provider", "quickbooks");
+                    setQbConnected(false);
+                  } catch (err) {
+                    alert("Could not disconnect — try again.");
+                  }
+                }}
+                style={{ ...S.btn("ghost"), fontSize: 11, color: C.muted }}
+              >Disconnect</button>
+            </div>
+          ) : (
+            <a
+              href={`/api/auth/quickbooks/connect?userId=${user?.id}`}
+              style={{ ...S.btn("primary"), textDecoration: "none", background: "#2CA01C", fontSize: 12 }}
+            >Connect QuickBooks</a>
+          )}
         </div>
 
         {/* ── Card Payments (Stripe Connect Standard) ──────────────────────
@@ -4394,13 +4430,26 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                   : "Not connected — your portal pages will show bank transfer only"}
               </div>
             </div>
-            {brand?.stripeAccountId
-              ? <div style={S.badge(C.green)}>✓ Connected</div>
-              : <a
-                  href={`/api/stripe/connect-onboard?userId=${user?.id}`}
-                  style={{ ...S.btn("primary"), textDecoration: "none", background: "#635BFF", fontSize: 12 }}
-                >Connect Stripe</a>
-            }
+            {brand?.stripeAccountId ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={S.badge(C.green)}>✓ Connected</div>
+                <button
+                  onClick={() => {
+                    if (!confirm("Disconnect Stripe? Card payments will stop working on your customer portal links. Your Stripe account stays intact — this only unlinks it from Trade PA. You can reconnect anytime.")) return;
+                    // Clear the Stripe link from brand_data. The setBrand updater
+                    // triggers the normal background sync to user_settings, so
+                    // no direct DB call needed here.
+                    setBrand(b => ({ ...b, stripeAccountId: null, stripeConnectedAt: null }));
+                  }}
+                  style={{ ...S.btn("ghost"), fontSize: 11, color: C.muted }}
+                >Disconnect</button>
+              </div>
+            ) : (
+              <a
+                href={`/api/stripe/connect-onboard?userId=${user?.id}`}
+                style={{ ...S.btn("primary"), textDecoration: "none", background: "#635BFF", fontSize: 12 }}
+              >Connect Stripe</a>
+            )}
           </div>
         </div>
       </div>
