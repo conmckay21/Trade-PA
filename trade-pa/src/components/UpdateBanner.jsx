@@ -1,55 +1,132 @@
 // trade-pa/src/components/UpdateBanner.jsx
 //
 // Shows a subtle banner at the bottom of the screen when a new app version
-// has been deployed and the service worker has finished installing it in
-// the background. User can tap "Reload" for a clean boot on the new code,
+// has been deployed. User can tap "Reload" for a clean boot on the new code,
 // tap "What's new" to read the changelog without reloading, or dismiss it
 // (reappears after a short cooldown so they don't miss it forever).
 //
-// Relies on workbox-window (already a dep via vite-plugin-pwa) to hook into
-// the same SW registration that Vite auto-injects.
+// HOW UPDATE DETECTION WORKS:
+// The build emits /public/version.json containing the build timestamp (see
+// vite.config.js's versionJsonPlugin). On app load we capture the current
+// version. Every minute we poll /version.json with a cache-buster — if the
+// version we see differs from the one we started with, a new deploy has
+// landed and we show the banner.
+//
+// We DELIBERATELY don't use service worker lifecycle events (waiting,
+// activated) because the push-notification SW skips waiting on install,
+// so those events never fire reliably. A simple fetch-and-compare loop
+// is far more robust across browsers and SW configurations.
+//
+// The banner also shows when the visibility changes back to "visible"
+// (user returns to the tab) — catches updates that landed while the app
+// was backgrounded.
 
-import { useEffect, useState } from "react";
-import { Workbox } from "workbox-window";
+import { useEffect, useState, useRef } from "react";
 import ChangelogModal from "./ChangelogModal.jsx";
+
+// Poll interval — every 60 seconds. Light enough not to matter for bandwidth
+// (version.json is <50 bytes), frequent enough that a tradie sees the banner
+// within a minute of a deploy. Tab-visible polling only — when backgrounded
+// we pause to save battery, then check immediately on return.
+const POLL_INTERVAL_MS = 60 * 1000;
+// Dismiss cooldown — after the user taps × the banner stays hidden for 5
+// minutes, then reappears so they don't permanently miss the update.
+const DISMISS_COOLDOWN_MS = 5 * 60 * 1000;
 
 export default function UpdateBanner() {
   const [updateReady, setUpdateReady] = useState(false);
   const [dismissedAt, setDismissedAt] = useState(0);
   const [changelogOpen, setChangelogOpen] = useState(false);
+  // Captured at first successful fetch — never changes for the lifetime of
+  // this app instance. This is "what version were we running when we loaded".
+  const baselineVersionRef = useRef(null);
 
   useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
+    // Disabled in dev — version.json is only emitted by `vite build`, so a
+    // dev server would 404 the polls and clutter the console with errors.
     if (import.meta.env.DEV) return;
 
-    const wb = new Workbox("/sw.js");
+    let cancelled = false;
 
-    const onWaiting = () => setUpdateReady(true);
-    const onActivated = (event) => {
-      if (!event.isUpdate) return;
-      setUpdateReady(true);
+    // Single-shot fetch + compare. Cache-buster ensures we never get a stale
+    // copy from any layer (browser cache, SW cache, CDN edge cache).
+    const checkVersion = async () => {
+      try {
+        const res = await fetch(`/version.json?t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const v = data?.version;
+        if (!v) return;
+        if (cancelled) return;
+        // First successful fetch establishes the baseline.
+        if (baselineVersionRef.current === null) {
+          baselineVersionRef.current = v;
+          return;
+        }
+        // Subsequent fetches compare against baseline.
+        if (v !== baselineVersionRef.current) {
+          setUpdateReady(true);
+        }
+      } catch (err) {
+        // Silent — network glitches are expected (offline, server hiccup).
+        // Next poll will try again.
+      }
     };
 
-    wb.addEventListener("waiting", onWaiting);
-    wb.addEventListener("activated", onActivated);
+    // Capture baseline on mount.
+    checkVersion();
 
-    wb.register().catch((err) => {
-      console.log("[UpdateBanner] SW register:", err?.message || err);
-    });
+    // Poll on interval, but only while tab is visible — saves battery on
+    // backgrounded PWAs.
+    let intervalId = null;
+    const startPolling = () => {
+      if (intervalId) return;
+      intervalId = setInterval(checkVersion, POLL_INTERVAL_MS);
+    };
+    const stopPolling = () => {
+      if (!intervalId) return;
+      clearInterval(intervalId);
+      intervalId = null;
+    };
 
-    const interval = setInterval(() => {
-      wb.update().catch(() => {});
-    }, 30 * 60 * 1000);
+    // When the tab becomes visible again, check immediately (catches updates
+    // that landed while user was on another tab / had screen locked) then
+    // resume polling.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkVersion();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    if (document.visibilityState === "visible") startPolling();
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      clearInterval(interval);
+      cancelled = true;
+      stopPolling();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, []);
 
-  const recentlyDismissed = dismissedAt > 0 && Date.now() - dismissedAt < 5 * 60 * 1000;
+  const recentlyDismissed = dismissedAt > 0 && Date.now() - dismissedAt < DISMISS_COOLDOWN_MS;
   const bannerVisible = updateReady && !recentlyDismissed;
 
-  const handleReload = () => window.location.reload();
+  // Hard reload — bypasses HTTP cache. The new SW will take over on the
+  // fresh page load. SW skipWaiting + clientsClaim is already configured,
+  // so no extra dance needed.
+  const handleReload = () => {
+    // Some browsers honour a cache-busting query on reload; harmless if not.
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("_v", Date.now().toString());
+      window.location.replace(url.toString());
+    } catch {
+      window.location.reload();
+    }
+  };
   const handleDismiss = () => setDismissedAt(Date.now());
 
   return (
