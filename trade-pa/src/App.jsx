@@ -6589,13 +6589,21 @@ Return only JSON, no other text.` },
             { l: "Ordered", v: (materials || []).filter(m => m.status === "ordered").length, sub: "Awaiting delivery", c: C.blue },
             { l: "Total Cost", v: totalCost > 0 ? `${fmtCurrency(totalCost)}` : "—", sub: "All materials", c: C.text },
           ];
-        })().map((st, i) => (
-          <div key={i} style={S.card}>
-            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{st.l}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: st.c }}>{st.v}</div>
-            <div style={{ fontSize: 11, color: C.muted }}>{st.sub}</div>
-          </div>
-        ))}
+        })().map((st, i) => {
+          // Auto-shrink the value font when long currency figures would
+          // overflow the card. £3,207.16 = 9 chars, fits at 22px. £999,999.99
+          // = 11 chars, needs 18px. £9,999,999.99 = 13 chars, needs 16px.
+          // Defaults to 22px for short/numeric values like counts.
+          const valueLen = String(st.v ?? "").length;
+          const valueFontSize = valueLen >= 12 ? 16 : valueLen >= 10 ? 18 : valueLen >= 8 ? 20 : 22;
+          return (
+            <div key={i} style={S.card}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{st.l}</div>
+              <div style={{ fontSize: valueFontSize, fontWeight: 700, color: st.c, lineHeight: 1.15, wordBreak: "break-word" }}>{st.v}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{st.sub}</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Phase 3: search + status chips — always visible, persistent */}
