@@ -16,6 +16,21 @@ Xero, QuickBooks and Stripe all have clear Disconnect buttons now. Change your m
 ### Updates reach you faster ✨
 Deployed a new version? You'll see a friendly banner within a minute. Tap Reload and you're on the latest.
 
+### Pay link now on invoices too 💷
+Every invoice now has its own "Pay Online" link — not just quotes. Share it with customers and they can view the invoice and pay by card (or see your bank details) without signing up. Auto-included as a button in your invoice emails too.
+
+### Pick your AI's voice 🎙
+Settings → AI Assistant → Manage assistant now has 5 voices to choose from: Eve (upbeat), Ara (warm), Leo (steady), Rex (confident), Sal (neutral). Tap Preview to hear each before you pick.
+
+### "What's new" changelog
+Tap Settings → Help → What's new ✨ any time to see the latest updates, like this one.
+
+### First-message voice fix
+Fixed a bug where the AI's first reply after tapping the mic was silent on the app. First-time users got confused — the reply was generating, it just wasn't playing. Sorted.
+
+### Faster, more reliable
+App now reloads properly after updates (no more stale screens), and the AI's exit phrases like "that's absolutely everything, thank you" now end hands-free mode cleanly.
+
 ---
 
 ## 2026-04-20
@@ -55,6 +70,21 @@ Your AI Assistant now shows clearly what it's doing — listening, transcribing,
 ### Voice goes faster
 Switched to Grok voice processing for faster, more natural replies. Fallback to Deepgram and Whisper kicks in automatically if anything wobbles.
 
+### Streaming replies
+AI responses now stream in as they're generated rather than appearing all at once. Feels snappier.
+
+---
+
+## 2026-04-10
+
+### Email templates
+Welcome, trial-ending and payment-failed emails now come from proper addresses (hello@, billing@) with your branding. Supabase auth emails too.
+
+### Error tracking
+When something goes wrong, we'll know about it now — and fix it faster.
+
+### Reminders via email
+Job reminders now come as branded emails with Mark Done / Snooze / Open App buttons right in the email.
 ### Streaming replies
 AI responses now stream in as they're generated rather than appearing all at once. Feels snappier.
 
