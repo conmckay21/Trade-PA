@@ -879,7 +879,7 @@ function AuthScreen({ onAuth, initialMode = "login", onBack }) {
 
   return (
     <div style={authStyles.wrap}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&display=swap'); *{box-sizing:border-box;margin:0;padding:0;} input:focus{border-color:#f59e0b !important;outline:none;}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&display=swap'); *{box-sizing:border-box;margin:0;padding:0;} input:focus{border-color:#f59e0b !important;outline:none;} input,textarea,select{font-size:16px !important;}`}</style>
       <div style={authStyles.box}>
         {onBack && (
           <button onClick={onBack} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", marginBottom: 20, display: "flex", alignItems: "center", gap: 6, padding: 0 }}>← Back to home</button>
@@ -29332,6 +29332,15 @@ function AppInner() {
         input:focus,textarea:focus{border-color:#f59e0b !important;outline:none;}
         @keyframes bellPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
         img{max-width:100%;}
+        /* iOS Safari zooms into any input/textarea/select with computed
+           font-size < 16px when tapped, and never zooms back out. The fix
+           is to enforce a 16px minimum globally — the !important wins
+           against inline styles like fontSize: 11/12/13 scattered throughout
+           the codebase. Slightly chunkier inputs are an acceptable trade for
+           "phone form-filling that doesn't make you want to throw it out
+           the window." Date / time / number inputs are included because
+           they trigger the same zoom behaviour. */
+        input,textarea,select{font-size:16px !important;}
       `}</style>
       <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100, width: "100%" }}>
         {/* New simplified header — Session C + mockup-faithful: brand + bell + avatar only */}
