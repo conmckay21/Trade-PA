@@ -8,6 +8,7 @@ import FieldMic from "./components/FieldMic.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
 import OfflineSettings from "./components/OfflineSettings.jsx";
 import UpdateBanner from "./components/UpdateBanner.jsx";
+import ChangelogModal from "./components/ChangelogModal.jsx";
 import { prewarmCache } from "./lib/prewarm.js";
 import { drainQueue } from "./lib/writeQueue.js";
 
@@ -4892,6 +4893,34 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       )}
 
       {subview === "help" && (<>
+      {/* What's new row — opens the changelog modal */}
+      <button
+        onClick={() => setChangelogOpen(true)}
+        style={{
+          background: C.surfaceHigh,
+          border: `1px solid ${C.border}`,
+          borderRadius: 12,
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          cursor: "pointer",
+          width: "100%",
+          textAlign: "left",
+          color: C.text,
+          fontFamily: "'DM Sans', sans-serif",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>What's new ✨</div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>See the latest features and improvements</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
       {/* Send feedback row — opens the existing feedback modal */}
       <button
         onClick={openFeedback}
@@ -27524,6 +27553,7 @@ function AppInner() {
 
   const [pdfHtml, setPdfHtml] = useState(null);
   const [offlineSettingsOpen, setOfflineSettingsOpen] = useState(false);
+  const [changelogOpen, setChangelogOpen] = useState(false);
   const [viewRaw, setViewRaw] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('xero') || params.has('qb')) return "Settings";
@@ -28620,6 +28650,7 @@ function AppInner() {
       <OfflineBanner onOpenSettings={() => setOfflineSettingsOpen(true)} />
       <UpdateBanner />
       <OfflineSettings open={offlineSettingsOpen} onClose={() => setOfflineSettingsOpen(false)} />
+      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
 
       {/* ── ONBOARDING OVERLAYS ──────────────────────────────────────── */}
 
