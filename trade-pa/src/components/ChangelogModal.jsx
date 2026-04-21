@@ -9,6 +9,11 @@
 // ## YYYY-MM-DD and ### Entry title structure seeded in the file. Keeping
 // the parser small avoids dragging in a markdown dependency for one feature.
 //
+// THEME: All colours come from --c-* CSS variables that App.jsx sets on
+// :root via applyPalette(). This way the modal automatically follows the
+// user's light/dark choice — previously every colour was hardcoded dark,
+// which looked broken in light mode.
+//
 // localStorage key:  tp_changelog_lastread  (stores the most recent
 //                    YYYY-MM-DD date the user has seen)
 
@@ -131,6 +136,8 @@ export default function ChangelogModal({ open, onClose }) {
       style={{
         position: "fixed",
         inset: 0,
+        // Backdrop overlay stays semi-transparent dark in both themes —
+        // it's a scrim, not a surface, so dim is correct for either mode.
         background: "rgba(0,0,0,0.6)",
         backdropFilter: "blur(4px)",
         WebkitBackdropFilter: "blur(4px)",
@@ -155,8 +162,8 @@ export default function ChangelogModal({ open, onClose }) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "#111",
-          border: "1px solid #262626",
+          background: "var(--c-surface)",
+          border: "1px solid var(--c-border)",
           borderRadius: 16,
           width: "100%",
           maxWidth: 520,
@@ -164,7 +171,7 @@ export default function ChangelogModal({ open, onClose }) {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.4)",
           animation: "tpChangelogSlide 220ms ease-out",
         }}
       >
@@ -172,7 +179,7 @@ export default function ChangelogModal({ open, onClose }) {
         <div
           style={{
             padding: "16px 18px",
-            borderBottom: "1px solid #262626",
+            borderBottom: "1px solid var(--c-border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -184,7 +191,7 @@ export default function ChangelogModal({ open, onClose }) {
               style={{
                 fontFamily: "'DM Mono', ui-monospace, monospace",
                 fontSize: 11,
-                color: "#737373",
+                color: "var(--c-muted)",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
               }}
@@ -196,7 +203,7 @@ export default function ChangelogModal({ open, onClose }) {
                 fontFamily: "'DM Sans', sans-serif",
                 fontSize: 18,
                 fontWeight: 700,
-                color: "#fafafa",
+                color: "var(--c-text)",
                 marginTop: 2,
               }}
             >
@@ -208,7 +215,7 @@ export default function ChangelogModal({ open, onClose }) {
             aria-label="Close"
             style={{
               background: "transparent",
-              color: "#a3a3a3",
+              color: "var(--c-textDim)",
               border: "none",
               fontSize: 22,
               lineHeight: 1,
@@ -247,7 +254,7 @@ export default function ChangelogModal({ open, onClose }) {
               style={{
                 fontFamily: "'DM Mono', ui-monospace, monospace",
                 fontSize: 12,
-                color: "#737373",
+                color: "var(--c-muted)",
                 padding: "12px 0",
               }}
             >
@@ -259,7 +266,7 @@ export default function ChangelogModal({ open, onClose }) {
               style={{
                 fontFamily: "'DM Mono', ui-monospace, monospace",
                 fontSize: 12,
-                color: "#737373",
+                color: "var(--c-muted)",
                 padding: "12px 0",
               }}
             >
@@ -273,7 +280,7 @@ export default function ChangelogModal({ open, onClose }) {
                   style={{
                     fontFamily: "'DM Mono', ui-monospace, monospace",
                     fontSize: 11,
-                    color: "#a3a3a3",
+                    color: "var(--c-textDim)",
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
                     marginBottom: 10,
@@ -285,8 +292,8 @@ export default function ChangelogModal({ open, onClose }) {
                   <div
                     key={j}
                     style={{
-                      background: "#171717",
-                      border: "1px solid #262626",
+                      background: "var(--c-surfaceHigh)",
+                      border: "1px solid var(--c-border)",
                       borderRadius: 12,
                       padding: "12px 14px",
                       marginBottom: 10,
@@ -297,7 +304,7 @@ export default function ChangelogModal({ open, onClose }) {
                         fontFamily: "'DM Sans', sans-serif",
                         fontSize: 14,
                         fontWeight: 700,
-                        color: "#fafafa",
+                        color: "var(--c-text)",
                         letterSpacing: "-0.01em",
                       }}
                     >
@@ -308,7 +315,7 @@ export default function ChangelogModal({ open, onClose }) {
                         style={{
                           fontFamily: "'DM Sans', sans-serif",
                           fontSize: 12.5,
-                          color: "#a3a3a3",
+                          color: "var(--c-textDim)",
                           marginTop: 4,
                           lineHeight: 1.5,
                         }}
