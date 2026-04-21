@@ -14,7 +14,7 @@ New Stripe tile in Settings → Integrations. One tap to connect, one tap to dis
 Xero, QuickBooks and Stripe all have clear Disconnect buttons now. Change your mind? No problem.
 
 ### Updates reach you faster ✨
-Deployed a new version? You'll see a friendly banner within a minute. Tap Reload and you're on the latest.
+Deployed a new version? You'll see a friendly banner within a minute (we now poll for new versions properly — the previous banner setup never fired). Tap Reload and you're on the latest.
 
 ### Pay link now on invoices too 💷
 Every invoice now has its own "Pay Online" link — not just quotes. Share it with customers and they can view the invoice and pay by card (or see your bank details) without signing up. Auto-included as a button in your invoice emails too.
@@ -24,6 +24,18 @@ The customer's quote page no longer shows card payment buttons or bank details �
 
 ### Bottom bar matches your theme 🎨
 The navigation bar at the bottom now follows your theme — frosted white in light mode, dark in dark mode. Less jarring, more native, easier on the eyes.
+
+### "What's new" matches your theme too 🎨
+Same fix for the What's new modal — light in light mode, dark in dark mode, instead of always-dark.
+
+### No more zoom-on-tap 📵
+Tapping any text box no longer zooms the screen in (an iOS Safari "feature" we've finally throttled). Forms now stay where they are when you're typing — way less infuriating.
+
+### Big numbers fit on big jobs 💷
+The Total Cost card on Materials now shrinks the figure font when you've got a really chunky total, so figures up to £9,999,999.99 still fit cleanly without wrapping or being cut off.
+
+### Chase emails now escalate properly 📈
+Previously every chase email got sent as "friendly reminder #1" — the counter reset every time the app reloaded. Now chase count is saved properly, so you get gentle reminder → second reminder → final notice in the right order, no matter how many times you sign out or reload.
 
 ### Pay link in every outgoing email 🔗
 Every email you send now has a "View Online" button and a plain-text link — whether it's the initial invoice, a quote, or a payment chase. Button works in most email apps; the plain link is there for forwarding, printing, or older mail clients that mangle buttons. Chase emails now include the link too, so your customers can pay straight from the reminder. Locked down so it stays readable in dark-mode email clients (iOS Mail, Outlook, etc.) — no more invisible header or button.
