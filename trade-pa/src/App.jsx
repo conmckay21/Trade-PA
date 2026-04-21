@@ -1147,6 +1147,7 @@ const C = {
   text: "var(--c-text)",
   textDim: "var(--c-textDim)",
   muted: "var(--c-muted)",
+  tabBarBg: "var(--c-tabBarBg)",
   // Accent colours — fixed across themes, support alpha-suffix concat
   amber: "#f59e0b",
   amberDim: "#92400e",
@@ -1167,6 +1168,10 @@ const DARK_PALETTE = {
   text: "#f5f5f5",        // was #e5e5e5
   textDim: "#d1d5db",     // was #9ca3af
   muted: "#b8bcc4",       // was #6b7280 — much more readable
+  // Tab bar uses translucent bg + backdrop blur for native iOS feel.
+  // Slightly darker than surface so the bar reads as a distinct surface
+  // even when content scrolls behind it.
+  tabBarBg: "rgba(15, 15, 15, 0.85)",
 };
 
 // LIGHT palette designed for outdoor visibility, not just inverted.
@@ -1179,6 +1184,10 @@ const LIGHT_PALETTE = {
   text: "#0f0f0f",
   textDim: "#374151",     // dark grey - 11.2:1 contrast on light bg
   muted: "#4b5563",       // mid-dark grey - 7.5:1 contrast on light bg
+  // Tab bar: translucent white with backdrop blur — mirrors how native iOS
+  // tab bars render in apps like Mail, Settings, Messages. The transparency
+  // lets a hint of scrolled content show through, reinforcing depth.
+  tabBarBg: "rgba(255, 255, 255, 0.85)",
 };
 
 // Apply a palette to the document root via CSS variables.
@@ -27778,7 +27787,10 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
         left: 0,
         right: 0,
         zIndex: 95, // above content, below modals (which are 100+)
-        background: "rgba(15, 15, 15, 0.92)",
+        // Translucent surface + backdrop blur — the bg colour comes from the
+        // theme so light mode gets frosted-white (native iOS look) and dark
+        // mode keeps the existing near-black. See tabBarBg in DARK/LIGHT_PALETTE.
+        background: C.tabBarBg,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         borderTop: `1px solid ${C.border}`,
@@ -27814,7 +27826,7 @@ function BottomTabBar({ view, setView, isDesktopBrowser }) {
                   alignItems: "center",
                   justifyContent: "flex-start",
                   gap: 4,
-                  color: active ? C.amber : C.textDim,
+                  color: active ? C.amber : C.muted,
                   fontFamily: "'DM Sans', sans-serif",
                   padding: "6px 4px",
                   transition: "color 150ms ease",
