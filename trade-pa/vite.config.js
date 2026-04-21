@@ -21,6 +21,48 @@ try {
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,svg}'],
+
+      // ─── Don't intercept server-side routes ──────────────────────────
+      // Without this, Workbox's default NavigationRoute handler serves the
+      // precached index.html for ANY navigation request — including
+      // <a href="/api/..."> links. That breaks OAuth-style flows like
+      // Stripe Connect onboarding (the browser never reaches the server
+      // because the SW answers with cached HTML).
+      //
+      // navigateFallbackDenylist tells the SW: "for these URL patterns,
+      // don't do the navigation-fallback trick, let the request go to
+      // the network as normal."
+      //
+      //   /api/*   → all serverless functions (Stripe, Xero, email, etc)
+      //   /quote/* → customer portal pages (served by api/portal.js)
+      //   /icons/*, /workbox-*, /sw.js → housekeeping URLs
+      navigateFallbackDenylist: [
+        /^\/api\//,
+        /^\/quote\//,
+        /^\/icons\//,
+        /^\/workbox-/,
+        /^\/sw\.js$/,
+      ],
+
+      // ─── Don't precache server-side routes ───────────────────────────
+      // Defensive layer: ensures the /api/ and /quote/ paths never end up
+      // in the precache manifest in the first place (they shouldn't, since
+      // they're not emitted as static assets, but this makes the intent
+      // explicit and guards against future build-config changes).
+      globIgnores: ['**/api/**', '**/quote/**'],
+
+      // ─── Faster update cycle for installed PWAs ─────────────────────
+      // skipWaiting on the new SW and clientsClaim so updates propagate
+      // to open tabs within seconds of a deploy instead of waiting for
+      // every tab to close. Pairs with registerType:'autoUpdate' above.
+      skipWaiting: true,
+      clientsClaim: true,
+
+      // ─── Auto-cleanup old Workbox caches on upgrade ─────────────────
+      // Ensures stale precaches from previous builds get deleted once
+      // the new SW activates, preventing unbounded cache growth and
+      // stale-asset weirdness.
+      cleanupOutdatedCaches: true,
     },
   })
 } catch (e) {
