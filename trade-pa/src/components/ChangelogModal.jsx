@@ -77,7 +77,8 @@ function parseChangelog(md) {
 export async function hasUnreadChangelog() {
   try {
     const lastRead = localStorage.getItem(LAST_READ_KEY) || "";
-    const res = await fetch("/changelog.md", { cache: "no-store" });
+    // Cache-buster so the SW can't serve a stale precached copy
+    const res = await fetch(`/changelog.md?v=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return false;
     const md = await res.text();
     const releases = parseChangelog(md);
@@ -101,7 +102,7 @@ export default function ChangelogModal({ open, onClose }) {
     setReleases(null);
     setError(null);
 
-    fetch("/changelog.md", { cache: "no-store" })
+    fetch(`/changelog.md?v=${Date.now()}`, { cache: "no-store" })
       .then((r) => {
         if (!r.ok) throw new Error(`Couldn't load changelog (${r.status})`);
         return r.text();
