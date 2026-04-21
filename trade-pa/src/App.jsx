@@ -4893,9 +4893,13 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       )}
 
       {subview === "help" && (<>
-      {/* What's new row — opens the changelog modal */}
+      {/* What's new row — fires a window event to open the changelog modal.
+          The modal state lives in the main App component (out of this
+          Settings component's scope), so we dispatch a custom event that
+          App listens for. Cleaner than prop-threading through the whole
+          Settings tree. */}
       <button
-        onClick={() => setChangelogOpen(true)}
+        onClick={() => window.dispatchEvent(new CustomEvent("tp:open-changelog"))}
         style={{
           background: C.surfaceHigh,
           border: `1px solid ${C.border}`,
@@ -27632,6 +27636,15 @@ function AppInner() {
   const [pdfHtml, setPdfHtml] = useState(null);
   const [offlineSettingsOpen, setOfflineSettingsOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
+
+  // Listen for changelog-open events fired by other components (e.g. the
+  // "What's new" row inside Settings, which lives in a separate component
+  // and can't see setChangelogOpen directly).
+  useEffect(() => {
+    const onOpen = () => setChangelogOpen(true);
+    window.addEventListener("tp:open-changelog", onOpen);
+    return () => window.removeEventListener("tp:open-changelog", onOpen);
+  }, []);
   const [viewRaw, setViewRaw] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('xero') || params.has('qb')) return "Settings";
