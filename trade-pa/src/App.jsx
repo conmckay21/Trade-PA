@@ -8625,6 +8625,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             description: lineItems.map(l => `${l.description}|${l.amount}`).join("\n"),
             lineItems,
             isQuote: false,
+            // Portal token for the customer-facing invoice page. Same token
+            // format as quotes — portal.js reads is_quote on the record to
+            // decide whether to render accept/decline (quote) or Pay Now
+            // (invoice) UI.
+            portalToken: generatePortalToken(),
           };
           setInvoices(prev => [inv, ...(prev || [])]);
           syncInvoiceToAccounting(user?.id, inv);
@@ -8640,6 +8645,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             line_items: JSON.stringify(lineItems),
             job_ref: input.job_ref || "",
             created_at: new Date().toISOString(),
+            portal_token: inv.portalToken,
           }).then(() => {}).catch(() => {});
           setLastAction({ type: "invoice", label: `${id} — ${fmtAmount(totalAmount)} — ${input.customer}`, view: "Invoices" });
           pendingWidgetRef.current = { type: "invoice", data: inv };
@@ -8686,11 +8692,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             description: lineItems.map(l => `${l.description}|${l.amount}`).join("\n"),
             lineItems,
             isQuote: true,
-            // Portal token: per-quote random string so customers can view the
+            // Portal token: per-doc random string so customers can view the
             // quote at /quote/<token> without logging in. Generated here so
             // the detail view can show the portal URL immediately, no refresh.
-            portalToken: Array.from(crypto.getRandomValues(new Uint8Array(24)))
-              .map(b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join(""),
+            portalToken: generatePortalToken(),
           };
           setInvoices(prev => [quote, ...(prev || [])]);
           db.from("invoices").upsert({
@@ -13730,6 +13735,20 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush, set
     return () => { if (setContextHint) setContextHint(null); };
   }, [outstandingInvoices.length, setContextHint]);
 
+  // Back-fill portal token for older docs opened from the Payments view
+  // (quotes or invoices) that pre-date the portal feature. Matches the
+  // InvoicesView back-fill so the shareable link exists whichever screen
+  // the user opens the doc from.
+  useEffect(() => {
+    if (!selected) return;
+    const existingToken = selected.portalToken || selected.portal_token;
+    if (existingToken) return;
+    const t = generatePortalToken();
+    setSelected(s => ({ ...s, portalToken: t }));
+    setInvoices(prev => (prev || []).map(i => i.id === selected.id ? { ...i, portalToken: t } : i));
+    if (user?.id) db.from("invoices").update({ portal_token: t }).eq("id", selected.id).eq("user_id", user.id).then(() => {}).catch(() => {});
+  }, [selected?.id]);
+
   const updateStatus = (id, status) => {
     const inv = (invoices || []).find(i => i.id === id);
     setInvoices(prev => (prev || []).map(i => i.id === id ? { ...i, status, due: status === "paid" ? "Paid" : i.due } : i));
@@ -13934,6 +13953,15 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush, set
                 <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{selected.isQuote ? "Valid for" : "Payment due"}</div>
                 <div style={{ fontSize: 13 }}>{selected.due}</div>
               </div>
+              {/* Portal link — shared component, handles both quote and
+                  invoice wording based on isQuote flag. */}
+              <PortalLinkPanel
+                token={selected.portalToken || selected.portal_token}
+                isQuote={!!selected.isQuote}
+                stripeReady={!!brand?.stripeAccountId}
+                colors={{ muted: C.muted, text: C.text, border: C.border, surfaceHigh: C.surfaceHigh }}
+                styles={{ input: S.input, btnGhost: S.btn("ghost") }}
+              />
             </div>
 
             {/* Mark Paid — full width green button for invoices */}
@@ -17870,16 +17898,25 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending, cust
   const subject = `${docType} ${doc.id} from ${brand.tradingName} — ${fmtCurrency(doc.amount)}`;
   const accent = brand?.accentColor || "#f59e0b";
   const docAmt = fmtCurrency(doc.amount);
-  // Customer portal CTA — only for quotes that have a portal token. The
-  // portalUrl helper resolves to view.tradespa.co.uk in production and the
-  // current origin elsewhere. PDF stays attached as a fallback for customers
-  // who'd rather print or sign the old-fashioned way.
+  // Customer portal CTA — shown for BOTH quotes and invoices when a portal
+  // token is present. Wording differs: quotes → "View & Accept Online", 
+  // invoices → "View & Pay Online" (or "View Online" if card payments aren't
+  // set up). PDF stays attached as a fallback for customers who'd rather
+  // print or sign the old-fashioned way.
   const portalToken = doc.portalToken || doc.portal_token;
-  const portalCTA = (isQuote && portalToken) ? `
+  const stripeReady = !isQuote && !!brand?.stripeAccountId;
+  const ctaLabel = isQuote
+    ? "View &amp; Accept Online &rarr;"
+    : stripeReady ? "View &amp; Pay Online &rarr;" : "View Online &rarr;";
+  const ctaSubtext = isQuote
+    ? "No login required &middot; one tap to accept"
+    : stripeReady ? "No login required &middot; pay by card or bank transfer"
+                  : "No login required &middot; view invoice and bank details";
+  const portalCTA = portalToken ? `
       <p style="text-align:center;margin:20px 0 24px;">
-        <a href="${portalUrl(portalToken)}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.02em;">View &amp; Accept Online &rarr;</a>
+        <a href="${portalUrl(portalToken)}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.02em;">${ctaLabel}</a>
       </p>
-      <p style="text-align:center;color:#888;font-size:12px;margin-top:-12px;margin-bottom:20px;">No login required &middot; one tap to accept</p>` : "";
+      <p style="text-align:center;color:#888;font-size:12px;margin-top:-12px;margin-bottom:20px;">${ctaSubtext}</p>` : "";
   const body = buildEmailHTML(brand, {
     heading: `${docType.toUpperCase()} ${doc.id}`,
     showBacs: !isQuote,
@@ -18273,6 +18310,16 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
                   <div style={{ fontSize: 13 }}>{selected.jobRef}</div>
                 </div>
               )}
+              {/* Portal link — lets customer view invoice and (if Stripe
+                  connected) pay by card directly. Auto-included as CTA button
+                  in the outgoing invoice email too. */}
+              <PortalLinkPanel
+                token={selected.portalToken || selected.portal_token}
+                isQuote={false}
+                stripeReady={!!brand?.stripeAccountId}
+                colors={{ muted: C.muted, text: C.text, border: C.border, surfaceHigh: C.surfaceHigh }}
+                styles={{ input: S.input, btnGhost: S.btn("ghost") }}
+              />
             </div>
 
             {selected.status !== "paid"
@@ -18407,15 +18454,16 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
     if (user?.id) db.from("invoices").update({ updated_at: newUpdated }).eq("id", id).eq("user_id", user.id).then(() => {}).catch(() => {});
   };
 
-  // Back-fill portal token for older quotes that were created before this
-  // feature existed. Runs silently whenever the user opens a quote that has
-  // no token yet — generates one and persists to DB so the URL can be shared.
+  // Back-fill portal token for older docs (quotes OR invoices) that were
+  // created before the portal existed. Runs silently whenever the user opens
+  // a doc with no token yet — generates one and persists to DB so the URL
+  // can be shared. Portal page handles quote vs invoice rendering via the
+  // stored is_quote flag, so a single token back-fill works for both.
   useEffect(() => {
-    if (!selected || !selected.isQuote) return;
+    if (!selected) return;
     const existingToken = selected.portalToken || selected.portal_token;
     if (existingToken) return;
-    const t = Array.from(crypto.getRandomValues(new Uint8Array(24)))
-      .map(b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
+    const t = generatePortalToken();
     setSelected(s => ({ ...s, portalToken: t }));
     setInvoices(prev => (prev || []).map(i => i.id === selected.id ? { ...i, portalToken: t } : i));
     if (user?.id) db.from("invoices").update({ portal_token: t }).eq("id", selected.id).eq("user_id", user.id).then(() => {}).catch(() => {});
@@ -18598,29 +18646,16 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
             )}
             {/* Customer portal link — share this URL with the customer so
                 they can view, accept or decline the quote without logging in.
-                Generated on quote creation or back-filled when viewed.
-                URL host comes from the portalUrl helper so subdomain changes
-                only need to happen in one place. */}
-            {(selected.portalToken || selected.portal_token) && (
-              <div style={{ padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Customer Portal Link</div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input
-                    readOnly
-                    style={{ ...S.input, fontFamily: "'DM Mono',monospace", fontSize: 11, flex: 1 }}
-                    value={portalUrl(selected.portalToken || selected.portal_token)}
-                    onClick={e => e.target.select()}
-                  />
-                  <button
-                    onClick={() => {
-                      if (navigator.clipboard) navigator.clipboard.writeText(portalUrl(selected.portalToken || selected.portal_token)).catch(() => {});
-                    }}
-                    style={{ ...S.btn("ghost"), fontSize: 11, flexShrink: 0 }}
-                  >Copy</button>
-                </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>Share this link &mdash; customer can view, accept or decline without signing up. You'll get a push notification when they respond. (Also auto-included as a button in your quote emails.)</div>
-              </div>
-            )}
+                Generated on quote creation or back-filled when viewed. Uses
+                the shared PortalLinkPanel component so quote/invoice detail
+                pages stay in sync on wording changes. */}
+            <PortalLinkPanel
+              token={selected.portalToken || selected.portal_token}
+              isQuote={true}
+              stripeReady={!!brand?.stripeAccountId}
+              colors={{ muted: C.muted, text: C.text, border: C.border, surfaceHigh: C.surfaceHigh }}
+              styles={{ input: S.input, btnGhost: S.btn("ghost") }}
+            />
           </div>
 
           <button style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: "14px", fontSize: 15, marginBottom: 10 }}
@@ -26982,6 +27017,56 @@ function urlBase64ToUint8Array(base64String) {
 // The portal endpoint itself is reachable on either host (the /quote/:token
 // rewrite in vercel.json applies project-wide), so preview deploys that
 // point at preview-url.vercel.app/quote/<token> work without any setup.
+// ─── Portal token generator ─────────────────────────────────────────────────
+// 24 random bytes, base-36 encoded → 24-character alphanumeric string that
+// maps to /quote/<token> (works for both quotes AND invoices; the portal page
+// reads is_quote on the record to decide whether to show accept/decline or
+// Pay Now). Keep in sync with /api/portal.js token validation regex.
+function generatePortalToken() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(24)))
+    .map(b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
+}
+
+// ─── Portal link panel ──────────────────────────────────────────────────────
+// Shared UI for the quote/invoice detail pages. Shows the customer portal
+// URL with a copy button + context-appropriate explainer. Caller passes:
+//   - token: portal token string (required — panel renders null if absent)
+//   - isQuote: boolean — changes wording between accept/decline and payment
+//   - stripeReady: boolean — when true, mentions card payment option in blurb
+//   - colors: { muted, text, border, surfaceHigh } theme tokens
+//   - styles: { input, btnGhost } shared input + button styles from parent
+function PortalLinkPanel({ token, isQuote, stripeReady, colors, styles }) {
+  if (!token) return null;
+  const url = portalUrl(token);
+  const blurb = isQuote
+    ? "Share this link — customer can view, accept or decline without signing up. You'll get a push notification when they respond. (Also auto-included as a button in your quote emails.)"
+    : stripeReady
+      ? "Share this link — customer can view the invoice and pay by card. You'll get a push notification when payment comes in. (Also auto-included as a button in your invoice emails.)"
+      : "Share this link — customer can view the invoice and bank transfer details online. (Also auto-included as a button in your invoice emails.) Connect Stripe in Settings → Integrations to accept card payments.";
+  return (
+    <div style={{ padding: "10px 14px", background: colors.surfaceHigh, borderRadius: 8 }}>
+      <div style={{ fontSize: 10, color: colors.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+        {isQuote ? "Customer Portal Link" : "Pay Online Link"}
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <input
+          readOnly
+          style={{ ...styles.input, fontFamily: "'DM Mono',monospace", fontSize: 11, flex: 1 }}
+          value={url}
+          onClick={e => e.target.select()}
+        />
+        <button
+          onClick={() => {
+            if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+          }}
+          style={{ ...styles.btnGhost, fontSize: 11, flexShrink: 0 }}
+        >Copy</button>
+      </div>
+      <div style={{ fontSize: 11, color: colors.muted, marginTop: 6, lineHeight: 1.5 }}>{blurb}</div>
+    </div>
+  );
+}
+
 function portalUrl(token) {
   if (!token) return "";
   let host = "https://view.tradespa.co.uk";
