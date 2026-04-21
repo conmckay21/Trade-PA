@@ -1,5 +1,34 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { writeFileSync, mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+// ─── Build-time version.json generator ──────────────────────────────────────
+// Writes /public/version.json with a fresh build hash on every build. The
+// UpdateBanner client polls this file and shows the "new version available"
+// banner when the hash differs from the one captured at app load time.
+//
+// We can't rely on service worker lifecycle events for update detection
+// because the push-notification SW skips waiting on install — there's no
+// "waiting" event for Workbox to hook into. A simple fetch-and-compare loop
+// against a versioned JSON file is far more reliable across browsers.
+//
+// The hash is just the build timestamp — guaranteed unique per build, no
+// crypto needed. The version file gets cache-busted via a query param
+// in the client to force a fresh fetch every poll.
+function versionJsonPlugin() {
+  return {
+    name: 'tradepa-version-json',
+    apply: 'build',
+    closeBundle() {
+      const version = String(Date.now());
+      const outDir = resolve(process.cwd(), 'public');
+      try { mkdirSync(outDir, { recursive: true }); } catch {}
+      writeFileSync(resolve(outDir, 'version.json'), JSON.stringify({ version }) + '\n');
+      console.log(`[tradepa-version-json] wrote public/version.json with version ${version}`);
+    },
+  };
+}
 
 let pwaPlugin = null
 try {
@@ -36,6 +65,7 @@ try {
       //   /api/*   → all serverless functions (Stripe, Xero, email, etc)
       //   /quote/* → customer portal pages (served by api/portal.js)
       //   /icons/*, /workbox-*, /sw.js → housekeeping URLs
+      //   /version.json → must always hit network for update detection
       navigateFallbackDenylist: [
         /^\/api\//,
         /^\/quote\//,
@@ -43,6 +73,7 @@ try {
         /^\/workbox-/,
         /^\/sw\.js$/,
         /^\/changelog\.md$/,
+        /^\/version\.json$/,
       ],
 
       // ─── Don't precache server-side routes ───────────────────────────
@@ -50,7 +81,7 @@ try {
       // in the precache manifest in the first place (they shouldn't, since
       // they're not emitted as static assets, but this makes the intent
       // explicit and guards against future build-config changes).
-      globIgnores: ['**/api/**', '**/quote/**'],
+      globIgnores: ['**/api/**', '**/quote/**', '**/version.json'],
 
       // ─── Faster update cycle for installed PWAs ─────────────────────
       // skipWaiting on the new SW and clientsClaim so updates propagate
@@ -71,5 +102,5 @@ try {
 }
 
 export default defineConfig({
-  plugins: [react(), pwaPlugin].filter(Boolean),
+  plugins: [react(), versionJsonPlugin(), pwaPlugin].filter(Boolean),
 })
