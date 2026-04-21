@@ -85,18 +85,3 @@ When something goes wrong, we'll know about it now — and fix it faster.
 
 ### Reminders via email
 Job reminders now come as branded emails with Mark Done / Snooze / Open App buttons right in the email.
-### Streaming replies
-AI responses now stream in as they're generated rather than appearing all at once. Feels snappier.
-
----
-
-## 2026-04-10
-
-### Email templates
-Welcome, trial-ending and payment-failed emails now come from proper addresses (hello@, billing@) with your branding. Supabase auth emails too.
-
-### Error tracking
-When something goes wrong, we'll know about it now — and fix it faster.
-
-### Reminders via email
-Job reminders now come as branded emails with Mark Done / Snooze / Open App buttons right in the email.
