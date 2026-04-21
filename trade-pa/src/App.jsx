@@ -7003,20 +7003,49 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   // Reusing one element means unlocking it once keeps it unlocked forever.
   const persistentAudioRef = useRef(typeof Audio !== "undefined" ? new Audio() : null);
 
+  // Exposes a promise that resolves once the audio element has been unlocked
+  // (silent priming play completed). speak() awaits this before its first
+  // playback so we never hit the "first message silent" bug on press-to-talk.
+  //
+  // Why this is needed:
+  // unlockAudio() used to be fire-and-forget. On a fresh tab, the user taps
+  // mic → unlockAudio starts the priming play → mic records → transcribe →
+  // Claude replies → speak() is called. On slow devices the priming play's
+  // promise hasn't resolved by the time speak() runs, so audio.volume=1.0
+  // hasn't taken effect and iOS Safari silently refuses playback. By
+  // exposing a promise and awaiting it, speak() never races the unlock.
+  const audioUnlockPromiseRef = useRef(null);
+
   const unlockAudio = () => {
-    if (audioUnlockedRef.current) return;
+    if (audioUnlockedRef.current) return audioUnlockPromiseRef.current || Promise.resolve();
+    if (audioUnlockPromiseRef.current) return audioUnlockPromiseRef.current;
     const el = persistentAudioRef.current;
-    if (!el) return;
-    try {
-      // Silent WAV — play on the SAME element speak() will reuse for TTS.
-      el.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=";
-      el.volume = 0.001;
-      el.play().then(() => {
-        audioUnlockedRef.current = true;
-        el.pause();
-        // Do NOT reset el.src — iOS unlocks per-element, clearing src resets that state
-      }).catch(() => {});
-    } catch(e) {}
+    if (!el) return Promise.resolve();
+    audioUnlockPromiseRef.current = new Promise((resolve) => {
+      try {
+        // Silent WAV — play on the SAME element speak() will reuse for TTS.
+        el.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=";
+        el.volume = 0.001;
+        el.play().then(() => {
+          audioUnlockedRef.current = true;
+          el.pause();
+          // Reset volume immediately so the next play() on this element is
+          // audible even if speak()'s own volume reset races with iOS's
+          // deferred property application.
+          el.volume = 1.0;
+          el.muted = false;
+          resolve();
+        }).catch(() => {
+          // Unlock failed (user hasn't gestured yet, or iOS refused). Don't
+          // mark unlocked — will retry on next gesture. Resolve anyway so
+          // speak() doesn't hang indefinitely.
+          resolve();
+        });
+      } catch (e) {
+        resolve();
+      }
+    });
+    return audioUnlockPromiseRef.current;
   };
   const bottomRef = useRef(null);
   const [handsFree, setHandsFree] = useState(false);
@@ -7232,6 +7261,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     };
   }, [user?.id]);
 
+  // Hands-free exit detection — two layers:
+  //
+  // 1. CLOSING_PHRASES: literal substring matches (fast path, most reliable
+  //    for phrases users say exactly).
+  // 2. CLOSING_PATTERNS: regex matches that tolerate filler words between
+  //    key terms. E.g. "that's absolutely everything thank you" should end
+  //    the session, but a literal includes("that's everything") misses it
+  //    because of "absolutely" between.
+  //
+  // Heuristic for "thank you": only counts as a signoff if the transcript
+  // is SHORT (<= 6 words) or ends with thanks — otherwise "thanks, now can
+  // you also book..." would wrongly exit mid-conversation.
   const CLOSING_PHRASES = [
     "that's everything", "thats everything", "that is everything",
     "that's all", "thats all", "that is all",
@@ -7247,6 +7288,33 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     "thanks that's it", "thanks thats it",
     "nah you're alright", "nah your alright",
   ];
+
+  // Regex patterns that allow up to 3 filler words between key terms.
+  // \b word boundaries prevent matching inside unrelated words.
+  const CLOSING_PATTERNS = [
+    // "that's [absolutely/really/genuinely] everything/all/it/enough"
+    /\b(that'?s|that is)\s+(?:\w+\s+){0,3}(everything|all|it|enough|fine|grand|great|perfect)\b/,
+    // "that [will/would/should] [just] do"
+    /\b(that|that'?ll)\s+(?:\w+\s+){0,2}do\b/,
+    // "we're/i'm [all] [good/done/sorted/fine]"
+    /\b(we'?re|i'?m|we are|i am)\s+(?:all\s+)?(good|done|sorted|fine|set)\b/,
+    // "nothing (else)" — "nothing else", "nothing more", "no more"
+    /\b(nothing|no more)\s+(else|more|thanks|thank you)?\b/,
+  ];
+
+  // Count words in a transcript (for the thank-you heuristic)
+  const wordCount = (s) => (s.match(/\S+/g) || []).length;
+
+  // Matches "thank you" / "thanks" ONLY when it's a short signoff-style
+  // utterance — not "thanks, now can you also book Tuesday".
+  const isThanksSignoff = (lower) => {
+    if (!/\b(thank you|thanks|cheers ta|cheers mate)\b/.test(lower)) return false;
+    // Short (<= 6 words) → almost certainly a signoff
+    if (wordCount(lower) <= 6) return true;
+    // Longer but ends with "thank you" or "thanks" → also a signoff
+    if (/\b(thank you|thanks)\s*[.!?]*\s*$/.test(lower)) return true;
+    return false;
+  };
 
   // Use a ref for the transcript callback so it always uses fresh send()/messages
   // even when called from stale closures inside async mic/speech flows
@@ -7301,7 +7369,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         return;
       }
 
-      const isClosing = CLOSING_PHRASES.some(p => lower.includes(p));
+      const isClosing = CLOSING_PHRASES.some(p => lower.includes(p))
+        || CLOSING_PATTERNS.some(re => re.test(lower))
+        || isThanksSignoff(lower);
       if (isClosing) {
         emptyCyclesRef.current = 0;
         setHandsFree(false);
@@ -7442,6 +7512,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
     // Start in "fetching" phase — gives network time to respond without cutting off early
     setSafety("fetching");
+
+    // Wait for the audio element to be unlocked before trying to play on it.
+    // First press-to-talk message was silent because unlockAudio's priming
+    // play hadn't finished resolving by the time we got here — audio.play()
+    // on a not-yet-unlocked element fails silently on iOS Safari. The unlock
+    // promise usually resolves in under 50ms so this has no perceptible
+    // impact on latency.
+    await unlockAudio();
 
     // Try Deepgram first for best voice quality
     try {
