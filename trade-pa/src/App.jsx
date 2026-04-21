@@ -7330,7 +7330,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     () => onSilenceRef.current && onSilenceRef.current()
   );
 
-  // Phase 2: tracks active TTS playback (Deepgram Aura or Web Speech fallback).
+  // Phase 2: tracks active TTS playback (server-side audio from /api/tts
+  // — Grok primary, Deepgram Aura fallback — or Web Speech if /api/tts fails).
   // Declared BEFORE speak() to avoid TDZ in production bundles.
   const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -7432,7 +7433,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
   // Helper: restart mic after speaking (or if speaking fails)
   // Speak using Web Speech API (instant, no API key, works offline)
-  // Used as primary TTS engine — reliable fallback from Deepgram
+  // Used as final fallback when server-side TTS (/api/tts — Grok or Deepgram)
+  // is unreachable or the returned audio fails to play.
   const speakWebSpeech = (text, onEnd) => {
     if (!("speechSynthesis" in window)) { onEnd(); return; }
     window.speechSynthesis.cancel();
@@ -7476,7 +7478,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
     // Phase 2: flip speaking state ON before any TTS attempt so the UI can morph.
     // Turned OFF in onSpeechEnd below, which is the single convergence point for
-    // Deepgram success, Deepgram→fallback, Web Speech end/error, and safety-timer abort.
+    // /api/tts success, /api/tts→Web Speech fallback, Web Speech end/error, and
+    // safety-timer abort.
     setIsSpeaking(true);
 
     let speechEnded = false;
@@ -7494,7 +7497,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     const wrappedEnd = () => onSpeechEnd();
 
     // setSafety: call this whenever we know what state we're in so the timer is calibrated.
-    //   "fetching"  — waiting for Deepgram network (10s max, long enough for slow connections)
+    //   "fetching"  — waiting for /api/tts response (10s max, long enough for slow connections)
     //   "playing"   — audio confirmed playing; timer covers estimated speech duration + buffer
     //   "fallback"  — Web Speech or play() blocked; 4s to detect silent iOS block
     const setSafety = (phase) => {
@@ -7518,14 +7521,25 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     setSafety("fetching");
 
     // Wait for the audio element to be unlocked before trying to play on it.
-    // First press-to-talk message was silent because unlockAudio's priming
-    // play hadn't finished resolving by the time we got here — audio.play()
-    // on a not-yet-unlocked element fails silently on iOS Safari. The unlock
-    // promise usually resolves in under 50ms so this has no perceptible
-    // impact on latency.
-    await unlockAudio();
+    // First press-to-talk message was silent in regular browser because
+    // unlockAudio's priming play hadn't finished resolving by the time we
+    // got here — audio.play() on a not-yet-unlocked element fails silently
+    // on iOS Safari. Solved by awaiting the unlock promise.
+    //
+    // But in PWA mode (iOS Safari standalone), the unlock promise can
+    // sometimes never resolve — iOS kills background promise chains
+    // aggressively. Awaiting it indefinitely stalls speak() forever and
+    // the speaking UI state gets stuck. Cap the wait at 500ms; on web
+    // unlock completes in ~50ms so this is invisible in the fast case,
+    // and in PWA we fall through to fire-and-forget after half a second.
+    try {
+      await Promise.race([
+        unlockAudio(),
+        new Promise((resolve) => setTimeout(resolve, 500)),
+      ]);
+    } catch {}
 
-    // Try Deepgram first for best voice quality
+    // Try server-side TTS first (/api/tts cascades: Grok → Deepgram Aura)
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
@@ -7547,8 +7561,28 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         audio.onerror = () => { URL.revokeObjectURL(url); setSafety("fallback"); speakWebSpeech(clean, wrappedEnd); };
         audio.src = url;
         ttsAudioRef.current = audio;
-        // Switch to playback-duration timer once we know it's actually playing
-        audio.play().then(() => setSafety("playing")).catch(() => {
+        // Switch to playback-duration timer once we know it's actually playing.
+        //
+        // iOS PWA quirk: audio.play() can resolve successfully but the audio
+        // element never actually progresses (silent failure — no error event
+        // fires either). Common on the very first TTS playback in a fresh
+        // PWA launch before the audio session is warmed up. Detect this by
+        // checking currentTime after a short delay — if still at 0 and no
+        // duration metadata loaded, fall back to Web Speech.
+        audio.play().then(() => {
+          setSafety("playing");
+          setTimeout(() => {
+            if (speechEnded) return; // already moved on (normal end or other fallback)
+            if (audio.currentTime === 0 && (isNaN(audio.duration) || audio.duration === 0)) {
+              // Silent failure — element never actually played anything.
+              try { audio.pause(); } catch {}
+              URL.revokeObjectURL(url);
+              ttsAudioRef.current = null;
+              setSafety("fallback");
+              speakWebSpeech(clean, wrappedEnd);
+            }
+          }, 400);
+        }).catch(() => {
           URL.revokeObjectURL(url);
           ttsAudioRef.current = null;
           setSafety("fallback");
@@ -7557,10 +7591,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         return;
       }
     } catch (e) {
-      console.warn("Deepgram TTS failed, using Web Speech:", e.message);
+      console.warn("/api/tts failed, using Web Speech:", e.message);
     }
 
-    // Deepgram unavailable — Web Speech fallback
+    // Server-side TTS unavailable — Web Speech fallback
     setSafety("fallback");
     speakWebSpeech(clean, wrappedEnd);
   };
