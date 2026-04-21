@@ -267,10 +267,12 @@ async function renderQuoteView(token, paidParam = null) {
   ` : "";
 
   // Stripe Pay Now CTA — shown when the tradesperson has connected Stripe AND
-  // the invoice isn't already paid. Posts to /api/stripe/connect-checkout
+  // the doc is an INVOICE (never on quotes — customer shouldn't be able to
+  // pay before accepting the quote; that's the job of the invoice stage)
+  // AND the invoice isn't already paid. Posts to /api/stripe/connect-checkout
   // which creates a Checkout session and 303-redirects to Stripe's hosted
   // payment page. On success Stripe sends the customer back to ?paid=1.
-  const stripeReady = brand.stripeAccountId && inv.status !== "paid" && !isExpired;
+  const stripeReady = !isQuote && brand.stripeAccountId && inv.status !== "paid" && !isExpired;
   const stripeHTML = stripeReady ? `
     <div class="panel" style="text-align:center;padding:18px;">
       <h2 style="margin-top:0;">Pay by card</h2>
@@ -282,7 +284,11 @@ async function renderQuoteView(token, paidParam = null) {
     </div>
   ` : "";
 
-  const bankHTML = (brand.bankName || brand.accountNumber) ? `
+  // Bank transfer details — shown on INVOICES only. Quotes intentionally
+  // don't show payment actions (Stripe or bank) because the customer hasn't
+  // accepted yet. A single "Payment terms" info block replaces it on quotes
+  // so customers still know what they're signing up for.
+  const bankHTML = (!isQuote && (brand.bankName || brand.accountNumber)) ? `
     <div class="panel">
       <h2>${stripeReady ? "Or pay by bank transfer" : "Pay by bank transfer"}</h2>
       <div class="bank">
@@ -292,6 +298,28 @@ async function renderQuoteView(token, paidParam = null) {
         ${brand.accountNumber ? `<div class="bank-row"><span>Account number</span><span>${esc(brand.accountNumber)}</span></div>` : ""}
         <div class="bank-row"><span>Reference</span><span>${esc(inv.id)}</span></div>
       </div>
+    </div>
+  ` : "";
+
+  // Payment terms — informational only, on QUOTES only. Tells the customer
+  // what to expect if they accept, without giving them a way to pay now.
+  // Wording adapts to what the tradesperson has set up: card + bank,
+  // card only, bank only, or neither.
+  const paymentTermsDays = parseInt(brand.paymentTerms || "30", 10) || 30;
+  const hasCard = !!brand.stripeAccountId;
+  const hasBank = !!(brand.bankName || brand.accountNumber);
+  let paymentMethodsText = "";
+  if (hasCard && hasBank) paymentMethodsText = "You'll be able to pay by card or bank transfer.";
+  else if (hasCard) paymentMethodsText = "You'll be able to pay by card online.";
+  else if (hasBank) paymentMethodsText = "Payment will be by bank transfer.";
+  else paymentMethodsText = "The tradesperson will share payment details with the invoice.";
+  const paymentTermsHTML = (isQuote && !isExpired && !alreadyResponded) ? `
+    <div class="panel" style="background:#fafafa;">
+      <h2>Payment terms</h2>
+      <p style="margin:0;color:#555;font-size:14px;line-height:1.5;">
+        If you accept this quote, an invoice will be issued with payment due in ${paymentTermsDays} days.
+        ${paymentMethodsText}
+      </p>
     </div>
   ` : "";
 
@@ -334,6 +362,8 @@ async function renderQuoteView(token, paidParam = null) {
     ${stripeHTML}
 
     ${bankHTML}
+
+    ${paymentTermsHTML}
 
     ${actionsHTML}
   `;
