@@ -8912,10 +8912,53 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           );
           if (!match) return `Couldn't find a quote matching that. Check the Quotes tab.`;
           const newId = nextInvoiceId(invoices);
-          const inv = { ...match, id: newId, isQuote: false, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
-          setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== match.id)]);
+          // Conversion preserves the original quote (don't delete). This
+          // keeps acceptance history intact and lets tradies see which quotes
+          // converted to work. The new invoice gets its OWN portal_token so
+          // any link the customer already has for the quote keeps showing
+          // the quote view, while the invoice gets a fresh link sent via
+          // the invoice email.
+          const inv = {
+            ...match,
+            id: newId,
+            isQuote: false,
+            status: "sent",
+            due: `Due in ${brand.paymentTerms || 30} days`,
+            portalToken: generatePortalToken(),
+          };
+          // Mark the quote as accepted (conversion implies customer said yes).
+          // Leaves declined/expired quotes alone — only touches pending ones.
+          const quoteNewStatus = (match.status === "accepted") ? match.status : "accepted";
+          setInvoices(prev => {
+            const withUpdatedQuote = (prev || []).map(i =>
+              i.id === match.id ? { ...i, status: quoteNewStatus } : i
+            );
+            return [inv, ...withUpdatedQuote];
+          });
+          // Persist: insert new invoice row + update quote status. Two calls,
+          // both non-blocking. If either fails, in-memory UI still reflects
+          // the change and an error is logged for debugging.
+          if (user?.id) {
+            db.from("invoices").upsert({
+              id: inv.id, user_id: user?.id,
+              customer: inv.customer, address: inv.address || "",
+              email: inv.email || "", phone: inv.phone || "",
+              amount: inv.amount, gross_amount: inv.grossAmount || inv.amount,
+              status: "sent", is_quote: false,
+              due: inv.due,
+              description: inv.description || "",
+              line_items: inv.lineItems ? JSON.stringify(inv.lineItems) : null,
+              job_ref: inv.jobRef || "",
+              created_at: new Date().toISOString(),
+              portal_token: inv.portalToken,
+            }).then(({ error }) => { if (error) console.error("convert_quote_to_invoice upsert failed:", error.message); });
+            if (match.status !== "accepted") {
+              db.from("invoices").update({ status: "accepted" }).eq("id", match.id).eq("user_id", user.id)
+                .then(({ error }) => { if (error) console.error("convert_quote_to_invoice quote status update failed:", error.message); });
+            }
+          }
           setLastAction({ type: "invoice", label: `Converted: ${newId} — ${match.customer}`, view: "Invoices" });
-          return `Quote ${match.id} converted to invoice ${newId} for ${match.customer} — ${fmtAmount(match.amount)}.`;
+          return `Quote ${match.id} converted to invoice ${newId} for ${match.customer} — ${fmtAmount(match.amount)}. Quote kept in your Quotes tab as accepted.`;
         }
         case "update_material_status": {
           const term = input.item.toLowerCase();
@@ -13767,10 +13810,48 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush, set
 
   const convertToInvoice = (quote) => {
     const newId = nextInvoiceId(invoices);
-    const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
-    setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== quote.id)]);
+    // Conversion preserves the original quote (don't delete). New invoice
+    // gets its own fresh portal_token so the customer's existing quote link
+    // still shows the quote; the invoice gets a new link in its email.
+    const inv = {
+      ...quote,
+      isQuote: false,
+      id: newId,
+      status: "sent",
+      due: `Due in ${brand.paymentTerms || 30} days`,
+      portalToken: generatePortalToken(),
+    };
+    // Mark the quote as accepted (conversion implies customer said yes).
+    // Leaves already-accepted quotes unchanged.
+    const quoteNewStatus = (quote.status === "accepted") ? quote.status : "accepted";
+    setInvoices(prev => {
+      const withUpdatedQuote = (prev || []).map(i =>
+        i.id === quote.id ? { ...i, status: quoteNewStatus } : i
+      );
+      return [inv, ...withUpdatedQuote];
+    });
     setSelected(null);
     setDocType("invoices");
+    // Persist: insert new invoice row + update quote status. Both non-blocking.
+    if (user?.id) {
+      db.from("invoices").upsert({
+        id: inv.id, user_id: user?.id,
+        customer: inv.customer, address: inv.address || "",
+        email: inv.email || "", phone: inv.phone || "",
+        amount: inv.amount, gross_amount: inv.grossAmount || inv.amount,
+        status: "sent", is_quote: false,
+        due: inv.due,
+        description: inv.description || "",
+        line_items: inv.lineItems ? JSON.stringify(inv.lineItems) : null,
+        job_ref: inv.jobRef || "",
+        created_at: new Date().toISOString(),
+        portal_token: inv.portalToken,
+      }).then(({ error }) => { if (error) console.error("convertToInvoice upsert failed:", error.message); });
+      if (quote.status !== "accepted") {
+        db.from("invoices").update({ status: "accepted" }).eq("id", quote.id).eq("user_id", user.id)
+          .then(({ error }) => { if (error) console.error("convertToInvoice quote status update failed:", error.message); });
+      }
+    }
   };
 
   const deleteDoc = (id) => {
@@ -18471,9 +18552,46 @@ function QuotesView({ brand, invoices, setInvoices, setView, customers, customer
 
   const convertToInvoice = async (quote) => {
     const newId = nextInvoiceId(invoices);
-    const inv = { ...quote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand.paymentTerms || 30} days` };
-    setInvoices(prev => [inv, ...(prev || []).filter(i => i.id !== quote.id)]);
+    // Conversion preserves the original quote (don't delete). New invoice
+    // gets its own fresh portal_token. See matching logic in Payments and
+    // the AI convert_quote_to_invoice tool.
+    const inv = {
+      ...quote,
+      isQuote: false,
+      id: newId,
+      status: "sent",
+      due: `Due in ${brand.paymentTerms || 30} days`,
+      portalToken: generatePortalToken(),
+    };
+    const quoteNewStatus = (quote.status === "accepted") ? quote.status : "accepted";
+    setInvoices(prev => {
+      const withUpdatedQuote = (prev || []).map(i =>
+        i.id === quote.id ? { ...i, status: quoteNewStatus } : i
+      );
+      return [inv, ...withUpdatedQuote];
+    });
     setSelected(null);
+    // Persist the invoice itself: insert new invoice row + update quote
+    // status. Both non-blocking — errors logged but don't block the UI.
+    if (user?.id) {
+      db.from("invoices").upsert({
+        id: inv.id, user_id: user?.id,
+        customer: inv.customer, address: inv.address || "",
+        email: inv.email || "", phone: inv.phone || "",
+        amount: inv.amount, gross_amount: inv.grossAmount || inv.amount,
+        status: "sent", is_quote: false,
+        due: inv.due,
+        description: inv.description || "",
+        line_items: inv.lineItems ? JSON.stringify(inv.lineItems) : null,
+        job_ref: inv.jobRef || "",
+        created_at: new Date().toISOString(),
+        portal_token: inv.portalToken,
+      }).then(({ error }) => { if (error) console.error("convertToInvoice upsert failed:", error.message); });
+      if (quote.status !== "accepted") {
+        db.from("invoices").update({ status: "accepted" }).eq("id", quote.id).eq("user_id", user.id)
+          .then(({ error }) => { if (error) console.error("convertToInvoice quote status update failed:", error.message); });
+      }
+    }
     // Build scope of work from quote line items or description
     const scopeOfWork = (quote.lineItems && quote.lineItems.length > 0)
       ? quote.lineItems.map(l => l.description || l.desc || "").filter(Boolean).join("\n")
