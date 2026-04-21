@@ -7,6 +7,7 @@ import AssistantSetup from "./AssistantSetup.jsx";
 import FieldMic from "./components/FieldMic.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
 import OfflineSettings from "./components/OfflineSettings.jsx";
+import UpdateBanner from "./components/UpdateBanner.jsx";
 import { prewarmCache } from "./lib/prewarm.js";
 import { drainQueue } from "./lib/writeQueue.js";
 
@@ -28617,6 +28618,7 @@ function AppInner() {
   return (
     <div style={S.app}>
       <OfflineBanner onOpenSettings={() => setOfflineSettingsOpen(true)} />
+      <UpdateBanner />
       <OfflineSettings open={offlineSettingsOpen} onClose={() => setOfflineSettingsOpen(false)} />
 
       {/* ── ONBOARDING OVERLAYS ──────────────────────────────────────── */}
