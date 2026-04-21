@@ -10263,9 +10263,30 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             .select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
           const email = input.email || custRows?.[0]?.email || inv.email;
           if (!email) return `No email on file for ${inv.customer}. Say their email address and I'll send the chase.`;
-          // Chase escalation — track count on invoice, vary tone
-          const chaseNum = (inv.chaseCount || 0) + 1;
-          setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, chaseCount: chaseNum, lastChased: new Date().toISOString() } : i));
+          // Chase escalation — track count on invoice, vary tone.
+          // chase_count and last_chased_at are DB columns; in-memory mirror
+          // uses chaseCount/lastChased (camelCase). Read both forms so we
+          // cope with whichever the hydration path populated. Without the
+          // DB persistence below, the counter resets on every reload and
+          // every chase ends up as "#1 — gentle reminder" regardless of
+          // how many have actually been sent.
+          const existingCount = inv.chaseCount ?? inv.chase_count ?? 0;
+          const chaseNum = existingCount + 1;
+          const chasedAtIso = new Date().toISOString();
+          setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, chaseCount: chaseNum, lastChased: chasedAtIso, chase_count: chaseNum, last_chased_at: chasedAtIso } : i));
+          // Persist to Supabase. If the columns don't exist yet the update
+          // silently no-ops via .catch() and the in-memory counter still
+          // works for the current session — harmless degradation. Once the
+          // migration in /docs/migrations adding chase_count + last_chased_at
+          // is applied, this starts persisting properly across reloads.
+          if (user?.id) {
+            db.from("invoices")
+              .update({ chase_count: chaseNum, last_chased_at: chasedAtIso })
+              .eq("id", inv.id)
+              .eq("user_id", user.id)
+              .then(({ error }) => { if (error) console.warn("chase count persist failed:", error.message); })
+              .catch(err => console.warn("chase count persist threw:", err?.message || err));
+          }
           const chaseAmt = fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0));
           const accent = brand?.accentColor || "#f59e0b";
           let chaseIntro, chaseClose, chaseHeading, subject;
@@ -28674,6 +28695,11 @@ function AppInner() {
           cisMaterials: parseFloat(r.cis_materials) || 0,
           cisDeduction: parseFloat(r.cis_deduction) || 0,
           cisNetPayable: parseFloat(r.cis_net_payable) || 0,
+          // Chase tracking — DB uses snake_case, in-memory uses camelCase.
+          // Mirror both so everywhere that reads either form works correctly.
+          // See chase_invoice tool handler for the write side.
+          chaseCount: r.chase_count || 0,
+          lastChased: r.last_chased_at || null,
         })));
         if (enq.data) setEnquiriesRaw(enq.data);
         if (mat.data) setMaterialsRaw(mat.data.map(m => ({
