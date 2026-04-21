@@ -22,8 +22,11 @@ Every invoice now has its own "Pay Online" link — not just quotes. Share it wi
 ### Cleaner quote portal 🧾
 The customer's quote page no longer shows card payment buttons or bank details — those only appear on the invoice after you've converted it. Quotes now show a simple "Payment terms" note so customers know what they're signing up for, without any way to accidentally pay before accepting. No more confused customers tapping Pay instead of Accept.
 
+### Bottom bar matches your theme 🎨
+The navigation bar at the bottom now follows your theme — frosted white in light mode, dark in dark mode. Less jarring, more native, easier on the eyes.
+
 ### Pay link in every outgoing email 🔗
-Every email you send now has a "View Online" button and a plain-text link — whether it's the initial invoice, a quote, or a payment chase. Button works in most email apps; the plain link is there for forwarding, printing, or older mail clients that mangle buttons. Chase emails now include the link too, so your customers can pay straight from the reminder.
+Every email you send now has a "View Online" button and a plain-text link — whether it's the initial invoice, a quote, or a payment chase. Button works in most email apps; the plain link is there for forwarding, printing, or older mail clients that mangle buttons. Chase emails now include the link too, so your customers can pay straight from the reminder. Locked down so it stays readable in dark-mode email clients (iOS Mail, Outlook, etc.) — no more invisible header or button.
 
 ### Converted quotes stick around 🧷
 Turning an accepted quote into an invoice now saves the invoice properly — so the Pay Online link works, and the invoice shows up everywhere it should. Your quote stays in the Quotes tab marked Accepted, so you can see your win rate and keep the history. (Before, converted invoices lived in memory only and disappeared on reload.)
