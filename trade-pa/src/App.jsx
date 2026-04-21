@@ -1442,28 +1442,71 @@ function buildEmailHTML(brand, { heading, body, showBacs = false, invoiceId = ""
   const accent = brand?.accentColor || "#f59e0b";
   const name = brand?.tradingName || "";
   const bacsBlock = showBacs && brand?.bankName ? `
-    <div style="background:#f8f8f8;border-radius:6px;padding:14px 16px;margin:16px 0;border:1px solid #eee;">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:8px;">Pay by bank transfer (BACS)</div>
-      <div style="font-size:13px;line-height:1.8;">
-        <b>Bank:</b> ${brand.bankName}<br>
-        <b>Account name:</b> ${brand.accountName || ""}<br>
-        <b>Sort code:</b> ${brand.sortCode || ""}<br>
-        <b>Account number:</b> ${brand.accountNumber || ""}<br>
-        <b>Reference:</b> ${invoiceId}
+    <div style="background:#f8f8f8;border-radius:6px;padding:14px 16px;margin:16px 0;border:1px solid #eee;color:#1a1a1a;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#666;margin-bottom:8px;">Pay by bank transfer (BACS)</div>
+      <div style="font-size:13px;line-height:1.8;color:#1a1a1a;">
+        <b style="color:#1a1a1a;">Bank:</b> ${brand.bankName}<br>
+        <b style="color:#1a1a1a;">Account name:</b> ${brand.accountName || ""}<br>
+        <b style="color:#1a1a1a;">Sort code:</b> ${brand.sortCode || ""}<br>
+        <b style="color:#1a1a1a;">Account number:</b> ${brand.accountNumber || ""}<br>
+        <b style="color:#1a1a1a;">Reference:</b> ${invoiceId}
       </div>
     </div>` : "";
-  const sig = `<p style="margin-top:24px;">Many thanks,<br><strong>${name}</strong>${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
-  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
-    <div style="background:${accent};padding:24px 28px;border-radius:8px 8px 0 0;">
-      <h2 style="color:#fff;margin:0;font-size:20px;">${name}</h2>
-      ${heading ? `<div style="color:rgba(255,255,255,0.8);font-size:13px;margin-top:4px;">${heading}</div>` : ""}
-    </div>
-    <div style="padding:24px 28px;background:#fff;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px;">
-      ${body}
-      ${bacsBlock}
-      ${sig}
-    </div>
-  </div>`;
+  const sig = `<p style="margin-top:24px;color:#1a1a1a;">Many thanks,<br><strong style="color:#1a1a1a;">${name}</strong>${brand?.phone ? `<br><span style="color:#1a1a1a;">${brand.phone}</span>` : ""}${brand?.email ? `<br><span style="color:#1a1a1a;">${brand.email}</span>` : ""}</p>`;
+  // Full HTML doc (not just a div) so we can inject color-scheme + meta tags
+  // that disable iOS Mail / Outlook / Gmail dark-mode auto-inversion. Without
+  // these, those clients try to "helpfully" recolour the email and break the
+  // amber header + amber button (white-on-amber becomes invisible). Belt-and-
+  // braces: meta tag, color-scheme rule, and explicit colour declarations on
+  // every text element so even partial inversion can't corrupt the design.
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">
+<title>${name}</title>
+<style>
+  :root { color-scheme: light only; supported-color-schemes: light only; }
+  /* Force amber header bar to remain amber even in dark-mode email clients.
+     Apple Mail respects color-scheme; Outlook needs the !important on bg. */
+  .tp-header { background:${accent} !important; }
+  .tp-header h2, .tp-header .tp-sub { color:#ffffff !important; }
+  /* CTA button — ensure amber bg + white text survive dark-mode inversion.
+     Wrapping table fallback for Outlook desktop, which ignores backdrop and
+     button styling but renders table cells reliably. */
+  .tp-cta { background:${accent} !important; color:#ffffff !important; }
+  /* Body copy — lock text colour so iOS Dark Mode doesn't flip dark grey to
+     light grey on a still-white surface (which would render invisibly). */
+  .tp-body, .tp-body p, .tp-body div, .tp-body strong, .tp-body span, .tp-body b { color:#1a1a1a !important; }
+  .tp-body a { color:#1a1a1a; }
+  /* Some clients also try to invert background: lock the inner card to white. */
+  .tp-card { background:#ffffff !important; }
+  @media (prefers-color-scheme: dark) {
+    /* Re-assert in dark-mode media query in case client honours it. */
+    .tp-header { background:${accent} !important; }
+    .tp-header h2, .tp-header .tp-sub { color:#ffffff !important; }
+    .tp-cta { background:${accent} !important; color:#ffffff !important; }
+    .tp-card { background:#ffffff !important; }
+    .tp-body, .tp-body p, .tp-body div, .tp-body strong, .tp-body span, .tp-body b { color:#1a1a1a !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;color-scheme:light only;">
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+  <div class="tp-header" style="background:${accent};padding:24px 28px;border-radius:8px 8px 0 0;">
+    <h2 style="color:#ffffff;margin:0;font-size:20px;">${name}</h2>
+    ${heading ? `<div class="tp-sub" style="color:#ffffff;opacity:0.85;font-size:13px;margin-top:4px;">${heading}</div>` : ""}
+  </div>
+  <div class="tp-card tp-body" style="padding:24px 28px;background:#ffffff;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px;color:#1a1a1a;">
+    ${body}
+    ${bacsBlock}
+    ${sig}
+  </div>
+</div>
+</body>
+</html>`;
 }
 
 function buildRef(brand, inv) {
@@ -27221,12 +27264,16 @@ function portalCtaBlock({ token, isQuote, stripeReady, accent }) {
     ? "No login required &middot; one tap to accept"
     : stripeReady ? "No login required &middot; pay by card or bank transfer"
                   : "No login required &middot; view invoice and bank details";
+  // tp-cta class lets buildEmailHTML's <style> block force the amber bg +
+  // white text in dark-mode email clients. Inline !important on the anchor
+  // is belt-and-braces for clients that strip <style> entirely (older
+  // Outlook, some webmail readers).
   return `
       <p style="text-align:center;margin:20px 0 4px;">
-        <a href="${url}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.02em;">${label}</a>
+        <a href="${url}" class="tp-cta" style="display:inline-block;background:${accent} !important;color:#ffffff !important;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.02em;">${label}</a>
       </p>
-      <p style="text-align:center;color:#888;font-size:12px;margin:0 0 10px;">${subtext}</p>
-      <p style="text-align:center;color:#aaa;font-size:11px;margin:0 0 20px;word-break:break-all;">Or paste this link into your browser:<br/><a href="${url}" style="color:#888;text-decoration:underline;">${url}</a></p>`;
+      <p style="text-align:center;color:#666 !important;font-size:12px;margin:0 0 10px;">${subtext}</p>
+      <p style="text-align:center;color:#888 !important;font-size:11px;margin:0 0 20px;word-break:break-all;">Or paste this link into your browser:<br/><a href="${url}" style="color:#666 !important;text-decoration:underline;">${url}</a></p>`;
 }
 
 // ─── iCalendar (.ics) generator ──────────────────────────────────────────────
