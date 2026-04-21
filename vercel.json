@@ -12,22 +12,10 @@
     "api/reminders/action.js": { "maxDuration": 10 }
   },
   "crons": [
-    {
-      "path": "/api/email-cron",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/evening-briefing",
-      "schedule": "0 17 * * *"
-    },
-    {
-      "path": "/api/cron/process-reminders",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/daily-automation",
-      "schedule": "0 8 * * *"
-    }
+    { "path": "/api/email-cron", "schedule": "0 * * * *" },
+    { "path": "/api/cron/evening-briefing", "schedule": "0 17 * * *" },
+    { "path": "/api/cron/process-reminders", "schedule": "*/5 * * * *" },
+    { "path": "/api/daily-automation", "schedule": "0 8 * * *" }
   ],
   "rewrites": [
     { "source": "/api/auth/gmail/connect", "destination": "/api/email" },
@@ -50,5 +38,38 @@
     { "source": "/api/push/send", "destination": "/api/push/send" },
     { "source": "/api/calendar/:token.ics", "destination": "/api/calendar?token=:token" },
     { "source": "/quote/:token", "destination": "/api/portal?action=view&token=:token" }
+  ],
+  "headers": [
+    {
+      "source": "/",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
   ]
 }
