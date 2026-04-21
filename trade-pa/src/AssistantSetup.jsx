@@ -36,12 +36,30 @@ const T = {
   font: "'DM Mono','Courier New',monospace",
 };
 
+// Grok TTS voices — the 5 voices xAI's /v1/tts endpoint accepts as voice_id.
+// Labels include a short personality hint so tradies can pick one they'll
+// enjoy hearing. All American-accented (no British voice available today).
+//
+// If this list grows, also update /api/tts.js's allowlist — that's the
+// server-side gate that prevents arbitrary voice_id injection.
 const VOICE_OPTIONS = [
-  { id: "british_female", label: "British, female" },
-  { id: "british_male",   label: "British, male" },
-  { id: "american_female",label: "American, female" },
-  { id: "american_male",  label: "American, male" },
+  { id: "eve", label: "Eve — energetic, upbeat" },
+  { id: "ara", label: "Ara — warm, conversational" },
+  { id: "leo", label: "Leo — steady, measured" },
+  { id: "rex", label: "Rex — confident, direct" },
+  { id: "sal", label: "Sal — neutral, clear" },
 ];
+
+// Map legacy voice IDs (from before the Grok migration) to new Grok voices.
+// Users who picked "british_female" etc. in the old UI get auto-migrated to
+// the closest Grok equivalent on first load after the update. Prevents the
+// "saved value isn't in the dropdown" UX glitch where nothing looks selected.
+const LEGACY_VOICE_MIGRATION = {
+  british_female: "ara",   // warm female
+  british_male: "leo",     // steady male
+  american_female: "eve",  // upbeat female
+  american_male: "rex",    // confident male
+};
 
 // Preset commands — shown if no `tools` prop is provided, or as quick-adds.
 // action_tool names should match your existing TOOLS in App.jsx.
@@ -79,8 +97,45 @@ export default function AssistantSetup({
   const [newWake, setNewWake] = useState("");
   const [personaType, setPersonaType] = useState("friendly");
   const [customPersona, setCustomPersona] = useState("");
-  const [voice, setVoice] = useState("british_female");
+  const [voice, setVoice] = useState("eve");
   const [signoff, setSignoff] = useState("");
+
+  // Voice preview — plays a short sample clip using /api/tts with the given
+  // voice_id. Local state tracks which voice is mid-preview so the button
+  // can show a "Playing" label and others disable to prevent overlap.
+  const [previewingId, setPreviewingId] = useState(null);
+  const previewAudioRef = React.useRef(null);
+
+  const previewVoice = async (voiceId) => {
+    if (previewingId) return; // a preview is already playing
+    setPreviewingId(voiceId);
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Hi, I'm your Trade PA. Here's what I sound like.",
+          voice: voiceId,
+        }),
+      });
+      if (!res.ok) throw new Error(`TTS ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      // Stop any previous preview that's still playing (defensive — shouldn't
+      // happen with the gate above, but safe if the blob finishes weirdly)
+      if (previewAudioRef.current) {
+        try { previewAudioRef.current.pause(); } catch {}
+      }
+      const audio = new Audio(url);
+      previewAudioRef.current = audio;
+      audio.onended = () => { URL.revokeObjectURL(url); setPreviewingId(null); };
+      audio.onerror = () => { URL.revokeObjectURL(url); setPreviewingId(null); };
+      await audio.play();
+    } catch (err) {
+      console.warn("Voice preview failed:", err?.message || err);
+      setPreviewingId(null);
+    }
+  };
 
   // Commands state
   const [commands, setCommands] = useState([]); // loaded from DB when editing
@@ -99,7 +154,13 @@ export default function AssistantSetup({
       if (settings) {
         if (settings.assistant_name) setName(settings.assistant_name);
         if (settings.assistant_wake_words?.length) setWakeWords(settings.assistant_wake_words);
-        if (settings.assistant_voice) setVoice(settings.assistant_voice);
+        if (settings.assistant_voice) {
+          // Migrate legacy voice IDs (british_female etc.) to current Grok voices
+          const migrated = LEGACY_VOICE_MIGRATION[settings.assistant_voice] || settings.assistant_voice;
+          // Sanity-check: if the value isn't in the current options list, fall back to default
+          const isValid = VOICE_OPTIONS.some(v => v.id === migrated);
+          setVoice(isValid ? migrated : "eve");
+        }
         if (settings.assistant_signoff) setSignoff(settings.assistant_signoff);
         if (settings.assistant_persona) {
           const matchPreset = PERSONA_PRESETS.find(p => p.id !== "custom" && settings.assistant_persona.startsWith(p.label));
@@ -320,6 +381,7 @@ export default function AssistantSetup({
               customPersona={customPersona} setCustomPersona={setCustomPersona}
               voice={voice} setVoice={setVoice}
               signoff={signoff} setSignoff={setSignoff}
+              previewingId={previewingId} previewVoice={previewVoice}
             />
           )}
           {step === "wake" && (
@@ -378,7 +440,7 @@ export default function AssistantSetup({
 }
 
 // ─── Step 1: Name + persona ─────────────────────────────────────────────────
-function NameStep({ name, setName, personaType, setPersonaType, customPersona, setCustomPersona, voice, setVoice, signoff, setSignoff }) {
+function NameStep({ name, setName, personaType, setPersonaType, customPersona, setCustomPersona, voice, setVoice, signoff, setSignoff, previewingId, previewVoice }) {
   return (
     <div style={{ padding: 18 }}>
       <SectionTitle>WHAT SHOULD IT CALL ITSELF?</SectionTitle>
@@ -418,11 +480,29 @@ function NameStep({ name, setName, personaType, setPersonaType, customPersona, s
       )}
 
       <SectionTitle style={{ marginTop: 22 }}>VOICE</SectionTitle>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <p style={blurb}>Tap Preview to hear a sample.</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {VOICE_OPTIONS.map(v => (
-          <button key={v.id} onClick={() => setVoice(v.id)} style={pill(voice === v.id)}>
-            {v.label}
-          </button>
+          <div key={v.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <button
+              onClick={() => setVoice(v.id)}
+              style={{ ...pill(voice === v.id), flex: 1, textAlign: "left", padding: "8px 14px" }}
+            >
+              {v.label}
+            </button>
+            <button
+              onClick={() => previewVoice(v.id)}
+              disabled={previewingId !== null}
+              style={{
+                ...miniBtn(T.amber),
+                opacity: previewingId === v.id ? 0.6 : 1,
+                minWidth: 76,
+              }}
+              aria-label={`Preview ${v.label}`}
+            >
+              {previewingId === v.id ? "▸ Playing" : "▸ Preview"}
+            </button>
+          </div>
         ))}
       </div>
 
