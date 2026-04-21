@@ -10075,12 +10075,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const invAmt = fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0));
           const invDue = inv.due || "30 days";
           const accent = brand?.accentColor || "#f59e0b";
+          const invPortalToken = inv.portalToken || inv.portal_token;
+          const invStripeReady = !!brand?.stripeAccountId;
+          const invCTA = portalCtaBlock({ token: invPortalToken, isQuote: false, stripeReady: invStripeReady, accent });
           const body = buildEmailHTML(brand, {
             heading: `INVOICE ${inv.id}`,
             showBacs: true,
             invoiceId: inv.id,
             body: `<p style="font-size:15px;">Dear ${inv.customer},</p>
               <p style="color:#555;">Please find your invoice ${inv.id} for <strong>${invAmt}</strong> attached. Payment is due ${invDue}.</p>
+              ${invCTA}
               <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
                 <div style="font-size:22px;font-weight:700;color:${accent};">${invAmt}</div>
                 <div style="font-size:12px;color:#888;margin-top:4px;">Due: ${invDue}</div>
@@ -10126,10 +10130,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const subject = `Quote ${quote.id} from ${brand?.tradingName || ""}`;
           const quoteAmt = fmtCurrency(parseFloat(quote.grossAmount || quote.amount || 0));
           const accent = brand?.accentColor || "#f59e0b";
+          const quotePortalToken = quote.portalToken || quote.portal_token;
+          const quoteCTA = portalCtaBlock({ token: quotePortalToken, isQuote: true, stripeReady: false, accent });
           const body = buildEmailHTML(brand, {
             heading: `QUOTE ${quote.id}`,
             body: `<p style="font-size:15px;">Dear ${quote.customer},</p>
               <p style="color:#555;">Thank you for your enquiry. Please find your quote ${quote.id} for <strong>${quoteAmt}</strong> attached.</p>
+              ${quoteCTA}
               <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
                 <div style="font-size:22px;font-weight:700;color:${accent};">${quoteAmt}</div>
                 <div style="font-size:12px;color:#888;margin-top:4px;">Valid for 30 days</div>
@@ -10240,6 +10247,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 <div style="font-size:22px;font-weight:700;color:${accent};">${chaseAmt}</div>
                 <div style="font-size:12px;color:#888;margin-top:4px;">${chaseNum >= 3 ? "OVERDUE" : "Currently outstanding"}</div>
               </div>
+              ${portalCtaBlock({ token: inv.portalToken || inv.portal_token, isQuote: false, stripeReady: !!brand?.stripeAccountId, accent })}
               ${chaseClose}`,
           });
           try {
@@ -17979,25 +17987,11 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending, cust
   const subject = `${docType} ${doc.id} from ${brand.tradingName} — ${fmtCurrency(doc.amount)}`;
   const accent = brand?.accentColor || "#f59e0b";
   const docAmt = fmtCurrency(doc.amount);
-  // Customer portal CTA — shown for BOTH quotes and invoices when a portal
-  // token is present. Wording differs: quotes → "View & Accept Online", 
-  // invoices → "View & Pay Online" (or "View Online" if card payments aren't
-  // set up). PDF stays attached as a fallback for customers who'd rather
-  // print or sign the old-fashioned way.
+  // Portal CTA — shared helper produces button + plain-text fallback link.
+  // Renders empty string if no token, so body interpolation is unconditional.
   const portalToken = doc.portalToken || doc.portal_token;
   const stripeReady = !isQuote && !!brand?.stripeAccountId;
-  const ctaLabel = isQuote
-    ? "View &amp; Accept Online &rarr;"
-    : stripeReady ? "View &amp; Pay Online &rarr;" : "View Online &rarr;";
-  const ctaSubtext = isQuote
-    ? "No login required &middot; one tap to accept"
-    : stripeReady ? "No login required &middot; pay by card or bank transfer"
-                  : "No login required &middot; view invoice and bank details";
-  const portalCTA = portalToken ? `
-      <p style="text-align:center;margin:20px 0 24px;">
-        <a href="${portalUrl(portalToken)}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.02em;">${ctaLabel}</a>
-      </p>
-      <p style="text-align:center;color:#888;font-size:12px;margin-top:-12px;margin-bottom:20px;">${ctaSubtext}</p>` : "";
+  const portalCTA = portalCtaBlock({ token: portalToken, isQuote, stripeReady, accent });
   const body = buildEmailHTML(brand, {
     heading: `${docType.toUpperCase()} ${doc.id}`,
     showBacs: !isQuote,
@@ -27193,6 +27187,37 @@ function portalUrl(token) {
     host = origin.includes("tradespa.co.uk") ? "https://view.tradespa.co.uk" : origin;
   }
   return `${host}/quote/${token}`;
+}
+
+// ─── Email portal CTA block ─────────────────────────────────────────────────
+// Shared HTML for the "View & Pay Online" button that goes into outbound
+// emails (initial send, AI send, chase). Wording adapts to quote vs invoice
+// and whether Stripe is connected. Includes a plain-text URL fallback line
+// below the button for email clients that block images / buttons, and for
+// readability when customers forward or print the email.
+//
+// Call from any email body template:
+//   const cta = portalCtaBlock({ token, isQuote, stripeReady, accent });
+//   body: `<p>Dear ${name},</p><p>Please find your invoice attached.</p>${cta}...`
+//
+// Returns empty string if no token — renders nothing so templates don't
+// need a conditional wrapper. Safe to interpolate unconditionally.
+function portalCtaBlock({ token, isQuote, stripeReady, accent }) {
+  if (!token) return "";
+  const url = portalUrl(token);
+  const label = isQuote
+    ? "View &amp; Accept Online &rarr;"
+    : stripeReady ? "View &amp; Pay Online &rarr;" : "View Online &rarr;";
+  const subtext = isQuote
+    ? "No login required &middot; one tap to accept"
+    : stripeReady ? "No login required &middot; pay by card or bank transfer"
+                  : "No login required &middot; view invoice and bank details";
+  return `
+      <p style="text-align:center;margin:20px 0 4px;">
+        <a href="${url}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.02em;">${label}</a>
+      </p>
+      <p style="text-align:center;color:#888;font-size:12px;margin:0 0 10px;">${subtext}</p>
+      <p style="text-align:center;color:#aaa;font-size:11px;margin:0 0 20px;word-break:break-all;">Or paste this link into your browser:<br/><a href="${url}" style="color:#888;text-decoration:underline;">${url}</a></p>`;
 }
 
 // ─── iCalendar (.ics) generator ──────────────────────────────────────────────
