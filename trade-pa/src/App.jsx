@@ -2869,6 +2869,14 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       if (params.get('qb') === 'error') alert(`QuickBooks connection failed: ${params.get('msg') || 'unknown error'}`);
       window.history.replaceState({}, '', window.location.pathname);
     }
+    if (params.has('stripe_connect')) {
+      const status = params.get('stripe_connect');
+      if (status === 'success') alert("✓ Stripe connected — you can now accept card payments through your customer portal links.");
+      else if (status === 'pending') alert("Stripe onboarding isn't fully complete yet. You can tap Connect Stripe again in Settings to finish — your progress is saved.");
+      else if (status === 'cancelled') alert("Stripe connection cancelled. You can try again anytime from Settings → Integrations.");
+      else if (status === 'error') alert(`Stripe connection failed: ${params.get('reason') || 'unknown error'}`);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     // Always check DB for actual connection status
     if (!user?.id) return;
     db
@@ -4363,6 +4371,37 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 style={{ ...S.btn("primary"), textDecoration: "none", background: "#2CA01C", fontSize: 12 }}
               >Connect QuickBooks</a>
           }
+        </div>
+
+        {/* ── Card Payments (Stripe Connect Standard) ──────────────────────
+            Lets the tradesperson take card payments through their customer
+            portal links. Money goes direct to their own Stripe account —
+            Trade PA takes no cut. */}
+        <div style={{ marginTop: 22, paddingTop: 18, borderTop: `1px solid ${C.border}` }}>
+          <div style={S.sectionTitle}>Card Payments</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
+            Connect Stripe to let your customers pay quotes and invoices by card directly from the portal link. Money goes to your Stripe account — we don't take a cut.
+          </div>
+          <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 8, background: "#635BFF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <span style={{ color: "#fff", fontWeight: 900, fontSize: 14 }}>S</span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Stripe</div>
+              <div style={{ fontSize: 11, color: C.muted }}>
+                {brand?.stripeAccountId
+                  ? `Connected${brand.stripeConnectedAt ? ` since ${new Date(brand.stripeConnectedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""}`
+                  : "Not connected — your portal pages will show bank transfer only"}
+              </div>
+            </div>
+            {brand?.stripeAccountId
+              ? <div style={S.badge(C.green)}>✓ Connected</div>
+              : <a
+                  href={`/api/stripe/connect-onboard?userId=${user?.id}`}
+                  style={{ ...S.btn("primary"), textDecoration: "none", background: "#635BFF", fontSize: 12 }}
+                >Connect Stripe</a>
+            }
+          </div>
         </div>
       </div>
       )}
@@ -27438,12 +27477,14 @@ function AppInner() {
   const [viewRaw, setViewRaw] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('xero') || params.has('qb')) return "Settings";
+    if (params.has('stripe_connect')) return "Settings";
     if (params.has('email_connected') || params.has('email_error')) return "Inbox";
     return "AI Assistant";
   });
   const [activeCategory, setActiveCategory] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('xero') || params.has('qb')) return "admin";
+    if (params.has('stripe_connect')) return "admin";
     if (params.has('email_connected') || params.has('email_error')) return "admin";
     return "work";
   });
