@@ -202,7 +202,7 @@ function errorPage(brand, heading, detail) {
 }
 
 // ─── View quote ─────────────────────────────────────────────────────────────
-async function renderQuoteView(token) {
+async function renderQuoteView(token, paidParam = null) {
   const invoices = await supabaseRequest("GET", `invoices?portal_token=eq.${encodeURIComponent(token)}&select=*&limit=1`);
   if (!Array.isArray(invoices) || invoices.length === 0) {
     return { status: 404, html: errorPage(null, "Not found", "This link is invalid or has been revoked.") };
@@ -226,7 +226,16 @@ async function renderQuoteView(token) {
 
   // Banner
   let banner = "";
-  if (alreadyResponded) {
+  // Stripe just-redirected-back banners take precedence over the standard
+  // already-responded banner. The actual paid status arrives via webhook so
+  // could lag a few seconds — we show a transitional message.
+  if (paidParam === "1") {
+    banner = inv.status === "paid"
+      ? `<div class="banner ok">Payment received &mdash; thank you. The tradesperson has been notified.</div>`
+      : `<div class="banner ok">Payment processing &mdash; thank you. You'll receive a Stripe receipt by email shortly. The tradesperson will be notified once Stripe confirms.</div>`;
+  } else if (paidParam === "cancelled") {
+    banner = `<div class="banner info">Payment cancelled &mdash; no charge was made. You can try again or pay by bank transfer.</div>`;
+  } else if (alreadyResponded) {
     const label = inv.status === "accepted" ? "accepted" : "declined";
     banner = `<div class="banner ${inv.status === "accepted" ? "ok" : "info"}">You ${label} this quote on ${fmtDate(inv.portal_responded_at || inv.updated_at)}. The tradesperson has been notified.</div>`;
   } else if (isExpired) {
@@ -257,9 +266,25 @@ async function renderQuoteView(token) {
     </table>
   ` : "";
 
+  // Stripe Pay Now CTA — shown when the tradesperson has connected Stripe AND
+  // the invoice isn't already paid. Posts to /api/stripe/connect-checkout
+  // which creates a Checkout session and 303-redirects to Stripe's hosted
+  // payment page. On success Stripe sends the customer back to ?paid=1.
+  const stripeReady = brand.stripeAccountId && inv.status !== "paid" && !isExpired;
+  const stripeHTML = stripeReady ? `
+    <div class="panel" style="text-align:center;padding:18px;">
+      <h2 style="margin-top:0;">Pay by card</h2>
+      <p style="font-size:12px;color:#666;margin-bottom:14px;">Secure payment via Stripe &middot; receipt emailed automatically</p>
+      <form method="POST" action="/api/stripe/connect-checkout" style="margin:0;">
+        <input type="hidden" name="token" value="${esc(token)}"/>
+        <button type="submit" class="cta primary" style="width:100%;max-width:280px;">Pay ${fmtGBP(inv.gross_amount || inv.amount)} now</button>
+      </form>
+    </div>
+  ` : "";
+
   const bankHTML = (brand.bankName || brand.accountNumber) ? `
     <div class="panel">
-      <h2>Pay by bank transfer</h2>
+      <h2>${stripeReady ? "Or pay by bank transfer" : "Pay by bank transfer"}</h2>
       <div class="bank">
         ${brand.accountName ? `<div class="bank-row"><span>Account name</span><span>${esc(brand.accountName)}</span></div>` : ""}
         ${brand.bankName ? `<div class="bank-row"><span>Bank</span><span>${esc(brand.bankName)}</span></div>` : ""}
@@ -305,6 +330,8 @@ async function renderQuoteView(token) {
     </div>
 
     ${itemsHTML ? `<div class="panel"><h2>${isQuote ? "Proposed work" : "Items"}</h2>${itemsHTML}</div>` : ""}
+
+    ${stripeHTML}
 
     ${bankHTML}
 
@@ -418,7 +445,13 @@ export default async function handler(req, res) {
       if (!/^[a-z0-9]{20,64}$/i.test(token)) {
         return sendHTML(res, 404, errorPage(null, "Not found", "This link is invalid or has expired."));
       }
-      const { status, html } = await renderQuoteView(token);
+      // Read the optional paid= param so we can show the appropriate banner
+      // when the customer is redirected back from Stripe Checkout. Values:
+      //   "1"         → payment completed (banner depends on whether webhook
+      //                 has fired yet — paid status will lag a few seconds)
+      //   "cancelled" → customer cancelled out of Stripe Checkout
+      const paidParam = req.query.paid || null;
+      const { status, html } = await renderQuoteView(token, paidParam);
       return sendHTML(res, status, html);
     }
 
