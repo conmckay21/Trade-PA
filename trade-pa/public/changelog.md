@@ -19,6 +19,9 @@ Deployed a new version? You'll see a friendly banner within a minute. Tap Reload
 ### Pay link now on invoices too 💷
 Every invoice now has its own "Pay Online" link — not just quotes. Share it with customers and they can view the invoice and pay by card (or see your bank details) without signing up. Auto-included as a button in your invoice emails too.
 
+### Converted quotes stick around 🧷
+Turning an accepted quote into an invoice now saves the invoice properly — so the Pay Online link works, and the invoice shows up everywhere it should. Your quote stays in the Quotes tab marked Accepted, so you can see your win rate and keep the history. (Before, converted invoices lived in memory only and disappeared on reload.)
+
 ### Pick your AI's voice 🎙
 Settings → AI Assistant → Manage assistant now has 5 voices to choose from: Eve (upbeat), Ara (warm), Leo (steady), Rex (confident), Sal (neutral). Tap Preview to hear each before you pick.
 
