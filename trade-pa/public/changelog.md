@@ -19,6 +19,9 @@ Deployed a new version? You'll see a friendly banner within a minute. Tap Reload
 ### Pay link now on invoices too 💷
 Every invoice now has its own "Pay Online" link — not just quotes. Share it with customers and they can view the invoice and pay by card (or see your bank details) without signing up. Auto-included as a button in your invoice emails too.
 
+### Cleaner quote portal 🧾
+The customer's quote page no longer shows card payment buttons or bank details — those only appear on the invoice after you've converted it. Quotes now show a simple "Payment terms" note so customers know what they're signing up for, without any way to accidentally pay before accepting. No more confused customers tapping Pay instead of Accept.
+
 ### Converted quotes stick around 🧷
 Turning an accepted quote into an invoice now saves the invoice properly — so the Pay Online link works, and the invoice shows up everywhere it should. Your quote stays in the Quotes tab marked Accepted, so you can see your win rate and keep the history. (Before, converted invoices lived in memory only and disappeared on reload.)
 
