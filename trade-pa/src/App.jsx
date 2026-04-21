@@ -12213,7 +12213,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 }} />
               )}
               <button
-                onClick={() => { abortSpeech(); recording ? stopRecording() : startRecording(true); }}
+                onClick={() => { unlockAudio(); abortSpeech(); recording ? stopRecording() : startRecording(true); }}
                 disabled={transcribing}
                 aria-label={vt.label}
                 style={{
