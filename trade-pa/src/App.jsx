@@ -6892,7 +6892,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 500, hf_hours: 5 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {} }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 500, hf_hours: 5 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {} }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -7060,6 +7060,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   const assistantNameRef = useRef(assistantName);
   const assistantWakeWordsRef = useRef(assistantWakeWords);
   const assistantSignoffRef = useRef(assistantSignoff);
+  const assistantVoiceRef = useRef(assistantVoice);
   const userCommandsRef = useRef(userCommands);
 
   // Usage tracking refs — needed by mic callbacks (stale closure protection)
@@ -7229,6 +7230,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   useEffect(() => { assistantNameRef.current = assistantName; }, [assistantName]);
   useEffect(() => { assistantWakeWordsRef.current = assistantWakeWords; }, [assistantWakeWords]);
   useEffect(() => { assistantSignoffRef.current = assistantSignoff; }, [assistantSignoff]);
+  useEffect(() => { assistantVoiceRef.current = assistantVoice; }, [assistantVoice]);
   useEffect(() => { userCommandsRef.current = userCommands; }, [userCommands]);
   useEffect(() => { usageDataRef.current = usageData; }, [usageData]);
   useEffect(() => { usageCapsRef.current = usageCaps; }, [usageCaps]);
@@ -7544,7 +7546,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: clean }),
+        body: JSON.stringify({ text: clean, voice: assistantVoiceRef.current }),
       });
       if (res.ok) {
         const blob = await res.blob();
@@ -7672,7 +7674,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: s }),
+        body: JSON.stringify({ text: s, voice: assistantVoiceRef.current }),
       })
         .then((r) => (r.ok ? r.blob() : null))
         .catch(() => null)
@@ -27743,6 +27745,10 @@ function AppInner() {
   const [assistantWakeWords, setAssistantWakeWords] = useState(["hey trade pa", "trade pa", "trade pay"]);
   const [assistantPersona, setAssistantPersona] = useState("");
   const [assistantSignoff, setAssistantSignoff] = useState("");
+  // assistantVoice — one of Grok TTS's 5 voice IDs (eve/ara/leo/rex/sal).
+  // Passed to /api/tts in speak() so the user's chosen voice is used.
+  // Default "eve" matches /api/tts's server-side default.
+  const [assistantVoice, setAssistantVoice] = useState("eve");
   const [userCommands, setUserCommands] = useState([]);
   const now = Date.now();
 
@@ -27797,7 +27803,7 @@ function AppInner() {
     (async () => {
       const { data: s } = await db
         .from("user_settings")
-        .select("assistant_name, assistant_wake_words, assistant_persona, assistant_signoff")
+        .select("assistant_name, assistant_wake_words, assistant_persona, assistant_signoff, assistant_voice")
         .eq("user_id", user.id)
         .maybeSingle();
       if (s) {
@@ -27805,6 +27811,15 @@ function AppInner() {
         if (s.assistant_wake_words?.length) setAssistantWakeWords(s.assistant_wake_words);
         if (s.assistant_persona) setAssistantPersona(s.assistant_persona);
         if (s.assistant_signoff) setAssistantSignoff(s.assistant_signoff);
+        if (s.assistant_voice) {
+          // Migrate legacy voice IDs (british_female etc.) set before the
+          // Grok TTS switch. Same mapping lives in AssistantSetup.jsx — keep
+          // the two in sync when voices change.
+          const LEGACY = { british_female: "ara", british_male: "leo", american_female: "eve", american_male: "rex" };
+          const ALLOWED = new Set(["eve", "ara", "leo", "rex", "sal"]);
+          const migrated = LEGACY[s.assistant_voice] || s.assistant_voice;
+          setAssistantVoice(ALLOWED.has(migrated) ? migrated : "eve");
+        }
       }
       const { data: cmds } = await db
         .from("user_commands")
@@ -29359,7 +29374,7 @@ function AppInner() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} setContextHint={setContextHint} />}
         {view === "Expenses" && <ExpensesTab user={user} setContextHint={setContextHint} />}
         {view === "CIS" && <CISStatementsTab user={user} setContextHint={setContextHint} />}
-        <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} /></div>
+        <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} assistantVoice={assistantVoice} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} setContextHint={setContextHint} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} setContextHint={setContextHint} />}
@@ -29395,6 +29410,9 @@ function AppInner() {
           setAssistantWakeWords(s.assistant_wake_words);
           setAssistantPersona(s.assistant_persona);
           setAssistantSignoff(s.assistant_signoff || "");
+          // Update voice live so the next speak() uses the new choice
+          // without needing a page reload.
+          if (s.assistant_voice) setAssistantVoice(s.assistant_voice);
           db.from("user_commands")
             .select("*").eq("user_id", user.id).eq("enabled", true)
             .order("created_at", { ascending: true })
