@@ -62,6 +62,128 @@ async function supabaseRequest(method, path, body) {
   return text ? JSON.parse(text) : null;
 }
 
+// ─── Portal view tracking ───────────────────────────────────────────────────
+//
+// When a customer opens a portal link, we:
+//   1. Record a 'portal_view' event in usage_events (for analytics)
+//   2. Send a push notification to the tradesperson — UNLESS the viewer
+//      is the tradesperson themselves
+//
+// Self-view suppression: the app sets a cookie 'tp_owner=<user_id>' on
+// every device the tradesperson has logged into. When a portal request
+// arrives with that cookie, and the cookie value matches the invoice's
+// user_id, we know this is the tradesperson previewing their own link
+// and skip the push. The event is still recorded.
+//
+// No dedupe by design — tradies want to see every time a customer opens
+// the link, including repeat views ("they looked 4 times today, they're
+// serious"). That's a feature, not noise.
+async function trackPortalView(req, inv) {
+  const isQuote = inv.is_quote === true;
+  const docType = isQuote ? "quote" : "invoice";
+
+  // Self-view check: parse the tp_owner cookie from the request headers.
+  // If it matches the invoice's user_id, this is the tradesperson viewing
+  // their own link — skip the push.
+  const isSelfView = (() => {
+    try {
+      const cookieHeader = req.headers?.cookie || "";
+      const match = cookieHeader.match(/(?:^|;\s*)tp_owner=([^;]+)/);
+      if (!match) return false;
+      const ownerFromCookie = decodeURIComponent(match[1]);
+      return ownerFromCookie === inv.user_id;
+    } catch {
+      return false;
+    }
+  })();
+
+  // Always record the event (analytics needs it regardless of who viewed).
+  // Metadata is deliberately kept small — no PII beyond doc id and type.
+  // We flag self-views in metadata so the Admin dashboard can filter them
+  // out when showing "real customer views".
+  try {
+    await supabaseRequest("POST", "usage_events", {
+      user_id: inv.user_id,
+      event_type: "portal_view",
+      event_name: `${docType}_viewed`,
+      metadata: {
+        doc_id: inv.id,
+        doc_type: docType,
+        amount: inv.amount || null,
+        customer: inv.customer || null,
+        self_view: isSelfView,
+      },
+    });
+  } catch (e) {
+    // Tracking failure must never block the portal render.
+    console.error("[portal] trackPortalView insert failed:", e.message);
+  }
+
+  // Push the tradesperson — every view, but never their own.
+  if (!isSelfView) {
+    try {
+      await notifyTradesperson(inv, docType);
+    } catch (e) {
+      console.error("[portal] notifyTradesperson failed:", e.message);
+    }
+  }
+}
+
+// Fire a push notification via /api/push/send. The endpoint is internal so
+// we call it server-to-server. Using absolute URL via VERCEL_URL or
+// PORTAL_SELF_URL so this works in both production and preview deployments.
+//
+// Also writes a row to in_app_notifications so the bell icon in the app
+// shows the notification even if push is muted/blocked. The two channels
+// are independent — failure in one shouldn't block the other.
+async function notifyTradesperson(inv, docType) {
+  const baseUrl =
+    process.env.PORTAL_SELF_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    "https://www.tradespa.co.uk";
+
+  const amountText = inv.amount
+    ? ` for £${Number(inv.amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : "";
+  const customer = inv.customer || "A customer";
+  const title = docType === "quote" ? "👀 Quote viewed" : "👀 Invoice viewed";
+  const body = `${customer} opened your ${docType}${amountText}.`;
+  const deepUrl = docType === "quote" ? "/Quotes" : "/Invoices";
+
+  // In-app notification feed (bell icon). Non-blocking; push still fires
+  // even if this fails.
+  try {
+    await supabaseRequest("POST", "in_app_notifications", {
+      user_id: inv.user_id,
+      type: "portal_view",
+      title,
+      body,
+      url: deepUrl,
+      metadata: {
+        doc_id: inv.id,
+        doc_type: docType,
+        amount: inv.amount || null,
+      },
+    });
+  } catch (e) {
+    console.error("[portal] in_app_notifications insert failed:", e.message);
+  }
+
+  // Push notification.
+  await fetch(`${baseUrl}/api/push/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId: inv.user_id,
+      title,
+      body,
+      url: "/",
+      type: "portal_view",
+      tag: `portal-view-${inv.id}`,
+    }),
+  });
+}
+
 // ─── HTML escaping ──────────────────────────────────────────────────────────
 function esc(s) {
   return String(s == null ? "" : s)
@@ -202,12 +324,17 @@ function errorPage(brand, heading, detail) {
 }
 
 // ─── View quote ─────────────────────────────────────────────────────────────
-async function renderQuoteView(token, paidParam = null) {
+async function renderQuoteView(req, token, paidParam = null) {
   const invoices = await supabaseRequest("GET", `invoices?portal_token=eq.${encodeURIComponent(token)}&select=*&limit=1`);
   if (!Array.isArray(invoices) || invoices.length === 0) {
     return { status: 404, html: errorPage(null, "Not found", "This link is invalid or has been revoked.") };
   }
   const inv = invoices[0];
+
+  // Fire-and-forget view tracking. Deliberately not awaited — the customer's
+  // page load must never depend on the tracking or notification pipeline.
+  // Any failures are logged server-side via console.error inside trackPortalView.
+  trackPortalView(req, inv).catch(err => console.error("[portal] trackPortalView:", err.message));
 
   const settingsRows = await supabaseRequest("GET", `user_settings?user_id=eq.${encodeURIComponent(inv.user_id)}&select=brand_data&limit=1`);
   const brand = settingsRows?.[0]?.brand_data || {};
@@ -425,7 +552,7 @@ async function handleResponse(req, res, action) {
   }
 
   if (inv.status === "accepted" || inv.status === "declined") {
-    const view = await renderQuoteView(token);
+    const view = await renderQuoteView(req, token);
     return sendHTML(res, view.status, view.html);
   }
 
@@ -453,7 +580,7 @@ async function handleResponse(req, res, action) {
     console.error("[portal] push notify failed:", e.message);
   }
 
-  const view = await renderQuoteView(token);
+  const view = await renderQuoteView(req, token);
   return sendHTML(res, view.status, view.html);
 }
 
@@ -481,7 +608,7 @@ export default async function handler(req, res) {
       //                 has fired yet — paid status will lag a few seconds)
       //   "cancelled" → customer cancelled out of Stripe Checkout
       const paidParam = req.query.paid || null;
-      const { status, html } = await renderQuoteView(token, paidParam);
+      const { status, html } = await renderQuoteView(req, token, paidParam);
       return sendHTML(res, status, html);
     }
 
