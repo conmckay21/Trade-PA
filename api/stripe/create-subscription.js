@@ -13,15 +13,42 @@ const supabaseAdmin = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
-// Plan key → env var mapping + metadata
+// Plan key → env var mapping + metadata.
+//
+// Keys here MUST match what the frontend sends as `plan_key`. See the
+// pricing page in App.jsx — links are built as `?plan=${p.plan}` where
+// `p.plan` is one of the keys below.
+//
+// `plan_code` is what gets stored in the subscriptions table's `plan`
+// column — matches the keys in TIER_CONFIG in App.jsx so the normalizer
+// there can read caps/labels correctly.
 const PLAN_CATALOGUE = {
-  solo_monthly:   { priceEnv: "STRIPE_PRICE_SOLO_MONTHLY",   plan_code: "solo",  is_founding: false },
-  solo_annual:    { priceEnv: "STRIPE_PRICE_SOLO_ANNUAL",    plan_code: "solo",  is_founding: false },
-  solo_founding:  { priceEnv: "STRIPE_PRICE_SOLO_FOUNDING",  plan_code: "solo",  is_founding: true  },
-  team_monthly:   { priceEnv: "STRIPE_PRICE_TEAM_MONTHLY",   plan_code: "team",  is_founding: false },
-  team_annual:    { priceEnv: "STRIPE_PRICE_TEAM_ANNUAL",    plan_code: "team",  is_founding: false },
-  pro_monthly:    { priceEnv: "STRIPE_PRICE_PRO_MONTHLY",    plan_code: "pro",   is_founding: false },
-  pro_annual:     { priceEnv: "STRIPE_PRICE_PRO_ANNUAL",     plan_code: "pro",   is_founding: false },
+  // Solo — £39.99/mo (was £49 before the tier migration)
+  solo_monthly:       { priceEnv: "STRIPE_PRICE_SOLO_MONTHLY",       plan_code: "solo",     is_founding: false },
+  solo_annual:        { priceEnv: "STRIPE_PRICE_SOLO_ANNUAL",        plan_code: "solo",     is_founding: false },
+  solo_founding:      { priceEnv: "STRIPE_PRICE_SOLO_FOUNDING",      plan_code: "solo",     is_founding: true  },
+
+  // Pro Solo — £59.99/mo (new tier as of Apr 2026 migration)
+  pro_solo_monthly:   { priceEnv: "STRIPE_PRICE_PRO_SOLO_MONTHLY",   plan_code: "pro_solo", is_founding: false },
+  pro_solo_annual:    { priceEnv: "STRIPE_PRICE_PRO_SOLO_ANNUAL",    plan_code: "pro_solo", is_founding: false },
+
+  // Team — £89/mo flat (unchanged name, new flat pricing)
+  team_monthly:       { priceEnv: "STRIPE_PRICE_TEAM_MONTHLY",       plan_code: "team",     is_founding: false },
+  team_annual:        { priceEnv: "STRIPE_PRICE_TEAM_ANNUAL",        plan_code: "team",     is_founding: false },
+
+  // Business — £129/mo flat (renamed from "pro" in the tier migration)
+  business_monthly:   { priceEnv: "STRIPE_PRICE_BUSINESS_MONTHLY",   plan_code: "business", is_founding: false },
+  business_annual:    { priceEnv: "STRIPE_PRICE_BUSINESS_ANNUAL",    plan_code: "business", is_founding: false },
+};
+
+// Legacy plan key aliases. Before Apr 2026 the top tier was called "pro"
+// and cost the same as the current "business" tier. If a stale signup
+// link or cached page sends an old key, we transparently upgrade it to
+// the new canonical key so the user never sees a 400. Remove this map
+// once there's no risk of old links being in circulation.
+const LEGACY_PLAN_ALIASES = {
+  pro_monthly: "business_monthly",
+  pro_annual:  "business_annual",
 };
 
 const FOUNDING_MEMBER_CAP = 100;
@@ -47,7 +74,12 @@ export default async function handler(req, res) {
   }
 
   const { plan_key, email, first_name, last_name, business_name } = req.body || {};
-  const planConfig = PLAN_CATALOGUE[plan_key];
+
+  // Transparent legacy key migration — see LEGACY_PLAN_ALIASES above.
+  // If a stale link sends e.g. pro_monthly, we upgrade to business_monthly
+  // before lookup so the signup doesn't 400.
+  const resolvedPlanKey = LEGACY_PLAN_ALIASES[plan_key] || plan_key;
+  const planConfig = PLAN_CATALOGUE[resolvedPlanKey];
   if (!planConfig) {
     return res.status(400).json({ error: "invalid_plan", message: "Unknown plan." });
   }
@@ -121,7 +153,7 @@ export default async function handler(req, res) {
         type: "main",
         supabase_user_id: userId,
         plan_code: planConfig.plan_code,
-        plan_key: plan_key,
+        plan_key: resolvedPlanKey,
         is_founding_member: planConfig.is_founding ? "true" : "false",
         founding_slot_number: foundingSlotNumber ? String(foundingSlotNumber) : "",
       },
