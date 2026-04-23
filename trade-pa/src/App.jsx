@@ -8609,7 +8609,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "list_expenses", description: "Show recent expenses inline. Triggers: \"show my expenses\", \"what have I spent\", \"expenses this month\". Filter by category or date range if mentioned. AFTER: total if meaningful — \"£[X] spent across [N] expenses this month.\"", input_schema: { type: "object", properties: {} } },
     { name: "log_cis_statement", description: "Log a CIS deduction statement received from a contractor. Triggers: \"CIS from [contractor] — gross £[X], deducted £[Y]\", \"log my CIS statement\". ASK IF MISSING: contractor name, gross, deduction amounts are all required. Tax month — default to current month. AFTER: \"CIS logged — £[gross] gross, £[deduction] deducted ([rate]%).\"", input_schema: { type: "object", properties: { contractor_name: { type: "string" }, gross_amount: { type: "string" }, deduction_amount: { type: "string" }, tax_month: { type: "string" }, notes: { type: "string" } }, required: ["contractor_name","gross_amount","deduction_amount"] } },
     { name: "list_cis_statements", description: "Show CIS deduction statements inline. Triggers: \"show my CIS\", \"CIS statements this year\", \"what CIS have I had\". Filter by tax year if mentioned.", input_schema: { type: "object", properties: {} } },
-    { name: "add_subcontractor", description: "Add a new subcontractor. Triggers: \"add [name] as a sub\", \"register [name] as a subbie\", \"new subbie — [name], [rate]% CIS\". ASK IF MISSING: name is required. UTR, CIS rate, phone/email — ask in priority order, only the most critical one. DEFAULTS: CIS rate → 20% (registered) unless stated. AFTER: \"[Name] added as a sub — [CIS rate]% CIS.\"", input_schema: { type: "object", properties: { name: { type: "string" }, company: { type: "string" }, utr: { type: "string" }, cis_rate: { type: "string", description: "20 registered, 30 unregistered, 0 gross" }, email: { type: "string" }, phone: { type: "string" }, address: { type: "string", description: "Business or home address" } }, required: ["name"] } },
+    { name: "add_subcontractor", description: "Add a new subcontractor. Triggers: \"add [name] as a sub\", \"register [name] as a subbie\", \"new subbie — [name], [rate]% CIS\". ASK IF MISSING: name is required. UTR, CIS rate, phone/email — ask in priority order, only the most critical one. DEFAULTS: CIS rate → 30% if no UTR provided (HMRC rule for unregistered subs), 20% if UTR on file, unless the user states a rate. AFTER: \"[Name] added as a sub — [CIS rate]% CIS.\"", input_schema: { type: "object", properties: { name: { type: "string" }, company: { type: "string" }, utr: { type: "string" }, cis_rate: { type: "string", description: "20 registered, 30 unregistered, 0 gross" }, email: { type: "string" }, phone: { type: "string" }, address: { type: "string", description: "Business or home address" } }, required: ["name"] } },
     { name: "log_subcontractor_payment", description: "Log a payment to a subcontractor, optionally linked to a job. Triggers: \"paid [name] £[X]\", \"sort [name]'s money — £[X] on [job]\", \"log £[X] to [subbie]\". Include customer and job_title to link the cost to a job — this makes it show in job profit. ASK IF MISSING: subbie name and amount are critical. Date → today. Payment type → price_work if just an amount, day_rate if \"per day\", hourly if \"per hour\". AFTER: \"£[amount] logged to [name]. CIS deduction: £[X].\"", input_schema: { type: "object", properties: { name: { type: "string", description: "Subcontractor name" }, customer: { type: "string", description: "Customer name to link this cost to a job card" }, job_title: { type: "string", description: "Job title to identify which job card to link to" }, payment_type: { type: "string", enum: ["price_work","day_rate","hourly"], description: "How they are paid" }, labour_amount: { type: "number", description: "Labour portion in £ (price_work) — CIS applies to this" }, materials_amount: { type: "number", description: "Materials portion in £ (price_work) — no CIS" }, gross: { type: "number", description: "Total gross if not splitting labour/materials" }, days: { type: "number", description: "Days worked (day_rate only)" }, hours: { type: "number", description: "Hours worked (hourly only)" }, rate: { type: "number", description: "Day or hourly rate in £" }, date: { type: "string" }, job_ref: { type: "string" }, description: { type: "string" }, invoice_number: { type: "string" } }, required: ["name"] } },
     { name: "list_subcontractors", description: "Show all subcontractors inline. Triggers: \"show my subbies\", \"list my subcontractors\", \"who's on my sub list\". AFTER: count — \"[N] subbies on your books.\"", input_schema: { type: "object", properties: {} } },
     { name: "list_unpaid", description: "Show what the user still owes — unpaid subcontractor payments and/or unpaid materials. ALWAYS choose the correct scope based on the user's question:\n- scope=\"subcontractors\" when they ask about subcontractors, subs, subbies, workers, labour payments. Examples: \"do I owe any subbies?\", \"what do I owe my subcontractors?\", \"who haven't I paid from my team?\".\n- scope=\"materials\" when they ask about materials, supplier bills, merchant invoices, stock. Examples: \"any unpaid materials?\", \"what do I owe the merchant?\", \"outstanding supplier bills?\".\n- scope=\"all\" only for general/ambiguous questions. Examples: \"what do I owe?\", \"any bills outstanding?\", \"money out?\", \"show me everything unpaid\".\nThis is about money the user OWES others (money out) — NOT money owed TO them (that would be invoices/list_invoices).", input_schema: { type: "object", properties: { scope: { type: "string", enum: ["all","subcontractors","materials"], description: "Which category to list. Pick the most specific one that matches the user\u2019s question." } }, required: ["scope"] } },
@@ -8656,9 +8656,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "delete_rams", description: "Delete a RAMS document. Triggers: \"delete that RAMS\", \"remove the [job] method statement\". CONFIRM FIRST.", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
     { name: "escalate_to_support", description: "Use ONLY when you have genuinely tried to resolve the user's issue and cannot. Collects their details and sends an email to Trade PA support. Triggers: user explicitly asks for human help, or after a real blocker. Never use as a first resort. AFTER: \"Sent to support — they'll email you back. Usually within a working day.\"", input_schema: { type: "object", properties: { issue_summary: { type: "string", description: "Clear description of the issue" }, steps_tried: { type: "string", description: "What you already tried" }, user_email: { type: "string", description: "User's email address if known" } }, required: ["issue_summary"] } },
     { name: "request_signature", description: "Open the signature pad for a customer to sign off a completed job. Triggers: \"get signature\", \"sign off\", \"customer's ready to sign\", \"job done — need their signature\". ASK IF MISSING: which job. AFTER the sign completes, the job status typically moves to completed.", input_schema: { type: "object", properties: { customer: { type: "string" }, title: { type: "string" } } } },
-    { name: "sync_to_xero", description: "Upload/sync an invoice to Xero accounting. Triggers: \"send to Xero\", \"sync the [customer] invoice to Xero\", \"push [invoice] to Xero\". ASK IF MISSING: check Xero is connected first — if not, guide to Settings → Integrations. Which invoice if multiple recent ones. AFTER: \"Invoice synced to Xero — [Xero invoice number].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
-    { name: "sync_to_quickbooks", description: "Upload/sync an invoice to QuickBooks. Triggers: \"send to QuickBooks\", \"sync to QB\", \"push the [customer] invoice to QuickBooks\". ASK IF MISSING: check QuickBooks is connected. Which invoice if multiple.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
-    { name: "sync_material_to_xero", description: "Create a bill in Xero for a material purchase. Triggers: \"send the [item] to Xero\", \"push that receipt to Xero as a bill\". ASK IF MISSING: check Xero is connected first — if not, offer to help them connect it.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
+    { name: "sync_to_xero", description: "Upload/sync an invoice to Xero accounting. Triggers: \"send to Xero\", \"sync the [customer] invoice to Xero\", \"push [invoice] to Xero\", \"upload the [customer] invoice to Xero\", \"fire that over to Xero\", \"get that on Xero\", \"pop that on Xero\", \"post it to Xero\", \"log it in Xero\", \"chuck that in Xero\", \"stick that on Xero\", \"that one into Xero\", \"Xero that invoice\". If the user just says \"Xero\" or \"push to Xero\" after referencing an invoice in the conversation, treat that as intent. ASK IF MISSING: check Xero is connected first — if not, guide to Settings → Integrations. Which invoice if multiple recent ones. AFTER: \"Invoice synced to Xero — [Xero invoice number].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
+    { name: "sync_to_quickbooks", description: "Upload/sync an invoice to QuickBooks. Triggers: \"send to QuickBooks\", \"sync to QB\", \"push the [customer] invoice to QuickBooks\", \"upload that to QuickBooks\", \"fire it to QB\", \"get that on QB\", \"pop it in QuickBooks\", \"post it to QuickBooks\", \"log it in QuickBooks\", \"chuck that in QB\", \"QB that invoice\", \"QuickBooks that one\". If the user just says \"QB\" or \"QuickBooks\" after referencing an invoice in the conversation, treat that as intent. ASK IF MISSING: check QuickBooks is connected. Which invoice if multiple.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
+    { name: "sync_material_to_xero", description: "Create a bill in Xero for a material purchase. Triggers: \"send the [item] to Xero\", \"push that receipt to Xero as a bill\", \"upload that receipt to Xero\", \"log that receipt in Xero\", \"fire that receipt over to Xero\", \"pop that receipt in Xero\", \"get that receipt on Xero\", \"Xero that receipt\". ASK IF MISSING: check Xero is connected first — if not, offer to help them connect it.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
     { name: "sync_material_to_quickbooks", description: "Create a bill in QuickBooks for a material purchase. Triggers: \"send the [item] to QuickBooks\", \"push that material to QB\". ASK IF MISSING: check QuickBooks is connected first.", input_schema: { type: "object", properties: { item: { type: "string" }, supplier: { type: "string" } } } },
     { name: "mark_invoice_paid_xero", description: "Mark an invoice as paid in Xero (only after it's been synced there). Triggers: \"update Xero — [customer] paid\", \"mark the [customer] invoice paid in Xero\". Only use if the invoice is already in Xero. AFTER: \"Xero updated — [customer]'s invoice marked paid.\"", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" } } } },
     {
@@ -8775,6 +8775,84 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     const result = await res.json().catch(() => ({}));
     return result;
   };
+
+  // Chase-email send — shared between the AI `chase_invoice` tool case and
+  // the UI chase buttons (Payments + Invoices detail views). Centralises
+  // escalation tone, chase-count persistence, PDF attachment, and email
+  // template so the two paths can never drift. Returns a structured result
+  // the caller formats into either a chat reply or a UI toast.
+  const chaseInvoiceSend = async (inv, email, { showWidget = true } = {}) => {
+    if (!inv) return { ok: false, message: "No invoice provided." };
+    if (!email) return { ok: false, message: `No email on file for ${inv.customer || "this invoice"}. Add their email first.` };
+    const existingCount = inv.chaseCount ?? inv.chase_count ?? 0;
+    const chaseNum = existingCount + 1;
+    const chasedAtIso = new Date().toISOString();
+    setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, chaseCount: chaseNum, lastChased: chasedAtIso, chase_count: chaseNum, last_chased_at: chasedAtIso } : i));
+    if (user?.id) {
+      db.from("invoices")
+        .update({ chase_count: chaseNum, last_chased_at: chasedAtIso })
+        .eq("id", inv.id).eq("user_id", user.id)
+        .then(({ error }) => { if (error) console.warn("chase count persist failed:", error.message); })
+        .catch(err => console.warn("chase count persist threw:", err?.message || err));
+    }
+    const chaseAmt = fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0));
+    const accent = brand?.accentColor || "#f59e0b";
+    let chaseIntro, chaseClose, chaseHeading, subject;
+    if (chaseNum <= 1) {
+      subject = `Payment reminder — Invoice ${inv.id}`;
+      chaseHeading = "PAYMENT REMINDER";
+      chaseIntro = `<p style="color:#555;">I hope you are well. This is a friendly reminder that the following invoice remains outstanding:</p>`;
+      chaseClose = `<p style="color:#555;font-size:13px;">If payment has already been sent, please disregard this message. If you have any queries, please don't hesitate to get in touch.</p>`;
+    } else if (chaseNum === 2) {
+      subject = `Second reminder — Invoice ${inv.id}`;
+      chaseHeading = "SECOND REMINDER";
+      chaseIntro = `<p style="color:#555;">I'm writing to follow up on my previous reminder regarding the outstanding balance below. I would appreciate your prompt attention to this matter.</p>`;
+      chaseClose = `<p style="color:#555;font-size:13px;">Please arrange payment at your earliest convenience. If there is an issue with the invoice or you would like to discuss payment terms, please get in touch.</p>`;
+    } else {
+      subject = `Final notice — Invoice ${inv.id} overdue`;
+      chaseHeading = "FINAL NOTICE";
+      chaseIntro = `<p style="color:#555;">Despite previous reminders, the following invoice remains unpaid. Please treat this as a matter of urgency.</p>`;
+      chaseClose = `<p style="color:#555;font-size:13px;">If payment is not received within 7 days, I may need to consider further action to recover this debt. If you have already made payment, please let me know so I can update my records.</p>`;
+    }
+    const body = buildEmailHTML(brand, {
+      heading: chaseHeading,
+      showBacs: true,
+      invoiceId: inv.id,
+      body: `<p style="font-size:15px;">Dear ${inv.customer},</p>
+        ${chaseIntro}
+        <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
+          <div style="font-size:13px;color:#666;margin-bottom:4px;">Invoice ${inv.id}</div>
+          <div style="font-size:22px;font-weight:700;color:${accent};">${chaseAmt}</div>
+          <div style="font-size:12px;color:#888;margin-top:4px;">${chaseNum >= 3 ? "OVERDUE" : "Currently outstanding"}</div>
+        </div>
+        ${portalCtaBlock({ token: inv.portalToken || inv.portal_token, isQuote: false, stripeReady: !!brand?.stripeAccountId, accent })}
+        ${chaseClose}`,
+    });
+    try {
+      let chasePdfBase64 = null;
+      try { chasePdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { console.warn("PDF gen failed:", pe.message); }
+      await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfBase64, `Invoice-${inv.id}.pdf`);
+      if (showWidget) pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
+      return { ok: true, chaseNum, hasPdf: !!chasePdfBase64, email };
+    } catch(e) {
+      return { ok: false, message: `Chase email failed: ${e.message}` };
+    }
+  };
+
+  // Register a window bridge so UI chase buttons (in Payments and Invoices
+  // views, which are sibling components) can invoke the chase flow without
+  // passing the function through a full prop chain. Unregisters on unmount
+  // and re-registers when user/brand change so the closure stays fresh.
+  useEffect(() => {
+    window._tradePaChase = async (inv) => {
+      if (!inv || !user?.id) return { ok: false, message: "Not signed in." };
+      const { data: custRows } = await db.from("customers")
+        .select("email").eq("user_id", user.id).ilike("name", `%${inv.customer || ""}%`).limit(1);
+      const email = custRows?.[0]?.email || inv.email;
+      return await chaseInvoiceSend(inv, email, { showWidget: false });
+    };
+    return () => { delete window._tradePaChase; };
+  }, [brand?.tradingName, brand?.accentColor, user?.id]);
 
   const executeTool = async (name, input) => {
     // ─── Shared job lookup helper — must be before switch to avoid TDZ ───────
@@ -9976,11 +10054,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const gross = parseFloat(input.gross_amount) || 0;
           const deduction = parseFloat(input.deduction_amount) || 0;
           const taxMonth = (input.tax_month || new Date().toISOString().slice(0,7)) + "-01";
-          // Dedup: same contractor + same month = duplicate
+          // Dedup: same contractor + same month = duplicate.
+          // Excluding archived rows so if a tradie archives one and re-adds, it works.
           const { data: existingCis } = await db.from("cis_statements")
             .select("id").eq("user_id", user?.id)
             .eq("contractor_name", input.contractor_name || "")
-            .eq("tax_month", taxMonth).limit(1);
+            .eq("tax_month", taxMonth).is("archived_at", null).limit(1);
           if (existingCis?.length) return ""; // Silent dedup
           const { data, error } = await db.from("cis_statements").insert({
             user_id: user?.id,
@@ -9996,7 +10075,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `CIS statement logged — ${input.contractor_name}: gross ${fmtCurrency(gross)}, deduction ${fmtCurrency(deduction)}, net ${fmtCurrency((gross-deduction))}.`;
         }
         case "list_cis_statements": {
-          const { data } = await db.from("cis_statements").select("*").eq("user_id", user?.id).order("tax_month", { ascending: false }).limit(12);
+          const { data } = await db.from("cis_statements").select("*").eq("user_id", user?.id).is("archived_at", null).order("tax_month", { ascending: false }).limit(12);
           if (!data?.length) return "No CIS statements logged yet.";
           pendingWidgetRef.current = { type: "cis_list", data };
           return `Here are your CIS statements:`;
@@ -10022,15 +10101,21 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             }
             return `${input.name} is already in your subcontractors.`;
           }
+          // HMRC rule: unregistered/unverified subs attract 30%, registered subs 20%.
+          // If the user hasn't stated a rate, default on whether a UTR was given.
+          // No UTR = unregistered = 30%. UTR on file = assume registered at 20%
+          // (tradie's job to verify with HMRC — we just hold the starting point).
+          const defaultCisRate = input.utr ? 20 : 30;
           const { data, error } = await db.from("subcontractors").insert({
             user_id: user?.id,
             name: input.name, company: input.company || "", utr: input.utr || "",
-            cis_rate: parseInt(input.cis_rate) || 20, email: input.email || "", phone: input.phone || "",
+            cis_rate: parseInt(input.cis_rate) || defaultCisRate, email: input.email || "", phone: input.phone || "",
             created_at: new Date().toISOString(),
           }).select().single();
           if (error) return `Failed to add subcontractor: ${error.message}`;
           pendingWidgetRef.current = { type: "subcontractor_entry", data };
-          return `${data.name} added as a subcontractor — CIS rate ${data.cis_rate}%.`;
+          const utrNote = !input.utr && !input.cis_rate ? " No UTR on file — HMRC requires 30% on unverified subbies. Set to 20% once you've verified their UTR with HMRC." : "";
+          return `${data.name} added as a subcontractor — CIS rate ${data.cis_rate}%.${utrNote}`;
         }
         case "log_subcontractor_payment": {
           const { data: subs } = await db.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
@@ -10511,6 +10596,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             let invPdfBase64 = null;
             try { invPdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { console.warn("PDF gen failed:", pe.message); }
             await sendEmailViaConnectedAccount(user?.id, email, subject, body, invPdfBase64, `Invoice-${inv.id}.pdf`);
+            // Promote draft → sent after successful send. Don't demote paid/overdue.
+            const curStatus = (inv.status || "").toLowerCase();
+            if (curStatus === "draft" || curStatus === "") {
+              try {
+                await db.from("invoices").update({ status: "sent" }).eq("id", inv.id).eq("user_id", user?.id);
+                setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, status: "sent" } : i));
+              } catch(se) { console.warn("Invoice status update failed:", se?.message); }
+            }
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount } };
             return `Invoice ${inv.id} sent to ${inv.customer} at ${email}${invPdfBase64 ? " (PDF attached)" : ""}.`;
           } catch(e) {
@@ -10566,6 +10659,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               quotePdfBase64 = await generateInvoicePDFBase64(brand, quoteForPdf);
             } catch(pe) { console.warn("PDF gen failed:", pe.message); }
             await sendEmailViaConnectedAccount(user?.id, email, subject, body, quotePdfBase64, `Quote-${quote.id}.pdf`);
+            // Promote draft → sent after successful send. Don't overwrite accepted/declined.
+            const curQStatus = (quote.status || "").toLowerCase();
+            if (curQStatus === "draft" || curQStatus === "") {
+              try {
+                await db.from("invoices").update({ status: "sent" }).eq("id", quote.id).eq("user_id", user?.id);
+                setInvoices(prev => (prev || []).map(i => i.id === quote.id ? { ...i, status: "sent" } : i));
+              } catch(se) { console.warn("Quote status update failed:", se?.message); }
+            }
             pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: quote.customer, invoice_id: quote.id, amount: quote.grossAmount || quote.amount, isQuote: true } };
             return `Quote ${quote.id} sent to ${quote.customer} at ${email}${quotePdfBase64 ? " (PDF attached)" : ""}.`;
           } catch(e) {
@@ -10627,76 +10728,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             .select("email").eq("user_id", user?.id).ilike("name", `%${inv.customer}%`).limit(1);
           const email = input.email || custRows?.[0]?.email || inv.email;
           if (!email) return `No email on file for ${inv.customer}. Say their email address and I'll send the chase.`;
-          // Chase escalation — track count on invoice, vary tone.
-          // chase_count and last_chased_at are DB columns; in-memory mirror
-          // uses chaseCount/lastChased (camelCase). Read both forms so we
-          // cope with whichever the hydration path populated. Without the
-          // DB persistence below, the counter resets on every reload and
-          // every chase ends up as "#1 — gentle reminder" regardless of
-          // how many have actually been sent.
-          const existingCount = inv.chaseCount ?? inv.chase_count ?? 0;
-          const chaseNum = existingCount + 1;
-          const chasedAtIso = new Date().toISOString();
-          setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, chaseCount: chaseNum, lastChased: chasedAtIso, chase_count: chaseNum, last_chased_at: chasedAtIso } : i));
-          // Persist to Supabase. If the columns don't exist yet the update
-          // silently no-ops via .catch() and the in-memory counter still
-          // works for the current session — harmless degradation. Once the
-          // migration in /docs/migrations adding chase_count + last_chased_at
-          // is applied, this starts persisting properly across reloads.
-          if (user?.id) {
-            db.from("invoices")
-              .update({ chase_count: chaseNum, last_chased_at: chasedAtIso })
-              .eq("id", inv.id)
-              .eq("user_id", user.id)
-              .then(({ error }) => { if (error) console.warn("chase count persist failed:", error.message); })
-              .catch(err => console.warn("chase count persist threw:", err?.message || err));
-          }
-          const chaseAmt = fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0));
-          const accent = brand?.accentColor || "#f59e0b";
-          let chaseIntro, chaseClose, chaseHeading, subject;
-          if (chaseNum <= 1) {
-            // Gentle
-            subject = `Payment reminder — Invoice ${inv.id}`;
-            chaseHeading = "PAYMENT REMINDER";
-            chaseIntro = `<p style="color:#555;">I hope you are well. This is a friendly reminder that the following invoice remains outstanding:</p>`;
-            chaseClose = `<p style="color:#555;font-size:13px;">If payment has already been sent, please disregard this message. If you have any queries, please don't hesitate to get in touch.</p>`;
-          } else if (chaseNum === 2) {
-            // Firm
-            subject = `Second reminder — Invoice ${inv.id}`;
-            chaseHeading = "SECOND REMINDER";
-            chaseIntro = `<p style="color:#555;">I'm writing to follow up on my previous reminder regarding the outstanding balance below. I would appreciate your prompt attention to this matter.</p>`;
-            chaseClose = `<p style="color:#555;font-size:13px;">Please arrange payment at your earliest convenience. If there is an issue with the invoice or you would like to discuss payment terms, please get in touch.</p>`;
-          } else {
-            // Final
-            subject = `Final notice — Invoice ${inv.id} overdue`;
-            chaseHeading = "FINAL NOTICE";
-            chaseIntro = `<p style="color:#555;">Despite previous reminders, the following invoice remains unpaid. Please treat this as a matter of urgency.</p>`;
-            chaseClose = `<p style="color:#555;font-size:13px;">If payment is not received within 7 days, I may need to consider further action to recover this debt. If you have already made payment, please let me know so I can update my records.</p>`;
-          }
-          const body = buildEmailHTML(brand, {
-            heading: chaseHeading,
-            showBacs: true,
-            invoiceId: inv.id,
-            body: `<p style="font-size:15px;">Dear ${inv.customer},</p>
-              ${chaseIntro}
-              <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
-                <div style="font-size:13px;color:#666;margin-bottom:4px;">Invoice ${inv.id}</div>
-                <div style="font-size:22px;font-weight:700;color:${accent};">${chaseAmt}</div>
-                <div style="font-size:12px;color:#888;margin-top:4px;">${chaseNum >= 3 ? "OVERDUE" : "Currently outstanding"}</div>
-              </div>
-              ${portalCtaBlock({ token: inv.portalToken || inv.portal_token, isQuote: false, stripeReady: !!brand?.stripeAccountId, accent })}
-              ${chaseClose}`,
-          });
-          try {
-            let chasePdfBase64 = null;
-            try { chasePdfBase64 = await generateInvoicePDFBase64(brand, inv); } catch(pe) { console.warn("PDF gen failed:", pe.message); }
-            await sendEmailViaConnectedAccount(user?.id, email, subject, body, chasePdfBase64, `Invoice-${inv.id}.pdf`);
-            pendingWidgetRef.current = { type: "email_sent", data: { to: email, subject, customer: inv.customer, invoice_id: inv.id, amount: inv.grossAmount || inv.amount, isChase: true } };
-            const toneLabel = chaseNum <= 1 ? "Gentle reminder" : chaseNum === 2 ? "Firm follow-up" : "Final notice";
-            return `${toneLabel} sent to ${inv.customer} at ${email} for invoice ${inv.id} (${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))})${chasePdfBase64 ? " (PDF attached)" : ""}. This is chase #${chaseNum}.`;
-          } catch(e) {
-            return `Chase email failed: ${e.message}`;
-          }
+          const chaseResult = await chaseInvoiceSend(inv, email, { showWidget: true });
+          if (!chaseResult.ok) return chaseResult.message;
+          const toneLabel = chaseResult.chaseNum <= 1 ? "Gentle reminder" : chaseResult.chaseNum === 2 ? "Firm follow-up" : "Final notice";
+          return `${toneLabel} sent to ${inv.customer} at ${email} for invoice ${inv.id} (${fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0))})${chaseResult.hasPdf ? " (PDF attached)" : ""}. This is chase #${chaseResult.chaseNum}.`;
         }
         case "create_invoice_from_job": {
           const term = (input.customer || input.job_title || "").toLowerCase();
@@ -10934,25 +10969,59 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Expense "${found[0].description}" deleted.`;
         }
         case "delete_cis_statement": {
-          const { data: found } = await db.from("cis_statements").select("id,contractor_name,tax_month").eq("user_id", user?.id).ilike("contractor_name", `%${input.contractor_name || ""}%`).order("tax_month", { ascending: false }).limit(1);
+          const { data: found } = await db.from("cis_statements").select("id,contractor_name,tax_month").eq("user_id", user?.id).is("archived_at", null).ilike("contractor_name", `%${input.contractor_name || ""}%`).order("tax_month", { ascending: false }).limit(1);
           if (!found?.length) return `CIS statement not found.`;
-          await db.from("cis_statements").delete().eq("id", found[0].id);
-          return `CIS statement for ${found[0].contractor_name} (${found[0].tax_month?.slice(0,7)}) deleted.`;
+          // Soft-delete only — keeps the row for HMRC's 6-year record retention.
+          // Hard-delete would create a compliance hole if the user needed it
+          // back at year-end or for an audit.
+          const { error: arcErr } = await db.from("cis_statements").update({ archived_at: new Date().toISOString() }).eq("id", found[0].id).eq("user_id", user?.id);
+          if (arcErr) return `Failed to archive CIS statement: ${arcErr.message}`;
+          return `CIS statement for ${found[0].contractor_name} (${found[0].tax_month?.slice(0,7)}) removed from your active list. Archived copy retained for HMRC records.`;
         }
         case "add_worker": {
+          // Dedup — match add_subcontractor's pattern. If an archived worker
+          // exists with the same name, silently reactivate + update. Otherwise
+          // signal duplicate to stop double-adds from voice (e.g. "add John
+          // Smith as a worker" said twice in a row).
+          const existingW = await db.from("workers").select("id,name,active").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          if (existingW.data?.length) {
+            const hit = existingW.data[0];
+            if (hit.active === false) {
+              const reactivateType = input.type || "subcontractor";
+              const reactivateCisRate = parseInt(input.cis_rate) || (input.utr ? 20 : 30);
+              const { data: wr, error: wrErr } = await db.from("workers").update({
+                active: true,
+                type: reactivateType,
+                role: input.role || undefined,
+                email: input.email || undefined,
+                phone: input.phone || undefined,
+                day_rate: parseFloat(input.day_rate || 0) || undefined,
+                hourly_rate: parseFloat(input.hourly_rate || 0) || undefined,
+                utr: input.utr || undefined,
+                cis_rate: reactivateType === "subcontractor" ? reactivateCisRate : undefined,
+                ni_number: input.ni_number || undefined,
+              }).eq("id", hit.id).eq("user_id", user?.id).select().single();
+              if (wrErr) return `Failed to reactivate worker: ${wrErr.message}`;
+              return `${wr.name} reactivated${input.role ? ` as ${input.role}` : ""}. Past time logs preserved.`;
+            }
+            return `${input.name} is already in your workers.`;
+          }
+          // Same HMRC rule as add_subcontractor for the CIS default
+          const workerDefaultCis = input.utr ? 20 : 30;
           const { data: newWorker, error: wErr } = await db.from("workers").insert({
             user_id: user?.id,
             name: input.name, type: input.type || "subcontractor",
             role: input.role || "", email: input.email || "", phone: input.phone || "",
             day_rate: parseFloat(input.day_rate || 0) || null,
             hourly_rate: parseFloat(input.hourly_rate || 0) || null,
-            utr: input.utr || "", cis_rate: parseInt(input.cis_rate || 20),
+            utr: input.utr || "", cis_rate: parseInt(input.cis_rate) || workerDefaultCis,
             ni_number: input.ni_number || "", active: true,
             created_at: new Date().toISOString(),
           }).select().single();
           if (wErr) return `Failed to add worker: ${wErr.message}`;
           const workerType = input.type === "employed" ? "employed staff member" : "subcontractor";
-          return `Worker added: ${input.name}${input.role ? ` (${input.role})` : ""} as a ${workerType}${input.day_rate ? ` — day rate ${fmtAmount(input.day_rate)}` : ""}${input.hourly_rate ? ` — hourly rate ${fmtAmount(input.hourly_rate)}` : ""}.`;
+          const utrNote = (input.type !== "employed") && !input.utr && !input.cis_rate ? " No UTR — defaulted to 30% CIS per HMRC rules." : "";
+          return `Worker added: ${input.name}${input.role ? ` (${input.role})` : ""} as a ${workerType}${input.day_rate ? ` — day rate ${fmtAmount(input.day_rate)}` : ""}${input.hourly_rate ? ` — hourly rate ${fmtAmount(input.hourly_rate)}` : ""}.${utrNote}`;
         }
         case "list_workers": {
           const { data: workerList } = await db.from("workers")
@@ -14338,6 +14407,7 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush, set
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [docType, setDocType] = useState("invoices");
   const [selected, setSelected] = useState(null);
+  const [chasingId, setChasingId] = useState(null);
 
   const safeInvoices = invoices || [];
   const allInvoices = safeInvoices.filter(i => !i.isQuote);
@@ -14665,8 +14735,27 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush, set
             {/* Secondary */}
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
-              {!selected.isQuote && selected.status === "overdue" && (
-                <button style={{ ...S.btn("danger") }} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>
+              {!selected.isQuote && (selected.status === "overdue" || selected.status === "sent") && (
+                <button style={{ ...S.btn("danger") }} disabled={chasingId === selected.id} onClick={async () => {
+                  // Direct-send via the shared chase helper exposed by the AI
+                  // assistant. Falls back to a status flip if the bridge isn't
+                  // ready (rare — only during first render).
+                  if (typeof window._tradePaChase !== "function") {
+                    updateStatus(selected.id, "sent");
+                    alert("Chase logic loading — status marked sent. Try again in a moment for the full email.");
+                    return;
+                  }
+                  setChasingId(selected.id);
+                  try {
+                    const r = await window._tradePaChase(selected);
+                    if (r?.ok) {
+                      const tone = r.chaseNum <= 1 ? "Gentle reminder" : r.chaseNum === 2 ? "Firm follow-up" : "Final notice";
+                      alert(`✓ ${tone} sent to ${selected.customer} (chase #${r.chaseNum}).`);
+                    } else {
+                      alert(r?.message || "Couldn't send the chase — check your email is connected.");
+                    }
+                  } finally { setChasingId(null); }
+                }}>📨 {chasingId === selected.id ? "Chasing..." : "Chase"}</button>
               )}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteDoc(selected.id)}>Delete</button>
             </div>
@@ -18761,6 +18850,7 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending, cust
 
 function InvoicesView({ brand, invoices, setInvoices, user, customers, customerContacts, setContextHint }) {
   const [selected, setSelected] = useState(null);
+  const [chasingInvId, setChasingInvId] = useState(null);
 
   // Phase 5b: publish context hint when an invoice is open.
   useEffect(() => {
@@ -19129,7 +19219,25 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.blue }} onClick={() => sendDocumentEmail(selected, brand, customers, user?.id, setSendingId, customerContacts)} disabled={sendingId === selected?.id}>{sendingId === selected?.id ? "Sending..." : "✉ Send"}</button>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingInvoice(selected)}>✏ Edit</button>
-              {selected.status === "overdue" && <button style={S.btn("danger")} onClick={() => updateStatus(selected.id, "sent")}>📨 Chase</button>}
+              {(selected.status === "overdue" || selected.status === "sent") && (
+                <button style={S.btn("danger")} disabled={chasingInvId === selected.id} onClick={async () => {
+                  if (typeof window._tradePaChase !== "function") {
+                    updateStatus(selected.id, "sent");
+                    alert("Chase logic loading — status marked sent. Try again for the full email.");
+                    return;
+                  }
+                  setChasingInvId(selected.id);
+                  try {
+                    const r = await window._tradePaChase(selected);
+                    if (r?.ok) {
+                      const tone = r.chaseNum <= 1 ? "Gentle reminder" : r.chaseNum === 2 ? "Firm follow-up" : "Final notice";
+                      alert(`✓ ${tone} sent to ${selected.customer} (chase #${r.chaseNum}).`);
+                    } else {
+                      alert(r?.message || "Couldn't send the chase — check your email is connected.");
+                    }
+                  } finally { setChasingInvId(null); }
+                }}>📨 {chasingInvId === selected.id ? "Chasing..." : "Chase"}</button>
+              )}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteInvoice(selected.id)}>Delete</button>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -23888,7 +23996,7 @@ function CISStatementsTab({ user, setContextHint }) {
   async function loadStatements() {
     if (!user) return;
     setLoading(true);
-    const { data } = await db.from("cis_statements").select("*").eq("user_id", user.id).order("tax_month", { ascending: false });
+    const { data } = await db.from("cis_statements").select("*").eq("user_id", user.id).is("archived_at", null).order("tax_month", { ascending: false });
     setStatements(data || []);
     setLoading(false);
   }
