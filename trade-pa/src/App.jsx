@@ -9146,17 +9146,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             return "When would you like me to remind you? e.g. 'at 9am tomorrow' or 'in 2 hours'.";
           }
           if (isNaN(fireAt.getTime())) return "I couldn't understand that time. Try saying something like '9am tomorrow' or 'in 30 minutes'.";
-          const reminder = { id: `r${Date.now()}`, text: input.text, time: fireAt.getTime(), timeLabel: input.time_label || fireAt.toLocaleString("en-GB"), done: false };
-          onAddReminder(reminder);
+          // Insert to DB first so the in-memory reminder carries the real
+          // DB UUID — the 5-min cron and /api/reminders/action.js both match
+          // reminders by that UUID. Fall back to a temp id if the write fails
+          // so offline/errored reminders still surface in the UI.
+          let reminderId = `r${Date.now()}`;
           try {
-            await db.from("reminders").insert({
+            const { data: remRow, error: remErr } = await db.from("reminders").insert({
               user_id: user?.id,
               text: input.text,
               fire_at: fireAt.toISOString(),
               done: false,
               created_at: new Date().toISOString(),
-            });
+            }).select().single();
+            if (remErr) console.warn("Reminder Supabase write:", remErr.message);
+            else if (remRow?.id) reminderId = remRow.id;
           } catch(e) { console.warn("Reminder Supabase write:", e.message); }
+          const reminder = { id: reminderId, text: input.text, time: fireAt.getTime(), timeLabel: input.time_label || fireAt.toLocaleString("en-GB"), done: false };
+          onAddReminder(reminder);
           setLastAction({ type: "reminder", label: input.text, view: "Reminders" });
           const label = input.time_label || fireAt.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
           return `Reminder set: "${input.text}" — ${label}.`;
@@ -9226,7 +9233,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "delete_enquiry": {
           const match = (enquiries || []).find(e => e.name.toLowerCase().includes(input.name.toLowerCase()));
           if (!match) return `Couldn't find an enquiry from "${input.name}".`;
-          setEnquiries(prev => (prev || []).filter(e => e !== match));
+          // Match by id where available (consistent with delete_customer one
+          // case below). Fall back to identity for in-memory-only enquiries
+          // that predate Supabase sync and have no id yet.
+          setEnquiries(prev => (prev || []).filter(e => match.id ? e.id !== match.id : e !== match));
           setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Enquiries" });
           return `Enquiry from ${match.name} deleted.`;
         }
@@ -10100,6 +10110,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               return `${re.name} reactivated — CIS rate ${re.cis_rate}%. Past payment history preserved.`;
             }
             return `${input.name} is already in your subcontractors.`;
+          }
+          // Cross-table check: if this name is already an active worker, block
+          // the insert to avoid two records for the same person. Temporary
+          // until workers/subcontractors are unified — see
+          // docs/migrations/workers-subs-unification.md.
+          const crossW = await db.from("workers").select("id,name,type,active")
+            .eq("user_id", user?.id).eq("active", true).ilike("name", `%${input.name}%`).limit(1);
+          if (crossW.data?.length) {
+            const w = crossW.data[0];
+            return `${w.name} is already in your workers list${w.type === "subcontractor" ? " as a subcontractor" : ""}. Open Workers → ${w.name} to update their details, or remove them from workers first if you want to add them as a separate subcontractor record.`;
           }
           // HMRC rule: unregistered/unverified subs attract 30%, registered subs 20%.
           // If the user hasn't stated a rate, default on whether a UTR was given.
@@ -11005,6 +11025,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               return `${wr.name} reactivated${input.role ? ` as ${input.role}` : ""}. Past time logs preserved.`;
             }
             return `${input.name} is already in your workers.`;
+          }
+          // Cross-table check: if this name is already an active subcontractor,
+          // block the insert to avoid two records for the same person.
+          // Temporary until tables are unified — see
+          // docs/migrations/workers-subs-unification.md.
+          const crossS = await db.from("subcontractors").select("id,name,active")
+            .eq("user_id", user?.id).eq("active", true).ilike("name", `%${input.name}%`).limit(1);
+          if (crossS.data?.length) {
+            const s = crossS.data[0];
+            return `${s.name} is already in your subcontractors list. Open Subcontractors → ${s.name} to update their details, or remove them from subcontractors first if you want to add them as a worker.`;
           }
           // Same HMRC rule as add_subcontractor for the CIS default
           const workerDefaultCis = input.utr ? 20 : 30;
@@ -21950,7 +21980,12 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
       : "";
     const certData = { ...form, id: showForm, label: certType?.label || "", short: certType?.short || "", signature: sigData, certNumber: certNum };
     const html = buildCertHTML(certData, brand, job, sigData);
-    const { data } = await db.from("trade_certificates").insert({ job_id: job.id, user_id: user.id, cert_type: showForm, cert_label: certType?.label || "", cert_data: certData, html_content: html, signature: sigData || null, created_at: new Date().toISOString() }).select().single();
+    const { data, error } = await db.from("trade_certificates").insert({ job_id: job.id, user_id: user.id, cert_type: showForm, cert_label: certType?.label || "", cert_data: certData, html_content: html, signature: sigData || null, created_at: new Date().toISOString() }).select().single();
+    if (error) {
+      alert(`Couldn't save certificate: ${error.message}`);
+      setSaving(false);
+      return;
+    }
     if (data) {
       setCerts(prev => [data, ...prev]);
       // Auto-increment the certificate counter in brand settings
@@ -22584,7 +22619,8 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
 
   async function addDayworkSheet() {
     if (!addDaysheet.hours || !addDaysheet.rate || !selected) return;
-    const { data } = await db.from("daywork_sheets").insert({ job_id: selected.id, user_id: user.id, ...addDaysheet, hours: parseFloat(addDaysheet.hours), rate: parseFloat(addDaysheet.rate) }).select().single();
+    const { data, error } = await db.from("daywork_sheets").insert({ job_id: selected.id, user_id: user.id, ...addDaysheet, hours: parseFloat(addDaysheet.hours), rate: parseFloat(addDaysheet.rate) }).select().single();
+    if (error) { alert(`Couldn't save daywork sheet: ${error.message}`); return; }
     if (data) { setDaysheets(prev => [data, ...prev]); setAddDaysheet({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" }); }
   }
 
@@ -23698,18 +23734,49 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
 
             <button
               style={{ ...S.btn("primary"), width: "100%", justifyContent: "center", padding: 14 }}
-              onClick={() => {
-                stagePaymentStages.forEach((s, i) => {
-                  const stageAmt = parseFloat((s.type === "pct"
-                    ? (selected.value * parseFloat(s.value || 0)) / 100
-                    : parseFloat(s.value || 0)).toFixed(2));
-                  if (!stageAmt || stageAmt <= 0) return;
-                  const invId = nextInvoiceId(invoices);
+              onClick={async () => {
+                // Auto-pull email/address/phone from the customer record so
+                // the draft invoices carry contact details and the Pay Online
+                // link works out of the box. Mirrors create_invoice tool.
+                let custAddr = selected.address || "";
+                let custEmail = "";
+                let custPhone = "";
+                if (selected.customer && (customers || []).length > 0) {
+                  const needle = selected.customer.toLowerCase().trim();
+                  const cust =
+                    (customers || []).find(c => (c.name || "").toLowerCase().trim() === needle) ||
+                    (customers || []).find(c => (c.name || "").toLowerCase().includes(needle));
+                  if (cust) {
+                    if (!custAddr && cust.address) custAddr = cust.address;
+                    if (cust.email) custEmail = cust.email;
+                    if (cust.phone) custPhone = cust.phone;
+                  }
+                }
+                // Pre-filter to valid stages. Running-list pattern avoids the
+                // stale-closure bug: nextInvoiceId(invoices) inside forEach
+                // would close over the pre-loop invoices array and hand out
+                // the same id to every stage.
+                const validStages = stagePaymentStages
+                  .map((s, i) => {
+                    const stageAmt = parseFloat((s.type === "pct"
+                      ? (selected.value * parseFloat(s.value || 0)) / 100
+                      : parseFloat(s.value || 0)).toFixed(2));
+                    return { s, i, stageAmt };
+                  })
+                  .filter(x => x.stageAmt > 0);
+                let runningInvoices = invoices || [];
+                const createdInvs = [];
+                const stagesWithAmounts = [];
+                for (const { s, i, stageAmt } of validStages) {
+                  const invId = nextInvoiceId(runningInvoices);
                   const label = s.label || `Stage ${i + 1}`;
+                  const portalToken = generatePortalToken();
                   const newInv = {
                     id: invId,
                     customer: selected.customer,
-                    address: selected.address || "",
+                    address: custAddr,
+                    email: custEmail,
+                    phone: custPhone,
                     amount: stageAmt,
                     desc: `${label} — ${selected.title || selected.type || ""}`,
                     description: `${label} — ${selected.title || selected.type || ""}`,
@@ -23720,11 +23787,46 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                     jobRef: selected.title || selected.type || "",
                     poNumber: selected.po_number || "",
                     created: new Date().toLocaleDateString("en-GB"),
+                    portalToken,
                   };
-                  setInvoices(prev => [newInv, ...(prev || [])]);
-                });
+                  runningInvoices = [newInv, ...runningInvoices];
+                  createdInvs.push(newInv);
+                  stagesWithAmounts.push({ label, type: s.type, value: s.value, amount: stageAmt, invoice_id: invId });
+                  // Persist to Supabase — mirrors create_invoice tool's upsert shape.
+                  if (user?.id) {
+                    try {
+                      await db.from("invoices").upsert({
+                        id: invId, user_id: user.id,
+                        customer: newInv.customer, address: newInv.address,
+                        email: newInv.email, phone: newInv.phone,
+                        amount: stageAmt, gross_amount: stageAmt,
+                        status: "draft", is_quote: false,
+                        due: newInv.due,
+                        description: newInv.description,
+                        line_items: JSON.stringify(newInv.lineItems),
+                        job_ref: newInv.jobRef || "",
+                        created_at: new Date().toISOString(),
+                        portal_token: portalToken,
+                      });
+                    } catch (e) {
+                      console.warn("Stage invoice Supabase write:", e.message);
+                    }
+                  }
+                }
+                setInvoices(prev => [...createdInvs, ...(prev || [])]);
+                // Save stages metadata to the job card — matches existing
+                // stage_payments JSON column pattern used elsewhere in App.jsx.
+                if (user?.id && selected?.id) {
+                  try {
+                    await db.from("job_cards")
+                      .update({ stage_payments: JSON.stringify(stagesWithAmounts) })
+                      .eq("id", selected.id).eq("user_id", user.id);
+                  } catch (e) {
+                    console.warn("Stage payments metadata write:", e.message);
+                  }
+                }
                 setShowStagePayments(false);
-                alert(`✓ ${stagePaymentStages.length} stage payment invoices created as drafts. Review and send from the Invoices tab.`);
+                alert(`✓ ${createdInvs.length} stage payment invoice${createdInvs.length !== 1 ? "s" : ""} created as drafts. Review and send from the Invoices tab.`);
               }}
             >
               Create {stagePaymentStages.length} Draft Invoice{stagePaymentStages.length !== 1 ? "s" : ""} →
