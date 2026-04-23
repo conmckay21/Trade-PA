@@ -8605,7 +8605,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         },
       },
     },
-    { name: "log_expense", description: "Log a business expense — fuel, parking, tools, accommodation, meals, other. Triggers: \"log £[X] for fuel\", \"add £[X] expense for parking\", \"claim £[X] for tools\", \"paid £[X] for [thing]\". ASK IF MISSING: amount and description are critical. Category — infer from description if possible (fuel/parking/tools/meals/accommodation/other). DEFAULTS: date → today. AFTER: \"£[amount] logged under [category].\"", input_schema: { type: "object", properties: { exp_type: { type: "string", enum: ["fuel","parking","tools","accommodation","meals","other","mileage"] }, description: { type: "string" }, amount: { type: "string" }, miles: { type: "string" }, exp_date: { type: "string" } }, required: ["description"] } },
+    { name: "log_expense", description: "Log a business expense — fuel, parking, tools, accommodation, meals, other. Triggers: \"log £[X] for fuel\", \"add £[X] expense for parking\", \"claim £[X] for tools\", \"paid £[X] for [thing]\". If the expense is linked to a specific job (e.g. \"£30 parking on the Bishop job\"), include customer or job_title so it shows in that job's profit breakdown. ASK IF MISSING: amount and description are critical. Category — infer from description if possible (fuel/parking/tools/meals/accommodation/other). DEFAULTS: date → today. AFTER: \"£[amount] logged under [category].\"", input_schema: { type: "object", properties: { exp_type: { type: "string", enum: ["fuel","parking","tools","accommodation","meals","other","mileage"] }, description: { type: "string" }, amount: { type: "string" }, miles: { type: "string" }, exp_date: { type: "string" }, customer: { type: "string", description: "Customer name if this expense is for a specific job — links the expense to that job's profit breakdown." }, job_title: { type: "string", description: "Optional job title to disambiguate if the customer has multiple jobs." } }, required: ["description"] } },
     { name: "list_expenses", description: "Show recent expenses inline. Triggers: \"show my expenses\", \"what have I spent\", \"expenses this month\". Filter by category or date range if mentioned. AFTER: total if meaningful — \"£[X] spent across [N] expenses this month.\"", input_schema: { type: "object", properties: {} } },
     { name: "log_cis_statement", description: "Log a CIS deduction statement received from a contractor. Triggers: \"CIS from [contractor] — gross £[X], deducted £[Y]\", \"log my CIS statement\". ASK IF MISSING: contractor name, gross, deduction amounts are all required. Tax month — default to current month. AFTER: \"CIS logged — £[gross] gross, £[deduction] deducted ([rate]%).\"", input_schema: { type: "object", properties: { contractor_name: { type: "string" }, gross_amount: { type: "string" }, deduction_amount: { type: "string" }, tax_month: { type: "string" }, notes: { type: "string" } }, required: ["contractor_name","gross_amount","deduction_amount"] } },
     { name: "list_cis_statements", description: "Show CIS deduction statements inline. Triggers: \"show my CIS\", \"CIS statements this year\", \"what CIS have I had\". Filter by tax year if mentioned.", input_schema: { type: "object", properties: {} } },
@@ -8780,6 +8780,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     // ─── Shared job lookup helper — must be before switch to avoid TDZ ───────
     const findJob = async (customer, jobTitle, actionLabel = "action") => {
       if (!customer && !jobTitle) return { error: "No customer or job title provided." };
+      // Primary: search job_cards (the rich tracking table most tools write to).
       let q = db.from("job_cards")
         .select("id,title,type,customer,status,address,value")
         .eq("user_id", user?.id)
@@ -8788,21 +8789,79 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       if (customer) q = q.ilike("customer", `%${customer}%`);
       if (jobTitle) q = q.or(`title.ilike.%${jobTitle}%,type.ilike.%${jobTitle}%`);
       const { data: matches } = await q;
-      if (!matches?.length) return { error: `No job card found for "${customer || jobTitle}". Check the Jobs tab.` };
-      if (matches.length === 1) return { job: matches[0] };
-      if (customer && jobTitle) {
-        const exact = matches.find(j =>
-          (j.customer || "").toLowerCase().includes(customer.toLowerCase()) &&
-          (j.title || j.type || "").toLowerCase().includes(jobTitle.toLowerCase())
-        );
-        if (exact) return { job: exact };
+      if (matches?.length) {
+        if (matches.length === 1) return { job: matches[0] };
+        if (customer && jobTitle) {
+          const exact = matches.find(j =>
+            (j.customer || "").toLowerCase().includes(customer.toLowerCase()) &&
+            (j.title || j.type || "").toLowerCase().includes(jobTitle.toLowerCase())
+          );
+          if (exact) return { job: exact };
+        }
+        const opts = matches.map(j => {
+          const addr = (j.address || "").split(",")[0].trim();
+          const val = j.value ? ` ${fmtAmount(j.value)}` : "";
+          return `"${j.title || j.type || "Job"}"${addr ? ` at ${addr}` : ""}${val} (${j.status || "active"})`;
+        }).join("; ");
+        return { error: `Multiple jobs found: ${opts}. Which job should I ${actionLabel}?` };
       }
-      const opts = matches.map(j => {
-        const addr = (j.address || "").split(",")[0].trim();
-        const val = j.value ? ` ${fmtAmount(j.value)}` : "";
-        return `"${j.title || j.type || "Job"}"${addr ? ` at ${addr}` : ""}${val} (${j.status || "active"})`;
-      }).join("; ");
-      return { error: `Multiple jobs found: ${opts}. Which job should I ${actionLabel}?` };
+      // Fallback: no job_card match — look at the simple `jobs` table
+      // (Schedule tab entries). These were created via create_job and never
+      // became rich job_cards. All child FKs (time_logs, materials,
+      // compliance_docs, etc.) point at job_cards.id (UUID), so we need a
+      // job_card to attach to. Solution: lazy-promote — create a job_card
+      // that mirrors the jobs row on first use, leave the jobs row alone
+      // so the Schedule tab still shows it.
+      let jq = db.from("jobs")
+        .select("id,type,customer,status,address,value,notes,date_obj,company_id")
+        .eq("user_id", user?.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (customer) jq = jq.ilike("customer", `%${customer}%`);
+      if (jobTitle) jq = jq.ilike("type", `%${jobTitle}%`);
+      const { data: jobsMatches } = await jq;
+      if (!jobsMatches?.length) {
+        return { error: `No job found for "${customer || jobTitle}". Check the Jobs or Schedule tab.` };
+      }
+      let pickFromJobs = null;
+      if (jobsMatches.length === 1) {
+        pickFromJobs = jobsMatches[0];
+      } else if (customer && jobTitle) {
+        pickFromJobs = jobsMatches.find(j =>
+          (j.customer || "").toLowerCase().includes(customer.toLowerCase()) &&
+          (j.type || "").toLowerCase().includes(jobTitle.toLowerCase())
+        );
+      }
+      if (!pickFromJobs) {
+        const opts = jobsMatches.map(j => {
+          const addr = (j.address || "").split(",")[0].trim();
+          const val = j.value ? ` ${fmtAmount(j.value)}` : "";
+          return `"${j.type || "Job"}"${addr ? ` at ${addr}` : ""}${val} (${j.status || "scheduled"})`;
+        }).join("; ");
+        return { error: `Multiple scheduled jobs found: ${opts}. Which one should I ${actionLabel}?` };
+      }
+      // Promote the scheduled job into a job_card so child tables can FK to it.
+      // The jobs row is left intact — Schedule tab continues to show it, and
+      // update_job_status now mirrors status changes across both tables.
+      const promotedPayload = {
+        user_id: user?.id,
+        company_id: pickFromJobs.company_id || null,
+        title: pickFromJobs.type || "Job",
+        customer: pickFromJobs.customer || "",
+        address: pickFromJobs.address || "",
+        type: pickFromJobs.type || "",
+        status: pickFromJobs.status || "active",
+        value: pickFromJobs.value || 0,
+        start_date: pickFromJobs.date_obj || null,
+        notes: pickFromJobs.notes || "",
+      };
+      const { data: promoted, error: promoteErr } = await db.from("job_cards")
+        .insert(promotedPayload).select().single();
+      if (promoteErr || !promoted) {
+        console.warn("[findJob] jobs→job_card promotion failed:", promoteErr?.message);
+        return { error: `Found "${pickFromJobs.customer}" in your schedule but couldn't promote it to a job card (${promoteErr?.message || "unknown"}). Try creating the job card manually first.` };
+      }
+      return { job: promoted };
     };
     // ─────────────────────────────────────────────────────────────────────────
     try {
@@ -8876,6 +8935,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             description: lineItems.map(l => `${l.description}|${l.amount}`).join("\n"),
             lineItems,
             isQuote: false,
+            // Honor brand defaults — VAT-registered tradies above the £85k
+            // threshold shouldn't have to manually toggle VAT on every voice
+            // invoice. Same defaults the InvoiceModal form now uses.
+            vatEnabled: brand?.vatEnabled || false,
+            vatRate: brand?.vatRate || 20,
+            cisEnabled: brand?.cisEnabled || false,
+            cisRate: brand?.cisRate || 20,
             // Portal token for the customer-facing invoice page. Same token
             // format as quotes — portal.js reads is_quote on the record to
             // decide whether to render accept/decline (quote) or Pay Now
@@ -8943,6 +9009,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             description: lineItems.map(l => `${l.description}|${l.amount}`).join("\n"),
             lineItems,
             isQuote: true,
+            // Honor brand defaults — see matching change in create_invoice.
+            vatEnabled: brand?.vatEnabled || false,
+            vatRate: brand?.vatRate || 20,
+            cisEnabled: brand?.cisEnabled || false,
+            cisRate: brand?.cisRate || 20,
             // Portal token: per-doc random string so customers can view the
             // quote at /quote/<token> without logging in. Generated here so
             // the detail view can show the portal URL immediately, no refresh.
@@ -9154,11 +9225,44 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Invoice ${match.id} for ${match.customer} (${fmtAmount(match.amount)}) marked as paid.`;
         }
         case "update_job_status": {
-          const match = (jobs || []).find(j => j.customer.toLowerCase().includes(input.customer.toLowerCase()) && (!input.job_type || j.type.toLowerCase().includes(input.job_type.toLowerCase())));
-          if (!match) return `Couldn't find a job for "${input.customer}". Check the Schedule tab.`;
-          setJobs(prev => (prev || []).map(j => j.id === match.id ? { ...j, status: input.status } : j));
-          setLastAction({ type: "job", label: `${input.status}: ${match.type} — ${match.customer}`, view: "Schedule" });
-          return `Job "${match.type}" for ${match.customer} updated to ${input.status}.`;
+          // Dual-table search — inverse of findJob's logic. A user saying
+          // "mark Karen's kitchen complete" could be talking about either
+          // the Schedule entry (jobs table) or the rich Job Card (job_cards
+          // table) or both. Before this fix this tool only touched jobs, so
+          // job_cards status stayed stale for users who lived in Jobs tab.
+          const customer = input.customer || "";
+          const typeFilter = input.job_type || "";
+          const jobsMatch = (jobs || []).find(j =>
+            (j.customer || "").toLowerCase().includes(customer.toLowerCase()) &&
+            (!typeFilter || (j.type || "").toLowerCase().includes(typeFilter.toLowerCase()))
+          );
+          // Also look for a matching job_card. We let findJob handle the
+          // promotion case — but here we want to FIND without promoting, so
+          // query directly.
+          let jcQuery = db.from("job_cards").select("id,customer,title,type,status")
+            .eq("user_id", user?.id).ilike("customer", `%${customer}%`)
+            .order("created_at", { ascending: false }).limit(5);
+          if (typeFilter) jcQuery = jcQuery.or(`title.ilike.%${typeFilter}%,type.ilike.%${typeFilter}%`);
+          const { data: jcMatches } = await jcQuery;
+          const jcMatch = jcMatches?.[0];
+          if (!jobsMatch && !jcMatch) {
+            return `Couldn't find a job for "${customer}". Check the Schedule and Jobs tabs.`;
+          }
+          const updatedPlaces = [];
+          if (jobsMatch) {
+            setJobs(prev => (prev || []).map(j => j.id === jobsMatch.id ? { ...j, status: input.status } : j));
+            updatedPlaces.push("Schedule");
+          }
+          if (jcMatch) {
+            const { error: jcUpErr } = await db.from("job_cards")
+              .update({ status: input.status, updated_at: new Date().toISOString() })
+              .eq("id", jcMatch.id).eq("user_id", user?.id);
+            if (!jcUpErr) updatedPlaces.push("Jobs");
+          }
+          const displayName = jcMatch?.customer || jobsMatch?.customer || customer;
+          const displayType = jcMatch?.title || jcMatch?.type || jobsMatch?.type || "job";
+          setLastAction({ type: "job", label: `${input.status}: ${displayType} — ${displayName}`, view: updatedPlaces.includes("Jobs") ? "Jobs" : "Schedule" });
+          return `Job "${displayType}" for ${displayName} updated to ${input.status}${updatedPlaces.length > 1 ? " (both Schedule and Jobs tabs)" : ""}.`;
         }
         case "convert_quote_to_invoice": {
           const match = (invoices || []).find(i =>
@@ -9833,6 +9937,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const amount = input.exp_type === "mileage"
             ? (parseFloat(input.miles || 0) * 0.45)
             : (parseFloat(input.amount) || 0);
+          // Resolve job link if a customer or job_title was given — this is
+          // what makes the expense show up in the job's profit breakdown.
+          // Before this, log_expense never accepted customer/job_title, so
+          // every expense had job_id=null and get_job_profit's expenseCost
+          // always came back as £0 regardless of what had been logged.
+          let expJobId = null;
+          if (input.customer || input.job_title) {
+            const { job: expJob } = await findJob(input.customer || "", input.job_title || "");
+            if (expJob) expJobId = expJob.id;
+          }
           // Dedup: same description + amount + date = duplicate
           const expDate = input.exp_date || new Date().toISOString().slice(0,10);
           const { data: existingExp } = await db.from("expenses")
@@ -9846,10 +9960,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             amount,
             miles: input.exp_type === "mileage" ? parseFloat(input.miles) : null,
             exp_date: input.exp_date || new Date().toISOString().slice(0,10),
+            job_id: expJobId,
           }).select().single();
           if (error) return `Failed to log expense: ${error.message}`;
           pendingWidgetRef.current = { type: "expense_entry", data };
-          return `Expense logged: ${input.description || input.exp_type} — ${fmtCurrency(amount)}`;
+          return `Expense logged: ${input.description || input.exp_type} — ${fmtCurrency(amount)}${expJobId ? ` (linked to ${input.customer}${input.job_title ? ` — ${input.job_title}` : ""})` : ""}`;
         }
         case "list_expenses": {
           const { data } = await db.from("expenses").select("*").eq("user_id", user?.id).order("exp_date", { ascending: false }).limit(20);
@@ -9887,8 +10002,26 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Here are your CIS statements:`;
         }
         case "add_subcontractor": {
-          const existing = await db.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
-          if (existing.data?.length) return `${input.name} is already in your subcontractors.`;
+          const existing = await db.from("subcontractors").select("id,name,active").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          if (existing.data?.length) {
+            const hit = existing.data[0];
+            // If an archived subbie matches, silently unarchive + update
+            // details. Otherwise signal the duplicate (existing pattern).
+            if (hit.active === false) {
+              const { data: re, error: reErr } = await db.from("subcontractors").update({
+                active: true,
+                company: input.company || undefined,
+                utr: input.utr || undefined,
+                cis_rate: input.cis_rate ? parseInt(input.cis_rate) : undefined,
+                email: input.email || undefined,
+                phone: input.phone || undefined,
+              }).eq("id", hit.id).eq("user_id", user?.id).select().single();
+              if (reErr) return `Failed to reactivate: ${reErr.message}`;
+              pendingWidgetRef.current = { type: "subcontractor_entry", data: re };
+              return `${re.name} reactivated — CIS rate ${re.cis_rate}%. Past payment history preserved.`;
+            }
+            return `${input.name} is already in your subcontractors.`;
+          }
           const { data, error } = await db.from("subcontractors").insert({
             user_id: user?.id,
             name: input.name, company: input.company || "", utr: input.utr || "",
@@ -9964,7 +10097,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Payment logged for ${sub.name} — ${payDesc}gross ${fmtCurrency(gross)}, CIS deduction ${fmtCurrency(deduction)} (on ${payType === "price_work" && execLabour > 0 ? "labour only" : "full amount"}), net to pay ${fmtCurrency(net)}.`;
         }
         case "list_subcontractors": {
-          const { data } = await db.from("subcontractors").select("*").eq("user_id", user?.id).order("name");
+          const { data } = await db.from("subcontractors").select("*")
+            .eq("user_id", user?.id).eq("active", true).order("name");
           if (!data?.length) return "No subcontractors added yet. Say 'add subcontractor' to add one.";
           pendingWidgetRef.current = { type: "subcontractor_list", data };
           return `Here are your subcontractors:`;
@@ -10027,14 +10161,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return summary;
         }
         case "add_compliance_cert": {
-          const { job: jcMatch, error: dwErr } = await findJob(input.customer, input.job_title, "log daywork to");
+          const { job: jcMatch, error: dwErr } = await findJob(input.customer, input.job_title, "add this certificate to");
           if (dwErr) return dwErr;
           const jc = [jcMatch];
                     const { data, error } = await db.from("compliance_docs").insert({
             job_id: jc[0].id, user_id: user?.id,
             doc_type: input.doc_type || "", doc_number: input.doc_number || "",
+            // Postgres rejects empty string in date columns — must be null
+            // when the user hasn't given an expiry. Same for issued_date.
             issued_date: input.issued_date || new Date().toISOString().slice(0,10),
-            expiry_date: input.expiry_date || "", notes: input.notes || "",
+            expiry_date: input.expiry_date || null, notes: input.notes || "",
           }).select().single();
           if (error) return `Failed to add certificate: ${error.message}`;
           pendingWidgetRef.current = { type: "compliance_cert", data: { ...data, customer: jc[0].customer, job_title: jc[0].title || jc[0].type } };
@@ -10056,11 +10192,34 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             description: input.description || "", amount, status: "pending",
           }).select().single();
           if (error) return `Failed to add variation order: ${error.message}`;
+          // Bump the job_card's headline value so any UI/report reading
+          // job_cards.value shows the new total including variations. Without
+          // this the job displays the original value forever even after £2k
+          // of variations have been added. get_job_profit works either way
+          // (it sums VOs separately) but reports using jobs.value don't.
+          // Select-then-update pattern: we need the current value before we
+          // can add to it. Fire-and-forget to keep voice response quick.
+          if (user?.id) {
+            db.from("job_cards")
+              .select("value")
+              .eq("id", jc[0].id)
+              .eq("user_id", user.id)
+              .single()
+              .then(({ data: curJc, error: readErr }) => {
+                if (readErr || !curJc) return;
+                const newValue = (parseFloat(curJc.value) || 0) + amount;
+                db.from("job_cards")
+                  .update({ value: newValue, updated_at: new Date().toISOString() })
+                  .eq("id", jc[0].id)
+                  .eq("user_id", user.id)
+                  .then(({ error: upErr }) => { if (upErr) console.warn("[add_variation_order] job value bump failed:", upErr.message); });
+              });
+          }
           pendingWidgetRef.current = { type: "variation_order", data: { ...data, customer: jc[0].customer } };
           return `Variation order added to ${jc[0].customer}'s job — ${input.description} — ${fmtCurrency(amount)}.`;
         }
         case "log_daywork": {
-          const { job: jcMatch, error: certErr } = await findJob(input.customer, input.job_title, "add this certificate to");
+          const { job: jcMatch, error: certErr } = await findJob(input.customer, input.job_title, "log daywork to");
           if (certErr) return certErr;
           const jc = [jcMatch];
                     const total = (parseFloat(input.hours) || 0) * (parseFloat(input.rate) || 0);
@@ -10561,6 +10720,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const invNum = "INV-" + String(((invoices || []).length + 1)).padStart(3, "0");
           const newInv = { id: invNum, customer: jc.customer, address: jc.address || "", email: "", amount: total, grossAmount: total, status: "draft", lineItems, jobRef: String(jc.id), isQuote: false, vatEnabled: brand?.vatEnabled || false, vatRate: brand?.vatRate || 20, due: "30 days", date: new Date().toLocaleDateString("en-GB") };
           setInvoices(prev => [newInv, ...(prev || [])]);
+          // Link the invoice back to the source job card so reverse lookups
+          // ("which invoice came from this job?") work and the job appears in
+          // the right state. Without this the relationship is one-way only.
+          if (user?.id && jc.id) {
+            db.from("job_cards")
+              .update({ invoice_id: invNum, status: jc.status === "complete" ? jc.status : "invoiced" })
+              .eq("id", jc.id)
+              .eq("user_id", user.id)
+              .then(({ error }) => { if (error) console.warn("[create_invoice_from_job] job_card link failed:", error.message); });
+          }
           pendingWidgetRef.current = { type: "invoice", data: newInv };
           return `Invoice ${invNum} created from ${jc.customer}'s job card — ${lineItems.length} line item${lineItems.length !== 1 ? "s" : ""}, total ${fmtCurrency(total)}. Review and send when ready.`;
         }
@@ -10922,10 +11091,21 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${expiredCount ? expiredCount + " expired, " : ""}${expiringCount} expiring in the next ${days} days.`;
         }
         case "delete_subcontractor": {
-          const { data: found } = await db.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name || ""}%`).limit(1);
+          const { data: found } = await db.from("subcontractors").select("id,name,active").eq("user_id", user?.id).ilike("name", `%${input.name || ""}%`).limit(1);
           if (!found?.length) return `Subcontractor not found.`;
-          await db.from("subcontractors").delete().eq("id", found[0].id);
-          return `${found[0].name} removed from subcontractors.`;
+          if (found[0].active === false) return `${found[0].name} is already archived.`;
+          // Soft-delete only: hard DELETE would CASCADE wipe their entire
+          // subcontractor_payments history, which is HMRC-reportable CIS
+          // data we must retain for 6 years. Setting active=false hides
+          // them from lists but keeps every payment record intact.
+          // Report payment count so the user knows what's being preserved.
+          const { count: payCount } = await db.from("subcontractor_payments")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", user?.id).eq("subcontractor_id", found[0].id);
+          const { error: arcErr } = await db.from("subcontractors")
+            .update({ active: false }).eq("id", found[0].id).eq("user_id", user?.id);
+          if (arcErr) return `Failed to archive: ${arcErr.message}`;
+          return `${found[0].name} archived.${payCount ? ` ${payCount} payment record${payCount > 1 ? "s" : ""} kept for CIS reporting.` : ""}`;
         }
         case "update_worker": {
           const { data: wMatches } = await db.from("workers").select("*").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
@@ -10946,11 +11126,28 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${w.name} updated: ${changes}.`;
         }
         case "delete_worker": {
-          const { data: wDel } = await db.from("workers").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: wDel } = await db.from("workers").select("id,name,active").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (!wDel?.length) return `Worker "${input.name}" not found.`;
-          const { error: wDelErr } = await db.from("workers").delete().eq("id", wDel[0].id).eq("user_id", user?.id);
-          if (wDelErr) return `Failed to delete: ${wDelErr.message}`;
-          return `${wDel[0].name} removed from workers.`;
+          if (wDel[0].active === false) return `${wDel[0].name} is already archived.`;
+          // Soft-delete only: hard DELETE would CASCADE wipe their
+          // job_workers assignments and worker_documents (CSCS cards,
+          // right-to-work checks, insurance certs — legally retained
+          // records). Setting active=false hides them from the workers
+          // list while preserving all HR/compliance history.
+          const [{ count: assignCount }, { count: docCount }, { count: timeCount }] = await Promise.all([
+            db.from("job_workers").select("id", { count: "exact", head: true }).eq("user_id", user?.id).eq("worker_id", wDel[0].id),
+            db.from("worker_documents").select("id", { count: "exact", head: true }).eq("user_id", user?.id).eq("worker_id", wDel[0].id),
+            db.from("time_logs").select("id", { count: "exact", head: true }).eq("user_id", user?.id).eq("worker", wDel[0].name),
+          ]);
+          const { error: wArcErr } = await db.from("workers")
+            .update({ active: false }).eq("id", wDel[0].id).eq("user_id", user?.id);
+          if (wArcErr) return `Failed to archive: ${wArcErr.message}`;
+          const kept = [
+            assignCount ? `${assignCount} job assignment${assignCount > 1 ? "s" : ""}` : "",
+            docCount ? `${docCount} document${docCount > 1 ? "s" : ""}` : "",
+            timeCount ? `${timeCount} time log${timeCount > 1 ? "s" : ""}` : "",
+          ].filter(Boolean).join(", ");
+          return `${wDel[0].name} archived.${kept ? ` ${kept} kept for HR records.` : ""}`;
         }
         case "update_subcontractor_payment": {
           const { data: subFind } = await db.from("subcontractors").select("id,name,cis_rate").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
@@ -11005,8 +11202,39 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const term = (input.customer || input.title || "").toLowerCase();
           const { data: found } = await db.from("job_cards").select("id,customer,title").eq("user_id", user?.id).or(`customer.ilike.%${term}%,title.ilike.%${term}%`).order("created_at", { ascending: false }).limit(1);
           if (!found?.length) return `Job card not found for "${input.customer || input.title}".`;
-          await db.from("job_cards").delete().eq("id", found[0].id);
-          return `Job card for ${found[0].customer}${found[0].title ? " — " + found[0].title : ""} deleted.`;
+          // Pre-delete: count attached children so we can tell the user what
+          // survives as orphans. All child FKs are ON DELETE SET NULL now
+          // (post 2026-04-23 FK harmonization migration) — nothing cascades,
+          // but users should know their time logs / certs / photos are now
+          // unattached and need reassigning or archiving.
+          let orphanSummary = "";
+          try {
+            const jcId = found[0].id;
+            const [timeCount, matCount, certCount, vosCount, notesCount, photosCount, dwCount, expCount] = await Promise.all([
+              db.from("time_logs").select("id", { count: "exact", head: true }).eq("job_id", jcId),
+              db.from("materials").select("id", { count: "exact", head: true }).eq("job_id", jcId),
+              db.from("compliance_docs").select("id", { count: "exact", head: true }).eq("job_id", jcId),
+              db.from("variation_orders").select("id", { count: "exact", head: true }).eq("job_id", jcId),
+              db.from("job_notes").select("id", { count: "exact", head: true }).eq("job_id", jcId),
+              db.from("job_photos").select("id", { count: "exact", head: true }).eq("job_id", jcId),
+              db.from("daywork_sheets").select("id", { count: "exact", head: true }).eq("job_id", jcId),
+              db.from("expenses").select("id", { count: "exact", head: true }).eq("job_id", jcId),
+            ]);
+            const orphans = [
+              timeCount.count ? `${timeCount.count} time log${timeCount.count > 1 ? "s" : ""}` : "",
+              matCount.count ? `${matCount.count} material${matCount.count > 1 ? "s" : ""}` : "",
+              certCount.count ? `${certCount.count} certificate${certCount.count > 1 ? "s" : ""}` : "",
+              vosCount.count ? `${vosCount.count} variation${vosCount.count > 1 ? "s" : ""}` : "",
+              notesCount.count ? `${notesCount.count} note${notesCount.count > 1 ? "s" : ""}` : "",
+              photosCount.count ? `${photosCount.count} photo${photosCount.count > 1 ? "s" : ""}` : "",
+              dwCount.count ? `${dwCount.count} daywork sheet${dwCount.count > 1 ? "s" : ""}` : "",
+              expCount.count ? `${expCount.count} expense${expCount.count > 1 ? "s" : ""}` : "",
+            ].filter(Boolean);
+            if (orphans.length) orphanSummary = ` ${orphans.join(", ")} kept but unattached — reassign or archive when you're ready.`;
+          } catch (e) { /* child count best-effort */ }
+          const { error: delErr } = await db.from("job_cards").delete().eq("id", found[0].id);
+          if (delErr) return `Failed to delete job card: ${delErr.message}`;
+          return `Job card for ${found[0].customer}${found[0].title ? " — " + found[0].title : ""} deleted.${orphanSummary}`;
         }
         case "delete_mileage": {
           let query = db.from("mileage_logs").select("id,from_location,to_location,date,miles").eq("user_id", user?.id);
@@ -11109,6 +11337,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             await fetch("/api/xero/mark-paid", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user?.id, invoiceId: inv.id }) });
             // Also update local status so the invoice no longer shows in outstanding lists
             setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, status: "paid", due: "Paid" } : i));
+            // Parity with mark_invoice_paid: also sync to QuickBooks (no harm
+            // if not connected — fire-and-forget), push the user, track event.
+            // The user-facing tool name says "Xero" but the action is "mark
+            // paid everywhere" — partial-sync was a silent gotcha for users
+            // running both systems.
+            syncInvoiceToAccounting(user?.id, { ...inv, status: "paid" });
+            sendPush({ title: "💰 Invoice Paid", body: `${inv.customer} paid ${fmtAmount(inv.amount)}`, url: "/", type: "invoice_paid", tag: "invoice-paid" });
+            trackEvent(db, user?.id, companyId, "payment", "invoice_marked_paid", {
+              amount: inv.amount,
+              invoice_id: inv.id,
+              source: "xero_explicit",
+            });
             pendingWidgetRef.current = { type: "accounting_sync", data: { platform: "Xero", customer: inv.customer, invoice_id: inv.id, success: true, markedPaid: true } };
             return `Invoice ${inv.id} for ${inv.customer} marked as paid in Xero and updated locally.`;
           } catch(e) {
@@ -11271,7 +11511,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "CREATE: create_job (scheduled), create_job_card, create_invoice, create_quote, create_invoice_from_job, log_enquiry, set_reminder, create_material, create_customer, add_stock_item, log_expense, log_cis_statement, add_subcontractor, log_subcontractor_payment, add_compliance_cert (CP12/EICR/PAT etc), add_variation_order, log_daywork, send_review_request, add_stage_payment\n"
   + "FIND/SHOW INLINE: find_invoice, find_quote, find_job_card (always shows full card), list_invoices, list_jobs, list_materials, find_material_receipt, list_schedule, get_job_full (use this when user asks for detail on a job), list_expenses, list_cis_statements, list_subcontractors, list_reminders, list_enquiries, list_customers, list_mileage, list_stock, list_rams, get_report, list_inbox_actions (show pending email actions with email snippet for review)\n"
   + "UPDATE BRAND: update_brand (use during onboarding or when user wants to update business details)\n"
-  + "DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material (use count param to delete multiple — count:3 deletes 3, count:999 deletes all matching)\n"
+  + "DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material (use count param to delete multiple — count:3 deletes 3, count:999 deletes all matching). Also delete_job_card, delete_subcontractor, delete_worker, delete_subcontractor_payment, delete_cis_statement, delete_expense, delete_mileage, delete_rams, delete_stock_item.\n"
+  + "DELETE CONFIRMATION RULE (NON-NEGOTIABLE): Before calling ANY delete_* tool, you MUST confirm with the user in your text reply, naming the EXACT thing being deleted (customer name, invoice number, job title — whatever identifies it precisely) and ONLY proceed if the user replies with a clear yes / confirm / delete it / go ahead. If the user's message is ambiguous (e.g. 'remove the Smith one' when there are multiple Smiths), list the candidates and ask which one — do not guess. Voice users on cellular often have STT mishearing risk where 'add' becomes 'delete' or a customer name gets mangled — the confirmation step protects them. ONLY exception: when the user has just been shown a list/find result and immediately follows with 'delete that' or 'remove that one' referring unambiguously to a single item shown. Even then, name the item back to them in your reply.\n"
   + "- update_material_status updates ALL items with that name — one call updates all duplicates at once.\n"
   + "UPDATE: mark_invoice_paid, update_job_status, update_job_card (edit any field), update_invoice (edit any field/line item), update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock, delete_stock_item\n"
   + "LOG: log_time, log_mileage, add_job_note\n"
@@ -14147,6 +14388,11 @@ function Payments({ brand, invoices, setInvoices, customers, user, sendPush, set
         type: "invoice_paid",
         tag: "invoice-paid",
       });
+      // Analytics parity with voice mark_invoice_paid — undercounting otherwise
+      trackEvent(db, user?.id, window._companyId, "payment", "invoice_marked_paid", {
+        amount: inv.amount,
+        invoice_id: inv.id,
+      });
     }
   };
 
@@ -14934,7 +15180,7 @@ function InvoiceModal({ brand, onClose, onSent, initialData, invoices, user, cus
     poNumber: initialData?.poNumber || "",
     lineItems: initialData?.lineItems || [],
     materialItems: initialData?.materialItems || [{ desc: "", amount: "" }],
-  } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: false, vatRate: 20, vatType: "income", vatZeroRated: false, cisEnabled: false, cisRate: 20, jobRef: "", lineItems: [], materialItems: [{ desc: "", amount: "" }] });
+  } : { customer: "", email: "", address: "", amount: "", labour: "", materials: "", desc: "", due: brand.paymentTerms || "14", paymentMethod: brand.defaultPaymentMethod || "both", vatEnabled: brand.vatEnabled || false, vatRate: brand.vatRate || 20, vatType: "income", vatZeroRated: false, cisEnabled: brand.cisEnabled || false, cisRate: brand.cisRate || 20, jobRef: "", lineItems: [], materialItems: [{ desc: "", amount: "" }] });
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
@@ -15280,7 +15526,7 @@ function QuoteModal({ brand, onClose, onSent, initialData, invoices, user, custo
     labour: initialData.cisLabour ? String(initialData.cisLabour) : "",
     materials: initialData.cisMaterials ? String(initialData.cisMaterials) : "",
     materialItems: initialData.materialItems || [{ desc: "", amount: "" }],
-  } : { customer: "", email: "", address: "", amount: "", desc: "", validDays: "30", vatEnabled: false, vatRate: 20, vatType: "income", jobRef: "", lineItems: [], cisEnabled: false, cisRate: 20, labour: "", materials: "", materialItems: [{ desc: "", amount: "" }] });
+  } : { customer: "", email: "", address: "", amount: "", desc: "", validDays: "30", vatEnabled: brand.vatEnabled || false, vatRate: brand.vatRate || 20, vatType: "income", jobRef: "", lineItems: [], cisEnabled: brand.cisEnabled || false, cisRate: brand.cisRate || 20, labour: "", materials: "", materialItems: [{ desc: "", amount: "" }] });
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
@@ -18547,6 +18793,11 @@ function InvoicesView({ brand, invoices, setInvoices, user, customers, customerC
     // Sync paid status to accounting software
     if (status === "paid" && inv && user?.id) {
       syncInvoiceToAccounting(user.id, { ...inv, status: "paid" });
+      // Analytics parity with voice mark_invoice_paid — undercounting otherwise
+      trackEvent(db, user?.id, window._companyId, "payment", "invoice_marked_paid", {
+        amount: inv.amount,
+        invoice_id: inv.id,
+      });
     }
   };
 
@@ -20059,13 +20310,66 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
       );
 
       if (matchingQuote) {
-        // Convert quote to invoice
+        // Convert quote to invoice — mirrors QuotesView.convertToInvoice
+        // (the canonical path) so the same chain of effects fires regardless
+        // of whether the user converted manually or via email approval.
+        // Previously this branch only mutated React state and removed the
+        // original quote from the list, which (a) raced with the setInvoices
+        // wrapper into a delete-then-upsert that often lost the new invoice,
+        // and (b) destroyed quote acceptance history.
         const newId = nextInvoiceId(invoices);
-        const newInvoice = { ...matchingQuote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand?.paymentTerms || 30} days` };
-        setInvoices(prev => [newInvoice, ...(prev || []).filter(i => i.id !== matchingQuote.id)]);
+        const newInvoice = {
+          ...matchingQuote,
+          isQuote: false,
+          id: newId,
+          status: "sent",
+          due: `Due in ${brand?.paymentTerms || 30} days`,
+          portalToken: generatePortalToken(),
+        };
+        // Preserve the quote, mark it accepted (don't filter it out).
+        setInvoices(prev => {
+          const withQuoteAccepted = (prev || []).map(i =>
+            i.id === matchingQuote.id ? { ...i, status: "accepted" } : i
+          );
+          return [newInvoice, ...withQuoteAccepted];
+        });
+        // Create the linking job_card so subsequent time/material/expense
+        // entries against this customer attach to the right work record.
+        if (user?.id) {
+          const scopeOfWork = (matchingQuote.lineItems && matchingQuote.lineItems.length > 0)
+            ? matchingQuote.lineItems.map(l => l.description || l.desc || "").filter(Boolean).join("\n")
+            : (matchingQuote.description || matchingQuote.desc || "");
+          await window._supabase.from("job_cards").insert({
+            user_id: user.id,
+            title: `${matchingQuote.id} — ${matchingQuote.customer}`,
+            customer: matchingQuote.customer,
+            address: matchingQuote.address || "",
+            type: matchingQuote.type || "",
+            status: "accepted",
+            value: matchingQuote.amount || 0,
+            quote_id: matchingQuote.id,
+            invoice_id: newId,
+            scope_of_work: scopeOfWork,
+            notes: `Quote accepted via email on ${new Date().toLocaleDateString("en-GB")}`,
+          }).then(({ error }) => { if (error) console.error("[accept_quote matched] job_card insert failed:", error.message); });
+        }
       } else {
-        // No matching quote found — create a job instead
-        setJobs(prev => [...(prev || []), { id: Date.now(), customer: customerName || "Unknown", address: d.address || "", type: d.type || "Boiler Installation", date: new Date().toLocaleDateString("en-GB"), dateObj: new Date().toISOString(), status: "pending", value: 0, notes: `Quote accepted via email. ${d.notes || ""}` }]);
+        // No matching quote — create a job_card so the work is at least
+        // tracked. Goes into job_cards (Jobs tab), NOT jobs (Schedule),
+        // because we don't have a date/time. Drops the old hardcoded
+        // "Boiler Installation" fallback that misclassified non-plumbers.
+        if (user?.id) {
+          await window._supabase.from("job_cards").insert({
+            user_id: user.id,
+            title: customerName || "New job from email",
+            customer: customerName || "Unknown",
+            address: d.address || "",
+            type: d.type || "",
+            status: "accepted",
+            value: 0,
+            notes: `Quote accepted via email — no matching quote found in system. ${d.notes || ""}`.trim(),
+          }).then(({ error }) => { if (error) console.error("[accept_quote unmatched] job_card insert failed:", error.message); });
+        }
       }
 
       // Send reply email asking for booking date
