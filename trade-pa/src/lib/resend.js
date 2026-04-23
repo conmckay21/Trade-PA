@@ -1,24 +1,25 @@
-// api/_lib/resend.js
+// api/lib/resend.js
 // Shared Resend client + transactional email templates for Trade PA.
-// Called from webhook handlers. Fire-and-forget: errors logged, never thrown.
+// Called from webhook handlers and cron jobs. Fire-and-forget: errors logged, never thrown.
 //
-// The `_lib` folder prefix tells Vercel NOT to treat this as a serverless route.
-// Imported via: import { sendWelcome, sendTrialEnding, sendPaymentFailed } from "../_lib/resend.js";
+// Imported via: import { sendWelcome, sendTrialEnding, sendPaymentFailed, sendReminder } from "../lib/resend.js";
 
 const RESEND_API = "https://api.resend.com/emails";
 
 // ---- Configuration ---------------------------------------------------------
-// If the app lives at a different URL (e.g. app.tradespa.co.uk), set APP_URL
-// env var on Vercel. Defaults to the marketing/app root.
 const APP_URL        = process.env.APP_URL || "https://tradespa.co.uk";
-const BILLING_URL    = `${APP_URL}/settings/billing`; // adjust if your route differs
+const BILLING_URL    = `${APP_URL}/settings/billing`;
 const SUPPORT_EMAIL  = "support@tradespa.co.uk";
 const BILLING_EMAIL  = "billing@tradespa.co.uk";
 const HELLO_EMAIL    = "hello@tradespa.co.uk";
 const PRIVACY_URL    = `${APP_URL}/privacy`;
 
-// Sender identities — must match aliases verified in Gmail "Send mail as"
-// and the domain verified in Resend.
+// Companies Act 2006 s.82 — business emails/letters must show company name,
+// registered number, place of registration. Rendered in the shared footer
+// of every transactional email. Single source of truth: change here, it
+// propagates to welcome / trial-ending / payment-failed / reminder / auth.
+const COMPANY_LEGAL = "Trade PA Ltd · Registered in England &amp; Wales · Company No. 17176983";
+
 const FROM_HELLO   = `Trade PA <${HELLO_EMAIL}>`;
 const FROM_BILLING = `Trade PA Billing <${BILLING_EMAIL}>`;
 
@@ -79,6 +80,32 @@ function formatDate(date) {
   });
 }
 
+// Like formatDate but uses Europe/London timezone — for reminder times
+// where the user expects to see the time they set, not UTC.
+function formatDateLocal(date) {
+  if (!date) return "";
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Europe/London",
+  });
+}
+
+function formatTimeLocal(date) {
+  if (!date) return "";
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("en-GB", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Europe/London",
+  });
+}
+
 function escapeHtml(s) {
   return String(s || "")
     .replace(/&/g, "&amp;")
@@ -88,9 +115,12 @@ function escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
+function truncate(s, max) {
+  const str = String(s || "");
+  return str.length <= max ? str : str.slice(0, max - 1).trimEnd() + "…";
+}
+
 // ---- Shared HTML layout ----------------------------------------------------
-// Inline styles only (most email clients strip <style> tags).
-// 600px max width, centered. Works on Gmail, Outlook, Apple Mail, mobile.
 function layout({ title, preheader, content, footerNote }) {
   const preheaderText = escapeHtml(preheader || "");
   return `<!DOCTYPE html>
@@ -115,7 +145,7 @@ ${content}
 </td></tr>
 <tr><td style="padding:20px 40px;background:#fafafa;border-top:1px solid #e5e5ea;font-size:13px;color:#86868b;line-height:1.6;">
 ${footerNote ? `<p style="margin:0 0 12px;">${footerNote}</p>` : ""}
-<p style="margin:0 0 4px;">Trade PA · United Kingdom</p>
+<p style="margin:0 0 4px;">${COMPANY_LEGAL}</p>
 <p style="margin:0;">
 <a href="mailto:${SUPPORT_EMAIL}" style="color:#0066ff;text-decoration:none;">Support</a>
 &nbsp;·&nbsp;
@@ -138,8 +168,6 @@ function button(href, label) {
 }
 
 // ---- Template: Welcome -----------------------------------------------------
-// Sent on customer.subscription.created (main subscriptions only).
-// From: hello@tradespa.co.uk — invites replies, feels human.
 export async function sendWelcome({ to, firstName, planName, trialEndsAt }) {
   const greetName = firstName ? `, ${escapeHtml(firstName)}` : "";
   const plan      = escapeHtml(planName || "Trade PA");
@@ -181,9 +209,6 @@ Any questions, just reply to this email.
 }
 
 // ---- Template: Trial Ending ------------------------------------------------
-// Sent on customer.subscription.trial_will_end (3 days before trial end).
-// From: hello@ — friendly, invites replies.
-// Two variants: with or without payment method on file.
 export async function sendTrialEnding({ to, firstName, trialEndsAt, planName, amount, currency, hasPaymentMethod }) {
   const name       = firstName ? escapeHtml(firstName) : "there";
   const plan       = escapeHtml(planName || "subscription");
@@ -241,8 +266,6 @@ Add card: ${BILLING_URL}
 }
 
 // ---- Template: Payment Failed ----------------------------------------------
-// Sent on invoice.payment_failed (main subscriptions only).
-// From: billing@ — clearly a billing issue, replies go to billing inbox.
 export async function sendPaymentFailed({ to, firstName, amount, currency, nextRetryDate }) {
   const name       = firstName ? escapeHtml(firstName) : "there";
   const amountStr  = amount ? formatCurrency(amount, currency) : "your subscription";
@@ -278,6 +301,69 @@ Questions? Reply to this email.
     from: FROM_BILLING,
     to,
     replyTo: BILLING_EMAIL,
+    subject,
+    html: layout({ title: subject, preheader, content }),
+    text,
+  });
+}
+
+// ---- Template: Reminder ----------------------------------------------------
+// Sent by /api/cron/process-reminders.js when a user-set reminder is due.
+// From: hello@tradespa.co.uk — personal tone.
+// Action buttons: Mark Done, Snooze 1h, Open App (all magic links).
+//
+// Action URLs include reminder_id + user_id in query string. The action
+// handler (/api/reminders/action.js) verifies both UUIDs match before acting.
+// No HMAC needed — 2 x UUIDv4 = 2^256 entropy, practically unguessable.
+export async function sendReminder({ to, reminderId, userId, text: reminderText, fireAt, createdAt }) {
+  const safeText    = String(reminderText || "").trim() || "Reminder";
+  const subject     = `Reminder: ${truncate(safeText, 60)}`;
+  const fireDateStr = formatDateLocal(fireAt);
+  const fireTimeStr = formatTimeLocal(fireAt);
+  const createdStr  = formatDateLocal(createdAt);
+
+  const actionBase = `${APP_URL}/api/reminders/action?r=${encodeURIComponent(reminderId)}&u=${encodeURIComponent(userId)}`;
+  const doneUrl    = `${actionBase}&a=done`;
+  const snoozeUrl  = `${actionBase}&a=snooze`;
+
+  const preheader = `${safeText} — ${fireDateStr} at ${fireTimeStr}`;
+
+  const content = `
+<h1 style="margin:0 0 16px;font-size:22px;font-weight:600;color:#1d1d1f;">⏰ Reminder</h1>
+<div style="padding:20px;background:#f5f5f7;border-radius:12px;margin:0 0 24px;">
+  <p style="margin:0 0 8px;font-size:17px;color:#1d1d1f;line-height:1.5;">${escapeHtml(safeText)}</p>
+  <p style="margin:0;font-size:14px;color:#86868b;">Due <strong>${escapeHtml(fireDateStr)}</strong> at <strong>${escapeHtml(fireTimeStr)}</strong></p>
+</div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px;">
+<tr>
+  <td style="padding:0 3px 0 0;" width="33%">
+    <a href="${doneUrl}" style="display:block;padding:12px 8px;background:#34c759;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;text-align:center;">✓ Mark Done</a>
+  </td>
+  <td style="padding:0 3px;" width="33%">
+    <a href="${snoozeUrl}" style="display:block;padding:12px 8px;background:#ff9500;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;text-align:center;">Snooze 1h</a>
+  </td>
+  <td style="padding:0 0 0 3px;" width="33%">
+    <a href="${APP_URL}" style="display:block;padding:12px 8px;background:#0066ff;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;text-align:center;">Open App</a>
+  </td>
+</tr>
+</table>
+<p style="margin:0;color:#86868b;font-size:13px;">Reminder set on ${escapeHtml(createdStr)}</p>
+`;
+
+  const text = `⏰ Reminder: ${safeText}
+
+Due ${fireDateStr} at ${fireTimeStr}
+
+Mark done:     ${doneUrl}
+Snooze 1 hour: ${snoozeUrl}
+Open app:      ${APP_URL}
+
+— Trade PA`;
+
+  return sendEmail({
+    from: FROM_HELLO,
+    to,
+    replyTo: HELLO_EMAIL,
     subject,
     html: layout({ title: subject, preheader, content }),
     text,
