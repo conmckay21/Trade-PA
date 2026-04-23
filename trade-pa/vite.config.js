@@ -74,6 +74,9 @@ try {
         /^\/sw\.js$/,
         /^\/changelog\.md$/,
         /^\/version\.json$/,
+        /^\/signup\.html$/,
+        /^\/terms\.html$/,
+        /^\/privacy-policy\.html$/,
       ],
 
       // ─── Don't precache server-side routes ───────────────────────────
