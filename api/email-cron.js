@@ -113,22 +113,33 @@ const REASON_LABELS = {
 };
 
 async function fetchNewEmails(conn, token) {
+  // First-run backfill window matches /api/email-check.js — 48h, not 24h. This
+  // covers the gap where a user connects their inbox and doesn't open the app
+  // for a day before the first cron tick lands.
   const since = conn.last_checked
     ? new Date(conn.last_checked)
-    : new Date(Date.now() - 24 * 60 * 60 * 1000);
+    : new Date(Date.now() - 48 * 60 * 60 * 1000);
 
   if (conn.provider === "gmail") {
     const afterSeconds = Math.floor(since.getTime() / 1000);
     // Category filters removed — they blocked valid customer emails, same
     // policy as /api/email-check.js.
-    const params = new URLSearchParams({ maxResults: "15", q: `after:${afterSeconds} -from:me` });
+    //
+    // Checkpoint-by-timestamp strategy (Option B — see changelog 2026-04-24):
+    // Gmail returns the list newest-first. We fetch up to 50 IDs cheaply (only
+    // ~5KB; real cost is the per-message body fetches). From those we take the
+    // OLDEST 15 via .slice(-15). Then last_checked advances to the newest
+    // processed email's internalDate — not wall clock — so any overflow stays
+    // strictly after the checkpoint and the next run picks it up.
+    const params = new URLSearchParams({ maxResults: "50", q: `after:${afterSeconds} -from:me` });
     const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`, { headers: { Authorization: `Bearer ${token}` } });
     const list = await listRes.json();
     if (list.error) throw new Error(list.error.message || "Gmail query failed");
     if (!list.messages?.length) return [];
 
+    const oldestFirst = list.messages.slice(-15);
     const fetched = await Promise.all(
-      list.messages.slice(0, 8).map(async (m) => {
+      oldestFirst.map(async (m) => {
         try {
           // format=full — same as manual path — so we get real body text not just snippet
           const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`, { headers: { Authorization: `Bearer ${token}` } });
@@ -147,14 +158,20 @@ async function fetchNewEmails(conn, token) {
             body: sliceForClaude(bodyText, hasPdf),
             hasPdfAttachment: hasPdf,
             pdfAttachments: pdfAtts,
+            // internalDate is ms-since-epoch as a string. Used for checkpointing.
+            receivedMs: Number(msg.internalDate) || 0,
           };
         } catch { return null; }
       })
     );
-    return fetched.filter(Boolean);
+    // Sort oldest-first for deterministic checkpointing.
+    return fetched.filter(Boolean).sort((a, b) => (a.receivedMs || 0) - (b.receivedMs || 0));
   } else {
     const sinceIso = since.toISOString();
-    const url = `https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$top=8&$filter=receivedDateTime ge ${sinceIso}&$select=id,subject,from,receivedDateTime,body,bodyPreview,hasAttachments&$expand=attachments($select=id,name,contentType)`;
+    // $orderby asc so we get the oldest 15 in the window, not newest. Combined
+    // with the receivedMs-based checkpoint this guarantees no emails fall off
+    // the back of the scan when a user has more than 15 in one hour.
+    const url = `https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$top=15&$orderby=receivedDateTime asc&$filter=receivedDateTime ge ${sinceIso}&$select=id,subject,from,receivedDateTime,body,bodyPreview,hasAttachments&$expand=attachments($select=id,name,contentType)`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     if (data.error) throw new Error(data.error.message || "Outlook query failed");
@@ -180,6 +197,7 @@ async function fetchNewEmails(conn, token) {
           body: sliceForClaude(bodyText, hasPdf),
           hasPdfAttachment: hasPdf,
           pdfAttachments: pdfAtts,
+          receivedMs: msg.receivedDateTime ? new Date(msg.receivedDateTime).getTime() : 0,
         };
       });
   }
@@ -356,6 +374,25 @@ async function shouldChaseOverdue() {
   return hour === 9;
 }
 
+// Auto-dismiss pending email actions sitting for 30+ days. A month-old action
+// has stale context — the user clearly isn't engaging with it and keeping it in
+// their inbox just adds noise. Uses status='dismissed' so it disappears from
+// the Inbox tab (which filters status=pending) without polluting the schema
+// with a new enum value. Runs once per cron tick — cheap bulk PATCH.
+async function cleanupStalePendingActions() {
+  const cutoffIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  await supabaseFetch(
+    `/email_actions?status=eq.pending&created_at=lt.${cutoffIso}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "dismissed",
+        processed_at: new Date().toISOString(),
+      }),
+    }
+  );
+}
+
 // Build a chase email using the user's own brand (trading name, phone, email, accent)
 // rather than Trade PA defaults. Sends via the user's own Gmail/Outlook so the reply
 // address is theirs, not ours.
@@ -443,9 +480,15 @@ export default async function handler(req, res) {
     }
 
     const chaseOverdue = await shouldChaseOverdue();
+    // Run stale cleanup once per cron tick — touches pending actions older
+    // than 30 days across ALL users in one bulk PATCH, regardless of who's
+    // processed below.
+    await cleanupStalePendingActions().catch(err => console.error("Stale cleanup failed:", err.message));
+
     let totalEmails = 0;
     let totalActions = 0;
     let skippedDormant = 0;
+    let brokenConnections = 0;
 
     for (const conn of connections) {
       try {
@@ -488,10 +531,21 @@ export default async function handler(req, res) {
         // Advance last_checked unless Anthropic API call failed above. Gmail/Outlook
         // query errors already threw to the per-user catch block below, leaving
         // last_checked untouched.
+        //
+        // Option B checkpoint: use the newest processed email's receivedMs, not
+        // wall clock. If we fetched 15 out of 20 available emails, the 5 we
+        // didn't fetch are strictly newer than our checkpoint, so next run's
+        // `after:last_checked` query picks them up. Zero email loss.
         if (advanceCheckpoint) {
+          const processedMs = emails
+            .map(e => e.receivedMs || 0)
+            .filter(ms => ms > 0);
+          const checkpointMs = processedMs.length ? Math.max(...processedMs) : Date.now();
+          // Cap at wall clock in case of clock skew / bad data
+          const checkpoint = new Date(Math.min(checkpointMs, Date.now())).toISOString();
           await supabaseFetch(
             `/email_connections?user_id=eq.${conn.user_id}&provider=eq.${conn.provider}`,
-            { method: "PATCH", body: JSON.stringify({ last_checked: new Date().toISOString() }) }
+            { method: "PATCH", body: JSON.stringify({ last_checked: checkpoint }) }
           );
         }
 
@@ -505,12 +559,40 @@ export default async function handler(req, res) {
         // Per-user failure shouldn't kill the whole cron run — log and move on.
         // last_checked untouched so next run retries from the same point.
         console.error(`Error for ${conn.provider}/${conn.user_id}:`, err.message);
+
+        // G41: detect a revoked / permanently-broken refresh token so the UI
+        // can prompt the user to reconnect. Both Google and Microsoft return
+        // specific error strings when a refresh token is no longer usable —
+        // typically because the user changed their password, revoked Trade PA
+        // access, or the token aged out. We set a flag on the connection row;
+        // the Inbox tab can read it and show a reconnect banner instead of
+        // silently returning 0 emails every hour.
+        const msg = (err.message || "").toLowerCase();
+        const isBrokenToken =
+          msg.includes("invalid_grant") ||
+          msg.includes("token has been expired or revoked") ||
+          msg.includes("aadsts") ||                // Microsoft AAD error codes
+          msg.includes("refresh token") && msg.includes("invalid");
+        if (isBrokenToken) {
+          brokenConnections++;
+          await supabaseFetch(
+            `/email_connections?user_id=eq.${conn.user_id}&provider=eq.${conn.provider}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                needs_reconnect: true,
+                last_error: (err.message || "Token revoked").slice(0, 300),
+                last_error_at: new Date().toISOString(),
+              }),
+            }
+          ).catch(() => {}); // best-effort; missing column won't kill the loop
+        }
       }
     }
 
     const ms = Date.now() - start;
-    console.log(`Cron done: ${totalEmails} emails, ${totalActions} actions, ${skippedDormant} dormant skipped, ${ms}ms`);
-    return res.json({ success: true, processed: totalEmails, actions: totalActions, skippedDormant, ms, connections: connections.length });
+    console.log(`Cron done: ${totalEmails} emails, ${totalActions} actions, ${skippedDormant} dormant, ${brokenConnections} broken, ${ms}ms`);
+    return res.json({ success: true, processed: totalEmails, actions: totalActions, skippedDormant, brokenConnections, ms, connections: connections.length });
 
   } catch (err) {
     console.error("Cron error:", err.message);
