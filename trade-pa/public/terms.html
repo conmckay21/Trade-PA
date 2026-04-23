@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Terms of Service — Trade PA</title>
+<meta name="description" content="Trade PA Ltd Terms of Service — the legal agreement between Trade PA Ltd and you."/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500;700&display=swap" rel="stylesheet"/>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -17,7 +18,7 @@
   .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; letter-spacing: 0.05em; color: var(--amber); text-decoration: none; }
   .logo-icon { width: 28px; height: 28px; background: var(--amber); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #000; font-size: 10px; font-weight: 900; letter-spacing: -0.02em; }
   .header-badge { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid var(--border); padding: 3px 10px; border-radius: 20px; }
-  main { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
   .page-header { margin-bottom: 48px; padding-bottom: 32px; border-bottom: 1px solid var(--border); }
   .page-header h1 { font-size: 26px; font-weight: 700; color: var(--text); margin-bottom: 8px; letter-spacing: -0.02em; }
   .meta { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; }
@@ -33,19 +34,29 @@
   section { margin-bottom: 44px; scroll-margin-top: 72px; }
   section h2 { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
   section h2::before { content: attr(data-num); font-size: 10px; color: var(--muted); font-weight: 400; min-width: 22px; }
+  section h3 { font-size: 12px; font-weight: 700; color: var(--text); margin: 20px 0 10px; letter-spacing: 0.02em; }
   section p { color: var(--text); margin-bottom: 14px; font-size: 13px; line-height: 1.8; }
   section p:last-child { margin-bottom: 0; }
   .highlight { border-left: 2px solid var(--amber); padding: 12px 16px; background: rgba(245, 158, 11, 0.06); border-radius: 0 6px 6px 0; margin: 16px 0; font-size: 12px; color: var(--text); line-height: 1.7; }
-  ul.list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+  ul.list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 12px 0 18px; }
   ul.list li { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: var(--text); line-height: 1.6; }
   ul.list li::before { content: "→"; color: var(--amber); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  table.data { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 12px; }
+  table.data thead th { text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  table.data tbody td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; line-height: 1.65; }
+  table.data tbody tr:last-child td { border-bottom: none; }
+  table.data tbody td:first-child { font-weight: 700; color: var(--amber); white-space: nowrap; }
   .contact-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px; }
-  .contact-row { display: flex; gap: 12px; align-items: center; font-size: 12px; }
-  .contact-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); min-width: 60px; }
+  .contact-row { display: flex; gap: 12px; align-items: flex-start; font-size: 12px; }
+  .contact-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); min-width: 110px; }
   .contact-value { color: var(--amber); }
   footer { border-top: 1px solid var(--border); padding: 24px; text-align: center; font-size: 11px; color: var(--muted); }
   footer a { color: var(--amber); text-decoration: none; }
-  @media (max-width: 600px) { main { padding: 32px 16px 60px; } .page-header h1 { font-size: 20px; } }
+  @media (max-width: 600px) {
+    main { padding: 32px 16px 60px; }
+    .page-header h1 { font-size: 20px; }
+    table.data { display: block; overflow-x: auto; }
+  }
 </style>
 </head>
 <body>
@@ -61,138 +72,306 @@
 <main>
   <div class="page-header">
     <h1>Terms of Service</h1>
-    <p style="color: var(--muted); font-size: 13px; margin-top: 8px;">Please read these terms carefully before using Trade PA.</p>
+    <p style="color: var(--muted); font-size: 13px; margin-top: 8px;">The legal agreement between Trade PA Ltd and you. Please read carefully before using the service.</p>
     <div class="meta">
-      <div class="meta-item">Effective: <span>31 March 2026</span></div>
-      <div class="meta-item">Last updated: <span>31 March 2026</span></div>
-      <div class="meta-item">Operator: <span>Trade PA</span></div>
+      <div class="meta-item">Effective: <span>23 April 2026</span></div>
+      <div class="meta-item">Last updated: <span>23 April 2026</span></div>
+      <div class="meta-item">Operator: <span>Trade PA Ltd</span></div>
     </div>
   </div>
 
   <div class="toc">
     <div class="toc-title">Contents</div>
     <ol>
-      <li><a href="#acceptance">Acceptance of terms</a></li>
+      <li><a href="#about">About these terms</a></li>
+      <li><a href="#definitions">Definitions</a></li>
+      <li><a href="#eligibility">Eligibility &amp; accounts</a></li>
       <li><a href="#service">The service</a></li>
-      <li><a href="#accounts">Accounts</a></li>
+      <li><a href="#trial">Free trial</a></li>
+      <li><a href="#pricing">Subscription plans &amp; pricing</a></li>
+      <li><a href="#payment">Payment &amp; renewals</a></li>
+      <li><a href="#cancellation">Cancellation, refunds &amp; consumer rights</a></li>
+      <li><a href="#data">Your data &amp; ownership</a></li>
+      <li><a href="#ai">AI output &amp; accuracy</a></li>
+      <li><a href="#tax">HMRC, CIS &amp; tax responsibility</a></li>
+      <li><a href="#email-access">Email integration</a></li>
+      <li><a href="#voice">Voice &amp; call recording</a></li>
       <li><a href="#acceptable-use">Acceptable use</a></li>
-      <li><a href="#data">Your data</a></li>
-      <li><a href="#email-access">Email access</a></li>
-      <li><a href="#payments">Payments &amp; subscriptions</a></li>
+      <li><a href="#ip">Intellectual property</a></li>
       <li><a href="#availability">Service availability</a></li>
+      <li><a href="#warranties">Warranties &amp; disclaimers</a></li>
       <li><a href="#liability">Limitation of liability</a></li>
-      <li><a href="#termination">Termination</a></li>
+      <li><a href="#indemnity">Indemnity</a></li>
+      <li><a href="#suspension">Suspension &amp; termination</a></li>
       <li><a href="#changes">Changes to these terms</a></li>
-      <li><a href="#law">Governing law</a></li>
+      <li><a href="#law">Governing law &amp; jurisdiction</a></li>
       <li><a href="#contact">Contact</a></li>
     </ol>
   </div>
 
-  <section id="acceptance">
-    <h2 data-num="01">Acceptance of terms</h2>
-    <p>By creating an account or using Trade PA, you agree to be bound by these Terms of Service. If you do not agree to these terms, do not use the service.</p>
-    <p>These terms constitute a legally binding agreement between you and Trade PA. We recommend you save or print a copy for your records.</p>
+  <section id="about">
+    <h2 data-num="01">About these terms</h2>
+    <p>These Terms of Service ("Terms") form a legally binding agreement between Trade PA Ltd, a private limited company registered in England and Wales (company number <strong>17176983</strong>, registered office 40 Blakemere Crescent, Portsmouth, PO6 3SG) ("Trade PA", "we", "us", "our") and you, the individual or business accessing the Trade PA service ("you", "your").</p>
+    <p>By creating an account, clicking "I agree", or using the service, you confirm that you have read, understood, and agree to be bound by these Terms. If you do not agree, you must not use the service.</p>
+    <p>These Terms incorporate our <a href="/privacy-policy.html" style="color: var(--amber);">Privacy Policy</a>, which explains how we handle your personal data.</p>
+  </section>
+
+  <section id="definitions">
+    <h2 data-num="02">Definitions</h2>
+    <ul class="list">
+      <li><strong>"Service"</strong> — the Trade PA web and mobile application, including all features, integrations, and AI assistance.</li>
+      <li><strong>"Account"</strong> — your user account on the Service, identified by your email address.</li>
+      <li><strong>"Subscription"</strong> — a recurring paid plan that gives you ongoing access to the Service.</li>
+      <li><strong>"Trial"</strong> — the 30-day free-of-charge evaluation period described in section 5.</li>
+      <li><strong>"Business Data"</strong> — all information you enter into or generate through the Service, including customer records, jobs, invoices, quotes, photos, and voice input.</li>
+      <li><strong>"Content"</strong> — any text, files, images, audio, or other material made available through the Service.</li>
+      <li><strong>"Applicable Law"</strong> — the laws of England and Wales, including the UK General Data Protection Regulation and the Data Protection Act 2018.</li>
+    </ul>
+  </section>
+
+  <section id="eligibility">
+    <h2 data-num="03">Eligibility &amp; accounts</h2>
+    <p>To use Trade PA you must be:</p>
+    <ul class="list">
+      <li>At least 18 years old</li>
+      <li>An individual running a trade or construction business, or an authorised representative of such a business</li>
+      <li>Based in the United Kingdom, or operating a business registered in the United Kingdom</li>
+      <li>Legally able to enter into a binding contract</li>
+    </ul>
+    <p>You are responsible for:</p>
+    <ul class="list">
+      <li>The accuracy of the information you provide at sign-up and in your Account</li>
+      <li>Keeping your password secure and confidential</li>
+      <li>All activity that occurs under your Account</li>
+      <li>Notifying us immediately at security@tradespa.co.uk of any suspected unauthorised access</li>
+    </ul>
+    <p>Accounts are for the individual tradesperson or business that registered them. On team plans, additional seats may be allocated to members of your own business only. You may not share your login with, or assign your Account to, any third party outside your business.</p>
   </section>
 
   <section id="service">
-    <h2 data-num="02">The service</h2>
-    <p>Trade PA is a business administration tool designed for sole-trader tradespeople in the United Kingdom. The service provides tools for job scheduling, invoice and quote creation, customer management, materials tracking, reminders, and optional email inbox integration.</p>
-    <p>The service is provided as a software-as-a-service (SaaS) web application, accessible via any modern web browser and as a Progressive Web App (PWA) on mobile devices.</p>
+    <h2 data-num="04">The service</h2>
+    <p>Trade PA is a software-as-a-service application providing business administration tools for UK tradespeople, including but not limited to: job scheduling and tracking, invoice and quote creation, customer management, materials tracking, mileage logging, CIS and subcontractor management, RAMS document generation, compliance certificate management, AI voice assistance, and optional email and telephony integrations.</p>
+    <p>We continuously improve the Service. New features may be added, existing features may be changed, and occasionally features may be removed. Where a removal materially reduces the value of your Subscription, we will notify you in advance and give you the opportunity to cancel for a pro-rata refund of any pre-paid period.</p>
+    <p>The Service is provided as a Progressive Web App (PWA) and, in due course, as native iOS and Android applications. All variants are covered by these Terms.</p>
   </section>
 
-  <section id="accounts">
-    <h2 data-num="03">Accounts</h2>
-    <p>You must create an account to use Trade PA. You are responsible for:</p>
+  <section id="trial">
+    <h2 data-num="05">Free trial</h2>
+    <p>New customers are offered a <strong>30-day free trial</strong> of the Service. Trial rules:</p>
     <ul class="list">
-      <li>Maintaining the confidentiality of your password</li>
-      <li>All activity that occurs under your account</li>
-      <li>Ensuring the information you provide is accurate and kept up to date</li>
-      <li>Notifying us immediately of any unauthorised access to your account</li>
+      <li>A valid payment card is required at sign-up</li>
+      <li>No charge is taken during the trial period</li>
+      <li>On day 31, your selected plan's fee is automatically charged to the card on file unless you have cancelled</li>
+      <li>You may cancel at any time during the trial by visiting Settings → Plan &amp; Billing. Cancellation takes effect immediately and no charge is made</li>
+      <li>Only one free trial is available per customer. Attempting to obtain multiple trials by creating additional accounts is a breach of these Terms and may result in account suspension</li>
     </ul>
-    <p>You must be at least 18 years old to create an account. Accounts are for individual business use and may not be shared with third parties outside your business.</p>
+    <p>The trial is offered at our discretion and may be modified or withdrawn for future customers. Existing trial customers keep the terms in place at the time they signed up.</p>
   </section>
 
-  <section id="acceptable-use">
-    <h2 data-num="04">Acceptable use</h2>
-    <p>You agree not to use Trade PA to:</p>
+  <section id="pricing">
+    <h2 data-num="06">Subscription plans &amp; pricing</h2>
+    <p>The following monthly subscription plans are currently offered:</p>
+    <table class="data">
+      <thead>
+        <tr><th>Plan</th><th>Monthly price</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Solo</td><td>£39.00</td></tr>
+        <tr><td>Pro Solo</td><td>£59.99</td></tr>
+        <tr><td>Team (up to 5 seats)</td><td>£89.00</td></tr>
+        <tr><td>Business</td><td>£129.00</td></tr>
+      </tbody>
+    </table>
+    <div class="highlight">
+      <strong>VAT status.</strong> Trade PA Ltd is not currently VAT-registered. All prices shown above are exclusive of VAT and no VAT is charged at this time. If and when Trade PA Ltd becomes VAT-registered (required if our taxable turnover exceeds £85,000), we will add VAT to invoices going forward and will notify you at least 30 days in advance of the first VAT-inclusive charge.
+    </div>
+    <p>Optional paid add-ons (such as the Trade PA phone number) are priced separately and shown clearly at the point of purchase. Add-on charges appear as separate line items on your invoice.</p>
+    <p>We may change prices from time to time. If we increase the price of your existing Subscription, we will notify you by email at least 30 days before the new price takes effect. You may cancel your Subscription before the new price takes effect to avoid paying the increase.</p>
+  </section>
+
+  <section id="payment">
+    <h2 data-num="07">Payment &amp; renewals</h2>
+    <p>Payments are processed by Stripe. By providing payment information, you authorise us (via Stripe) to charge your card:</p>
     <ul class="list">
-      <li>Violate any applicable law or regulation</li>
-      <li>Store or transmit fraudulent, defamatory, or illegal content</li>
-      <li>Attempt to gain unauthorised access to our systems or another user's account</li>
-      <li>Interfere with or disrupt the integrity or performance of the service</li>
-      <li>Use the service to send spam or unsolicited communications</li>
-      <li>Reverse engineer, decompile, or attempt to extract the source code of the application</li>
+      <li>On day 31 of your free trial, for your selected plan</li>
+      <li>Every month thereafter on the same calendar day (or the nearest prior day if that day does not exist in a given month)</li>
+      <li>For any add-ons you have purchased, on the same billing cycle</li>
     </ul>
-    <p>We reserve the right to suspend or terminate accounts that violate these terms without notice.</p>
+    <p>If a payment fails, we will attempt to retake the payment up to three times over a seven-day period. During this time we will notify you by email so you can update your card. If payment is still not collected after the retry period, your Account will be downgraded to read-only access and, if the failure persists for a further 14 days, suspended until the balance is paid.</p>
+    <p>You can update your payment details or view past invoices at any time via Settings → Plan &amp; Billing, which opens the Stripe Customer Portal.</p>
+  </section>
+
+  <section id="cancellation">
+    <h2 data-num="08">Cancellation, refunds &amp; consumer rights</h2>
+    <h3>Cancelling your subscription</h3>
+    <p>You may cancel your Subscription at any time from Settings → Plan &amp; Billing. Cancellation takes effect at the end of your current paid billing period, so you retain access to the Service until then.</p>
+    <h3>Refund policy</h3>
+    <p>Except where required by law (see below), we do not offer refunds for partial billing periods. Once a monthly payment has been taken, the Subscription runs to the end of that month regardless of when you cancel within it.</p>
+    <h3>14-day consumer right to cancel</h3>
+    <p>If you are a consumer acquiring the Service for purposes wholly or mainly outside your trade, business, craft or profession, you have a legal right under the Consumer Contracts Regulations 2013 to cancel within 14 days of your first paid subscription beginning, without giving a reason.</p>
+    <p>To exercise this right, email billing@tradespa.co.uk within 14 days, stating your name, email address on your Account, and a statement that you wish to cancel. We will refund the full payment within 14 days of receiving your notice, using the same payment method.</p>
+    <p>Because the Service is supplied as digital content, you expressly agree that the Service begins immediately on payment and you acknowledge that by starting to use the Service you lose the right to cancel under the Consumer Contracts Regulations once performance has begun. If you want to preserve your cancellation right, do not begin using the Service within the 14-day window.</p>
+    <p>Trade PA is marketed and sold primarily as a business tool. Most customers acquire the Service for their trade or profession and the consumer right to cancel will not apply to them.</p>
+    <h3>Account termination</h3>
+    <p>You may permanently delete your Account at any time from Settings → Account → Delete Account. Deletion is irreversible. Your Business Data will be removed from our active systems within 90 days, subject to the tax-record retention requirements in our Privacy Policy.</p>
   </section>
 
   <section id="data">
-    <h2 data-num="05">Your data</h2>
-    <p>You retain full ownership of all data you enter into Trade PA — your jobs, customers, invoices, and business records belong to you.</p>
-    <p>By using the service, you grant Trade PA a limited licence to store, process, and display your data solely for the purpose of providing the service to you.</p>
-    <p>We do not claim any ownership over your business data and will not use it for any purpose other than operating Trade PA. Please see our <a href="/privacy-policy.html" style="color: var(--amber);">Privacy Policy</a> for full details on how we handle your data.</p>
+    <h2 data-num="09">Your data &amp; ownership</h2>
+    <p>You retain full ownership of your Business Data. By using the Service, you grant us a limited, non-exclusive, worldwide licence to host, store, process, transmit, and display your Business Data only for the purposes of providing and improving the Service to you.</p>
+    <p>We do not claim any rights over your Business Data and will not use it to train AI models or sell it to third parties. Further detail on our handling of your data is in the <a href="/privacy-policy.html" style="color: var(--amber);">Privacy Policy</a>.</p>
     <div class="highlight">
-      You are responsible for ensuring that any personal data you enter about your customers (names, addresses, contact details) is handled in compliance with UK GDPR and applicable data protection law. As the data controller for your customers' information, you should have a lawful basis for storing and processing that data.
+      <strong>Your customers' data.</strong> When you enter personal data about your own customers into Trade PA, you are the data controller of that information and we act as your data processor. You must have a lawful basis under UK GDPR for collecting and storing your customers' data, and you must provide your own customers with appropriate privacy information. We strongly recommend having a privacy notice on your own quotes, invoices, or website that explains how you handle customer data.
     </div>
+    <p>You are responsible for maintaining backups of any Business Data that is critical to you. The Service provides an export function at Settings → Export My Data, which you can use at any time.</p>
+  </section>
+
+  <section id="ai">
+    <h2 data-num="10">AI output &amp; accuracy</h2>
+    <p>The Service includes AI-powered features (voice assistant, automated categorisation, content generation for invoices, quotes, RAMS documents, and similar). AI output:</p>
+    <ul class="list">
+      <li>Is generated by third-party AI models and is probabilistic rather than deterministic</li>
+      <li>Can contain errors, inaccuracies, or omissions</li>
+      <li>Must be reviewed by you before being sent, filed, or relied upon</li>
+      <li>Does not constitute professional advice of any kind</li>
+    </ul>
+    <p>You are responsible for the accuracy of every document, invoice, quote, compliance certificate, RAMS, or other record that you create or send using AI-assisted features. Trade PA Ltd accepts no responsibility for errors in AI-generated content that you have approved, sent, or filed.</p>
+  </section>
+
+  <section id="tax">
+    <h2 data-num="11">HMRC, CIS &amp; tax responsibility</h2>
+    <p>Trade PA includes features to help you track information relevant to UK tax obligations, including invoices, expenses, mileage, VAT, and Construction Industry Scheme (CIS) deductions. These features are <strong>record-keeping aids, not tax advice or accounting services</strong>.</p>
+    <p>Specifically:</p>
+    <ul class="list">
+      <li>Trade PA is not a chartered accountant, tax adviser, or regulated financial services provider</li>
+      <li>Nothing in the Service constitutes advice on your personal tax affairs, your CIS status, your VAT obligations, IR35 determinations, or any other regulated matter</li>
+      <li>CIS deduction calculations presented in the Service reflect our understanding of the rules as of the effective date of these Terms and the inputs you provide — you are responsible for verifying every calculation and for the correct submission of monthly CIS returns (CIS300), quarterly VAT returns, annual Self Assessment, or Corporation Tax returns</li>
+      <li>The retention of financial records for 6 years for UK tax purposes remains your legal responsibility, not ours</li>
+      <li>If you have any doubt about your tax position, you should consult a qualified accountant or tax adviser</li>
+    </ul>
   </section>
 
   <section id="email-access">
-    <h2 data-num="06">Email access</h2>
-    <p>Trade PA offers an optional feature to connect your Gmail or Microsoft Outlook account. By connecting your email account you authorise Trade PA to read, send, and modify emails on your behalf as described in our Privacy Policy.</p>
-    <p>You may revoke this access at any time from within the app. Trade PA will not access your email account for any purpose other than the features explicitly provided within the app.</p>
-    <p>Trade PA's use of information received from Google APIs complies with the Google API Services User Data Policy, including the Limited Use requirements.</p>
+    <h2 data-num="12">Email integration</h2>
+    <p>Trade PA offers an optional feature to connect your Gmail or Microsoft Outlook account so the Service can read, send, and manage emails on your behalf. Connecting your email is entirely your choice — the core Service functions fully without it.</p>
+    <p>By connecting your email account, you authorise us to act as your agent for the specific actions the integration performs (reading messages to surface trade-relevant emails, sending invoices and quotes from your address, marking messages as read). You remain responsible for the content of emails sent from your address via the Service.</p>
+    <p>You may revoke access at any time from Settings → Integrations, or from your Google or Microsoft account security settings.</p>
+    <p>Our use of information received from Google APIs complies with the Google API Services User Data Policy, including the Limited Use requirements. We do not use your Gmail data to train AI models.</p>
   </section>
 
-  <section id="payments">
-    <h2 data-num="07">Payments &amp; subscriptions</h2>
-    <p>Trade PA may offer paid subscription plans. Where a paid plan is offered:</p>
+  <section id="voice">
+    <h2 data-num="13">Voice &amp; call recording</h2>
+    <p>The Service includes AI voice features. When you speak to the assistant, your voice is recorded, transcribed, and processed by third-party AI providers as described in our Privacy Policy.</p>
+    <p>If you subscribe to the optional Trade PA phone number add-on, inbound and outbound calls may be recorded for automatic logging against customer records. You are responsible for any obligation to notify callers that their call may be recorded. Trade PA can play a pre-call notification message automatically — we strongly recommend enabling this from Settings → Phone → Call Recording.</p>
+  </section>
+
+  <section id="acceptable-use">
+    <h2 data-num="14">Acceptable use</h2>
+    <p>You agree not to use the Service to:</p>
     <ul class="list">
-      <li>Subscription fees are billed in advance on a monthly or annual basis</li>
-      <li>All prices are quoted in GBP and are inclusive of VAT where applicable</li>
-      <li>You may cancel your subscription at any time — cancellation takes effect at the end of the current billing period</li>
-      <li>We do not offer refunds for partial billing periods</li>
+      <li>Violate any applicable law or regulation, including UK consumer-protection law, data-protection law, or tax law</li>
+      <li>Store, create, or transmit fraudulent, defamatory, harassing, or illegal content</li>
+      <li>Send spam or unsolicited marketing communications</li>
+      <li>Upload malware, viruses, or code intended to harm the Service or other users</li>
+      <li>Attempt to gain unauthorised access to our systems, another user's Account, or any data you are not entitled to</li>
+      <li>Interfere with or disrupt the integrity, performance, or availability of the Service</li>
+      <li>Reverse-engineer, decompile, disassemble, or attempt to extract source code or AI prompts from the Service, except to the extent such restriction is prohibited by law</li>
+      <li>Scrape, copy, or export Service content other than your own Business Data</li>
+      <li>Impersonate any person, misrepresent your identity, or create accounts on behalf of others without their authorisation</li>
+      <li>Use the Service to provide a competing product or to train a competing AI model</li>
+      <li>Circumvent usage limits, rate limits, or trial restrictions</li>
     </ul>
-    <p>During any free trial period, no payment is required. We will notify you before any trial converts to a paid subscription.</p>
+    <p>We reserve the right to investigate and take appropriate action against any breach of this section, up to and including immediate suspension or termination of your Account without refund.</p>
+  </section>
+
+  <section id="ip">
+    <h2 data-num="15">Intellectual property</h2>
+    <p>All intellectual property rights in the Service, including the software, user interface, design, brand, logos, trade marks (including TRADE PA and TRADESPA), patents (including UK patent applications pending), documentation, and any AI prompts or orchestration logic, are and remain the exclusive property of Trade PA Ltd or its licensors.</p>
+    <p>These Terms grant you a limited, non-exclusive, non-transferable licence to use the Service for the duration of your Subscription in accordance with these Terms. Nothing in these Terms transfers any IP rights to you.</p>
+    <p>You retain all IP rights in your Business Data and in any content you create using the Service (for example, the text of invoices and quotes you generate).</p>
   </section>
 
   <section id="availability">
-    <h2 data-num="08">Service availability</h2>
-    <p>We aim to keep Trade PA available at all times but cannot guarantee uninterrupted service. The service may be temporarily unavailable due to maintenance, updates, or circumstances beyond our control.</p>
-    <p>We will endeavour to provide advance notice of planned maintenance where possible. We are not liable for any loss or inconvenience caused by service interruptions.</p>
+    <h2 data-num="16">Service availability</h2>
+    <p>We aim to keep the Service available at all times but do not guarantee uninterrupted operation. The Service depends on third-party infrastructure (including cloud hosting, telephony providers, and AI providers), any of which may experience outages.</p>
+    <p>We do not offer a contractual uptime SLA on standard plans. We will use reasonable efforts to:</p>
+    <ul class="list">
+      <li>Provide advance notice of scheduled maintenance where possible</li>
+      <li>Publish an operational status page for incidents</li>
+      <li>Restore service as quickly as reasonably practicable after unplanned outages</li>
+    </ul>
+    <p>We are not liable for any loss arising from Service unavailability, except as set out in section 18.</p>
+  </section>
+
+  <section id="warranties">
+    <h2 data-num="17">Warranties &amp; disclaimers</h2>
+    <p>To the fullest extent permitted by law, the Service is provided "as is" and "as available", without warranties of any kind, whether express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, non-infringement, or accuracy of AI-generated output.</p>
+    <p>We do not warrant that:</p>
+    <ul class="list">
+      <li>The Service will meet your specific requirements</li>
+      <li>The Service will be uninterrupted, timely, secure, or error-free</li>
+      <li>AI-generated content will be accurate, complete, or fit for any purpose</li>
+      <li>Any errors in the Service will be corrected within a specific timeframe</li>
+    </ul>
   </section>
 
   <section id="liability">
-    <h2 data-num="09">Limitation of liability</h2>
-    <p>Trade PA is provided "as is" without warranties of any kind, either express or implied. To the maximum extent permitted by law:</p>
+    <h2 data-num="18">Limitation of liability</h2>
+    <p>Nothing in these Terms excludes or limits our liability for:</p>
     <ul class="list">
-      <li>We are not liable for any indirect, incidental, or consequential damages arising from your use of the service</li>
-      <li>We are not liable for loss of business, revenue, or data resulting from service outages or errors</li>
-      <li>Our total liability to you for any claim shall not exceed the amount you paid for the service in the three months preceding the claim</li>
+      <li>Death or personal injury caused by our negligence</li>
+      <li>Fraud or fraudulent misrepresentation</li>
+      <li>Any other liability that cannot lawfully be excluded or limited under Applicable Law</li>
     </ul>
-    <p>Nothing in these terms excludes or limits our liability for death or personal injury caused by negligence, fraud, or any other liability that cannot be excluded by law.</p>
+    <p>Subject to the above:</p>
+    <ul class="list">
+      <li>We are not liable for any indirect, incidental, consequential, special, or exemplary damages, including loss of profits, loss of business, loss of goodwill, or loss of data</li>
+      <li>We are not liable for losses arising from your failure to check AI-generated content before sending, filing, or relying on it</li>
+      <li>We are not liable for losses arising from your failure to maintain your own backups of Business Data</li>
+      <li>Our total aggregate liability to you for all claims arising from or relating to the Service in any 12-month period shall not exceed the greater of (a) the total fees you have paid to us in the 12 months preceding the event giving rise to the claim, or (b) £100</li>
+    </ul>
   </section>
 
-  <section id="termination">
-    <h2 data-num="10">Termination</h2>
-    <p>You may delete your account at any time from within the app settings. Upon deletion, your data will be permanently removed from our systems within 30 days.</p>
-    <p>We reserve the right to suspend or terminate your account immediately if you breach these terms, without obligation to provide a refund for any unused subscription period.</p>
-    <p>Upon termination, your right to access the service ends immediately. We recommend you export any data you need before deleting your account.</p>
+  <section id="indemnity">
+    <h2 data-num="19">Indemnity</h2>
+    <p>You agree to indemnify and hold Trade PA Ltd harmless against any claim, demand, loss, liability, or expense (including reasonable legal fees) arising from:</p>
+    <ul class="list">
+      <li>Your breach of these Terms</li>
+      <li>Your breach of Applicable Law in your use of the Service</li>
+      <li>Your failure to have a lawful basis for processing your customers' personal data</li>
+      <li>Any content you upload, create, or send via the Service that infringes a third party's rights</li>
+      <li>Your use of AI-generated output in a way that causes harm to a third party</li>
+    </ul>
+  </section>
+
+  <section id="suspension">
+    <h2 data-num="20">Suspension &amp; termination</h2>
+    <p>We may suspend or terminate your Account without prior notice if:</p>
+    <ul class="list">
+      <li>You materially breach these Terms, including the acceptable use policy in section 14</li>
+      <li>Payment for your Subscription fails and is not corrected within the timeframes in section 7</li>
+      <li>We are required to do so by law, court order, or regulator</li>
+      <li>We reasonably believe your use of the Service poses a security risk to other users or to our infrastructure</li>
+    </ul>
+    <p>Where suspension is due to payment failure, we will restore access within 24 hours of successful payment. Where termination is due to breach, no refund of any pre-paid fees will be issued.</p>
+    <p>On termination of your Account for any reason, these Terms continue to apply to any matters pre-dating termination, and sections 9, 15, 18, 19, and 22 survive.</p>
   </section>
 
   <section id="changes">
-    <h2 data-num="11">Changes to these terms</h2>
-    <p>We may update these Terms of Service from time to time. We will notify you of material changes by email or by displaying a notice in the app.</p>
-    <p>Continued use of Trade PA after changes to these terms constitutes acceptance of the updated terms. If you do not agree to the updated terms, you should stop using the service and delete your account.</p>
+    <h2 data-num="21">Changes to these terms</h2>
+    <p>We may update these Terms from time to time. For non-material changes (e.g. clarifications, typo corrections), we will update the "Last updated" date at the top of this page.</p>
+    <p>For material changes (e.g. new charges, changes to liability, reduction in your rights), we will notify you by email at least 30 days before the change takes effect. Continued use of the Service after that date constitutes acceptance of the revised Terms. If you do not accept the revised Terms, you may cancel your Subscription before the effective date without penalty.</p>
   </section>
 
   <section id="law">
-    <h2 data-num="12">Governing law</h2>
-    <p>These terms are governed by the laws of England and Wales. Any disputes arising from these terms or your use of Trade PA shall be subject to the exclusive jurisdiction of the courts of England and Wales.</p>
+    <h2 data-num="22">Governing law &amp; jurisdiction</h2>
+    <p>These Terms and any dispute or claim arising out of or in connection with them (including non-contractual disputes or claims) shall be governed by and construed in accordance with the laws of England and Wales.</p>
+    <p>The courts of England and Wales shall have exclusive jurisdiction to settle any such dispute or claim, except that if you are a consumer you may also bring proceedings in the courts of the part of the United Kingdom where you live.</p>
   </section>
 
   <section id="contact">
-    <h2 data-num="13">Contact</h2>
-    <p>If you have any questions about these terms, please contact us:</p>
+    <h2 data-num="23">Contact</h2>
+    <p>For questions about these Terms, notices required under them, or any contractual matter:</p>
     <div class="contact-card">
       <div class="contact-row">
         <div class="contact-label">Company</div>
@@ -203,12 +382,20 @@
         <div class="contact-value">17176983 (England &amp; Wales)</div>
       </div>
       <div class="contact-row">
-        <div class="contact-label">Email</div>
+        <div class="contact-label">Registered office</div>
+        <div style="font-size: 12px; color: var(--text);">40 Blakemere Crescent, Portsmouth, PO6 3SG, United Kingdom</div>
+      </div>
+      <div class="contact-row">
+        <div class="contact-label">Legal enquiries</div>
         <div class="contact-value">legal@tradespa.co.uk</div>
       </div>
       <div class="contact-row">
-        <div class="contact-label">Country</div>
-        <div style="font-size: 12px; color: var(--text);">United Kingdom</div>
+        <div class="contact-label">Billing enquiries</div>
+        <div class="contact-value">billing@tradespa.co.uk</div>
+      </div>
+      <div class="contact-row">
+        <div class="contact-label">Support</div>
+        <div class="contact-value">support@tradespa.co.uk</div>
       </div>
     </div>
   </section>
