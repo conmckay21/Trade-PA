@@ -29,7 +29,7 @@ const TIER_CONFIG = {
     label: "Trial",
     badgeText: "TRIAL",
     priceText: "Free",
-    priceDisplay: "Free 14-day trial",
+    priceDisplay: "Free 30-day trial",
     userLimit: 1,
     caps: { convos: 50, hf_hours: 0.5 }, // 30 min HF
     colorKey: "muted",
