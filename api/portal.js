@@ -308,6 +308,7 @@ function pageShell({ brand, title, bodyHTML }) {
   </div>
   <div class="foot">
     Delivered securely via <a href="https://www.tradespa.co.uk" target="_blank" rel="noopener">Trade PA</a>
+    <div style="margin-top:4px;font-size:10px;color:#bbb;">Trade PA Ltd · Company No. 17176983 · Registered in England &amp; Wales</div>
   </div>
 </div>
 </body>
