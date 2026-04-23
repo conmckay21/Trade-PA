@@ -8,6 +8,7 @@
     "api/email.js": { "maxDuration": 60 },
     "api/cron/evening-briefing.js": { "maxDuration": 60 },
     "api/cron/process-reminders.js": { "maxDuration": 60 },
+    "api/cron/check-ai-spend.js": { "maxDuration": 60 },
     "api/daily-automation.js": { "maxDuration": 120 },
     "api/reminders/action.js": { "maxDuration": 10 }
   },
@@ -15,7 +16,8 @@
     { "path": "/api/email-cron", "schedule": "0 * * * *" },
     { "path": "/api/cron/evening-briefing", "schedule": "0 17 * * *" },
     { "path": "/api/cron/process-reminders", "schedule": "*/5 * * * *" },
-    { "path": "/api/daily-automation", "schedule": "0 8 * * *" }
+    { "path": "/api/daily-automation", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/check-ai-spend", "schedule": "15 9 * * *" }
   ],
   "rewrites": [
     { "source": "/api/auth/gmail/connect", "destination": "/api/email" },
@@ -30,7 +32,6 @@
     { "source": "/api/outlook/thread", "destination": "/api/email" },
     { "source": "/api/outlook/send", "destination": "/api/email" },
     { "source": "/api/outlook/parse-supplier", "destination": "/api/email" },
-    { "source": "/api/email/check", "destination": "/api/email" },
     { "source": "/api/email/actions", "destination": "/api/email" },
     { "source": "/api/email/actions/approve", "destination": "/api/email" },
     { "source": "/api/email/actions/reject", "destination": "/api/email" },
