@@ -4,6 +4,18 @@
 
 ## 2026-04-23
 
+### No email will slip past the scan on a busy morning 🛡
+Bit of a quiet fix this one but it matters. If you got a flood of emails in one hour — say you sent a batch of quote follow-ups and replies all came back at once — the old scan could only handle the most recent 8 in an hour and the oldest ones just fell off the back. Not anymore. The scan now bookmarks itself by the arrival time of the newest email it actually processed, so any overflow stays first in the queue for the next tick. The Check Now button works the same way. You might see classifications arrive across two hourly ticks instead of one on a mental busy day, but nothing ever goes missing.
+
+### Old suggestions stop cluttering your Inbox 🧹
+Pending suggestions the AI made for you more than a month ago now clear themselves out automatically. If you never got round to approving or dismissing a "book Mrs Patel's tap" suggestion from six weeks back, it was still sitting in your Inbox with out-of-date context — that just stops now. Anything still relevant stays. Anything recent stays. Only genuinely stale stuff quietly disappears.
+
+### We'll spot if your inbox connection breaks 🔌
+If you change your Google/Microsoft password or revoke Trade PA's access, your inbox connection stops working and the hourly scan goes quiet. The cron now notices this specifically instead of silently failing every hour, so your connection row gets flagged — ready for the Inbox tab to show a clear "reconnect your inbox" banner when that's wired up on the front end. No more scans failing in the dark.
+
+### Hourly inbox scan now catches reschedules, cancellations, completions, CIS statements and more 📬
+Your background hourly scan used to spot six kinds of email (jobs, enquiries, payments, materials, contacts, ignore). It now spots all eleven — same brain the Check Now button uses. So reschedule requests, cancellations, job-completion confirmations, quote acceptances and monthly CIS statements from contractors will all get picked up automatically without you having to tap anything. The scan also reads past dismissals you've made, so if you've told it "that's spam" or "wrong customer" a few times, it learns and stops making the same mistake.
+
 ### "Check Now" button is quicker and smarter 📬
 The Check Now button in your Inbox tab used to re-read the last 48 hours every single time — even if nothing new had landed. Now it only looks at emails that have actually arrived since the last check (whether that was the hourly auto-scan or the last time you tapped it). If nothing new has come in, the tap finishes instantly with no fuss. If new emails have landed, they get picked up fast. Same Claude smarts behind the scenes, just no pointless re-reading.
 
