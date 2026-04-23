@@ -22,36 +22,40 @@ const supabaseAdmin = createClient(
 // `plan_code` is what gets stored in the subscriptions table's `plan`
 // column — matches the keys in TIER_CONFIG in App.jsx so the normalizer
 // there can read caps/labels correctly.
+//
+// Monthly-only as of Apr 2026 — annual plans were removed before launch
+// to keep the pricing page simple and avoid locking trial customers into
+// 12-month commitments before we know the product sticks. Can be added
+// back later without any data migration.
+//
+// Founding-member programme also removed Apr 2026 — the £39 locked-in
+// founding price became the standard Solo tier, so the separate
+// programme became redundant. Legacy subscription rows with
+// plan="solo_founding" still normalise to "solo" via normalizeTier() in
+// App.jsx. Related columns (is_founding_member, founding_member_slot_number,
+// founding_price_locked_until) remain in the subscriptions table for
+// any historic rows but aren't populated by new signups.
 const PLAN_CATALOGUE = {
-  // Solo — £39.99/mo (was £49 before the tier migration)
-  solo_monthly:       { priceEnv: "STRIPE_PRICE_SOLO_MONTHLY",       plan_code: "solo",     is_founding: false },
-  solo_annual:        { priceEnv: "STRIPE_PRICE_SOLO_ANNUAL",        plan_code: "solo",     is_founding: false },
-  solo_founding:      { priceEnv: "STRIPE_PRICE_SOLO_FOUNDING",      plan_code: "solo",     is_founding: true  },
+  // Solo — £39/mo
+  solo_monthly:       { priceEnv: "STRIPE_PRICE_SOLO_MONTHLY",       plan_code: "solo"     },
 
-  // Pro Solo — £59.99/mo (new tier as of Apr 2026 migration)
-  pro_solo_monthly:   { priceEnv: "STRIPE_PRICE_PRO_SOLO_MONTHLY",   plan_code: "pro_solo", is_founding: false },
-  pro_solo_annual:    { priceEnv: "STRIPE_PRICE_PRO_SOLO_ANNUAL",    plan_code: "pro_solo", is_founding: false },
+  // Pro Solo — £59/mo (new tier as of Apr 2026 migration)
+  pro_solo_monthly:   { priceEnv: "STRIPE_PRICE_PRO_SOLO_MONTHLY",   plan_code: "pro_solo" },
 
-  // Team — £89/mo flat (unchanged name, new flat pricing)
-  team_monthly:       { priceEnv: "STRIPE_PRICE_TEAM_MONTHLY",       plan_code: "team",     is_founding: false },
-  team_annual:        { priceEnv: "STRIPE_PRICE_TEAM_ANNUAL",        plan_code: "team",     is_founding: false },
+  // Team — £89/mo flat
+  team_monthly:       { priceEnv: "STRIPE_PRICE_TEAM_MONTHLY",       plan_code: "team"     },
 
   // Business — £129/mo flat (renamed from "pro" in the tier migration)
-  business_monthly:   { priceEnv: "STRIPE_PRICE_BUSINESS_MONTHLY",   plan_code: "business", is_founding: false },
-  business_annual:    { priceEnv: "STRIPE_PRICE_BUSINESS_ANNUAL",    plan_code: "business", is_founding: false },
+  business_monthly:   { priceEnv: "STRIPE_PRICE_BUSINESS_MONTHLY",   plan_code: "business" },
 };
 
 // Legacy plan key aliases. Before Apr 2026 the top tier was called "pro"
 // and cost the same as the current "business" tier. If a stale signup
 // link or cached page sends an old key, we transparently upgrade it to
-// the new canonical key so the user never sees a 400. Remove this map
-// once there's no risk of old links being in circulation.
+// the new canonical key so the user never sees a 400.
 const LEGACY_PLAN_ALIASES = {
   pro_monthly: "business_monthly",
-  pro_annual:  "business_annual",
 };
-
-const FOUNDING_MEMBER_CAP = 100;
 
 async function getUserIdFromRequest(req) {
   const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -105,23 +109,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Founding member slot check
-    let foundingSlotNumber = null;
-    if (planConfig.is_founding) {
-      const { count, error: countErr } = await supabaseAdmin
-        .from("subscriptions")
-        .select("id", { count: "exact", head: true })
-        .eq("is_founding_member", true);
-      if (countErr) throw countErr;
-      if (count >= FOUNDING_MEMBER_CAP) {
-        return res.status(403).json({
-          error: "founding_full",
-          message: "All 100 Founding Member spots have been claimed. Please choose a standard plan.",
-        });
-      }
-      foundingSlotNumber = (count || 0) + 1;
-    }
-
     // Create Stripe customer
     const customer = await stripe.customers.create({
       email,
@@ -154,8 +141,6 @@ export default async function handler(req, res) {
         supabase_user_id: userId,
         plan_code: planConfig.plan_code,
         plan_key: resolvedPlanKey,
-        is_founding_member: planConfig.is_founding ? "true" : "false",
-        founding_slot_number: foundingSlotNumber ? String(foundingSlotNumber) : "",
       },
     });
 
@@ -182,8 +167,6 @@ export default async function handler(req, res) {
         trial_ends_at: subscription.trial_end
           ? new Date(subscription.trial_end * 1000).toISOString()
           : null,
-        is_founding_member: planConfig.is_founding,
-        founding_member_slot_number: foundingSlotNumber,
       });
 
     if (insertErr) {
