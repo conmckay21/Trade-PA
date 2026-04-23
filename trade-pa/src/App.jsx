@@ -875,7 +875,7 @@ function LandingPage({ onAuth }) {
                     </li>
                   ))}
                 </ul>
-                <a href={`/signup.html?plan=${p.plan}`} style={{ background: "#f59e0b", color: "#000", padding: 14, borderRadius: 8, fontWeight: 700, fontSize: 14, textAlign: "center", display: "block", textDecoration: "none", fontFamily: "'DM Mono',monospace" }} className="lp-btn-primary">Start free trial →</a>
+                <button onClick={() => window.location.href = `/signup.html?plan=${p.plan}`} style={{ background: "#f59e0b", color: "#000", padding: 14, borderRadius: 8, fontWeight: 700, fontSize: 14, textAlign: "center", display: "block", width: "100%", border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace" }} className="lp-btn-primary">Start free trial →</button>
               </div>
             ))}
           </div>
