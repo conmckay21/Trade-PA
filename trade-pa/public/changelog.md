@@ -4,6 +4,9 @@
 
 ## 2026-04-23
 
+### "Check Now" button is quicker and smarter 📬
+The Check Now button in your Inbox tab used to re-read the last 48 hours every single time — even if nothing new had landed. Now it only looks at emails that have actually arrived since the last check (whether that was the hourly auto-scan or the last time you tapped it). If nothing new has come in, the tap finishes instantly with no fuss. If new emails have landed, they get picked up fast. Same Claude smarts behind the scenes, just no pointless re-reading.
+
 ### Pricing page "Start free trial" buttons now actually work 🔧
 The big amber buttons on the pricing cards weren't taking you anywhere when tapped. Fixed — click any plan's button now and it jumps you straight to signup with that plan pre-selected, same as the other CTAs on the page. Sorry to anyone who bounced off that one.
 
