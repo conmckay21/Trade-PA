@@ -4,6 +4,9 @@
 
 ## 2026-04-23
 
+### "Approve that" by voice now actually does the thing 🗣
+This one was a proper silent bug. When you approved an inbox action by voice — "approve that booking" or "yes, mark Dave's invoice as paid" — the action disappeared from your inbox like it worked, but nothing actually happened. No job on the calendar. No confirmation reply to the customer. No invoice marked paid. Approving through the Inbox tab's buttons worked fine; voice was the only path that was broken. Now voice runs the full approval — it creates the job, sends the reply from your own inbox, parses supplier PDFs, marks invoices paid — same as tapping the buttons. Dismissing by voice now also teaches the email classifier why you dismissed, so it stops making the same mistake. And whichever way you approve or dismiss, the other screen refreshes properly.
+
 ### No email will slip past the scan on a busy morning 🛡
 Bit of a quiet fix this one but it matters. If you got a flood of emails in one hour — say you sent a batch of quote follow-ups and replies all came back at once — the old scan could only handle the most recent 8 in an hour and the oldest ones just fell off the back. Not anymore. The scan now bookmarks itself by the arrival time of the newest email it actually processed, so any overflow stays first in the queue for the next tick. The Check Now button works the same way. You might see classifications arrive across two hourly ticks instead of one on a mental busy day, but nothing ever goes missing.
 
