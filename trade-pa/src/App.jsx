@@ -12,6 +12,155 @@ import ChangelogModal from "./components/ChangelogModal.jsx";
 import { prewarmCache } from "./lib/prewarm.js";
 import { drainQueue } from "./lib/writeQueue.js";
 
+// ─────────────────────────────────────────────────────────────────────────
+// TIER_CONFIG — single source of truth for all subscription tiers.
+//
+// Changes to pricing, caps, or user limits should happen here and nowhere
+// else. Every conditional in the app (plan badge, usage bars, upgrade CTA,
+// cap enforcement) reads from this config rather than hardcoding strings.
+//
+// Keys are the DB-stored tier identifiers used in the `subscriptions.plan`
+// column and emitted from the Stripe webhook. The backend webhook must
+// produce these exact strings: "solo", "pro_solo", "team", "business".
+// Legacy key "pro" is mapped to "business" at read time (see checkSubscription).
+// ─────────────────────────────────────────────────────────────────────────
+const TIER_CONFIG = {
+  trial: {
+    label: "Trial",
+    badgeText: "TRIAL",
+    priceText: "Free",
+    priceDisplay: "Free 14-day trial",
+    userLimit: 1,
+    caps: { convos: 50, hf_hours: 0.5 }, // 30 min HF
+    colorKey: "muted",
+  },
+  solo: {
+    label: "Solo",
+    badgeText: "SOLO",
+    priceText: "£39.99",
+    priceDisplay: "1 user · £39.99/mo",
+    userLimit: 1,
+    caps: { convos: 100, hf_hours: 1 },
+    colorKey: "amber",
+    stripePlanKey: "solo_monthly",
+  },
+  pro_solo: {
+    label: "Pro Solo",
+    badgeText: "PRO SOLO",
+    priceText: "£59.99",
+    priceDisplay: "1 user · £59.99/mo",
+    userLimit: 1,
+    caps: { convos: 300, hf_hours: 3 },
+    colorKey: "amber",
+    stripePlanKey: "pro_solo_monthly",
+  },
+  team: {
+    label: "Team",
+    badgeText: "TEAM",
+    priceText: "£89",
+    priceDisplay: "Up to 5 users · £89/mo",
+    userLimit: 5,
+    caps: { convos: 400, hf_hours: 4 },
+    colorKey: "green",
+    stripePlanKey: "team_monthly",
+  },
+  business: {
+    label: "Business",
+    badgeText: "BUSINESS",
+    priceText: "£129",
+    priceDisplay: "Up to 10 users · £129/mo",
+    userLimit: 10,
+    caps: { convos: 800, hf_hours: 8 },
+    colorKey: "blue",
+    stripePlanKey: "business_monthly",
+  },
+};
+
+// Helper: normalize any tier key (including legacy "pro" and "solo_founding")
+// to a canonical key that exists in TIER_CONFIG. Unknown keys fall back to solo.
+function normalizeTier(key) {
+  if (key === "pro") return "business";          // legacy rename
+  if (key === "solo_founding") return "solo";    // founding flag handled separately
+  return TIER_CONFIG[key] ? key : "solo";
+}
+
+// Helper: look up a tier's config, with a safe fallback to Solo.
+function getTierConfig(key) {
+  return TIER_CONFIG[normalizeTier(key)] || TIER_CONFIG.solo;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// trackEvent — fire-and-forget usage analytics.
+//
+// Writes a row to the usage_events table. Never throws, never blocks,
+// never retries. The caller MUST have a valid Supabase session (auth.uid)
+// — events are rejected by RLS otherwise.
+//
+// Usage:
+//   trackEvent(dbInstance, user.id, companyId, "tool_call", "create_invoice",
+//              { success: true, duration_ms: 420, amount: 1200 });
+//
+// Event categories (keep vocab stable so dashboards don't drift):
+//   - "tool_call"     — AI tool executions (create_invoice, send_quote, ...)
+//   - "voice_session" — PTT or hands-free start/end
+//   - "email_sent"    — invoice, quote, chase emails
+//   - "payment"       — Stripe subscription events
+//   - "plan_event"    — cap_hit, upgraded, downgraded
+//   - "portal_view"   — customer opened a portal link
+//
+// Dropped silently if user_id/db missing (e.g. during onboarding before
+// a session exists) so callers don't need to null-check.
+// ─────────────────────────────────────────────────────────────────────────
+async function trackEvent(dbInstance, userId, companyId, eventType, eventName, metadata = {}) {
+  if (!dbInstance || !userId || !eventType || !eventName) return;
+  try {
+    await dbInstance.from("usage_events").insert({
+      user_id: userId,
+      company_id: companyId || null,
+      event_type: eventType,
+      event_name: eventName,
+      metadata: metadata || {},
+    });
+  } catch (err) {
+    // Swallow — tracking must never impact UX. Sentry will pick up any
+    // schema-level issues via the error boundary if they surface elsewhere.
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// setOwnerCookie — drops a cookie on the tradesperson's device containing
+// their user_id. The server-side portal endpoint (/api/portal) reads this
+// cookie on incoming requests and suppresses the "customer viewed your
+// quote" push notification when the viewer's cookie matches the invoice's
+// owner.
+//
+// Why a cookie: the portal is un-authenticated (anyone with the link can
+// view) but we still need to distinguish the tradesperson previewing their
+// own link from a genuine customer view. A cookie is set on any device the
+// tradesperson has logged into, and gets sent automatically on every portal
+// request — no extra plumbing needed on the link-sharing side.
+//
+// Security properties:
+//   - Value is just the user_id UUID (not secret — it's in every JWT already)
+//   - SameSite=Lax means cookie IS sent when opening /quote/<token> from
+//     inside the app (same-site nav), but NOT on arbitrary cross-site POSTs
+//   - httpOnly=false because we need to set it from client-side JS
+//   - Secure=true in production (always HTTPS)
+//   - 90 day lifetime
+// ─────────────────────────────────────────────────────────────────────────
+function setOwnerCookie(userId) {
+  if (!userId || typeof document === "undefined") return;
+  try {
+    const maxAge = 60 * 60 * 24 * 90; // 90 days
+    const secure = (typeof window !== "undefined" && window.location?.protocol === "https:") ? "; Secure" : "";
+    document.cookie = `tp_owner=${encodeURIComponent(userId)}; Max-Age=${maxAge}; Path=/; SameSite=Lax${secure}`;
+  } catch {
+    // Some browser contexts (e.g. embedded webviews) block cookie writes.
+    // Fall back silently — the worst case is the tradesperson gets pushes
+    // for their own portal previews, which is annoying but not broken.
+  }
+}
+
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -628,7 +777,7 @@ function LandingPage({ onAuth }) {
       <div style={{ ...LP.section }}>
         <div style={LP.sectionLabel}>How we compare</div>
         <h2 style={LP.h2}>More intelligent.<br/>Better value.</h2>
-        <p style={{ fontSize: 16, color: "#666", marginBottom: 40, lineHeight: 1.7, maxWidth: 560 }}>Tradify is £34/month with no AI. Trade PA Solo is £49/month — with an AI that runs your entire inbox, answers calls and tracks jobs for you.</p>
+        <p style={{ fontSize: 16, color: "#666", marginBottom: 40, lineHeight: 1.7, maxWidth: 560 }}>Tradify is £34/month with no AI. Trade PA Solo is £39.99/month — with an AI that runs your entire inbox, answers calls and tracks jobs for you.</p>
         <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 14, overflow: "hidden" }}>
           {/* Header */}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", borderBottom: "1px solid #222" }}>
@@ -656,7 +805,7 @@ function LandingPage({ onAuth }) {
           ))}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr" }}>
             <div style={{ padding: "14px 20px", fontSize: 13, color: "#666" }}>Monthly price (sole trader)</div>
-            <div style={{ padding: "14px 20px", fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)" }}>from £49</div>
+            <div style={{ padding: "14px 20px", fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)" }}>from £39.99</div>
             <div style={{ padding: "14px 20px", fontSize: 13, color: "#555" }}>£34</div>
           </div>
         </div>
@@ -690,9 +839,10 @@ function LandingPage({ onAuth }) {
           {/* Plan cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 24 }}>
             {[
-              { name: "Solo", price: "£49", period: "/mo", annual: "or £529/year · save £59", users: "1 user", popular: false, plan: "solo_monthly", features: ["500 AI conversations per month", "5 hours hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Allowance resets 1st of month"] },
-              { name: "Team", price: "£89", period: "/mo", annual: "or £961/year · save £107", users: "Up to 5 users", popular: true, plan: "team_monthly", features: ["1,500 AI conversations per month", "15 hours hands-free per month", "Team scheduling & per-user permissions", "Staff timesheets & GPS tracking", "All 43 features included"] },
-              { name: "Pro", price: "£129", period: "/mo", annual: "or £1,393/year · save £155", users: "Up to 10 users", popular: false, plan: "pro_monthly", features: ["2,500 AI conversations per month", "25 hours hands-free per month", "Priority support", "Everything in Team, more capacity", "All 43 features included"] },
+              { name: "Solo", price: "£39.99", period: "/mo", annual: "or £439/year · save £40", users: "1 user", popular: false, plan: "solo_monthly", features: ["100 AI conversations per month", "1 hour hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Allowance resets 1st of month"] },
+              { name: "Pro Solo", price: "£59.99", period: "/mo", annual: "or £659/year · save £60", users: "1 user", popular: true, plan: "pro_solo_monthly", features: ["300 AI conversations per month", "3 hours hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Priority for new features"] },
+              { name: "Team", price: "£89", period: "/mo", annual: "or £979/year · save £89", users: "Up to 5 users", popular: false, plan: "team_monthly", features: ["400 AI conversations per month", "4 hours hands-free per month", "Team scheduling & per-user permissions", "Staff timesheets & GPS tracking", "All 43 features included"] },
+              { name: "Business", price: "£129", period: "/mo", annual: "or £1,419/year · save £129", users: "Up to 10 users", popular: false, plan: "business_monthly", features: ["800 AI conversations per month", "8 hours hands-free per month", "Priority support", "Everything in Team, more capacity", "All 43 features included"] },
             ].map(p => (
               <div key={p.name} style={{ background: "#141414", border: p.popular ? "2px solid #f59e0b" : "1px solid #222", borderRadius: 20, padding: "44px 32px 36px", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#f59e0b" }} />
@@ -2662,10 +2812,10 @@ function TeamInvite({ companyId, planTier, currentMemberCount }) {
     if (!email || !companyId) return;
 
     // Check user limit based on plan
-    const PLAN_LIMITS = { solo: 1, team: 5, pro: 10 };
-    const maxUsers = PLAN_LIMITS[planTier] || 1;
+    const tierCfg = getTierConfig(planTier);
+    const maxUsers = tierCfg.userLimit;
     if (currentMemberCount >= maxUsers) {
-      setError(`Your ${planTier} plan allows up to ${maxUsers} user${maxUsers === 1 ? "" : "s"}. Upgrade your plan to add more team members.`);
+      setError(`Your ${tierCfg.label} plan allows up to ${maxUsers} user${maxUsers === 1 ? "" : "s"}. Upgrade your plan to add more team members.`);
       return;
     }
 
@@ -2828,6 +2978,203 @@ function CertificationsCard({ brand, setBrand }) {
         })}
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// AdminUsage — admin-only dashboard rendering recent usage analytics.
+//
+// Fetches the last 7 days of events from the usage_events table and shows
+// four panels:
+//   1. Tool usage summary (tool name, total calls, success rate)
+//   2. Voice session aggregate (count + total minutes in last 7 days)
+//   3. Cap hits (last 30 days) — these are upgrade prospects
+//   4. Recent events feed (last 50, reverse chronological)
+//
+// Gated upstream by isExemptAccount(user.email); this component itself
+// does no further authentication, so don't render it for non-admins.
+// ─────────────────────────────────────────────────────────────────────────
+function AdminUsage({ db, C, S }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [capHits, setCapHits] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        // Last 7 days of all events (up to 2000 rows to keep the UI snappy)
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: rows, error: err1 } = await db
+          .from("usage_events")
+          .select("*")
+          .gte("created_at", sevenDaysAgo)
+          .order("created_at", { ascending: false })
+          .limit(2000);
+        if (err1) throw err1;
+
+        // Last 30 days of cap-hit events — upgrade prospect list
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: caps, error: err2 } = await db
+          .from("usage_events")
+          .select("*")
+          .eq("event_type", "plan_event")
+          .eq("event_name", "convos_cap_hit")
+          .gte("created_at", thirtyDaysAgo)
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (err2) throw err2;
+
+        if (!cancelled) {
+          setEvents(rows || []);
+          setCapHits(caps || []);
+        }
+      } catch (e) {
+        if (!cancelled) setError(e?.message || "Couldn't load usage data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [db]);
+
+  // Compute tool usage aggregates (tool_call events only)
+  const toolStats = (() => {
+    const byTool = {};
+    for (const ev of events) {
+      if (ev.event_type !== "tool_call") continue;
+      if (!byTool[ev.event_name]) byTool[ev.event_name] = { total: 0, success: 0 };
+      byTool[ev.event_name].total += 1;
+      if (ev.metadata?.success) byTool[ev.event_name].success += 1;
+    }
+    return Object.entries(byTool)
+      .map(([name, stats]) => ({ name, ...stats, rate: stats.total ? Math.round((stats.success / stats.total) * 100) : 0 }))
+      .sort((a, b) => b.total - a.total);
+  })();
+
+  // Compute voice session aggregates
+  const voiceStats = (() => {
+    let sessionCount = 0;
+    let totalSeconds = 0;
+    for (const ev of events) {
+      if (ev.event_type !== "voice_session") continue;
+      if (ev.event_name === "handsfree_ended") {
+        sessionCount += 1;
+        totalSeconds += ev.metadata?.duration_seconds || 0;
+      }
+    }
+    return { sessionCount, totalMinutes: Math.round(totalSeconds / 60) };
+  })();
+
+  // Count unique users active in last 7 days
+  const activeUsers = new Set(events.map(ev => ev.user_id)).size;
+
+  if (loading) {
+    return (
+      <div style={{ ...S.card, textAlign: "center", color: C.muted, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+        Loading usage data…
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ ...S.card, color: "#ef4444", fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+        {error}
+      </div>
+    );
+  }
+
+  const statNumStyle = { fontSize: 26, fontWeight: 700, color: C.text, fontFamily: "'DM Sans',sans-serif", lineHeight: 1.1 };
+  const statLabelStyle = { fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4, fontWeight: 700 };
+
+  return (
+    <>
+      {/* Summary row — last 7 days at a glance */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+        <div style={S.card}>
+          <div style={statNumStyle}>{activeUsers}</div>
+          <div style={statLabelStyle}>Active Users · 7d</div>
+        </div>
+        <div style={S.card}>
+          <div style={statNumStyle}>{events.filter(e => e.event_type === "tool_call").length}</div>
+          <div style={statLabelStyle}>Tool Calls · 7d</div>
+        </div>
+        <div style={S.card}>
+          <div style={statNumStyle}>{voiceStats.sessionCount}</div>
+          <div style={statLabelStyle}>Voice Sessions · 7d</div>
+        </div>
+        <div style={S.card}>
+          <div style={statNumStyle}>{voiceStats.totalMinutes}m</div>
+          <div style={statLabelStyle}>Hands-Free · 7d</div>
+        </div>
+      </div>
+
+      {/* Top tools */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>Top tools · last 7 days</div>
+        {toolStats.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.muted, padding: "8px 0" }}>No tool calls in this window yet.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {toolStats.slice(0, 15).map(t => (
+              <div key={t.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: C.text }}>{t.name}</div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
+                  <span style={{ color: t.rate >= 90 ? C.green : t.rate >= 70 ? C.amber : "#ef4444" }}>{t.rate}%</span>
+                  <span style={{ color: C.muted, minWidth: 40, textAlign: "right" }}>{t.total}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Cap hits — upgrade prospects */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>Cap hits · last 30 days</div>
+        <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>
+          Users who hit their monthly conversation cap. These are warm upgrade prospects.
+        </div>
+        {capHits.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.muted, padding: "8px 0" }}>Nobody's hit their cap yet.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {capHits.slice(0, 20).map(ev => (
+              <div key={ev.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${C.border}`, fontFamily: "'DM Mono',monospace", fontSize: 11 }}>
+                <div style={{ color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{ev.user_id?.slice(0, 8)}…</div>
+                <div style={{ color: C.amber, marginRight: 12 }}>{ev.metadata?.convos_used}/{ev.metadata?.convos_cap}</div>
+                <div style={{ color: C.muted, fontSize: 10 }}>{new Date(ev.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent events feed */}
+      <div style={S.card}>
+        <div style={S.sectionTitle}>Recent events</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 400, overflowY: "auto" }}>
+          {events.slice(0, 50).map(ev => (
+            <div key={ev.id} style={{ fontFamily: "'DM Mono',monospace", fontSize: 10.5, padding: "4px 0", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 8, alignItems: "baseline" }}>
+              <span style={{ color: C.muted, minWidth: 60 }}>{new Date(ev.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+              <span style={{
+                color: ev.event_type === "tool_call" ? C.amber
+                  : ev.event_type === "voice_session" ? C.blue
+                  : ev.event_type === "payment" ? C.green
+                  : ev.event_type === "plan_event" ? "#ef4444"
+                  : C.muted,
+                minWidth: 100,
+              }}>{ev.event_type}</span>
+              <span style={{ color: C.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.event_name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -3147,7 +3494,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         </svg>
       ),
       iconTint: "neutral",
-      status: { text: planTier === "pro" ? "PRO" : planTier === "team" ? "TEAM" : "SOLO", color: "amber" },
+      status: { text: getTierConfig(planTier).badgeText, color: "amber" },
     },
     {
       id: "help",
@@ -3174,6 +3521,22 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       ),
       iconTint: "neutral",
     },
+    // Admin-only usage dashboard. Only visible when the signed-in user's
+    // email matches the EXEMPT list (Connor + a handful of test accounts).
+    // Non-admins never see this tile — it's filtered out below.
+    ...(isExemptAccount(user?.email) ? [{
+      id: "admin_usage",
+      group: "ACCOUNT",
+      name: "Admin · Usage",
+      sub: "Tool usage · voice sessions · cap hits",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      ),
+      iconTint: "purple",
+      status: { text: "ADMIN", color: "purple" },
+    }] : []),
   ];
 
   // Tints for category icons (mockup uses several tones)
@@ -3598,10 +3961,20 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       </>)}
 
       {subview === "plan" && (<>
-      {/* Plan hero — big, clear at-a-glance status */}
+      {/* Plan hero — big, clear at-a-glance status. Reads all presentation
+          details from TIER_CONFIG so a tier added/renamed upstream flows
+          through without editing this block. */}
+      {(() => {
+        const tierCfg = getTierConfig(planTier);
+        // Map the tier's colorKey to the actual colour token for this theme.
+        const tierColour = tierCfg.colorKey === "blue" ? C.blue
+                        : tierCfg.colorKey === "green" ? C.green
+                        : tierCfg.colorKey === "muted" ? C.muted
+                        : C.amber;
+        return (
       <div style={{
-        background: `linear-gradient(135deg, ${planTier === "pro" ? `${C.blue}14` : planTier === "team" ? `${C.green}14` : `${C.amber}14`}, transparent)`,
-        border: `1px solid ${planTier === "pro" ? `${C.blue}40` : planTier === "team" ? `${C.green}40` : `${C.amber}40`}`,
+        background: `linear-gradient(135deg, ${tierColour}14, transparent)`,
+        border: `1px solid ${tierColour}40`,
         borderRadius: 14,
         padding: 18,
         display: "flex",
@@ -3625,9 +3998,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               letterSpacing: "-0.02em",
               color: C.text,
               lineHeight: 1.1,
-            }}>Trade PA {planTier === "pro" ? "Pro" : planTier === "team" ? "Team" : "Solo"}</div>
+            }}>Trade PA {tierCfg.label}</div>
             <div style={{ fontSize: 12, color: C.textDim, marginTop: 3 }}>
-              {planTier === "solo" ? "1 user · £49/mo" : planTier === "team" ? "Up to 5 users · £89/mo" : "Up to 10 users · £129/mo"}
+              {tierCfg.priceDisplay}
             </div>
           </div>
           <span style={{
@@ -3635,18 +4008,20 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             fontSize: 11,
             fontWeight: 700,
             letterSpacing: "0.1em",
-            color: planTier === "pro" ? C.blue : planTier === "team" ? C.green : C.amber,
-            background: `${planTier === "pro" ? C.blue : planTier === "team" ? C.green : C.amber}1a`,
-            border: `1px solid ${planTier === "pro" ? C.blue : planTier === "team" ? C.green : C.amber}40`,
+            color: tierColour,
+            background: `${tierColour}1a`,
+            border: `1px solid ${tierColour}40`,
             padding: "4px 10px",
             borderRadius: 10,
             flexShrink: 0,
-          }}>{planTier === "pro" ? "PRO" : planTier === "team" ? "TEAM" : "SOLO"}</span>
+          }}>{tierCfg.badgeText}</span>
         </div>
       </div>
+        );
+      })()}
 
-      {/* Upgrade CTA row — only for plans below Pro */}
-      {planTier !== "pro" && (
+      {/* Upgrade CTA row — only shown for plans below Business. */}
+      {planTier !== "business" && (
         <a
           href="mailto:hello@tradespa.co.uk?subject=Trade%20PA%20upgrade%20request"
           style={{
@@ -3671,9 +4046,14 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               color: C.amber,
             }}>Upgrade plan →</div>
             <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>
-              {planTier === "solo"
-                ? "Team (£89/mo · 5 users) or Pro (£129/mo · 10 users)"
-                : "Pro — £129/mo · up to 10 users"}
+              {(() => {
+                // Suggest the next tier up from the user's current one.
+                // Business is the ceiling — this block doesn't render above.
+                if (planTier === "solo") return "Pro Solo (£59.99/mo · 3× capacity), Team (£89/mo · 5 users) or Business (£129/mo · 10 users)";
+                if (planTier === "pro_solo") return "Team (£89/mo · 5 users) or Business (£129/mo · 10 users)";
+                if (planTier === "team") return "Business — £129/mo · up to 10 users";
+                return "Business — £129/mo · up to 10 users";
+              })()}
             </div>
           </div>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3790,11 +4170,11 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         </div>
         {(() => {
           const convUsed = usageData?.conversations_used || 0;
-          const convCap = usageCaps?.convos || 500;
+          const convCap = usageCaps?.convos || 100;
           const convUnlimited = convCap === Infinity;
           const convPct = convUnlimited ? 0 : Math.min(1, convUsed / convCap);
           const hfUsed = Math.round((usageData?.handsfree_seconds_used || 0) / 60);
-          const hfCap = usageCaps?.hf_hours === Infinity ? Infinity : (usageCaps?.hf_hours || 5) * 60;
+          const hfCap = usageCaps?.hf_hours === Infinity ? Infinity : (usageCaps?.hf_hours || 1) * 60;
           const hfUnlimited = hfCap === Infinity;
           const hfPct = hfUnlimited ? 0 : Math.min(1, hfUsed / hfCap);
           const barStyle = () => ({
@@ -3844,7 +4224,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               borderTop: `1px solid ${C.border}`,
               fontWeight: 600,
             }}>
-              {planTier === "solo" ? "SOLO PLAN" : planTier === "team" ? "TEAM PLAN" : "PRO PLAN"} · RESETS 1ST OF EACH MONTH
+              {getTierConfig(planTier).badgeText} PLAN · RESETS 1ST OF EACH MONTH
             </div>
           </>);
         })()}
@@ -5157,6 +5537,10 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         </div>
       )}
       </>)}
+
+      {subview === "admin_usage" && isExemptAccount(user?.email) && (
+        <AdminUsage db={db} C={C} S={S} />
+      )}
 
       {/* Preview Modal */}
       {preview && (
@@ -6952,7 +7336,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 500, hf_hours: 5 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {} }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 100, hf_hours: 1 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {} }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -7270,6 +7654,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   useEffect(() => {
     if (handsFree) {
       handsFreeStartRef.current = Date.now();
+      // Log the session start so we can measure hands-free uptake per tier.
+      trackEvent(db, user?.id, companyId, "voice_session", "handsfree_started", {});
     } else if (handsFreeStartRef.current) {
       const elapsed = Math.round((Date.now() - handsFreeStartRef.current) / 1000);
       handsFreeStartRef.current = null;
@@ -7284,6 +7670,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           p_user_id: user.id, p_month: currentMonth,
           p_conversations: 0, p_seconds: elapsed,
         })).catch(() => {});
+        // Analytics: session ended. Duration lets us see distribution of
+        // real usage — if 90% of sessions are <30s, the "1h HF cap" on
+        // Solo is vastly more than anyone ever needs.
+        trackEvent(db, user?.id, companyId, "voice_session", "handsfree_ended", {
+          duration_seconds: elapsed,
+        });
       }
     }
   }, [handsFree]);
@@ -8954,6 +9346,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           syncInvoiceToAccounting(user?.id, { ...match, status: "paid" });
           sendPush({ title: "💰 Invoice Paid", body: `${match.customer} paid ${fmtAmount(match.amount)}`, url: "/", type: "invoice_paid", tag: "invoice-paid" });
           setLastAction({ type: "invoice", label: `Paid: ${match.id} — ${match.customer}`, view: "Invoices" });
+          // Analytics: invoice marked paid. Tracking amount helps us see
+          // typical ticket size per tradie — informs value-prop messaging.
+          trackEvent(db, user?.id, companyId, "payment", "invoice_marked_paid", {
+            amount: match.amount,
+            invoice_id: match.id,
+          });
           return `Invoice ${match.id} for ${match.customer} (${fmtAmount(match.amount)}) marked as paid.`;
         }
         case "update_job_status": {
@@ -11287,6 +11685,12 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     if (_caps.convos !== Infinity && (usageDataRef.current?.conversations_used || 0) >= _caps.convos) {
       setLimitError(null);
       setLimitModal({ reason: "limit_reached", pendingText: text });
+      // Analytics: user hit the monthly conversation cap. This is a strong
+      // upgrade signal — the Admin dashboard lists these as warm leads.
+      trackEvent(db, user?.id, companyId, "plan_event", "convos_cap_hit", {
+        convos_used: usageDataRef.current?.conversations_used || 0,
+        convos_cap: _caps.convos,
+      });
       return;
     }
     const isOnboardingTrigger = text === "__onboarding_start__";
@@ -11470,7 +11874,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           } else if (block.type === "tool_use") {
             iterToolUseBlocks.push(block);
             pendingWidgetRef.current = null;
+            const toolStartedAt = Date.now();
             const result = await executeTool(block.name, block.input);
+            const toolDurationMs = Date.now() - toolStartedAt;
+            // Fire-and-forget usage tracking. Empty/null result = failure from
+            // the tool's perspective; a non-null string is success. We don't
+            // capture the full input because some tools carry PII (amounts,
+            // customer names) that shouldn't flow into analytics.
+            trackEvent(db, user?.id, companyId, "tool_call", block.name, {
+              success: !!result,
+              duration_ms: toolDurationMs,
+            });
             if (result) allToolResults.push(result);
             if (result && ACTION_TOOLS.includes(block.name)) {
               sessionActionsRef.current = [...sessionActionsRef.current.slice(-9), `${block.name}(${JSON.stringify(block.input).slice(0,60)})`];
@@ -12154,10 +12568,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
            Tap to jump to Settings. Reads usageData/usageCaps already in props. */}
       {(() => {
         const convUsed = usageData?.conversations_used || 0;
-        const convCap = usageCaps?.convos || 500;
+        const convCap = usageCaps?.convos || 100;
         const convUnlimited = convCap === Infinity;
         const hfUsedMin = Math.round((usageData?.handsfree_seconds_used || 0) / 60);
-        const hfCapMin = usageCaps?.hf_hours === Infinity ? Infinity : (usageCaps?.hf_hours || 5) * 60;
+        const hfCapMin = usageCaps?.hf_hours === Infinity ? Infinity : (usageCaps?.hf_hours || 1) * 60;
         const hfUnlimited = hfCapMin === Infinity;
         const worstPct = Math.max(
           convUnlimited ? 0 : convUsed / convCap,
@@ -15407,6 +15821,144 @@ function formatDate(ts) {
   if (d.toDateString() === today.toDateString()) return "Today";
   if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Notifications — in-app feed backed by the in_app_notifications table.
+//
+// Receives the list of notifications as props from AppInner (which loads
+// and polls). Handles UX: tap to mark-as-read + navigate to the URL,
+// swipe/tap to dismiss, "mark all as read" button.
+//
+// Visual language matches Reminders so it feels consistent with the
+// existing "inbox-style" views in the app.
+// ─────────────────────────────────────────────────────────────────────────
+function Notifications({ notifications, onMarkRead, onMarkAllRead, onDismiss, onOpen }) {
+  const { theme } = useTheme();
+  const palette = theme === "dark" ? DARK_PALETTE : LIGHT_PALETTE;
+  const C = new Proxy({}, { get: (_, k) => `var(--c-${k})` });
+
+  const hasUnread = notifications.some(n => !n.read_at);
+
+  if (notifications.length === 0) {
+    return (
+      <div style={{ padding: 40, textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🔔</div>
+        <div style={{ fontSize: 15, color: C.text, fontWeight: 600, marginBottom: 4 }}>No notifications yet</div>
+        <div style={{ fontSize: 13, color: C.textDim, lineHeight: 1.5, maxWidth: 320, margin: "0 auto" }}>
+          When a customer opens one of your quote or invoice portal links, you'll see it here.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 4px" }}>
+        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: C.muted, letterSpacing: "0.1em", fontWeight: 700 }}>
+          RECENT · {notifications.length}
+        </div>
+        {hasUnread && (
+          <button
+            onClick={onMarkAllRead}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: C.amber,
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              cursor: "pointer",
+              padding: 0,
+              textTransform: "uppercase",
+            }}
+          >Mark all read</button>
+        )}
+      </div>
+
+      {notifications.map(n => {
+        const unread = !n.read_at;
+        const when = (() => {
+          const ms = Date.now() - new Date(n.created_at).getTime();
+          const mins = Math.floor(ms / 60000);
+          if (mins < 1) return "Just now";
+          if (mins < 60) return `${mins}m ago`;
+          const hours = Math.floor(mins / 60);
+          if (hours < 24) return `${hours}h ago`;
+          const days = Math.floor(hours / 24);
+          if (days < 7) return `${days}d ago`;
+          return new Date(n.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+        })();
+        return (
+          <div
+            key={n.id}
+            onClick={() => onOpen(n)}
+            style={{
+              background: unread ? `${palette.amber}12` : "var(--c-surfaceHigh)",
+              border: `1px solid ${unread ? `${palette.amber}40` : "var(--c-border)"}`,
+              borderRadius: 12,
+              padding: "12px 14px",
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              position: "relative",
+            }}
+          >
+            {unread && (
+              <div style={{
+                position: "absolute",
+                top: 14, right: 14,
+                width: 8, height: 8,
+                borderRadius: "50%",
+                background: palette.amber,
+              }} />
+            )}
+            <div style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: 14,
+              fontWeight: 700,
+              color: C.text,
+              letterSpacing: "-0.01em",
+              paddingRight: unread ? 24 : 0,
+            }}>{n.title}</div>
+            <div style={{
+              fontSize: 12.5,
+              color: C.textDim,
+              lineHeight: 1.5,
+            }}>{n.body}</div>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: 4,
+            }}>
+              <div style={{
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 10,
+                color: C.muted,
+                letterSpacing: "0.05em",
+              }}>{when}</div>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDismiss(n.id); }}
+                aria-label="Dismiss"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: C.muted,
+                  cursor: "pointer",
+                  padding: 4,
+                  fontSize: 14,
+                  lineHeight: 1,
+                }}
+              >✕</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function Reminders({ reminders, onAdd, onDismiss, onRemove, dueNow, onClearDue }) {
@@ -27232,10 +27784,10 @@ function PortalLinkPanel({ token, isQuote, stripeReady, colors, styles }) {
   if (!token) return null;
   const url = portalUrl(token);
   const blurb = isQuote
-    ? "Share this link — customer can view, accept or decline without signing up. You'll get a push notification when they respond. (Also auto-included as a button in your quote emails.)"
+    ? "Share this link — customer can view, accept or decline without signing up. You'll get a push when they open it AND when they respond. (Also auto-included as a button in your quote emails.)"
     : stripeReady
-      ? "Share this link — customer can view the invoice and pay by card. You'll get a push notification when payment comes in. (Also auto-included as a button in your invoice emails.)"
-      : "Share this link — customer can view the invoice and bank transfer details online. (Also auto-included as a button in your invoice emails.) Connect Stripe in Settings → Integrations to accept card payments.";
+      ? "Share this link — customer can view the invoice and pay by card. You'll get a push when they open it AND when payment comes in. (Also auto-included as a button in your invoice emails.)"
+      : "Share this link — customer can view the invoice and bank transfer details online. You'll get a push when they open it. (Also auto-included as a button in your invoice emails.) Connect Stripe in Settings → Integrations to accept card payments.";
   return (
     <div style={{ padding: "10px 14px", background: colors.surfaceHigh, borderRadius: 8 }}>
       <div style={{ fontSize: 10, color: colors.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
@@ -28047,14 +28599,9 @@ function AppInner() {
   // ── Fair-use caps: usage tracking ─────────────────────────────
   const currentMonth = new Date().toISOString().slice(0, 7); // "2026-04"
   const [usageData, setUsageData] = useState({ conversations_used: 0, handsfree_seconds_used: 0 });
-  const USAGE_CAPS = {
-    trial:         { convos: 500,  hf_hours: 5 },   // trial limits = Solo level regardless of plan
-    solo:          { convos: 500,  hf_hours: 5 },
-    solo_founding: { convos: 500,  hf_hours: 5 },   // founding member — same caps as Solo
-    team:          { convos: 1500, hf_hours: 15 },
-    pro:           { convos: 2500, hf_hours: 25 },
-  };
-  const usageCaps = USAGE_CAPS[planTier] || USAGE_CAPS.solo;
+  // Caps come from TIER_CONFIG (single source of truth). getTierConfig
+  // handles legacy "pro" → "business" rename and the "solo_founding" flag.
+  const usageCaps = getTierConfig(planTier).caps;
   // Custom assistant persona — state here in App (passed to AIAssistant as props)
   const [assistantSetupOpen, setAssistantSetupOpen] = useState(false);
   const [assistantName, setAssistantName] = useState("Trade PA");
@@ -28434,6 +28981,7 @@ function AppInner() {
       try {
         if (session?.user) {
           Sentry.setUser({ id: session.user.id, email: session.user.email });
+          setOwnerCookie(session.user.id);
         } else {
           Sentry.setUser(null);
         }
@@ -28444,6 +28992,7 @@ function AppInner() {
       try {
         if (session?.user) {
           Sentry.setUser({ id: session.user.id, email: session.user.email });
+          setOwnerCookie(session.user.id);
         } else {
           Sentry.setUser(null);
         }
@@ -28456,12 +29005,13 @@ function AppInner() {
   useEffect(() => {
     if (!user) { setSubscriptionStatus(null); return; }
 
-    // Exempt accounts skip subscription check entirely
+    // Exempt accounts skip subscription check entirely — treated as Business tier
+    // so the caps are generous and all features are unlocked.
     const EXEMPT = ["thetradepa@gmail.com", "connor@tradespa.co.uk", "connor_mckay777@hotmail.com", "connor_mckay777@hotmail.co.uk", "landbheating@outlook.com", "shannonandrewsimpson@gmail.com"];
     if (EXEMPT.includes(user.email?.toLowerCase())) {
       setSubscriptionStatus("active");
-      setPlanTier("pro");
-      setUserLimit(10);
+      setPlanTier("business");
+      setUserLimit(getTierConfig("business").userLimit);
       return;
     }
 
@@ -28470,14 +29020,14 @@ function AppInner() {
       if (!data?.length) { setSubscriptionStatus("none"); return; }
       const sub = data[0];
 
-      // Determine plan tier from DB's plan column (set by create-subscription.js)
-      // solo_founding is treated as "solo" for UI purposes — founding status is tracked separately
-      // via sub.is_founding_member if Path C adds a dedicated founding badge
+      // Determine plan tier from DB's plan column (set by create-subscription.js).
+      // normalizeTier handles legacy "pro" → "business" rename and maps the
+      // "solo_founding" marker back to "solo" for UI purposes (founding status
+      // is tracked separately via sub.is_founding_member if a badge is needed).
       const rawPlan = sub.plan || "solo";
-      const detectedPlan = rawPlan === "solo_founding" ? "solo" : rawPlan;
-      const PLAN_USER_LIMITS = { solo: 1, team: 5, pro: 10 };
+      const detectedPlan = normalizeTier(rawPlan);
       setPlanTier(detectedPlan);
-      setUserLimit(PLAN_USER_LIMITS[detectedPlan] || 1);
+      setUserLimit(getTierConfig(detectedPlan).userLimit);
 
       if (sub.current_period_end && new Date(sub.current_period_end) < new Date() && sub.status === "active") {
         setSubscriptionStatus("past_due");
@@ -28596,6 +29146,76 @@ function AppInner() {
   const [userRole, setUserRole] = useState("owner");
   const [members, setMembers] = useState([]);
   const [pendingInvite, setPendingInvite] = useState(null);
+
+  // ── In-app notifications (bell icon feed) ─────────────────────────────────
+  // Backed by in_app_notifications table. Populated server-side by portal.js
+  // (customer views) and can be extended to webhook events, etc. We fetch
+  // on load and poll every 60s so the bell badge stays fresh without
+  // overwhelming the DB.
+  const [inAppNotifs, setInAppNotifs] = useState([]);
+  const loadInAppNotifs = async () => {
+    if (!user?.id) return;
+    try {
+      const { data } = await db
+        .from("in_app_notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (data) setInAppNotifs(data);
+    } catch {
+      // Silently ignore — a transient network blip shouldn't break the UI.
+    }
+  };
+  useEffect(() => {
+    if (!user?.id) return;
+    loadInAppNotifs();
+    const poll = setInterval(loadInAppNotifs, 60000);
+    return () => clearInterval(poll);
+  }, [user?.id]);
+
+  // Mark a single notification as read. Optimistic update + DB write.
+  const markNotifRead = async (id) => {
+    setInAppNotifs(prev => prev.map(n => n.id === id ? { ...n, read_at: new Date().toISOString() } : n));
+    try {
+      await db.from("in_app_notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
+    } catch {}
+  };
+  const markAllNotifsRead = async () => {
+    const nowIso = new Date().toISOString();
+    setInAppNotifs(prev => prev.map(n => n.read_at ? n : { ...n, read_at: nowIso }));
+    try {
+      await db.from("in_app_notifications")
+        .update({ read_at: nowIso })
+        .eq("user_id", user.id)
+        .is("read_at", null);
+    } catch {}
+  };
+  const dismissNotif = async (id) => {
+    setInAppNotifs(prev => prev.filter(n => n.id !== id));
+    try { await db.from("in_app_notifications").delete().eq("id", id); } catch {}
+  };
+  const openNotif = (n) => {
+    markNotifRead(n.id);
+    if (n.url && n.url !== "/") {
+      // Strip leading slash to get the view name (e.g. "/Quotes" -> "Quotes")
+      const view = n.url.startsWith("/") ? n.url.slice(1) : n.url;
+      if (view) setView(view);
+    }
+  };
+
+  const unreadNotifCount = inAppNotifs.filter(n => !n.read_at).length;
+
+  // Bound trackEvent helper — captures current user + companyId so callers
+  // don't have to pass them on every call. Stable reference via useRef so
+  // child components don't re-render when companyId/user arrive.
+  const trackEventRef = useRef(null);
+  trackEventRef.current = (eventType, eventName, metadata) => {
+    trackEvent(db, user?.id, companyId, eventType, eventName, metadata);
+  };
+  const track = (eventType, eventName, metadata) => {
+    trackEventRef.current?.(eventType, eventName, metadata);
+  };
 
   // ── Get or create company for user ───────────────────────────────────────
   const getOrCreateCompany = async (uid) => {
@@ -29365,10 +29985,16 @@ function AppInner() {
           </div>
           {/* Right: bell + avatar */}
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {/* Notification bell with count */}
+            {/* Notification bell with count.
+                The badge combines three signals in priority order:
+                  1. alertCount (overdue/due-now reminders) — red, most urgent
+                  2. unreadNotifCount (in-app notifs — customer viewed, etc) — amber
+                  3. upcomingCount (future reminders) — amber
+                Tapping opens the Notifications view; a link to Reminders
+                lives inside that view. */}
             <button
-              onClick={() => setView("Reminders")}
-              aria-label="Reminders"
+              onClick={() => setView("Notifications")}
+              aria-label="Notifications"
               style={{
                 position: "relative",
                 width: 36, height: 36,
@@ -29383,7 +30009,7 @@ function AppInner() {
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: bellFlash ? "bellPulse 0.4s ease 3" : "none" }}>
                 <path d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              {(alertCount > 0 || upcomingCount > 0) && (
+              {(alertCount > 0 || unreadNotifCount > 0 || upcomingCount > 0) && (
                 <div style={{
                   position: "absolute",
                   top: 2, right: 2,
@@ -29396,7 +30022,7 @@ function AppInner() {
                   fontSize: 10, fontWeight: 700,
                   display: "grid", placeItems: "center",
                   border: `2px solid ${C.surface}`,
-                }}>{alertCount > 0 ? alertCount : upcomingCount}</div>
+                }}>{alertCount > 0 ? alertCount : (unreadNotifCount + upcomingCount)}</div>
               )}
             </button>
             {/* Avatar button — opens dropdown menu */}
@@ -29673,7 +30299,7 @@ function AppInner() {
             })}
           </nav>
         )}
-      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" ? 16 : 24, paddingBottom: isDesktopBrowser ? undefined : "60px", ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
+      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" || view === "Notifications" ? 16 : 24, paddingBottom: isDesktopBrowser ? undefined : "60px", ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
         <div style={isDesktopBrowser ? { maxWidth: 720, margin: "0 auto", width: "100%" } : { display: "contents" }}>
         {(() => {
           // Guard — redirect member to Dashboard if they're on a tab they can't access
@@ -29706,6 +30332,15 @@ function AppInner() {
         {view === "CIS" && <CISStatementsTab user={user} setContextHint={setContextHint} />}
         <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} assistantVoice={assistantVoice} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
+        {view === "Notifications" && (
+          <Notifications
+            notifications={inAppNotifs}
+            onMarkRead={markNotifRead}
+            onMarkAllRead={markAllNotifsRead}
+            onDismiss={dismissNotif}
+            onOpen={openNotif}
+          />
+        )}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} setContextHint={setContextHint} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} setContextHint={setContextHint} />}
         {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} brand={brand} user={user} setContextHint={setContextHint} />}
