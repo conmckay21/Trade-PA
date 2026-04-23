@@ -28546,22 +28546,62 @@ function AppInner() {
   const brandLoadedRef = useRef(false);
   useEffect(() => {
     if (!user?.id || brandLoadedRef.current || onboardingStep === 99) return;
-    // Wait for brand to load from localStorage/Supabase
-    const timer = setTimeout(() => {
-      brandLoadedRef.current = true;
-      if (onboardingStep > 0) return; // already set from persisted state
-      const isNew = !brand.tradingName || brand.tradingName === "" || brand.tradingName === "Your Business" || brand.tradingName.endsWith("'s Trades");
-      if (isNew) {
-        setOnboardingStep(1);
-      } else {
-        setOnboardingStep(99);
+    // Canonical onboarding check: the existing public.user_onboarding table
+    // (per-user, has voice_used / ai_used / dismissed / completed_at flags).
+    // RLS allows each user to read/insert/update only their own row.
+    //
+    // Historical context: this used to rely on a 600ms setTimeout + a heuristic
+    // on brand.tradingName ("Your Business", *"'s Trades"). That had two bugs:
+    //   1. On 3G / cellular, brand load could exceed 600ms → false-positive "new"
+    //   2. Users genuinely named "John's Trades" were misclassified as defaults
+    // Both vanish once we read the explicit column.
+    let cancelled = false;
+    (async () => {
+      if (onboardingStep > 0) { brandLoadedRef.current = true; return; }
+      try {
+        const { data: row } = await db
+          .from("user_onboarding")
+          .select("completed_at, dismissed")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        brandLoadedRef.current = true;
+        // Treat dismissed (user explicitly skipped onboarding) the same as
+        // completed — don't pester them again on the next login.
+        const done = row?.completed_at || row?.dismissed;
+        setOnboardingStep(done ? 99 : 1);
+      } catch (err) {
+        // Network failure or query error — fall back to the old heuristic so
+        // a returning user isn't stuck in onboarding if their connection is
+        // flaky. Worst case: they see the welcome once and skip through.
+        if (cancelled) return;
+        brandLoadedRef.current = true;
+        const looksDefault =
+          !brand.tradingName ||
+          brand.tradingName === "" ||
+          brand.tradingName === "Your Business" ||
+          brand.tradingName.endsWith("'s Trades");
+        setOnboardingStep(looksDefault ? 1 : 99);
       }
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [user?.id, brand.tradingName, onboardingStep]);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, onboardingStep]);
 
   const advanceOnboarding = (toStep) => { setOnboardingStep(toStep); };
-  const completeOnboarding = () => { setOnboardingStep(99); };
+  const completeOnboarding = async () => {
+    setOnboardingStep(99);
+    // Persist server-side so the next device / reinstall / native app never
+    // re-triggers onboarding. Fire-and-forget — the local state is the source
+    // of truth for this session, this is just for future sessions. Upsert so
+    // first-time users get a row and returners just update completed_at.
+    try {
+      await db.from("user_onboarding")
+        .upsert(
+          { user_id: user.id, completed_at: new Date().toISOString() },
+          { onConflict: "user_id" }
+        );
+    } catch (err) { console.warn("[onboarding] server mark failed:", err?.message); }
+  };
   const [navTourStep, setNavTourStep] = useState(0);
 
   // Load assistant persona + custom commands on login
