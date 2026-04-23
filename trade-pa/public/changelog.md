@@ -2,6 +2,31 @@
 
 ---
 
+## 2026-04-23
+
+### New pricing plans 💷
+Fairer pricing that matches what you actually use. **Solo £39.99/mo** (100 conversations, 1 hour hands-free), new **Pro Solo £59.99/mo** for busier tradies (300 conversations, 3 hours hands-free), **Team £89/mo** for crews up to 5 (400 conversations, 4 hours hands-free), and **Business £129/mo** for firms up to 10 (800 conversations, 8 hours hands-free). Caps reset on the 1st of every month, same as before.
+
+### New Pro Solo tier for power users ⚡
+If you're a sole trader using the app all day every day, Pro Solo gives you 3× the conversations and hands-free time without jumping to a team plan you don't need.
+
+### Team and Business caps now company-wide 🔒
+Team and Business plans use one shared pool for the whole company now (400 or 800 conversations respectively), which is fair to everyone paying the right price for their crew size.
+
+### Behind the scenes: usage tracking 📊
+We're now quietly tracking which tools are used most, voice session lengths, and payment events. This means the next round of product improvements will be driven by real usage data, not guesswork. Nothing visible changes for you — this is an engine room upgrade.
+
+### Updated Terms and Privacy Policy 📝
+We've refreshed our Terms of Service and Privacy Policy to reflect the new pricing plans and to clearly explain the usage tracking. Nothing sneaky — just honest and up to date. You can read them any time at [tradespa.co.uk/terms.html](https://www.tradespa.co.uk/terms.html) and [tradespa.co.uk/privacy-policy.html](https://www.tradespa.co.uk/privacy-policy.html).
+
+### Know when customers open your quotes and invoices 👀
+Every time a customer opens one of your portal links — quotes or invoices — you'll get a push notification AND a new entry in the bell icon in the app. No more guessing if they've seen it. You'll even see if they open it multiple times ("they've looked four times today, they're thinking about it"). Your own previews never trigger the notification — the app remembers it's you.
+
+### New Notifications view 🔔
+Tap the bell icon in the top-right to see a proper feed of recent alerts — customer views, payments, accepted quotes and more. Unread notifications show with an amber dot; tap to mark as read and jump straight to the relevant invoice or quote. Running total in the badge so you never miss anything.
+
+---
+
 ## 2026-04-21
 
 ### Get paid by card 💳
