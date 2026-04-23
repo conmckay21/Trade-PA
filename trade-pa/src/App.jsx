@@ -7135,7 +7135,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 100, hf_hours: 1 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {} }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 100, hf_hours: 1 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {}, pendingInboxCount = 0 }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -11364,6 +11364,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       }).join(", ");
     })() + "\n"
     + "- Enquiries: " + ((enquiries||[]).length === 0 ? "none" : (enquiries||[]).map(e=>e.name).join(", ")) + "\n"
+    + "- Inbox actions pending approval: " + (pendingInboxCount === 0 ? "none" : `${pendingInboxCount} waiting — tell the user if they ask, or call list_inbox_actions to show them`) + "\n"
     + "- Current RAMS session: " + (ramsSession ? "YES - step " + ramsSession.step : "none") + "\n"
     + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
     + (sessionActionsRef.current.length ? "\n\nACTIONS ALREADY COMPLETED THIS SESSION (do NOT repeat these):\n" + sessionActionsRef.current.map(a => "- " + a).join("\n") + "\n" : "")
@@ -20142,7 +20143,7 @@ async function logEmailFeedback(user, action, reason) {
   } catch (e) { console.error("AI feedback log failed:", e.message); }
 }
 
-function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, setLastAction, setContextHint }) {
+function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, setLastAction, setContextHint, sendPush }) {
   // Theme-aware: bg/text/border tokens use the same CSS variables as global C,
   // so the Inbox tab follows light/dark mode. Accent colours stay as hex literals.
   const IC = { amber: C.amber, amberLight: "#fef3c766", green: C.green, red: C.red, blue: C.blue, muted: C.muted, border: C.border, bg2: C.surface, bg3: C.surfaceHigh, text: C.text };
@@ -20326,15 +20327,16 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
   async function approve(action) {
     setProcessing(p => ({ ...p, [action.id]: true }));
     try {
-      // Build the env bag for the shared dispatcher. sendPush isn't currently
-      // passed into InboxView as a prop (pre-existing gap — the old in-component
-      // executeAction referenced `sendPush` directly despite it never being in
-      // scope, so the create_enquiry push was silently failing). Leaving it
-      // undefined here preserves that exact behavior; the helper optional-chains
-      // the call so nothing throws.
+      // sendPush is now threaded through as a prop, so the `📩 New Enquiry`
+      // push on create_enquiry approvals actually fires. The old in-component
+      // executeAction referenced `sendPush` directly without it being in scope,
+      // so that push was silently ReferenceError'ing and being swallowed by the
+      // try/catch — users weren't getting any enquiry notifications from the
+      // Inbox tab. This closes that gap.
       await executeEmailAction(action, {
         user, brand, connection, customers, invoices,
         setCustomers, setJobs, setInvoices, setMaterials, setEnquiries,
+        sendPush,
       });
       await fetch("/api/email/actions/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
       setPendingActions(prev => prev.filter(a => a.id !== action.id));
@@ -28473,6 +28475,31 @@ function AppInner() {
   // record is selected. FloatingMicButton uses this for a richer context string.
   const [contextHint, setContextHint] = useState(null);
 
+  // Top-level cache of pending inbox action count — so the voice assistant
+  // always knows how many approvals are waiting, even when the user didn't
+  // invoke voice from the Inbox tab. Loads on App mount, refreshes whenever
+  // InboxView or the voice approve/reject handlers fire the cross-surface
+  // "trade-pa-inbox-refreshed" event.
+  const [pendingInboxCount, setPendingInboxCount] = useState(0);
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    const loadCount = async () => {
+      try {
+        const r = await fetch(`/api/email/actions?userId=${user.id}&status=pending`);
+        const d = await r.json();
+        if (!cancelled) setPendingInboxCount((d.actions || []).length);
+      } catch { /* silent — nice-to-have, not critical */ }
+    };
+    loadCount();
+    const onRefresh = () => loadCount();
+    window.addEventListener("trade-pa-inbox-refreshed", onRefresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("trade-pa-inbox-refreshed", onRefresh);
+    };
+  }, [user?.id]);
+
   // ── Fair-use caps: usage tracking ─────────────────────────────
   const currentMonth = new Date().toISOString().slice(0, 7); // "2026-04"
   const [usageData, setUsageData] = useState({ conversations_used: 0, handsfree_seconds_used: 0 });
@@ -30207,7 +30234,7 @@ function AppInner() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} setContextHint={setContextHint} />}
         {view === "Expenses" && <ExpensesTab user={user} setContextHint={setContextHint} />}
         {view === "CIS" && <CISStatementsTab user={user} setContextHint={setContextHint} />}
-        <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} assistantVoice={assistantVoice} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} /></div>
+        <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} assistantVoice={assistantVoice} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} pendingInboxCount={pendingInboxCount} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Notifications" && (
           <Notifications
@@ -30219,7 +30246,7 @@ function AppInner() {
           />
         )}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} setContextHint={setContextHint} />}
-        {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} setContextHint={setContextHint} />}
+        {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} setContextHint={setContextHint} sendPush={sendPush} />}
         {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} brand={brand} user={user} setContextHint={setContextHint} />}
         {view === "Mileage" && <MileageTab user={user} setContextHint={setContextHint} />}
         {view === "Subcontractors" && <SubcontractorsTab user={user} brand={brand} setContextHint={setContextHint} />}
