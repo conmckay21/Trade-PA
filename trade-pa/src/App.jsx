@@ -37,8 +37,8 @@ const TIER_CONFIG = {
   solo: {
     label: "Solo",
     badgeText: "SOLO",
-    priceText: "£39.99",
-    priceDisplay: "1 user · £39.99/mo",
+    priceText: "£39",
+    priceDisplay: "1 user · £39/mo",
     userLimit: 1,
     caps: { convos: 100, hf_hours: 1 },
     colorKey: "amber",
@@ -47,8 +47,8 @@ const TIER_CONFIG = {
   pro_solo: {
     label: "Pro Solo",
     badgeText: "PRO SOLO",
-    priceText: "£59.99",
-    priceDisplay: "1 user · £59.99/mo",
+    priceText: "£59",
+    priceDisplay: "1 user · £59/mo",
     userLimit: 1,
     caps: { convos: 300, hf_hours: 3 },
     colorKey: "amber",
@@ -777,7 +777,7 @@ function LandingPage({ onAuth }) {
       <div style={{ ...LP.section }}>
         <div style={LP.sectionLabel}>How we compare</div>
         <h2 style={LP.h2}>More intelligent.<br/>Better value.</h2>
-        <p style={{ fontSize: 16, color: "#666", marginBottom: 40, lineHeight: 1.7, maxWidth: 560 }}>Tradify is £34/month with no AI. Trade PA Solo is £39.99/month — with an AI that runs your entire inbox, answers calls and tracks jobs for you.</p>
+        <p style={{ fontSize: 16, color: "#666", marginBottom: 40, lineHeight: 1.7, maxWidth: 560 }}>Tradify is £34/month with no AI. Trade PA Solo is £39/month — with an AI that runs your entire inbox, answers calls and tracks jobs for you.</p>
         <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 14, overflow: "hidden" }}>
           {/* Header */}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", borderBottom: "1px solid #222" }}>
@@ -805,7 +805,7 @@ function LandingPage({ onAuth }) {
           ))}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr" }}>
             <div style={{ padding: "14px 20px", fontSize: 13, color: "#666" }}>Monthly price (sole trader)</div>
-            <div style={{ padding: "14px 20px", fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)" }}>from £39.99</div>
+            <div style={{ padding: "14px 20px", fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)" }}>from £39</div>
             <div style={{ padding: "14px 20px", fontSize: 13, color: "#555" }}>£34</div>
           </div>
         </div>
@@ -839,10 +839,10 @@ function LandingPage({ onAuth }) {
           {/* Plan cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 24 }}>
             {[
-              { name: "Solo", price: "£39.99", period: "/mo", annual: "or £439/year · save £40", users: "1 user", popular: false, plan: "solo_monthly", features: ["100 AI conversations per month", "1 hour hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Allowance resets 1st of month"] },
-              { name: "Pro Solo", price: "£59.99", period: "/mo", annual: "or £659/year · save £60", users: "1 user", popular: true, plan: "pro_solo_monthly", features: ["300 AI conversations per month", "3 hours hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Priority for new features"] },
-              { name: "Team", price: "£89", period: "/mo", annual: "or £979/year · save £89", users: "Up to 5 users", popular: false, plan: "team_monthly", features: ["400 AI conversations per month", "4 hours hands-free per month", "Team scheduling & per-user permissions", "Staff timesheets & GPS tracking", "All 43 features included"] },
-              { name: "Business", price: "£129", period: "/mo", annual: "or £1,419/year · save £129", users: "Up to 10 users", popular: false, plan: "business_monthly", features: ["800 AI conversations per month", "8 hours hands-free per month", "Priority support", "Everything in Team, more capacity", "All 43 features included"] },
+              { name: "Solo", price: "£39", period: "/mo", users: "1 user", popular: false, plan: "solo_monthly", features: ["100 AI conversations per month", "1 hour hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Allowance resets 1st of month"] },
+              { name: "Pro Solo", price: "£59", period: "/mo", users: "1 user", popular: true, plan: "pro_solo_monthly", features: ["300 AI conversations per month", "3 hours hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Priority for new features"] },
+              { name: "Team", price: "£89", period: "/mo", users: "Up to 5 users", popular: false, plan: "team_monthly", features: ["400 AI conversations per month", "4 hours hands-free per month", "Team scheduling & per-user permissions", "Staff timesheets & GPS tracking", "All 43 features included"] },
+              { name: "Business", price: "£129", period: "/mo", users: "Up to 10 users", popular: false, plan: "business_monthly", features: ["800 AI conversations per month", "8 hours hands-free per month", "Priority support", "Everything in Team, more capacity", "All 43 features included"] },
             ].map(p => (
               <div key={p.name} style={{ background: "#141414", border: p.popular ? "2px solid #f59e0b" : "1px solid #222", borderRadius: 20, padding: "44px 32px 36px", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#f59e0b" }} />
@@ -853,7 +853,6 @@ function LandingPage({ onAuth }) {
                 <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 52, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em", color: "#f59e0b", marginBottom: 4 }}>
                   {p.price}<span style={{ fontSize: 16, color: "#666", fontWeight: 400 }}>{p.period}</span>
                 </div>
-                <p style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>{p.annual}</p>
                 <p style={{ color: "#f59e0b", fontSize: 12, fontFamily: "'DM Mono',monospace", marginBottom: 20 }}>{p.users}</p>
                 <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 8, marginBottom: 28, flex: 1 }}>
                   {p.features.map(f => (
@@ -3839,7 +3838,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               {(() => {
                 // Suggest the next tier up from the user's current one.
                 // Business is the ceiling — this block doesn't render above.
-                if (planTier === "solo") return "Pro Solo (£59.99/mo · 3× capacity), Team (£89/mo · 5 users) or Business (£129/mo · 10 users)";
+                if (planTier === "solo") return "Pro Solo (£59/mo · 3× capacity), Team (£89/mo · 5 users) or Business (£129/mo · 10 users)";
                 if (planTier === "pro_solo") return "Team (£89/mo · 5 users) or Business (£129/mo · 10 users)";
                 if (planTier === "team") return "Business — £129/mo · up to 10 users";
                 return "Business — £129/mo · up to 10 users";
