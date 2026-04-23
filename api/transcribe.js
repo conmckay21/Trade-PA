@@ -47,27 +47,34 @@ export default async function handler(req, res) {
     // ─── PROVIDER CASCADE ──────────────────────────────────────────────────
     // Each attempt returns { text } on success or throws / returns null on failure.
     // We log which provider succeeded for production monitoring via Sentry.
+    //
+    // Accept rule: the transcript must be present AND at least 2 characters of
+    // real content after trimming. A provider returning "" or " " or "." counts
+    // as a failure — we fall through to the next provider. This catches the
+    // degraded-200 case (Grok observed returning empty strings during outages
+    // in early April) that the old `!== null` check missed silently.
+    const isUsable = (t) => typeof t === "string" && t.trim().length >= 2;
 
     // 1. GROK STT (primary) — best entity recognition accuracy per xAI benchmarks
     const grokResult = await tryGrokSTT(audioBuffer, mimeType);
-    if (grokResult !== null) {
+    if (isUsable(grokResult)) {
       return res.status(200).json({ text: grokResult, provider: 'grok' });
     }
 
     // 2. DEEPGRAM (fallback) — proven format support + UK accent tuning
     const deepgramResult = await tryDeepgram(audioBuffer, mimeType);
-    if (deepgramResult !== null) {
+    if (isUsable(deepgramResult)) {
       return res.status(200).json({ text: deepgramResult, provider: 'deepgram' });
     }
 
     // 3. WHISPER (tertiary) — last resort
     const whisperResult = await tryWhisper(audioBuffer, mimeType);
-    if (whisperResult !== null) {
+    if (isUsable(whisperResult)) {
       return res.status(200).json({ text: whisperResult, provider: 'whisper' });
     }
 
     // All three providers failed — return graceful empty transcript
-    console.error('[transcribe] all providers failed');
+    console.error('[transcribe] all providers failed or returned empty');
     return res.status(200).json({ text: '', provider: 'none' });
 
   } catch (err) {
