@@ -570,6 +570,20 @@ function LandingPage({ onAuth }) {
           .lp-hero-ctas{justify-content:flex-start;}
         }
 
+        /* Responsive pricing grid. Goes:
+             - <640px       → 1 col (stacked)
+             - 640-1199px   → 2x2 grid (two per row)
+             - ≥1200px      → 4 across in one row
+           Deliberately skips the "3 cards per row" zone to avoid a
+           lonely 4th card wrapping underneath. */
+        .lp-pricing-grid{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:24px;}
+        @media (min-width: 640px){
+          .lp-pricing-grid{grid-template-columns:repeat(2, 1fr);}
+        }
+        @media (min-width: 1200px){
+          .lp-pricing-grid{grid-template-columns:repeat(4, 1fr);}
+        }
+
         /* Voice card animations */
         @keyframes vc-pulse{0%,100%{opacity:0.4;box-shadow:0 0 0 0 rgba(245,158,11,0.4);}50%{opacity:1;box-shadow:0 0 0 5px transparent;}}
         @keyframes vc-wave{0%,100%{height:8%;}50%{height:var(--h,60%);}}
@@ -837,7 +851,7 @@ function LandingPage({ onAuth }) {
           </div>
 
           {/* Plan cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 24 }}>
+          <div className="lp-pricing-grid">
             {[
               { name: "Solo", price: "£39", period: "/mo", users: "1 user", popular: false, plan: "solo_monthly", features: ["100 AI conversations per month", "1 hour hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Allowance resets 1st of month"] },
               { name: "Pro Solo", price: "£59", period: "/mo", users: "1 user", popular: true, plan: "pro_solo_monthly", features: ["300 AI conversations per month", "3 hours hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Priority for new features"] },
