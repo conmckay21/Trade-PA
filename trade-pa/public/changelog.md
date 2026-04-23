@@ -4,6 +4,9 @@
 
 ## 2026-04-23
 
+### Pricing page "Start free trial" buttons now actually work 🔧
+The big amber buttons on the pricing cards weren't taking you anywhere when tapped. Fixed — click any plan's button now and it jumps you straight to signup with that plan pre-selected, same as the other CTAs on the page. Sorry to anyone who bounced off that one.
+
 ### New pricing plans 💷
 Fairer pricing that matches what you actually use. **Solo £39.99/mo** (100 conversations, 1 hour hands-free), new **Pro Solo £59.99/mo** for busier tradies (300 conversations, 3 hours hands-free), **Team £89/mo** for crews up to 5 (400 conversations, 4 hours hands-free), and **Business £129/mo** for firms up to 10 (800 conversations, 8 hours hands-free). Caps reset on the 1st of every month, same as before.
 
