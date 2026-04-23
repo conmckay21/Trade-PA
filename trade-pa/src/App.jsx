@@ -8633,7 +8633,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "add_stage_payment", description: "Add stage payment milestones to a job card. Triggers: \"set up stage payments on [job]\", \"30/40/30 on [customer]\", \"add a 50% deposit stage to [job]\". DEFAULTS: if no split stated → 30/40/30. ASK IF MISSING: which job, if unclear. AFTER: \"[N] stages set on [customer]'s job — [summary].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, job_title: { type: "string" }, stages: { type: "string", description: "JSON array of stages [{label,type,value}] or leave empty for default 30/40/30 split" } } } },
     { name: "list_inbox_actions", description: "Show pending email actions — suggested actions from emails that need user approval. Triggers: \"what's in my inbox\", \"show me pending emails\", \"any email actions\", \"anything to approve\". AFTER: \"[N] pending — [brief summary of each].\"", input_schema: { type: "object", properties: {} } },
     { name: "approve_inbox_action", description: "Approve a pending inbox action (executes the suggested action). Triggers: \"approve that\", \"do it\", \"yes go ahead\" when context is an inbox action. Confirms by showing what was done.", input_schema: { type: "object", properties: { action_id: { type: "string" }, description: { type: "string" } } } },
-    { name: "reject_inbox_action", description: "Reject/dismiss a pending inbox action. Triggers: \"no\", \"dismiss that\", \"reject it\", \"not needed\" when context is an inbox action.", input_schema: { type: "object", properties: { action_id: { type: "string" } } } },
+    { name: "reject_inbox_action", description: "Reject/dismiss a pending inbox action. Triggers: \"no\", \"dismiss that\", \"reject it\", \"not needed\" when context is an inbox action. If the user gives a reason in their utterance — e.g. \"that's spam\", \"wrong customer\", \"already handled\", \"not relevant\" — map it to one of the reason IDs so the email classifier learns and stops suggesting the same kind of action.", input_schema: { type: "object", properties: { action_id: { type: "string" }, reason: { type: "string", enum: ["wrong_type","not_relevant","wrong_customer","already_done","spam"], description: "Why the user dismissed — pick the best match. wrong_type: wrong action category. not_relevant: not a real action. wrong_customer: matched the wrong customer. already_done: user already handled it. spam: junk/marketing/noise." } } } },
     { name: "generate_subcontractor_statement", description: "Generate a CIS statement PDF for a subcontractor for a given tax month. Triggers: \"generate [name]'s CIS statement\", \"send [subbie] their CIS for [month]\". ASK IF MISSING: subbie name and month/period. DEFAULTS: month → last month if unstated. AFTER: \"Statement generated for [name] — [month]. Email or download?\"", input_schema: { type: "object", properties: { name: { type: "string" }, month: { type: "string", description: "YYYY-MM" } }, required: ["name"] } },
     { name: "update_job_card", description: "Update any field on a job card — title, customer, address, value, status, scope, PO number. Triggers: \"change the value on [job] to £X\", \"update the address on the [customer] job\", \"set the PO number to ABC123\". ASK IF MISSING: which field to update, if unclear. For repeat customers with multiple jobs, always confirm which job.", input_schema: { type: "object", properties: { customer: { type: "string", description: "Current customer name to find the job" }, title: { type: "string", description: "Current job title to find the job" }, new_title: { type: "string" }, new_customer: { type: "string" }, new_address: { type: "string" }, new_value: { type: "string" }, new_status: { type: "string", enum: ["enquiry","quoted","accepted","in_progress","on_hold","completed","cancelled"] }, new_notes: { type: "string" }, new_scope: { type: "string" }, new_po_number: { type: "string" } } } },
     { name: "update_invoice", description: "Update an invoice — change customer, amount, due date, status, payment method, VAT, or add/remove line items. Triggers: \"change the [customer] invoice to £X\", \"update the due date on [customer]'s invoice\", \"add a line to [customer]'s bill\". ASK IF MISSING: which field to change.", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_due: { type: "string" }, new_status: { type: "string" }, new_address: { type: "string" }, new_payment_method: { type: "string", enum: ["bacs","card","both"], description: "bacs = bank transfer only, card = Stripe only, both = show both options" }, new_vat_enabled: { type: "string", description: "true or false" }, add_line_item: { type: "string", description: "Add a line item as 'description|amount' e.g. 'Extra labour|150'" }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
@@ -10603,15 +10603,54 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             const actions = data.actions || [];
             const action = actions.find(a => a.id === input.action_id || (a.email_subject || "").toLowerCase().includes((input.description || "").toLowerCase()));
             if (!action) return `Couldn't find that action. Say "show inbox actions" to see what's pending.`;
+
+            // Fetch email connection so reply emails go out via the user's own inbox
+            const { data: conn } = await window._supabase
+              .from("email_connections")
+              .select("*")
+              .eq("user_id", user.id)
+              .maybeSingle();
+
+            // Execute the real dispatch — create job, send reply, parse PDF, etc.
+            // sendPush omitted on purpose: the user triggered this by voice, they
+            // don't need a push notification on the same device.
+            await executeEmailAction(action, {
+              user, brand, connection: conn, customers, invoices,
+              setCustomers, setJobs, setInvoices, setMaterials, setEnquiries,
+            });
+
+            // Flip the DB status
             await fetch("/api/email/actions/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
-            return `Action approved — "${action.description || action.action_type}" from ${action.email_from || "email"}. Done.`;
+
+            // Teach the email classifier what we just approved
+            await updateEmailAIContext(action, user);
+
+            // Tell the Inbox tab (and any other listeners) the pending list changed
+            window.dispatchEvent(new CustomEvent("trade-pa-inbox-refreshed"));
+
+            return `Action approved — "${action.action_description || action.action_type}" from ${action.email_from || "email"}. Done.`;
           } catch(e) {
             return `Failed to approve: ${e.message}`;
           }
         }
         case "reject_inbox_action": {
           try {
+            // Fetch the action so we can log proper feedback for classifier learning
+            const res = await fetch(`/api/email/actions?userId=${user?.id}&status=pending`);
+            const data = await res.json();
+            const action = (data.actions || []).find(a => a.id === input.action_id);
+
+            // Log feedback via shared helper — reason must match one of the 5
+            // DISMISS_REASONS IDs in InboxView. Voice defaults to "not_relevant"
+            // if no reason was inferred from the user's utterance.
+            if (action) {
+              await logEmailFeedback(user, action, input.reason || "not_relevant");
+            }
+
             await fetch("/api/email/actions/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: input.action_id }) });
+
+            window.dispatchEvent(new CustomEvent("trade-pa-inbox-refreshed"));
+
             return `Action dismissed.`;
           } catch(e) {
             return `Failed to reject: ${e.message}`;
@@ -19542,6 +19581,567 @@ function CompanyForm({ form, set, draftContacts, setDraftContacts, onSave, onCan
 }
 
 // ─── InboxView (AI Email Agent) ───────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
+// Email-action dispatch — shared between the Inbox tab's Approve/Dismiss UI
+// AND the voice tools (approve_inbox_action, reject_inbox_action in AIAssistant).
+//
+// Previously the voice path just flipped the DB status without actually creating
+// the job / sending the reply / parsing the PDF, so voice-approvals looked like
+// they worked but were silent no-ops. Hoisting to module scope lets both paths
+// share the real dispatch logic. Callers pass an env bag of state + setters +
+// identity. `sendPush` is optional — voice omits it because the user triggered
+// the action themselves and doesn't need a push notification on the same device.
+// ────────────────────────────────────────────────────────────────────────────
+
+async function executeEmailAction(action, env) {
+  const { user, brand, connection, customers, invoices,
+          setCustomers, setJobs, setInvoices, setMaterials, setEnquiries,
+          sendPush } = env;
+  const db = window._supabase;
+  const d = action.action_data || {};
+  switch (action.action_type) {
+    case "create_job": {
+      // Add job to schedule — use TBC if no date mentioned
+      const hasDate = !!(d.date_text && d.date_text.trim());
+      setJobs(prev => [...(prev || []), {
+        id: Date.now(),
+        customer: d.customer || d.sender_name || "Unknown",
+        address: d.address || "",
+        type: d.type || "Job",
+        date: hasDate ? d.date_text : "TBC",
+        dateObj: new Date().toISOString(),
+        status: "pending",
+        value: 0,
+        notes: d.notes || `From email: ${action.email_subject}`,
+      }]);
+
+      // Check if customer already exists
+      const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+      const senderName = d.sender_name || d.customer || "there";
+      const existingCustomer = (customers || []).find(c =>
+        c.name?.toLowerCase().includes((d.customer || "").toLowerCase()) ||
+        c.email?.toLowerCase() === replyTo.toLowerCase()
+      );
+
+      if (replyTo && connection) {
+        if (!existingCustomer) {
+          // New customer — add partial record and ask for details + availability
+          setCustomers(prev => [...(prev || []), {
+            id: Date.now(),
+            name: d.customer || d.sender_name || "Unknown",
+            email: replyTo,
+            phone: "",
+            address: "",
+            notes: `Added from email booking request`,
+          }]);
+
+          const jobDesc = d.type || "the work";
+          const dateText = hasDate ? ` on ${d.date_text}` : "";
+          const replyBody = `<p>Hi ${senderName},</p>
+<p>Thank you for getting in touch. I've added your ${jobDesc} request${dateText} to my diary and will be in touch to confirm the appointment.</p>
+<p>To get you set up ahead of the scheduled appointment, could you please provide the following details:</p>
+<ul>
+<li><strong>Full name</strong></li>
+<li><strong>Phone number</strong></li>
+<li><strong>Address where the work is needed</strong></li>
+${!hasDate ? "<li><strong>A few preferred dates and times that work for you</strong></li>" : ""}
+</ul>
+<p>Once I have these I'll send you a full confirmation.</p>
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+
+          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+          }).catch(err => console.error("Reply failed:", err.message));
+
+        } else {
+          // Existing customer — send a booking confirmation
+          const jobDesc = d.type || "the work";
+          const dateText = hasDate ? ` on ${d.date_text}` : "";
+          const availabilityLine = !hasDate
+            ? `<p>Could you please suggest a few dates and times that work for you so we can get something confirmed?</p>`
+            : `<p>We'll be in touch shortly to confirm the full details.</p>`;
+
+          const replyBody = `<p>Hi ${senderName},</p>
+<p>Thank you for getting in touch. I've added your ${jobDesc} request${dateText} to the diary.</p>
+${availabilityLine}
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+
+          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+          }).catch(err => console.error("Confirmation reply failed:", err.message));
+        }
+      }
+      break;
+    }
+    case "create_enquiry": {
+      const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+      const senderName = d.sender_name || d.customer || d.name || "there";
+      const enquiryName = d.name || d.customer || d.sender_name || senderName || "Unknown";
+
+      // Create enquiry with full contact details
+      const newEnquiry = {
+        name: enquiryName,
+        source: "Email",
+        msg: d.message || action.email_snippet,
+        time: "Just now",
+        urgent: d.urgent || false,
+        status: "new",
+        email: replyTo,
+        phone: d.phone || "",
+        address: d.address || "",
+      };
+      setEnquiries(prev => [newEnquiry, ...(prev || [])]);
+      // Push notification for new enquiry — optional-chained so voice path
+      // (which doesn't pass sendPush) doesn't throw.
+      sendPush?.({
+        title: "📩 New Enquiry",
+        body: `${enquiryName}${d.message ? " — " + d.message.slice(0, 80) : ""}`,
+        url: "/",
+        type: "enquiry",
+        tag: "new-enquiry",
+        requireInteraction: true,
+      });
+
+      // Also save directly to Supabase so it persists through reloads
+      if (user?.id) {
+        const cid = window._companyId;
+        if (cid) {
+          await window._supabase.from("enquiries").insert({
+            company_id: cid,
+            user_id: user.id,
+            name: enquiryName,
+            source: "Email",
+            msg: d.message || action.email_snippet || "",
+            time: "Just now",
+            urgent: d.urgent || false,
+            status: "new",
+            email: replyTo,
+            phone: d.phone || "",
+            address: d.address || "",
+          }).catch(e => console.error("Enquiry insert:", e.message));
+        }
+      }
+
+      // Create or update customer record
+      const existingCustomer = (customers || []).find(c =>
+        c.email?.toLowerCase() === replyTo.toLowerCase() ||
+        c.name?.toLowerCase() === enquiryName.toLowerCase()
+      );
+
+      if (replyTo && !existingCustomer) {
+        setCustomers(prev => [...(prev || []), {
+          id: Date.now(),
+          name: enquiryName,
+          email: replyTo,
+          phone: d.phone || "",
+          address: d.address || "",
+          notes: "Added from email enquiry",
+        }]);
+      }
+
+      // Send reply asking for details (only if we have a reply address and email connection)
+      if (replyTo && connection) {
+        const replyBody = `<p>Hi ${senderName},</p>
+<p>Thank you for getting in touch. I've added your ${d.type || d.message?.slice(0, 50) || "enquiry"} to the diary.</p>
+<p>Could you please suggest a few dates and times that work for you so we can get something confirmed?</p>
+${!existingCustomer ? `<p>It would also be helpful to have:</p>
+<ul>
+<li><strong>Your phone number</strong></li>
+<li><strong>The address where the work is needed</strong></li>
+</ul>` : ""}
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+
+        const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+        }).catch(err => console.error("Enquiry reply failed:", err.message));
+      }
+      break;
+    }
+    case "save_customer": { const ex = (customers || []).find(c => c.name?.toLowerCase() === (d.name || d.customer || "").toLowerCase()); if (!ex) setCustomers(prev => [...(prev || []), { id: Date.now(), name: d.name || d.customer || "Unknown", email: d.email || d.reply_to || "", phone: d.phone || "", address: "", notes: "" }]); break; }
+    case "add_materials": {
+      // If we have attachment info, parse the PDF to extract line items
+      if (d.message_id && d.attachment_id) {
+        try {
+          const isOutlook = connection?.provider === "outlook";
+          const endpoint = isOutlook ? "/api/outlook/parse-supplier" : "/api/gmail/parse-supplier";
+          const parseRes = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, messageId: d.message_id, attachmentId: d.attachment_id }),
+          });
+          const parseData = await parseRes.json();
+          if (parseData.items?.length > 0) {
+            const receiptId = `email_${action.id}_${Date.now()}`;
+            const supplierName = d.supplier || action.email_from?.match(/^(.+?)\s*</)?.[1]?.replace(/"/g, "") || "Supplier";
+            const newMaterials = parseData.items.map((item, i) => ({
+              id: Date.now() + i,
+              item: item.item || item.description || "Unknown item",
+              qty: item.qty || 1,
+              unitPrice: item.unitPrice || item.unit_price || 0,
+              supplier: supplierName,
+              job: "",
+              status: "ordered", // Invoice received = already ordered/purchased
+              receiptId,
+              receiptSource: "email",
+              receiptFilename: d.attachment_filename || "",
+            }));
+            setMaterials(prev => [...newMaterials, ...(prev || [])]);
+            break;
+          }
+        } catch (err) {
+          console.error("PDF parse failed:", err.message);
+        }
+      }
+      // Fallback — add single placeholder entry
+      setMaterials(prev => [...(prev || []), {
+        id: Date.now(),
+        item: `Items from ${d.supplier || d.attachment_filename || "supplier invoice"}`,
+        qty: 1, unitPrice: 0,
+        supplier: d.supplier || "",
+        job: "", status: "to_order",
+        receiptSource: "email",
+        receiptFilename: d.attachment_filename || "",
+      }]);
+      break;
+    }
+
+    case "add_cis_statement": {
+      // Try to parse CIS statement from PDF attachment
+      if (d.message_id && d.attachment_id) {
+        try {
+          const isOutlook = connection?.provider === "outlook";
+          const { data: connData } = await window._supabase.from("email_connections").select("access_token").eq("user_id", user.id).single();
+          const token = connData?.access_token;
+
+          const attRes = await fetch(
+            isOutlook
+              ? `https://graph.microsoft.com/v1.0/me/messages/${d.message_id}/attachments/${d.attachment_id}`
+              : `https://gmail.googleapis.com/gmail/v1/users/me/messages/${d.message_id}/attachments/${d.attachment_id}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const attData = await attRes.json();
+          const rawBase64 = isOutlook ? attData.contentBytes : attData.data;
+
+          if (rawBase64) {
+            const base64Clean = rawBase64.replace(/-/g, "+").replace(/_/g, "/");
+            const pdfDataUrl = `data:application/pdf;base64,${base64Clean}`;
+
+            // Use Claude to extract CIS data from the PDF
+            const parseRes = await fetch("/api/claude", {
+              method: "POST",
+              headers: await authHeaders(),
+              body: JSON.stringify({
+                model: "claude-sonnet-4-6",
+                max_tokens: 400,
+                messages: [{
+                  role: "user",
+                  content: [
+                    { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Clean } },
+                    { type: "text", text: "Extract CIS monthly statement details. Return ONLY JSON: {\"contractor_name\":\"company name\",\"tax_month\":\"YYYY-MM\",\"gross_amount\":number,\"deduction_amount\":number,\"net_amount\":number}" }
+                  ],
+                }],
+              }),
+            });
+            const parseData = await parseRes.json();
+            const raw = parseData.content?.[0]?.text?.trim() || "{}";
+            const match = raw.match(/\{[\s\S]*\}/);
+            const cis = match ? JSON.parse(match[0]) : {};
+
+            await window._supabase.from("cis_statements").insert({
+              user_id: user.id,
+              contractor_name: cis.contractor_name || d.contractor_name || "Unknown Contractor",
+              tax_month: ((cis.tax_month || d.tax_month || new Date().toISOString().slice(0,7))) + "-01",
+              gross_amount: cis.gross_amount || parseFloat(d.gross_amount) || 0,
+              deduction_amount: cis.deduction_amount || parseFloat(d.deduction_amount) || 0,
+              net_amount: cis.net_amount || ((cis.gross_amount || 0) - (cis.deduction_amount || 0)) || 0,
+              notes: `From email: ${action.email_subject}`,
+              attachment_data: pdfDataUrl,
+            });
+            break;
+          }
+        } catch (err) {
+          console.error("CIS PDF parse failed:", err.message);
+        }
+      }
+      // Fallback — save what Claude extracted from the email body
+      if (d.contractor_name || d.gross_amount) {
+        await window._supabase.from("cis_statements").insert({
+          user_id: user.id,
+          contractor_name: d.contractor_name || "Unknown Contractor",
+          tax_month: (d.tax_month || new Date().toISOString().slice(0,7)) + "-01",
+          gross_amount: parseFloat(d.gross_amount) || 0,
+          deduction_amount: parseFloat(d.deduction_amount) || 0,
+          net_amount: (parseFloat(d.gross_amount) || 0) - (parseFloat(d.deduction_amount) || 0),
+          notes: `From email: ${action.email_subject}`,
+        });
+      }
+      break;
+    }
+    case "update_job": {
+      const jobId = d.job_id;
+      const customerNameForJob = (d.customer || "").toLowerCase();
+      const jobValue = d.job_value ? parseFloat(d.job_value) : null;
+
+      if (jobId) {
+        await db.from("job_cards")
+          .update({ status: "completed", completion_date: new Date().toISOString() })
+          .eq("id", jobId)
+          .eq("user_id", user.id);
+      } else {
+        const { data: matchingJobs } = await db.from("job_cards")
+          .select("id, title, type, status, value")
+          .eq("user_id", user.id)
+          .ilike("customer", `%${customerNameForJob}%`)
+          .neq("status", "completed")
+          .order("created_at", { ascending: false });
+
+        if (matchingJobs?.length > 0) {
+          let bestMatch = matchingJobs[0];
+          if (jobValue && matchingJobs.length > 1) {
+            const valueMatch = matchingJobs.find(j =>
+              j.value && Math.abs(parseFloat(j.value) - jobValue) / jobValue < 0.1
+            );
+            if (valueMatch) bestMatch = valueMatch;
+          }
+          await db.from("job_cards")
+            .update({ status: "completed", completion_date: new Date().toISOString() })
+            .eq("id", bestMatch.id)
+            .eq("user_id", user.id);
+        }
+      }
+      // Send completion confirmation email
+      const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+      const custRecord = (customers || []).find(c => c.name?.toLowerCase().includes(customerNameForJob));
+      const completeEmail = custRecord?.email || replyTo;
+      const completeName = d.customer || custRecord?.name || "there";
+      if (completeEmail && connection) {
+        const jobDesc = d.type || "the work";
+        const completeBody = `<p>Hi ${completeName},</p>
+<p>Just to confirm that ${jobDesc} has been completed and marked off on our system.</p>
+<p>If there's anything you're not happy with or if you have any questions, please don't hesitate to get in touch.</p>
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+        const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, to: completeEmail, subject: `Job completed — ${brand?.tradingName || ""}`, body: completeBody }),
+        }).catch(err => console.error("Completion email failed:", err.message));
+      }
+      break;
+    }
+    case "reschedule_job": {
+      const customerName = d.customer || "";
+      const newDate = d.new_date || d.date_text || "";
+      const { data: matchJobs } = await db.from("job_cards")
+        .select("id, title, type, customer")
+        .eq("user_id", user.id)
+        .ilike("customer", `%${customerName}%`)
+        .neq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (matchJobs?.length) {
+        const updates = { notes: `Rescheduled via email: ${action.email_subject}` };
+        if (newDate) {
+          updates.date = newDate;
+          try { updates.dateObj = new Date(newDate).toISOString(); } catch {}
+        }
+        await db.from("job_cards").update(updates).eq("id", matchJobs[0].id).eq("user_id", user.id);
+        setJobs(prev => (prev || []).map(j => j.id === matchJobs[0].id ? { ...j, ...updates } : j));
+      }
+      // Reply confirming reschedule
+      const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+      if (replyTo && connection) {
+        const senderName = d.sender_name || customerName || "there";
+        const dateConfirm = newDate ? ` I've updated the diary to ${newDate}.` : "";
+        const replyBody = `<p>Hi ${senderName},</p>
+<p>No problem at all.${dateConfirm}${!newDate ? " Could you let me know what date and time would work better for you?" : ""}</p>
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+        const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+        }).catch(err => console.error("Reschedule reply failed:", err.message));
+      }
+      break;
+    }
+    case "cancel_job": {
+      const customerName = d.customer || "";
+      const { data: matchJobs } = await db.from("job_cards")
+        .select("id, title, type, customer")
+        .eq("user_id", user.id)
+        .ilike("customer", `%${customerName}%`)
+        .neq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (matchJobs?.length) {
+        await db.from("job_cards").update({ status: "cancelled", notes: `Cancelled via email: ${action.email_subject}` }).eq("id", matchJobs[0].id).eq("user_id", user.id);
+        setJobs(prev => (prev || []).map(j => j.id === matchJobs[0].id ? { ...j, status: "cancelled" } : j));
+      }
+      // Reply confirming cancellation
+      const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+      if (replyTo && connection) {
+        const senderName = d.sender_name || customerName || "there";
+        const replyBody = `<p>Hi ${senderName},</p>
+<p>No problem — I've removed that from the diary. If you'd like to rebook in the future, just get in touch and we'll get you sorted.</p>
+<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
+        const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+        }).catch(err => console.error("Cancellation reply failed:", err.message));
+      }
+      break;
+    }
+    case "mark_invoice_paid": {
+      // Extract invoice number from action_data, email subject, or email snippet
+      const invoiceNumFromData = d.invoice_number ? String(d.invoice_number) : null;
+      const subjectMatch = action.email_subject?.match(/(?:invoice\s*#?\s*)(\d+)/i);
+      const invoiceNumFromSubject = subjectMatch ? subjectMatch[1] : null;
+      const snippetMatch = action.email_snippet?.match(/(?:invoice\s*#?\s*)(\d+)/i);
+      const invoiceNumFromSnippet = snippetMatch ? snippetMatch[1] : null;
+      const invoiceNum = invoiceNumFromData || invoiceNumFromSubject || invoiceNumFromSnippet;
+      const customerNameLower = (d.customer || "").toLowerCase();
+
+      const inv = (invoices || []).find(i => {
+        if (i.isQuote || i.status === "paid") return false;
+        // Match by invoice number (highest priority)
+        if (invoiceNum && i.id?.includes(invoiceNum)) return true;
+        // Match by customer name
+        if (customerNameLower && i.customer?.toLowerCase().includes(customerNameLower)) return true;
+        return false;
+      });
+
+      if (inv) {
+        setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, status: "paid", due: "Paid" } : i));
+        // Send payment confirmation email
+        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+        const custRecord = (customers || []).find(c => c.name?.toLowerCase().includes(customerNameLower));
+        const confirmEmail = custRecord?.email || inv.email || replyTo;
+        if (confirmEmail && connection) {
+          const paidAmt = fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0));
+          const confirmBody = buildEmailHTML(brand, {
+            heading: "PAYMENT RECEIVED",
+            body: `<p style="font-size:15px;">Dear ${inv.customer},</p>
+              <p style="color:#555;">Thank you for your payment of <strong>${paidAmt}</strong> for invoice ${inv.id}. This invoice is now marked as paid.</p>
+              <p style="color:#555;font-size:13px;">If you need a receipt or have any questions, please don't hesitate to get in touch.</p>`,
+          });
+          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, to: confirmEmail, subject: `Payment received — Invoice ${inv.id}`, body: confirmBody }),
+          }).catch(err => console.error("Payment confirmation failed:", err.message));
+        }
+      }
+      break;
+    }
+    case "accept_quote": {
+      // Find matching quote by customer name or address
+      const customerName = d.customer || "";
+      const address = d.address || d.notes || "";
+      const matchingQuote = (invoices || []).find(i =>
+        i.isQuote &&
+        (i.customer?.toLowerCase().includes(customerName.toLowerCase()) ||
+         (address && (i.jobRef?.toLowerCase().includes(address.toLowerCase()) ||
+          i.address?.toLowerCase().includes(address.toLowerCase()))))
+      );
+
+      if (matchingQuote) {
+        // Convert quote to invoice
+        const newId = nextInvoiceId(invoices);
+        const newInvoice = { ...matchingQuote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand?.paymentTerms || 30} days` };
+        setInvoices(prev => [newInvoice, ...(prev || []).filter(i => i.id !== matchingQuote.id)]);
+      } else {
+        // No matching quote found — create a job instead
+        setJobs(prev => [...(prev || []), { id: Date.now(), customer: customerName || "Unknown", address: d.address || "", type: d.type || "Boiler Installation", date: new Date().toLocaleDateString("en-GB"), dateObj: new Date().toISOString(), status: "pending", value: 0, notes: `Quote accepted via email. ${d.notes || ""}` }]);
+      }
+
+      // Send reply email asking for booking date
+      const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
+      if (replyTo && connection) {
+        const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
+        const jobDesc = d.address || d.type || "the work";
+        const replyBody = `<p>Hi ${customerName || "there"},</p><p>Thank you for confirming you'd like to go ahead with ${jobDesc}. I'll get that booked in for you.</p><p>What date and time would suit you best? Please let me know a few options and I'll confirm which works.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}</p>`;
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
+        }).catch(err => console.error("Reply failed:", err.message));
+      }
+      break;
+    }
+  }
+}
+
+// Learn from approvals — teaches the email classifier about the user's real
+// suppliers, contractors, customers, and job types. Read by email-cron.js and
+// email-check.js via the ai_context table.
+async function updateEmailAIContext(action, user) {
+  const d = action.action_data || {};
+  try {
+    // Load existing context
+    const { data: existing } = await window._supabase.from("ai_context").select("*").eq("user_id", user.id).single();
+    const ctx = existing || { suppliers: [], contractors: [], customers: [], job_types: [] };
+
+    // Add what we learned
+    if (action.action_type === "add_materials" && d.supplier) {
+      if (!ctx.suppliers.find(s => s.name?.toLowerCase() === d.supplier.toLowerCase())) {
+        ctx.suppliers = [...(ctx.suppliers || []), { name: d.supplier, type: "materials", from: action.email_from?.match(/<(.+)>/)?.[1] || action.email_from }];
+      }
+    }
+    if (action.action_type === "add_cis_statement" && d.contractor_name) {
+      if (!ctx.contractors.find(c => c.name?.toLowerCase() === d.contractor_name.toLowerCase())) {
+        ctx.contractors = [...(ctx.contractors || []), { name: d.contractor_name, type: "cis", from: action.email_from?.match(/<(.+)>/)?.[1] || action.email_from }];
+      }
+    }
+    if ((action.action_type === "create_job" || action.action_type === "create_enquiry" || action.action_type === "accept_quote") && d.customer) {
+      if (!ctx.customers.find(c => c.name?.toLowerCase() === d.customer.toLowerCase())) {
+        ctx.customers = [...(ctx.customers || []), { name: d.customer, from: action.email_from?.match(/<(.+)>/)?.[1] || action.email_from }];
+      }
+    }
+    if (action.action_type === "create_job" && d.type) {
+      if (!ctx.job_types.find(t => t.toLowerCase() === d.type.toLowerCase())) {
+        ctx.job_types = [...(ctx.job_types || []), d.type];
+      }
+    }
+
+    // Upsert context
+    await window._supabase.from("ai_context").upsert({
+      user_id: user.id,
+      ...ctx,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+  } catch (e) { console.error("AI context update failed:", e.message); }
+}
+
+// Learn from dismissals — writes an ai_feedback row that the email classifier
+// prompts will surface as PAST MISTAKES TO AVOID on the next scan. The `reason`
+// must be one of the IDs listed in App.jsx DISMISS_REASONS so the label map in
+// email-cron.js and email-check.js can render it cleanly.
+async function logEmailFeedback(user, action, reason) {
+  try {
+    await window._supabase.from("ai_feedback").insert({
+      user_id: user.id,
+      email_id: action.email_id,
+      email_from: action.email_from,
+      email_subject: action.email_subject,
+      action_suggested: action.action_type,
+      reason: reason || "not_relevant",
+    });
+  } catch (e) { console.error("AI feedback log failed:", e.message); }
+}
+
 function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, customers, setCustomers, setLastAction, setContextHint }) {
   // Theme-aware: bg/text/border tokens use the same CSS variables as global C,
   // so the Inbox tab follows light/dark mode. Accent colours stay as hex literals.
@@ -19726,12 +20326,21 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
   async function approve(action) {
     setProcessing(p => ({ ...p, [action.id]: true }));
     try {
-      await executeAction(action);
+      // Build the env bag for the shared dispatcher. sendPush isn't currently
+      // passed into InboxView as a prop (pre-existing gap — the old in-component
+      // executeAction referenced `sendPush` directly despite it never being in
+      // scope, so the create_enquiry push was silently failing). Leaving it
+      // undefined here preserves that exact behavior; the helper optional-chains
+      // the call so nothing throws.
+      await executeEmailAction(action, {
+        user, brand, connection, customers, invoices,
+        setCustomers, setJobs, setInvoices, setMaterials, setEnquiries,
+      });
       await fetch("/api/email/actions/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
       setPendingActions(prev => prev.filter(a => a.id !== action.id));
       setRecentActions(prev => [{ ...action, status: "approved" }, ...prev]);
       // Update AI context with what was learned from this approval
-      await updateAIContext(action);
+      await updateEmailAIContext(action, user);
       // Notify other surfaces (AI home card, etc.) that pending list changed
       window.dispatchEvent(new CustomEvent("trade-pa-inbox-refreshed"));
     } catch (e) { console.error(e); }
@@ -19747,15 +20356,8 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
     setFeedbackAction(null);
     setProcessing(p => ({ ...p, [action.id]: true }));
     try {
-      // Save feedback for AI learning
-      await window._supabase.from("ai_feedback").insert({
-        user_id: user.id,
-        email_id: action.email_id,
-        email_from: action.email_from,
-        email_subject: action.email_subject,
-        action_suggested: action.action_type,
-        reason,
-      });
+      // Save feedback for AI learning via shared helper (voice path uses same helper)
+      await logEmailFeedback(user, action, reason);
       await fetch("/api/email/actions/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actionId: action.id }) });
       setPendingActions(prev => prev.filter(a => a.id !== action.id));
       // Notify other surfaces that pending list changed
@@ -19764,530 +20366,6 @@ function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, enquirie
     setProcessing(p => ({ ...p, [action.id]: false }));
   }
 
-  // Update AI context with patterns learned from approved actions
-  async function updateAIContext(action) {
-    const d = action.action_data || {};
-    try {
-      // Load existing context
-      const { data: existing } = await window._supabase.from("ai_context").select("*").eq("user_id", user.id).single();
-      const ctx = existing || { suppliers: [], contractors: [], customers: [], job_types: [] };
-
-      // Add what we learned
-      if (action.action_type === "add_materials" && d.supplier) {
-        if (!ctx.suppliers.find(s => s.name?.toLowerCase() === d.supplier.toLowerCase())) {
-          ctx.suppliers = [...(ctx.suppliers || []), { name: d.supplier, type: "materials", from: action.email_from?.match(/<(.+)>/)?.[1] || action.email_from }];
-        }
-      }
-      if (action.action_type === "add_cis_statement" && d.contractor_name) {
-        if (!ctx.contractors.find(c => c.name?.toLowerCase() === d.contractor_name.toLowerCase())) {
-          ctx.contractors = [...(ctx.contractors || []), { name: d.contractor_name, type: "cis", from: action.email_from?.match(/<(.+)>/)?.[1] || action.email_from }];
-        }
-      }
-      if ((action.action_type === "create_job" || action.action_type === "create_enquiry" || action.action_type === "accept_quote") && d.customer) {
-        if (!ctx.customers.find(c => c.name?.toLowerCase() === d.customer.toLowerCase())) {
-          ctx.customers = [...(ctx.customers || []), { name: d.customer, from: action.email_from?.match(/<(.+)>/)?.[1] || action.email_from }];
-        }
-      }
-      if (action.action_type === "create_job" && d.type) {
-        if (!ctx.job_types.find(t => t.toLowerCase() === d.type.toLowerCase())) {
-          ctx.job_types = [...(ctx.job_types || []), d.type];
-        }
-      }
-
-      // Upsert context
-      await window._supabase.from("ai_context").upsert({
-        user_id: user.id,
-        ...ctx,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id" });
-    } catch (e) { console.error("AI context update failed:", e.message); }
-  }
-
-  async function executeAction(action) {
-    const d = action.action_data || {};
-    switch (action.action_type) {
-      case "create_job": {
-        // Add job to schedule — use TBC if no date mentioned
-        const hasDate = !!(d.date_text && d.date_text.trim());
-        setJobs(prev => [...(prev || []), {
-          id: Date.now(),
-          customer: d.customer || d.sender_name || "Unknown",
-          address: d.address || "",
-          type: d.type || "Job",
-          date: hasDate ? d.date_text : "TBC",
-          dateObj: new Date().toISOString(),
-          status: "pending",
-          value: 0,
-          notes: d.notes || `From email: ${action.email_subject}`,
-        }]);
-
-        // Check if customer already exists
-        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
-        const senderName = d.sender_name || d.customer || "there";
-        const existingCustomer = (customers || []).find(c =>
-          c.name?.toLowerCase().includes((d.customer || "").toLowerCase()) ||
-          c.email?.toLowerCase() === replyTo.toLowerCase()
-        );
-
-        if (replyTo && connection) {
-          if (!existingCustomer) {
-            // New customer — add partial record and ask for details + availability
-            setCustomers(prev => [...(prev || []), {
-              id: Date.now(),
-              name: d.customer || d.sender_name || "Unknown",
-              email: replyTo,
-              phone: "",
-              address: "",
-              notes: `Added from email booking request`,
-            }]);
-
-            const jobDesc = d.type || "the work";
-            const dateText = hasDate ? ` on ${d.date_text}` : "";
-            const replyBody = `<p>Hi ${senderName},</p>
-<p>Thank you for getting in touch. I've added your ${jobDesc} request${dateText} to my diary and will be in touch to confirm the appointment.</p>
-<p>To get you set up ahead of the scheduled appointment, could you please provide the following details:</p>
-<ul>
-<li><strong>Full name</strong></li>
-<li><strong>Phone number</strong></li>
-<li><strong>Address where the work is needed</strong></li>
-${!hasDate ? "<li><strong>A few preferred dates and times that work for you</strong></li>" : ""}
-</ul>
-<p>Once I have these I'll send you a full confirmation.</p>
-<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
-
-            const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-            await fetch(endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
-            }).catch(err => console.error("Reply failed:", err.message));
-
-          } else {
-            // Existing customer — send a booking confirmation
-            const jobDesc = d.type || "the work";
-            const dateText = hasDate ? ` on ${d.date_text}` : "";
-            const availabilityLine = !hasDate
-              ? `<p>Could you please suggest a few dates and times that work for you so we can get something confirmed?</p>`
-              : `<p>We'll be in touch shortly to confirm the full details.</p>`;
-
-            const replyBody = `<p>Hi ${senderName},</p>
-<p>Thank you for getting in touch. I've added your ${jobDesc} request${dateText} to the diary.</p>
-${availabilityLine}
-<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
-
-            const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-            await fetch(endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
-            }).catch(err => console.error("Confirmation reply failed:", err.message));
-          }
-        }
-        break;
-      }
-      case "create_enquiry": {
-        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
-        const senderName = d.sender_name || d.customer || d.name || "there";
-        const enquiryName = d.name || d.customer || d.sender_name || senderName || "Unknown";
-
-        // Create enquiry with full contact details
-        const newEnquiry = {
-          name: enquiryName,
-          source: "Email",
-          msg: d.message || action.email_snippet,
-          time: "Just now",
-          urgent: d.urgent || false,
-          status: "new",
-          email: replyTo,
-          phone: d.phone || "",
-          address: d.address || "",
-        };
-        setEnquiries(prev => [newEnquiry, ...(prev || [])]);
-        // Push notification for new enquiry
-        sendPush({
-          title: "📩 New Enquiry",
-          body: `${enquiryName}${d.message ? " — " + d.message.slice(0, 80) : ""}`,
-          url: "/",
-          type: "enquiry",
-          tag: "new-enquiry",
-          requireInteraction: true,
-        });
-
-        // Also save directly to Supabase so it persists through reloads
-        if (user?.id) {
-          const cid = window._companyId;
-          if (cid) {
-            await window._supabase.from("enquiries").insert({
-              company_id: cid,
-              user_id: user.id,
-              name: enquiryName,
-              source: "Email",
-              msg: d.message || action.email_snippet || "",
-              time: "Just now",
-              urgent: d.urgent || false,
-              status: "new",
-              email: replyTo,
-              phone: d.phone || "",
-              address: d.address || "",
-            }).catch(e => console.error("Enquiry insert:", e.message));
-          }
-        }
-
-        // Create or update customer record
-        const existingCustomer = (customers || []).find(c =>
-          c.email?.toLowerCase() === replyTo.toLowerCase() ||
-          c.name?.toLowerCase() === enquiryName.toLowerCase()
-        );
-
-        if (replyTo && !existingCustomer) {
-          setCustomers(prev => [...(prev || []), {
-            id: Date.now(),
-            name: enquiryName,
-            email: replyTo,
-            phone: d.phone || "",
-            address: d.address || "",
-            notes: "Added from email enquiry",
-          }]);
-        }
-
-        // Send reply asking for details (only if we have a reply address and email connection)
-        if (replyTo && connection) {
-          const replyBody = `<p>Hi ${senderName},</p>
-<p>Thank you for getting in touch. I've added your ${d.type || d.message?.slice(0, 50) || "enquiry"} to the diary.</p>
-<p>Could you please suggest a few dates and times that work for you so we can get something confirmed?</p>
-${!existingCustomer ? `<p>It would also be helpful to have:</p>
-<ul>
-<li><strong>Your phone number</strong></li>
-<li><strong>The address where the work is needed</strong></li>
-</ul>` : ""}
-<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
-
-          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-          await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
-          }).catch(err => console.error("Enquiry reply failed:", err.message));
-        }
-        break;
-      }
-      case "save_customer": { const ex = (customers || []).find(c => c.name?.toLowerCase() === (d.name || d.customer || "").toLowerCase()); if (!ex) setCustomers(prev => [...(prev || []), { id: Date.now(), name: d.name || d.customer || "Unknown", email: d.email || d.reply_to || "", phone: d.phone || "", address: "", notes: "" }]); break; }
-      case "add_materials": {
-        // If we have attachment info, parse the PDF to extract line items
-        if (d.message_id && d.attachment_id) {
-          try {
-            const isOutlook = connection?.provider === "outlook";
-            const endpoint = isOutlook ? "/api/outlook/parse-supplier" : "/api/gmail/parse-supplier";
-            const parseRes = await fetch(endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId: user.id, messageId: d.message_id, attachmentId: d.attachment_id }),
-            });
-            const parseData = await parseRes.json();
-            if (parseData.items?.length > 0) {
-              const receiptId = `email_${action.id}_${Date.now()}`;
-              const supplierName = d.supplier || action.email_from?.match(/^(.+?)\s*</)?.[1]?.replace(/"/g, "") || "Supplier";
-              const newMaterials = parseData.items.map((item, i) => ({
-                id: Date.now() + i,
-                item: item.item || item.description || "Unknown item",
-                qty: item.qty || 1,
-                unitPrice: item.unitPrice || item.unit_price || 0,
-                supplier: supplierName,
-                job: "",
-                status: "ordered", // Invoice received = already ordered/purchased
-                receiptId,
-                receiptSource: "email",
-                receiptFilename: d.attachment_filename || "",
-              }));
-              setMaterials(prev => [...newMaterials, ...(prev || [])]);
-              break;
-            }
-          } catch (err) {
-            console.error("PDF parse failed:", err.message);
-          }
-        }
-        // Fallback — add single placeholder entry
-        setMaterials(prev => [...(prev || []), {
-          id: Date.now(),
-          item: `Items from ${d.supplier || d.attachment_filename || "supplier invoice"}`,
-          qty: 1, unitPrice: 0,
-          supplier: d.supplier || "",
-          job: "", status: "to_order",
-          receiptSource: "email",
-          receiptFilename: d.attachment_filename || "",
-        }]);
-        break;
-      }
-
-      case "add_cis_statement": {
-        // Try to parse CIS statement from PDF attachment
-        if (d.message_id && d.attachment_id) {
-          try {
-            const isOutlook = connection?.provider === "outlook";
-            const { data: connData } = await window._supabase.from("email_connections").select("access_token").eq("user_id", user.id).single();
-            const token = connData?.access_token;
-
-            const attRes = await fetch(
-              isOutlook
-                ? `https://graph.microsoft.com/v1.0/me/messages/${d.message_id}/attachments/${d.attachment_id}`
-                : `https://gmail.googleapis.com/gmail/v1/users/me/messages/${d.message_id}/attachments/${d.attachment_id}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            const attData = await attRes.json();
-            const rawBase64 = isOutlook ? attData.contentBytes : attData.data;
-
-            if (rawBase64) {
-              const base64Clean = rawBase64.replace(/-/g, "+").replace(/_/g, "/");
-              const pdfDataUrl = `data:application/pdf;base64,${base64Clean}`;
-
-              // Use Claude to extract CIS data from the PDF
-              const parseRes = await fetch("/api/claude", {
-                method: "POST",
-                headers: await authHeaders(),
-                body: JSON.stringify({
-                  model: "claude-sonnet-4-6",
-                  max_tokens: 400,
-                  messages: [{
-                    role: "user",
-                    content: [
-                      { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Clean } },
-                      { type: "text", text: "Extract CIS monthly statement details. Return ONLY JSON: {\"contractor_name\":\"company name\",\"tax_month\":\"YYYY-MM\",\"gross_amount\":number,\"deduction_amount\":number,\"net_amount\":number}" }
-                    ],
-                  }],
-                }),
-              });
-              const parseData = await parseRes.json();
-              const raw = parseData.content?.[0]?.text?.trim() || "{}";
-              const match = raw.match(/\{[\s\S]*\}/);
-              const cis = match ? JSON.parse(match[0]) : {};
-
-              await window._supabase.from("cis_statements").insert({
-                user_id: user.id,
-                contractor_name: cis.contractor_name || d.contractor_name || "Unknown Contractor",
-                tax_month: ((cis.tax_month || d.tax_month || new Date().toISOString().slice(0,7))) + "-01",
-                gross_amount: cis.gross_amount || parseFloat(d.gross_amount) || 0,
-                deduction_amount: cis.deduction_amount || parseFloat(d.deduction_amount) || 0,
-                net_amount: cis.net_amount || ((cis.gross_amount || 0) - (cis.deduction_amount || 0)) || 0,
-                notes: `From email: ${action.email_subject}`,
-                attachment_data: pdfDataUrl,
-              });
-              break;
-            }
-          } catch (err) {
-            console.error("CIS PDF parse failed:", err.message);
-          }
-        }
-        // Fallback — save what Claude extracted from the email body
-        if (d.contractor_name || d.gross_amount) {
-          await window._supabase.from("cis_statements").insert({
-            user_id: user.id,
-            contractor_name: d.contractor_name || "Unknown Contractor",
-            tax_month: (d.tax_month || new Date().toISOString().slice(0,7)) + "-01",
-            gross_amount: parseFloat(d.gross_amount) || 0,
-            deduction_amount: parseFloat(d.deduction_amount) || 0,
-            net_amount: (parseFloat(d.gross_amount) || 0) - (parseFloat(d.deduction_amount) || 0),
-            notes: `From email: ${action.email_subject}`,
-          });
-        }
-        break;
-      }
-      case "update_job": {
-        const jobId = d.job_id;
-        const customerNameForJob = (d.customer || "").toLowerCase();
-        const jobValue = d.job_value ? parseFloat(d.job_value) : null;
-
-        if (jobId) {
-          await db.from("job_cards")
-            .update({ status: "completed", completion_date: new Date().toISOString() })
-            .eq("id", jobId)
-            .eq("user_id", user.id);
-        } else {
-          const { data: matchingJobs } = await db.from("job_cards")
-            .select("id, title, type, status, value")
-            .eq("user_id", user.id)
-            .ilike("customer", `%${customerNameForJob}%`)
-            .neq("status", "completed")
-            .order("created_at", { ascending: false });
-
-          if (matchingJobs?.length > 0) {
-            let bestMatch = matchingJobs[0];
-            if (jobValue && matchingJobs.length > 1) {
-              const valueMatch = matchingJobs.find(j =>
-                j.value && Math.abs(parseFloat(j.value) - jobValue) / jobValue < 0.1
-              );
-              if (valueMatch) bestMatch = valueMatch;
-            }
-            await db.from("job_cards")
-              .update({ status: "completed", completion_date: new Date().toISOString() })
-              .eq("id", bestMatch.id)
-              .eq("user_id", user.id);
-          }
-        }
-        // Send completion confirmation email
-        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
-        const custRecord = (customers || []).find(c => c.name?.toLowerCase().includes(customerNameForJob));
-        const completeEmail = custRecord?.email || replyTo;
-        const completeName = d.customer || custRecord?.name || "there";
-        if (completeEmail && connection) {
-          const jobDesc = d.type || "the work";
-          const completeBody = `<p>Hi ${completeName},</p>
-<p>Just to confirm that ${jobDesc} has been completed and marked off on our system.</p>
-<p>If there's anything you're not happy with or if you have any questions, please don't hesitate to get in touch.</p>
-<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
-          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-          await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user.id, to: completeEmail, subject: `Job completed — ${brand?.tradingName || ""}`, body: completeBody }),
-          }).catch(err => console.error("Completion email failed:", err.message));
-        }
-        break;
-      }
-      case "reschedule_job": {
-        const customerName = d.customer || "";
-        const newDate = d.new_date || d.date_text || "";
-        const { data: matchJobs } = await db.from("job_cards")
-          .select("id, title, type, customer")
-          .eq("user_id", user.id)
-          .ilike("customer", `%${customerName}%`)
-          .neq("status", "completed")
-          .order("created_at", { ascending: false })
-          .limit(1);
-        if (matchJobs?.length) {
-          const updates = { notes: `Rescheduled via email: ${action.email_subject}` };
-          if (newDate) {
-            updates.date = newDate;
-            try { updates.dateObj = new Date(newDate).toISOString(); } catch {}
-          }
-          await db.from("job_cards").update(updates).eq("id", matchJobs[0].id).eq("user_id", user.id);
-          setJobs(prev => (prev || []).map(j => j.id === matchJobs[0].id ? { ...j, ...updates } : j));
-        }
-        // Reply confirming reschedule
-        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
-        if (replyTo && connection) {
-          const senderName = d.sender_name || customerName || "there";
-          const dateConfirm = newDate ? ` I've updated the diary to ${newDate}.` : "";
-          const replyBody = `<p>Hi ${senderName},</p>
-<p>No problem at all.${dateConfirm}${!newDate ? " Could you let me know what date and time would work better for you?" : ""}</p>
-<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
-          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-          await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
-          }).catch(err => console.error("Reschedule reply failed:", err.message));
-        }
-        break;
-      }
-      case "cancel_job": {
-        const customerName = d.customer || "";
-        const { data: matchJobs } = await db.from("job_cards")
-          .select("id, title, type, customer")
-          .eq("user_id", user.id)
-          .ilike("customer", `%${customerName}%`)
-          .neq("status", "completed")
-          .order("created_at", { ascending: false })
-          .limit(1);
-        if (matchJobs?.length) {
-          await db.from("job_cards").update({ status: "cancelled", notes: `Cancelled via email: ${action.email_subject}` }).eq("id", matchJobs[0].id).eq("user_id", user.id);
-          setJobs(prev => (prev || []).map(j => j.id === matchJobs[0].id ? { ...j, status: "cancelled" } : j));
-        }
-        // Reply confirming cancellation
-        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
-        if (replyTo && connection) {
-          const senderName = d.sender_name || customerName || "there";
-          const replyBody = `<p>Hi ${senderName},</p>
-<p>No problem — I've removed that from the diary. If you'd like to rebook in the future, just get in touch and we'll get you sorted.</p>
-<p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}${brand?.email ? `<br>${brand.email}` : ""}</p>`;
-          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-          await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
-          }).catch(err => console.error("Cancellation reply failed:", err.message));
-        }
-        break;
-      }
-      case "mark_invoice_paid": {
-        // Extract invoice number from action_data, email subject, or email snippet
-        const invoiceNumFromData = d.invoice_number ? String(d.invoice_number) : null;
-        const subjectMatch = action.email_subject?.match(/(?:invoice\s*#?\s*)(\d+)/i);
-        const invoiceNumFromSubject = subjectMatch ? subjectMatch[1] : null;
-        const snippetMatch = action.email_snippet?.match(/(?:invoice\s*#?\s*)(\d+)/i);
-        const invoiceNumFromSnippet = snippetMatch ? snippetMatch[1] : null;
-        const invoiceNum = invoiceNumFromData || invoiceNumFromSubject || invoiceNumFromSnippet;
-        const customerNameLower = (d.customer || "").toLowerCase();
-
-        const inv = (invoices || []).find(i => {
-          if (i.isQuote || i.status === "paid") return false;
-          // Match by invoice number (highest priority)
-          if (invoiceNum && i.id?.includes(invoiceNum)) return true;
-          // Match by customer name
-          if (customerNameLower && i.customer?.toLowerCase().includes(customerNameLower)) return true;
-          return false;
-        });
-
-        if (inv) {
-          setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, status: "paid", due: "Paid" } : i));
-          // Send payment confirmation email
-          const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
-          const custRecord = (customers || []).find(c => c.name?.toLowerCase().includes(customerNameLower));
-          const confirmEmail = custRecord?.email || inv.email || replyTo;
-          if (confirmEmail && connection) {
-            const paidAmt = fmtCurrency(parseFloat(inv.grossAmount || inv.amount || 0));
-            const confirmBody = buildEmailHTML(brand, {
-              heading: "PAYMENT RECEIVED",
-              body: `<p style="font-size:15px;">Dear ${inv.customer},</p>
-                <p style="color:#555;">Thank you for your payment of <strong>${paidAmt}</strong> for invoice ${inv.id}. This invoice is now marked as paid.</p>
-                <p style="color:#555;font-size:13px;">If you need a receipt or have any questions, please don't hesitate to get in touch.</p>`,
-            });
-            const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-            await fetch(endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId: user.id, to: confirmEmail, subject: `Payment received — Invoice ${inv.id}`, body: confirmBody }),
-            }).catch(err => console.error("Payment confirmation failed:", err.message));
-          }
-        }
-        break;
-      }
-      case "accept_quote": {
-        // Find matching quote by customer name or address
-        const customerName = d.customer || "";
-        const address = d.address || d.notes || "";
-        const matchingQuote = (invoices || []).find(i =>
-          i.isQuote &&
-          (i.customer?.toLowerCase().includes(customerName.toLowerCase()) ||
-           (address && (i.jobRef?.toLowerCase().includes(address.toLowerCase()) ||
-            i.address?.toLowerCase().includes(address.toLowerCase()))))
-        );
-
-        if (matchingQuote) {
-          // Convert quote to invoice
-          const newId = nextInvoiceId(invoices);
-          const newInvoice = { ...matchingQuote, isQuote: false, id: newId, status: "sent", due: `Due in ${brand?.paymentTerms || 30} days` };
-          setInvoices(prev => [newInvoice, ...(prev || []).filter(i => i.id !== matchingQuote.id)]);
-        } else {
-          // No matching quote found — create a job instead
-          setJobs(prev => [...(prev || []), { id: Date.now(), customer: customerName || "Unknown", address: d.address || "", type: d.type || "Boiler Installation", date: new Date().toLocaleDateString("en-GB"), dateObj: new Date().toISOString(), status: "pending", value: 0, notes: `Quote accepted via email. ${d.notes || ""}` }]);
-        }
-
-        // Send reply email asking for booking date
-        const replyTo = d.reply_to || action.email_from?.match(/<(.+)>/)?.[1] || action.email_from || "";
-        if (replyTo && connection) {
-          const endpoint = connection.provider === "outlook" ? "/api/outlook/send" : "/api/gmail/send";
-          const jobDesc = d.address || d.type || "the work";
-          const replyBody = `<p>Hi ${customerName || "there"},</p><p>Thank you for confirming you'd like to go ahead with ${jobDesc}. I'll get that booked in for you.</p><p>What date and time would suit you best? Please let me know a few options and I'll confirm which works.</p><p>Many thanks,<br>${brand?.tradingName || ""}${brand?.phone ? `<br>${brand.phone}` : ""}</p>`;
-          await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user.id, to: replyTo, subject: `Re: ${action.email_subject}`, body: replyBody }),
-          }).catch(err => console.error("Reply failed:", err.message));
-        }
-        break;
-      }
-    }
-  }
 
   function actionIcon(type) { return { create_job: "📅", create_enquiry: "📩", mark_invoice_paid: "✅", update_job: "🔧", add_materials: "🔧", save_customer: "👤", accept_quote: "🤝", add_cis_statement: "🏗", reschedule_job: "🔄", cancel_job: "❌" }[type] || "⚡"; }
   function actionColor(type) { return { create_job: IC.green, create_enquiry: IC.blue, mark_invoice_paid: IC.green, update_job: IC.amber, add_materials: IC.amber, save_customer: "#8b5cf6", accept_quote: IC.green, add_cis_statement: IC.blue, reschedule_job: IC.blue, cancel_job: IC.red }[type] || IC.amber; }
