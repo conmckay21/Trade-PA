@@ -1,4 +1,6 @@
-export default async function handler(req, res) {
+import { withSentry } from "../../lib/sentry.js";
+
+async function handler(req, res) {
   const { code, state: userId, error } = req.query;
   const APP_URL = process.env.APP_URL || 'https://trade-pa-id3s.vercel.app';
 
@@ -57,3 +59,5 @@ export default async function handler(req, res) {
     res.redirect(`${APP_URL}/?xero=error&msg=${encodeURIComponent(err.message)}`);
   }
 }
+
+export default withSentry(handler, { routeName: "auth/xero/callback" });
