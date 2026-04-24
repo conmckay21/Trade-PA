@@ -4,8 +4,9 @@
 // Twilio stays in the bridge so recording continues regardless
 
 import twilio from 'twilio';
+import { withSentry } from "../lib/sentry.js";
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { userId, confName, forwardTo, callerNumber, customerName } = req.query;
   const callStatus = req.body?.CallStatus;
 
@@ -48,3 +49,5 @@ export default async function handler(req, res) {
     console.error('Mobile dial failed:', err.message);
   }
 }
+
+export default withSentry(handler, { routeName: "calls/app-status" });
