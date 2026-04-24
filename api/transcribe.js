@@ -10,6 +10,7 @@
 // - NO rate limiting or allowance check: tap-to-talk is "never capped" per pricing.
 
 import { createClient } from '@supabase/supabase-js';
+import { withSentry } from "./lib/sentry.js";
 
 const supabaseAdmin = createClient(
   process.env.VITE_SUPABASE_URL,
@@ -29,7 +30,7 @@ async function getUserIdFromRequest(req) {
   } catch { return null; }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // ─── AUTH GATE ───────────────────────────────────────────────────────────
@@ -237,3 +238,5 @@ function mimeTypeToExtension(mimeType) {
   if (mt.includes('aac')) return 'aac';
   return 'webm'; // sensible default — most browsers record this
 }
+
+export default withSentry(handler, { routeName: "transcribe" });
