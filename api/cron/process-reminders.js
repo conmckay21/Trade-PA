@@ -21,6 +21,57 @@ const QUERY_LOOKAHEAD_MS = 15 * 60 * 1000;       // 15 minutes
 const QUERY_LOOKBEHIND_MS = 24 * 60 * 60 * 1000;  // 24 hours
 const BATCH_LIMIT = 100;                           // process max 100 per run
 
+// Map related_type → table/columns for enrichment lookup.
+// Keep the column lists minimal — only fields the email template actually
+// renders. Each entry picks the bare-minimum columns for a reasonable
+// context block. If a field is missing in the DB row, the template degrades
+// cleanly (falls back to "—" or just omits the line).
+const RELATED_LOOKUP = {
+  job: {
+    table: "job_cards",
+    columns: "id, customer, title, type, address, value, status",
+  },
+  invoice: {
+    table: "invoices",
+    columns: "id, customer, amount, gross_amount, status, is_quote, due",
+  },
+  customer: {
+    table: "customers",
+    columns: "id, name, phone, email, address",
+  },
+  enquiry: {
+    table: "enquiries",
+    columns: "id, name, source, msg, urgent, status",
+  },
+};
+
+// Fetch the related entity for a reminder. Returns an object shaped
+// { type, data } for the email template, or null if no lookup is needed
+// or the related row has since been deleted. Never throws — context
+// enrichment is best-effort; a failure falls back to the plain template.
+async function loadRelatedContext(supabase, relatedType, relatedId, userId) {
+  if (!relatedType || !relatedId) return null;
+  const cfg = RELATED_LOOKUP[relatedType];
+  if (!cfg) return null;
+  try {
+    const { data, error } = await supabase
+      .from(cfg.table)
+      .select(cfg.columns)
+      .eq("id", relatedId)
+      .eq("user_id", userId)   // scope to the reminder owner
+      .maybeSingle();
+    if (error) {
+      console.warn(`[process-reminders] context lookup error (${relatedType} ${relatedId}): ${error.message}`);
+      return null;
+    }
+    if (!data) return null;   // entity deleted since reminder was set
+    return { type: relatedType, data };
+  } catch (err) {
+    console.warn(`[process-reminders] context lookup threw (${relatedType}): ${err.message}`);
+    return null;
+  }
+}
+
 async function handler(req, res) {
   // ---- Auth check --------------------------------------------------------
   const auth = req.headers.authorization || "";
@@ -52,7 +103,7 @@ async function handler(req, res) {
 
   const { data: reminders, error: qErr } = await supabase
     .from("reminders")
-    .select("id, user_id, text, fire_at, created_at")
+    .select("id, user_id, text, fire_at, created_at, related_type, related_id")
     .eq("fired", false)
     .eq("done", false)
     .lte("fire_at", windowEnd)
@@ -92,6 +143,15 @@ async function handler(req, res) {
         userEmailCache[reminder.user_id] = email;
       }
 
+      // Load the related entity context (if any). Best-effort — failure
+      // here just means the email falls back to the plain template.
+      const relatedContext = await loadRelatedContext(
+        supabase,
+        reminder.related_type,
+        reminder.related_id,
+        reminder.user_id
+      );
+
       // Send email
       const ok = await sendReminder({
         to: email,
@@ -100,6 +160,7 @@ async function handler(req, res) {
         text: reminder.text,
         fireAt: reminder.fire_at,
         createdAt: reminder.created_at,
+        relatedContext,
       });
 
       if (!ok) {
