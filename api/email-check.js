@@ -12,7 +12,9 @@
 // so a steady-state click here almost always finds 0 new emails and costs £0.
 // First click after connect finds up to ~48h of inbox and costs one Haiku call.
 
-export default async function handler(req, res) {
+import { withSentry } from "./lib/sentry.js";
+
+async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
   const { userId } = req.body;
@@ -387,3 +389,5 @@ Use "ignore" and empty action_data {} for spam, newsletters, promotions, or anyt
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, { routeName: "email-check" });
