@@ -18,27 +18,31 @@ const supabaseAdmin = createClient(
 // below spreads these values directly into the row. handsfree is in seconds,
 // not hours, because that's what check_usage_allowance reads against
 // usage_tracking.handsfree_seconds_used.
+//
+// Addon pack sizes refreshed Apr 2026 to match new tier caps (Solo 100 / 200 / 400 / 800).
+// Old packs were sized for the retired 500/1500/2500-cap tiers and would have
+// undercut the upgrade ladder.
 const ADDON_CATALOGUE = {
   conversations: {
-    priceEnv: "STRIPE_PRICE_ADDON_CONV_500",
-    display_name: "+500 AI conversations",
-    price_paid_pence: 3900,
-    conversations_added: 500,
+    priceEnv: "STRIPE_PRICE_ADDON_CONV_100",
+    display_name: "+100 AI conversations",
+    price_paid_pence: 2500,
+    conversations_added: 100,
     handsfree_seconds_added: 0,
   },
   handsfree: {
-    priceEnv: "STRIPE_PRICE_ADDON_HF_10",
-    display_name: "+10 hands-free hours",
-    price_paid_pence: 1900,
+    priceEnv: "STRIPE_PRICE_ADDON_HF_1H",
+    display_name: "+1 hour hands-free",
+    price_paid_pence: 500,
     conversations_added: 0,
-    handsfree_seconds_added: 36000, // 10 hours × 3600
+    handsfree_seconds_added: 3600, // 1 hour × 3600
   },
   combo: {
     priceEnv: "STRIPE_PRICE_ADDON_COMBO",
-    display_name: "+500 conversations & +10 hands-free hours",
-    price_paid_pence: 5500,
-    conversations_added: 500,
-    handsfree_seconds_added: 36000,
+    display_name: "+100 conversations & +1 hour hands-free",
+    price_paid_pence: 2800,
+    conversations_added: 100,
+    handsfree_seconds_added: 3600,
   },
 };
 
