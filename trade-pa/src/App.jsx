@@ -23477,6 +23477,66 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
                       </div>
                     )}
 
+                    {/* Stage Payments — only renders if stages were set up
+                        for this job. Each row shows the live invoice status
+                        (draft/sent/paid) so the user doesn't need to refresh
+                        or jump to Invoices to see what's happened. */}
+                    {(() => {
+                      let parsedStages = [];
+                      try {
+                        if (selected?.stage_payments) {
+                          parsedStages = typeof selected.stage_payments === "string"
+                            ? JSON.parse(selected.stage_payments)
+                            : selected.stage_payments;
+                        }
+                      } catch { parsedStages = []; }
+                      if (!Array.isArray(parsedStages) || parsedStages.length === 0) return null;
+                      const stagePill = (status) => {
+                        if (status === "paid") return { bg: C.green + "22", color: C.green, label: "Paid" };
+                        if (status === "sent" || status === "overdue") return { bg: C.amber + "22", color: C.amber, label: status === "overdue" ? "Overdue" : "Sent" };
+                        return { bg: C.muted + "22", color: C.muted, label: "Draft" };
+                      };
+                      const paidCount = parsedStages.filter(st => {
+                        const inv = (invoices || []).find(i => i.id === st.invoice_id);
+                        return inv?.status === "paid";
+                      }).length;
+                      return (
+                        <div style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                          <div style={{ padding: "8px 14px", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span>💰 Stage Payments</span>
+                            <span style={{ fontFamily: "'DM Mono',monospace", color: paidCount === parsedStages.length ? C.green : C.muted }}>
+                              {paidCount}/{parsedStages.length} paid
+                            </span>
+                          </div>
+                          {parsedStages.map((st, i) => {
+                            const inv = (invoices || []).find(invc => invc.id === st.invoice_id);
+                            const pill = stagePill(inv?.status);
+                            return (
+                              <div key={st.invoice_id || i}
+                                onClick={() => { if (inv) setView("Invoices"); }}
+                                style={{ display: "flex", alignItems: "center", padding: "10px 14px", borderBottom: i < parsedStages.length - 1 ? `1px solid ${C.border}` : "none", gap: 10, cursor: inv ? "pointer" : "default" }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 600 }}>{st.label || `Stage ${i + 1}`}</div>
+                                  <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace", marginTop: 2 }}>
+                                    {st.invoice_id || "—"}
+                                    {st.type === "pct" && st.value ? ` · ${st.value}%` : ""}
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, fontWeight: 700, color: C.text }}>
+                                    £{parseFloat(st.amount || 0).toFixed(2)}
+                                  </div>
+                                  <div style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 8, background: pill.bg, color: pill.color, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                    {pill.label}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+
                     {/* Linked RAMS */}
                     {linkedRams.length > 0 && (
                       <div style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
@@ -29741,83 +29801,107 @@ function AppInner() {
   };
 
   // ── Load all data from Supabase on login ──────────────────────────────────
+  // fetchAll is hoisted out of the mount useEffect so the manual refresh
+  // button (header) and any other consumer can re-run it. Same data, same
+  // setters — just a function we can call again on demand.
+  const fetchAll = async () => {
+    if (!user) return;
+    setDbLoading(true);
+    try {
+      const cid = await getOrCreateCompany(user.id);
+      if (!cid) { setDbLoading(false); return; }
+
+      // Load members for team management via the get_company_members
+      // RPC — a SECURITY DEFINER function that safely exposes
+      // auth.users.email for members of the caller's own company.
+      // Returns rows with a user_email column alongside the normal
+      // company_members fields.
+      const { data: mem } = await db.rpc("get_company_members", { p_company_id: cid });
+      if (mem) setMembers(mem);
+
+      const [j, inv, enq, mat, cust, contacts] = await Promise.all([
+        db.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
+        db.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
+        db.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
+        db.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
+        db.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
+        db.from("customer_contacts").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
+      ]);
+      if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
+      if (inv.data) setInvoicesRaw(inv.data.map(r => ({
+        ...r,
+        vatEnabled: r.vat_enabled, vatRate: parseFloat(r.vat_rate) || 20,
+        vatType: r.vat_type || "", vatZeroRated: r.vat_zero_rated || false,
+        isQuote: r.is_quote, paymentMethod: r.payment_method,
+        amount: parseFloat(r.amount) || 0,
+        grossAmount: parseFloat(r.gross_amount || r.amount) || 0,
+        jobRef: r.job_ref || "", address: r.address || "", email: r.email || "",
+        lineItems: Array.isArray(r.line_items) ? r.line_items : (r.line_items ? JSON.parse(r.line_items) : []),
+        materialItems: Array.isArray(r.material_items) ? r.material_items : (r.material_items ? JSON.parse(r.material_items) : []),
+        cisEnabled: r.cis_enabled || false, cisRate: parseFloat(r.cis_rate) || 20,
+        cisLabour: parseFloat(r.cis_labour) || 0,
+        cisMaterials: parseFloat(r.cis_materials) || 0,
+        cisDeduction: parseFloat(r.cis_deduction) || 0,
+        cisNetPayable: parseFloat(r.cis_net_payable) || 0,
+        // Chase tracking — DB uses snake_case, in-memory uses camelCase.
+        // Mirror both so everywhere that reads either form works correctly.
+        // See chase_invoice tool handler for the write side.
+        chaseCount: r.chase_count || 0,
+        lastChased: r.last_chased_at || null,
+      })));
+      if (enq.data) setEnquiriesRaw(enq.data);
+      if (mat.data) setMaterialsRaw(mat.data.map(m => ({
+        id: m.id,
+        item: m.item || "",
+        qty: m.qty || 1,
+        unitPrice: m.unit_price || 0,
+        supplier: m.supplier || "",
+        job: m.job || "",
+        status: m.status || "to_order",
+        receiptId: m.receipt_id || "",
+        receiptSource: m.receipt_source || "",
+        receiptFilename: m.receipt_filename || "",
+        receiptImage: m.receipt_image || "", // base64 image stored in Supabase
+      })));
+      if (cust.data) setCustomersRaw(cust.data);
+      if (contacts.data) setCustomerContactsRaw(contacts.data.map(c => ({
+        id: c.id,
+        customerId: c.customer_id,
+        name: c.name || "",
+        role: c.role || "",
+        phone: c.phone || "",
+        email: c.email || "",
+        notes: c.notes || "",
+        isPrimary: !!c.is_primary,
+        isBilling: !!c.is_billing,
+      })));
+    } catch (e) { console.error("DB load error:", e); }
+    setDbLoading(false);
+  };
+
   useEffect(() => {
     if (!user) return;
-    const fetchAll = async () => {
-      setDbLoading(true);
-      try {
-        const cid = await getOrCreateCompany(user.id);
-        if (!cid) { setDbLoading(false); return; }
-
-        // Load members for team management via the get_company_members
-        // RPC — a SECURITY DEFINER function that safely exposes
-        // auth.users.email for members of the caller's own company.
-        // Returns rows with a user_email column alongside the normal
-        // company_members fields.
-        const { data: mem } = await db.rpc("get_company_members", { p_company_id: cid });
-        if (mem) setMembers(mem);
-
-        const [j, inv, enq, mat, cust, contacts] = await Promise.all([
-          db.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
-          db.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
-          db.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
-          db.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
-          db.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
-          db.from("customer_contacts").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
-        ]);
-        if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
-        if (inv.data) setInvoicesRaw(inv.data.map(r => ({
-          ...r,
-          vatEnabled: r.vat_enabled, vatRate: parseFloat(r.vat_rate) || 20,
-          vatType: r.vat_type || "", vatZeroRated: r.vat_zero_rated || false,
-          isQuote: r.is_quote, paymentMethod: r.payment_method,
-          amount: parseFloat(r.amount) || 0,
-          grossAmount: parseFloat(r.gross_amount || r.amount) || 0,
-          jobRef: r.job_ref || "", address: r.address || "", email: r.email || "",
-          lineItems: Array.isArray(r.line_items) ? r.line_items : (r.line_items ? JSON.parse(r.line_items) : []),
-          materialItems: Array.isArray(r.material_items) ? r.material_items : (r.material_items ? JSON.parse(r.material_items) : []),
-          cisEnabled: r.cis_enabled || false, cisRate: parseFloat(r.cis_rate) || 20,
-          cisLabour: parseFloat(r.cis_labour) || 0,
-          cisMaterials: parseFloat(r.cis_materials) || 0,
-          cisDeduction: parseFloat(r.cis_deduction) || 0,
-          cisNetPayable: parseFloat(r.cis_net_payable) || 0,
-          // Chase tracking — DB uses snake_case, in-memory uses camelCase.
-          // Mirror both so everywhere that reads either form works correctly.
-          // See chase_invoice tool handler for the write side.
-          chaseCount: r.chase_count || 0,
-          lastChased: r.last_chased_at || null,
-        })));
-        if (enq.data) setEnquiriesRaw(enq.data);
-        if (mat.data) setMaterialsRaw(mat.data.map(m => ({
-          id: m.id,
-          item: m.item || "",
-          qty: m.qty || 1,
-          unitPrice: m.unit_price || 0,
-          supplier: m.supplier || "",
-          job: m.job || "",
-          status: m.status || "to_order",
-          receiptId: m.receipt_id || "",
-          receiptSource: m.receipt_source || "",
-          receiptFilename: m.receipt_filename || "",
-          receiptImage: m.receipt_image || "", // base64 image stored in Supabase
-        })));
-        if (cust.data) setCustomersRaw(cust.data);
-        if (contacts.data) setCustomerContactsRaw(contacts.data.map(c => ({
-          id: c.id,
-          customerId: c.customer_id,
-          name: c.name || "",
-          role: c.role || "",
-          phone: c.phone || "",
-          email: c.email || "",
-          notes: c.notes || "",
-          isPrimary: !!c.is_primary,
-          isBilling: !!c.is_billing,
-        })));
-      } catch (e) { console.error("DB load error:", e); }
-      setDbLoading(false);
-    };
     fetchAll();
   }, [user?.id]);
+
+  // Manual refresh — bound to the header refresh button and exposed via
+  // window._tradePaRefresh so anywhere else (e.g. a future pull-to-refresh
+  // gesture, or an AI tool case) can trigger it without prop-drilling.
+  // Also re-fetches in-app notifications so the bell badge stays in sync.
+  // Bumping jobsRefreshKey forces JobsTab to re-mount which re-runs its
+  // own per-tab loaders.
+  const refreshAllData = async () => {
+    if (dbLoading) return; // prevent rapid double-taps
+    await Promise.all([
+      fetchAll(),
+      loadInAppNotifs(),
+    ]);
+    setJobsRefreshKey(k => k + 1);
+  };
+  useEffect(() => {
+    window._tradePaRefresh = refreshAllData;
+    return () => { delete window._tradePaRefresh; };
+  }, [dbLoading]);
 
   // ── Company-aware Supabase setters ────────────────────────────────────────
   const setJobs = (updater) => {
@@ -30443,15 +30527,48 @@ function AppInner() {
           </div>
           {/* Right: bell + avatar */}
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {/* Manual refresh — re-fetches jobs/invoices/enquiries/materials/
+                customers/notifications from Supabase. Tradies on flaky 4G
+                often have stale state (especially after voice-driven changes
+                from another device); this button is the explicit "give me
+                the latest" without losing app state, modals, or AI context. */}
+            <button
+              onClick={() => { if (typeof window._tradePaRefresh === "function") window._tradePaRefresh(); }}
+              disabled={dbLoading}
+              aria-label="Refresh data"
+              title="Refresh"
+              style={{
+                width: 36, height: 36,
+                background: "transparent",
+                border: "none",
+                borderRadius: 10,
+                color: dbLoading ? C.amber : C.textDim,
+                cursor: dbLoading ? "wait" : "pointer",
+                display: "grid", placeItems: "center",
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: dbLoading ? "spin 0.9s linear infinite" : "none", transformOrigin: "center" }}>
+                <polyline points="23 4 23 10 17 10" />
+                <polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg>
+            </button>
             {/* Notification bell with count.
-                The badge combines three signals in priority order:
+                The badge surfaces two signals in priority order:
                   1. alertCount (overdue/due-now reminders) — red, most urgent
                   2. unreadNotifCount (in-app notifs — customer viewed, etc) — amber
-                  3. upcomingCount (future reminders) — amber
-                Tapping opens the Notifications view; a link to Reminders
-                lives inside that view. */}
+                Future reminders are NOT badged here — they're surfaced via the
+                Reminders bottom-nav badge instead. Otherwise the bell would
+                claim "you have things to look at" when tapping it leads to a
+                panel that doesn't show reminders.
+                Tap routing: red badge → Reminders (the actionable surface for
+                overdue items). Amber badge → Notifications. Both → Notifications
+                (it has links into Reminders inside it). */}
             <button
-              onClick={() => setView("Notifications")}
+              onClick={() => {
+                if (alertCount > 0 && unreadNotifCount === 0) setView("Reminders");
+                else setView("Notifications");
+              }}
               aria-label="Notifications"
               style={{
                 position: "relative",
@@ -30467,7 +30584,7 @@ function AppInner() {
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: bellFlash ? "bellPulse 0.4s ease 3" : "none" }}>
                 <path d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              {(alertCount > 0 || unreadNotifCount > 0 || upcomingCount > 0) && (
+              {(alertCount > 0 || unreadNotifCount > 0) && (
                 <div style={{
                   position: "absolute",
                   top: 2, right: 2,
@@ -30480,7 +30597,7 @@ function AppInner() {
                   fontSize: 10, fontWeight: 700,
                   display: "grid", placeItems: "center",
                   border: `2px solid ${C.surface}`,
-                }}>{alertCount > 0 ? alertCount : (unreadNotifCount + upcomingCount)}</div>
+                }}>{alertCount > 0 ? alertCount : unreadNotifCount}</div>
               )}
             </button>
             {/* Avatar button — opens dropdown menu */}
