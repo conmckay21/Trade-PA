@@ -5,8 +5,9 @@
 // This keeps Twilio as the bridge so recording always works
 
 import twilio from 'twilio';
+import { withSentry } from "../lib/sentry.js";
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { userId, callerNumber, customerName, confName, forwardTo } = req.query;
   const event = req.body?.StatusCallbackEvent;
   const participantCount = parseInt(req.body?.ParticipantCount || '0');
@@ -78,3 +79,5 @@ export default async function handler(req, res) {
     }
   }
 }
+
+export default withSentry(handler, { routeName: "calls/conf-status" });
