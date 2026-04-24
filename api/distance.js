@@ -2,6 +2,8 @@
 // Uses postcodes.io (free, no API key, government-backed) for geocoding
 // Handles voice-transcribed postcodes: "P 063 Sugar Golf" → "PO6 3SG"
 
+import { withSentry } from "./lib/sentry.js";
+
 const PHONETIC = {
   alpha:'A', bravo:'B', charlie:'C', delta:'D', echo:'E', foxtrot:'F',
   golf:'G', hotel:'H', india:'I', juliet:'J', kilo:'K', lima:'L',
@@ -112,7 +114,7 @@ async function getCoords(address) {
   throw new Error(`Could not locate "${address}". ${hint}`);
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { from, to } = req.body || {};
@@ -146,3 +148,5 @@ export default async function handler(req, res) {
     return res.status(422).json({ error: e.message });
   }
 }
+
+export default withSentry(handler, { routeName: "distance" });
