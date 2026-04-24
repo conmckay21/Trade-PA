@@ -3,7 +3,9 @@
 // Handles: quote follow-ups, appointment reminders, review requests
 // Each user with an email connection gets checked independently
 
-export default async function handler(req, res) {
+import { withSentry } from "./lib/sentry.js";
+
+async function handler(req, res) {
   // Accept both POST (manual trigger) and GET (Vercel cron)
   if (req.method !== "POST" && req.method !== "GET") return res.status(405).json({ error: "POST or GET only" });
 
@@ -282,3 +284,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, { routeName: "daily-automation" });
