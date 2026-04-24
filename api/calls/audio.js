@@ -4,7 +4,9 @@
 // This is needed because Twilio recordings require authentication
 // and browsers can't pass auth headers to <audio src="...">
 
-export default async function handler(req, res) {
+import { withSentry } from "../lib/sentry.js";
+
+async function handler(req, res) {
   const { url } = req.query;
 
   if (!url) {
@@ -46,3 +48,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Internal error" });
   }
 }
+
+export default withSentry(handler, { routeName: "calls/audio" });
