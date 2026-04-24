@@ -1,7 +1,9 @@
 // api/push/subscribe.js
 // Saves or removes a push subscription for a user
 
-export default async function handler(req, res) {
+import { withSentry } from "../lib/sentry.js";
+
+async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
   const { userId, subscription, action } = req.body;
@@ -43,3 +45,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, { routeName: "push/subscribe" });
