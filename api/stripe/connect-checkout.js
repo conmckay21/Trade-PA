@@ -13,6 +13,7 @@
 // notifies the tradesperson.
 
 import Stripe from "stripe";
+import { withSentry } from "../lib/sentry.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -47,7 +48,7 @@ function redirectBack(res, url) {
   res.end();
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).send("POST only.");
@@ -142,3 +143,5 @@ export default async function handler(req, res) {
     return res.status(500).send(`Couldn't start payment: ${(err.message || "").slice(0, 120)}`);
   }
 }
+
+export default withSentry(handler, { routeName: "stripe/connect-checkout" });
