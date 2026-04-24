@@ -14,6 +14,12 @@ const BILLING_EMAIL  = "billing@tradespa.co.uk";
 const HELLO_EMAIL    = "hello@tradespa.co.uk";
 const PRIVACY_URL    = `${APP_URL}/privacy`;
 
+// Companies Act 2006 s.82 — business emails/letters must show company name,
+// registered number, place of registration. Rendered in the shared footer
+// of every transactional email. Single source of truth: change here, it
+// propagates to welcome / trial-ending / payment-failed / reminder / auth.
+const COMPANY_LEGAL = "Trade PA Ltd · Registered in England &amp; Wales · Company No. 17176983";
+
 const FROM_HELLO   = `Trade PA <${HELLO_EMAIL}>`;
 const FROM_BILLING = `Trade PA Billing <${BILLING_EMAIL}>`;
 
@@ -139,7 +145,7 @@ ${content}
 </td></tr>
 <tr><td style="padding:20px 40px;background:#fafafa;border-top:1px solid #e5e5ea;font-size:13px;color:#86868b;line-height:1.6;">
 ${footerNote ? `<p style="margin:0 0 12px;">${footerNote}</p>` : ""}
-<p style="margin:0 0 4px;">Trade PA · United Kingdom</p>
+<p style="margin:0 0 4px;">${COMPANY_LEGAL}</p>
 <p style="margin:0;">
 <a href="mailto:${SUPPORT_EMAIL}" style="color:#0066ff;text-decoration:none;">Support</a>
 &nbsp;·&nbsp;
@@ -309,7 +315,117 @@ Questions? Reply to this email.
 // Action URLs include reminder_id + user_id in query string. The action
 // handler (/api/reminders/action.js) verifies both UUIDs match before acting.
 // No HMAC needed — 2 x UUIDv4 = 2^256 entropy, practically unguessable.
-export async function sendReminder({ to, reminderId, userId, text: reminderText, fireAt, createdAt }) {
+//
+// relatedContext (optional): { type, data } object from the cron's enrichment
+// lookup. When present, renders a context block between the reminder text
+// and the action buttons showing relevant details (invoice amount + status,
+// job address, customer phone, etc). When null/undefined, email renders
+// exactly as before — existing plain reminders unaffected.
+
+// Format a currency value for display. Empty string if not a number.
+function formatMoney(n) {
+  const num = parseFloat(n);
+  if (!isFinite(num)) return "";
+  return "£" + num.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Render the status pill HTML for invoices — matches the in-app colour
+// vocabulary loosely (green=paid, amber=sent/overdue, grey=draft).
+function invoiceStatusPill(status) {
+  const s = String(status || "").toLowerCase();
+  let bg = "#e8e8ed", fg = "#1d1d1f", label = s || "—";
+  if (s === "paid")         { bg = "#e8f8ee"; fg = "#1e7c3a"; label = "Paid"; }
+  else if (s === "overdue") { bg = "#fdecec"; fg = "#b42318"; label = "Overdue"; }
+  else if (s === "sent")    { bg = "#fff4e5"; fg = "#a86200"; label = "Sent"; }
+  else if (s === "draft")   { bg = "#e8e8ed"; fg = "#545458"; label = "Draft"; }
+  else if (s === "accepted"){ bg = "#e8f8ee"; fg = "#1e7c3a"; label = "Accepted"; }
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${bg};color:${fg};font-size:12px;font-weight:600;">${escapeHtml(label)}</span>`;
+}
+
+// Render the context block shown in enriched reminder emails. Keep it tight
+// — a few key fields per type, nothing more. If a field is missing it's
+// just omitted; layout survives.
+function renderRelatedContext(ctx) {
+  if (!ctx || !ctx.data) return "";
+  const d = ctx.data;
+  let heading = "", rows = [];
+  if (ctx.type === "invoice") {
+    heading = d.is_quote ? "📄 Quote" : "💷 Invoice";
+    const amount = d.gross_amount ?? d.amount;
+    rows.push(["Customer", escapeHtml(d.customer || "—")]);
+    if (amount != null && formatMoney(amount)) rows.push(["Amount", formatMoney(amount)]);
+    if (d.status) rows.push(["Status", invoiceStatusPill(d.status)]);
+    if (d.due) rows.push(["Due", escapeHtml(d.due)]);
+  } else if (ctx.type === "job") {
+    heading = "🔨 Job";
+    rows.push(["Customer", escapeHtml(d.customer || "—")]);
+    if (d.title || d.type) rows.push(["Job", escapeHtml(d.title || d.type)]);
+    if (d.address) rows.push(["Address", escapeHtml(d.address)]);
+    if (d.value) rows.push(["Value", formatMoney(d.value)]);
+    if (d.status) rows.push(["Status", escapeHtml(String(d.status).replace(/_/g, " "))]);
+  } else if (ctx.type === "customer") {
+    heading = "👤 Customer";
+    rows.push(["Name", escapeHtml(d.name || "—")]);
+    if (d.phone) rows.push(["Phone", escapeHtml(d.phone)]);
+    if (d.email) rows.push(["Email", escapeHtml(d.email)]);
+    if (d.address) rows.push(["Address", escapeHtml(d.address)]);
+  } else if (ctx.type === "enquiry") {
+    heading = d.urgent ? "📩 Enquiry (urgent)" : "📩 Enquiry";
+    rows.push(["From", escapeHtml(d.name || "—")]);
+    if (d.source) rows.push(["Source", escapeHtml(d.source)]);
+    if (d.msg) rows.push(["Message", escapeHtml(truncate(d.msg, 160))]);
+    if (d.status) rows.push(["Status", escapeHtml(d.status)]);
+  } else {
+    return "";
+  }
+  const rowHtml = rows.map(([k, v]) => `
+    <tr>
+      <td style="padding:4px 12px 4px 0;color:#86868b;font-size:13px;vertical-align:top;width:80px;">${escapeHtml(k)}</td>
+      <td style="padding:4px 0;color:#1d1d1f;font-size:14px;">${v}</td>
+    </tr>`).join("");
+  return `
+<div style="padding:16px 20px;background:#ffffff;border:1px solid #e5e5ea;border-radius:12px;margin:0 0 20px;">
+  <p style="margin:0 0 12px;font-size:13px;color:#86868b;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">${heading}</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;">${rowHtml}</table>
+</div>`;
+}
+
+// Plain-text version of the context block for email clients that show text.
+function renderRelatedContextText(ctx) {
+  if (!ctx || !ctx.data) return "";
+  const d = ctx.data;
+  const lines = [];
+  if (ctx.type === "invoice") {
+    const amount = d.gross_amount ?? d.amount;
+    lines.push(d.is_quote ? "Quote" : "Invoice");
+    if (d.customer) lines.push(`  Customer: ${d.customer}`);
+    if (amount != null && formatMoney(amount)) lines.push(`  Amount:   ${formatMoney(amount)}`);
+    if (d.status) lines.push(`  Status:   ${d.status}`);
+    if (d.due) lines.push(`  Due:      ${d.due}`);
+  } else if (ctx.type === "job") {
+    lines.push("Job");
+    if (d.customer) lines.push(`  Customer: ${d.customer}`);
+    if (d.title || d.type) lines.push(`  Job:      ${d.title || d.type}`);
+    if (d.address) lines.push(`  Address:  ${d.address}`);
+    if (d.value) lines.push(`  Value:    ${formatMoney(d.value)}`);
+    if (d.status) lines.push(`  Status:   ${String(d.status).replace(/_/g, " ")}`);
+  } else if (ctx.type === "customer") {
+    lines.push("Customer");
+    if (d.name) lines.push(`  Name:     ${d.name}`);
+    if (d.phone) lines.push(`  Phone:    ${d.phone}`);
+    if (d.email) lines.push(`  Email:    ${d.email}`);
+    if (d.address) lines.push(`  Address:  ${d.address}`);
+  } else if (ctx.type === "enquiry") {
+    lines.push(d.urgent ? "Enquiry (urgent)" : "Enquiry");
+    if (d.name) lines.push(`  From:     ${d.name}`);
+    if (d.source) lines.push(`  Source:   ${d.source}`);
+    if (d.msg) lines.push(`  Message:  ${truncate(d.msg, 160)}`);
+    if (d.status) lines.push(`  Status:   ${d.status}`);
+  }
+  return lines.length ? "\n" + lines.join("\n") + "\n" : "";
+}
+
+export async function sendReminder({ to, reminderId, userId, text: reminderText, fireAt, createdAt, relatedContext }) {
   const safeText    = String(reminderText || "").trim() || "Reminder";
   const subject     = `Reminder: ${truncate(safeText, 60)}`;
   const fireDateStr = formatDateLocal(fireAt);
@@ -322,12 +438,16 @@ export async function sendReminder({ to, reminderId, userId, text: reminderText,
 
   const preheader = `${safeText} — ${fireDateStr} at ${fireTimeStr}`;
 
+  const contextHtml = renderRelatedContext(relatedContext);
+  const contextText = renderRelatedContextText(relatedContext);
+
   const content = `
 <h1 style="margin:0 0 16px;font-size:22px;font-weight:600;color:#1d1d1f;">⏰ Reminder</h1>
-<div style="padding:20px;background:#f5f5f7;border-radius:12px;margin:0 0 24px;">
+<div style="padding:20px;background:#f5f5f7;border-radius:12px;margin:0 0 20px;">
   <p style="margin:0 0 8px;font-size:17px;color:#1d1d1f;line-height:1.5;">${escapeHtml(safeText)}</p>
   <p style="margin:0;font-size:14px;color:#86868b;">Due <strong>${escapeHtml(fireDateStr)}</strong> at <strong>${escapeHtml(fireTimeStr)}</strong></p>
 </div>
+${contextHtml}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px;">
 <tr>
   <td style="padding:0 3px 0 0;" width="33%">
@@ -347,7 +467,7 @@ export async function sendReminder({ to, reminderId, userId, text: reminderText,
   const text = `⏰ Reminder: ${safeText}
 
 Due ${fireDateStr} at ${fireTimeStr}
-
+${contextText}
 Mark done:     ${doneUrl}
 Snooze 1 hour: ${snoozeUrl}
 Open app:      ${APP_URL}
