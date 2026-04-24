@@ -1,5 +1,6 @@
 // api/xero/create-bill.js
 import { createClient } from '@supabase/supabase-js';
+import { withSentry } from "../lib/sentry.js";
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 async function refreshXeroToken(userId, refreshToken) {
@@ -42,7 +43,7 @@ async function getOrCreateContact(accessToken, tenantId, supplierName) {
   return createData.Contacts?.[0]?.ContactID;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { userId, material } = req.body;
   if (!userId || !material) return res.status(400).json({ error: 'Missing userId or material' });
@@ -135,3 +136,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, { routeName: "xero/create-bill" });
