@@ -1,4 +1,6 @@
-export default async function handler(req, res) {
+import { withSentry } from "../lib/sentry.js";
+
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { userId, invoice } = req.body;
@@ -172,3 +174,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, { routeName: "xero/create-invoice" });
