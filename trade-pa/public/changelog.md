@@ -4,6 +4,18 @@
 
 ## 2026-04-24
 
+### Multi-action fixes: the assistant's better at juggling now 🤹
+
+When you rattle off several things at once — "invoice Smith £900, log 4 hours on Wilson, and remind me to chase Thompson" — the assistant was already pretty good at handling that, but there were some edge cases that needed tightening. Fixed a genuine bug where creating a new customer and invoicing them in the same breath meant the invoice couldn't find the customer's address (React state hadn't caught up yet — now it does, through a within-turn tracker). Raised the internal "how many rounds of tool-calling" limit from 5 to 8 so big batches don't get silently cut off mid-way. Added a batch of prompt rules covering: what to do when one action in a batch is ambiguous (do the clear ones first, ask about the ambiguous one), how to phrase delete confirmations when they're mixed with other actions (so "yes" can't be misread), how to handle a closing phrase that's fused with actions ("...thanks, that's everything"), how to link a mileage second-leg properly, and when NOT to claim "the biggest" or "the oldest" without checking.
+
+### Voice assistant: big tune-up across 93 tools 🎙️
+
+Did a proper sweep of every voice command the app understands. Found and fixed four real bugs: the "add a job for Patel" case (where it was asking for a date you never mentioned), empty-payload calls to send/chase invoice (which were silently failing), a conflicting default on "what's expiring" (30 days vs 60 days — now 30), and a contradiction in the mileage command that made it oscillate between "just log it" and asking questions. Beyond those: every voice command now has a proper confirmation template so you hear a consistent "done — here's what I did" at the end of each action. Added smarter disambiguation rules where two things could match (stock "used" vs "received", multiple invoices for the same customer, RAMS step transitions). Tightened guardrails so the AI can't fabricate IDs or log zero-value payments. Full audit report lives at `docs/ai-audit/2026-04-24-voice-tools-audit.md` for anyone who wants to see what was flagged and what changed.
+
+### Smarter reminder linking 🧠
+
+Small tweak to how the assistant decides whether to link a reminder to a specific job, invoice, customer or enquiry. Clearer rules on which signals mean what ("chase X" is almost always an invoice, "call X" is almost always a customer, etc.) and explicit guidance on what to do when the same name matches two things — it'll now ask rather than guess. You should see more reminder emails come through with the full context block attached, rather than falling back to plain text.
+
 ### Quiet groundwork: unified workers + subs table 🏗️
 
 Behind-the-scenes only — no user-visible change. Started consolidating the two separate lists (Workers and Subcontractors) that overlap heavily in practice, into a single underlying table. Today's step: created the new table, copied existing records into it, and wired every add/edit/delete to keep it in sync automatically. The old lists and UI work exactly as before. Over the next couple of sessions we'll migrate the reads over so you eventually see one unified list with a clear employed/self-employed filter instead of two lists you have to flip between.
