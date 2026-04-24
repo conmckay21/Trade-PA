@@ -1,6 +1,7 @@
 // api/quickbooks/create-bills.js
 // Bulk creates purchase bills in QuickBooks for multiple material items
 import { createClient } from '@supabase/supabase-js';
+import { withSentry } from "../lib/sentry.js";
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
@@ -55,7 +56,7 @@ async function getOrCreateVendor(accessToken, baseUrl, tenantId, supplierName) {
   return newVendorData.Vendor?.Id;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { userId, materials } = req.body;
@@ -144,3 +145,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, { routeName: "quickbooks/create-bills" });
