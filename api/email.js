@@ -1,3 +1,5 @@
+import { withSentry } from "./lib/sentry.js";
+
 async function upsertEmailConnection(userId, data) {
   const res = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_connections`, {
     method: "POST",
@@ -72,7 +74,7 @@ function makeGmailRaw({ to, from, subject, body, attachmentBase64, attachmentNam
   return Buffer.from(raw).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const path = req.url.split("?")[0];
 
   // ── Gmail Connect ──────────────────────────────────────────────────────────
@@ -435,3 +437,5 @@ Respond ONLY with JSON:
 
   return res.status(404).json({ error: "Not found" });
 }
+
+export default withSentry(handler, { routeName: "email" });
