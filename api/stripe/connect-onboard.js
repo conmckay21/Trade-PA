@@ -17,6 +17,7 @@
 //   6. User fills form on Stripe → Stripe redirects to return_url (our callback).
 
 import Stripe from "stripe";
+import { withSentry } from "../lib/sentry.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -52,7 +53,7 @@ async function writeBrandData(userId, brandData) {
   );
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).send("GET only.");
@@ -115,3 +116,5 @@ export default async function handler(req, res) {
     res.end();
   }
 }
+
+export default withSentry(handler, { routeName: "stripe/connect-onboard" });
