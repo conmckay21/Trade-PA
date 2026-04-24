@@ -24,6 +24,8 @@
 //   date          — human-readable display string fallback
 //   customer, address, type, status, value, notes  — event details
 
+import { withSentry } from "./lib/sentry.js";
+
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
   process.env.VITE_SUPABASE_URL;
@@ -126,7 +128,7 @@ function buildICS(jobs, brandName) {
   return lines.join("\r\n") + "\r\n";
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD");
     return res.status(405).end();
@@ -178,3 +180,5 @@ export default async function handler(req, res) {
     return sendText(res, 500, `Calendar error: ${err.message.slice(0, 200)}`);
   }
 }
+
+export default withSentry(handler, { routeName: "calendar" });
