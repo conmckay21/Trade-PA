@@ -1,4 +1,6 @@
-export default function handler(req, res) {
+import { withSentry } from "../../lib/sentry.js";
+
+function handler(req, res) {
   const clientId = process.env.XERO_CLIENT_ID;
   const redirectUri = process.env.XERO_REDIRECT_URI;
   const scope = 'openid profile email accounting.invoices accounting.contacts offline_access';
@@ -13,3 +15,5 @@ export default function handler(req, res) {
 
   res.redirect(url.toString());
 }
+
+export default withSentry(handler, { routeName: "auth/xero/connect" });
