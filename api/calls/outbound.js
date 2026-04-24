@@ -2,7 +2,9 @@
 // TwiML App URL — Twilio calls this when the in-app Device makes an outbound call
 // Params sent from the app via device.connect({ params: { To, userId, customerName } })
 
-export default async function handler(req, res) {
+import { withSentry } from "../lib/sentry.js";
+
+async function handler(req, res) {
   const { To, userId, customerName } = req.body || {};
 
   if (!To || !userId) {
@@ -56,3 +58,5 @@ export default async function handler(req, res) {
 </Response>`);
   }
 }
+
+export default withSentry(handler, { routeName: "calls/outbound" });
