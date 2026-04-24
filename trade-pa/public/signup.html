@@ -164,13 +164,10 @@
     const planKey = params.get("plan") || "solo_monthly";
 
     const PLAN_LABELS = {
-      solo_monthly:    { name: "Solo",          price: "£49/mo",    interval: "monthly" },
-      solo_annual:     { name: "Solo (annual)", price: "£529/year", interval: "annual" },
-      solo_founding:   { name: "Solo — Founding Member", price: "£39/mo", interval: "monthly" },
-      team_monthly:    { name: "Team",          price: "£89/mo",    interval: "monthly" },
-      team_annual:     { name: "Team (annual)", price: "£961/year", interval: "annual" },
-      pro_monthly:     { name: "Pro",           price: "£129/mo",   interval: "monthly" },
-      pro_annual:      { name: "Pro (annual)",  price: "£1,393/year", interval: "annual" },
+      solo_monthly:     { name: "Solo",     price: "£39/mo",  interval: "monthly" },
+      pro_solo_monthly: { name: "Pro Solo", price: "£59/mo",  interval: "monthly" },
+      team_monthly:     { name: "Team",     price: "£89/mo",  interval: "monthly" },
+      business_monthly: { name: "Business", price: "£129/mo", interval: "monthly" },
     };
 
     const planLabel = PLAN_LABELS[planKey] || PLAN_LABELS.solo_monthly;
