@@ -9131,7 +9131,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             (e.source || "").toLowerCase() === (input.source || "").toLowerCase()
           );
           if (dupEnq) return ""; // Silent dedup
-          const enq = { name: input.name, source: input.source, msg: input.message, time: "Just now", urgent: input.urgent || false };
+          const enq = { id: newEnquiryId(), name: input.name, source: input.source, msg: input.message, time: "Just now", urgent: input.urgent || false, status: "new" };
           setEnquiries(prev => [enq, ...(prev || [])]);
           setLastAction({ type: "enquiry", label: `${input.name} via ${input.source}`, view: "Enquiries" });
           return `Enquiry logged from ${input.name} via ${input.source}.`;
@@ -9233,14 +9233,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "delete_enquiry": {
           const match = (enquiries || []).find(e => e.name.toLowerCase().includes(input.name.toLowerCase()));
           if (!match) return `Couldn't find an enquiry from "${input.name}".`;
-          // Match by id where available. Fall back to identity for in-memory-
-          // only enquiries that predate Supabase sync and have no id yet.
-          // The Supabase write happens automatically via the setEnquiries
-          // wrapper (delete-all-then-reinsert pattern, see top-level setter).
-          // Note: that wrapper assigns NEW UUIDs on every reinsert, so any
-          // future feature relying on stable enquiry ids (e.g. reminders
-          // with related_id) needs the wrapper switched to per-row upsert
-          // first. Out of scope for this fix.
+          // Match by id where available. Fall back to identity for any
+          // in-memory-only enquiry that somehow escaped id assignment (every
+          // creation path now calls newEnquiryId(), but defensive).
+          // The Supabase delete happens automatically via the setEnquiries
+          // wrapper (per-row diff pattern — see top-level setter).
           setEnquiries(prev => (prev || []).filter(e => match.id ? e.id !== match.id : e !== match));
           setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Enquiries" });
           return `Enquiry from ${match.name} deleted.`;
@@ -20087,8 +20084,12 @@ ${availabilityLine}
       const senderName = d.sender_name || d.customer || d.name || "there";
       const enquiryName = d.name || d.customer || d.sender_name || senderName || "Unknown";
 
-      // Create enquiry with full contact details
+      // Create enquiry with full contact details. The ID is generated up
+      // front so the setEnquiries wrapper's per-row upsert writes to a stable
+      // row, and any follow-up (e.g. the push notification handler navigating
+      // to this specific enquiry) can reference it by ID.
       const newEnquiry = {
+        id: newEnquiryId(),
         name: enquiryName,
         source: "Email",
         msg: d.message || action.email_snippet,
@@ -20111,25 +20112,10 @@ ${availabilityLine}
         requireInteraction: true,
       });
 
-      // Also save directly to Supabase so it persists through reloads
-      if (user?.id) {
-        const cid = window._companyId;
-        if (cid) {
-          await window._supabase.from("enquiries").insert({
-            company_id: cid,
-            user_id: user.id,
-            name: enquiryName,
-            source: "Email",
-            msg: d.message || action.email_snippet || "",
-            time: "Just now",
-            urgent: d.urgent || false,
-            status: "new",
-            email: replyTo,
-            phone: d.phone || "",
-            address: d.address || "",
-          }).catch(e => console.error("Enquiry insert:", e.message));
-        }
-      }
+      // Note: no separate Supabase insert here — the setEnquiries wrapper
+      // now persists via per-row upsert (since the 2026-04-24 refactor).
+      // The previous direct insert at this spot was creating duplicates
+      // because the old wipe-and-reinsert wrapper was also writing the row.
 
       // Create or update customer record
       const existingCustomer = (customers || []).find(c =>
@@ -21236,7 +21222,7 @@ function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoic
 
   function addEnquiry() {
     if (!form.name) return;
-    const enq = { ...form, id: Date.now(), time: "Just now", status: "new" };
+    const enq = { ...form, id: newEnquiryId(), time: "Just now", status: "new" };
     setEnquiries(prev => [enq, ...(prev || [])]);
     setShowAdd(false);
     setForm({ name: "", phone: "", email: "", address: "", source: "Phone", msg: "", urgent: false });
@@ -28238,6 +28224,27 @@ function generatePortalToken() {
     .map(b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
 }
 
+// Generate a proper UUID for enquiry IDs (and any other client-generated id
+// that needs to match a Postgres uuid column). crypto.randomUUID() is the
+// clean modern path; fall back to a manual v4-shape build using
+// getRandomValues for older browsers that don't have randomUUID yet.
+//
+// Why this matters: the setEnquiries wrapper used to wipe-and-reinsert the
+// whole enquiries table on every write, which hid the fact that in-memory
+// enquiries had inconsistent id types (missing, Date.now() numbers, or
+// uuids depending on entry path). With per-row upsert, IDs must match the
+// uuid column type — so every creation path now generates one up front.
+function newEnquiryId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10
+  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+
 // ─── Portal link panel ──────────────────────────────────────────────────────
 // Shared UI for the quote/invoice detail pages. Shows the customer portal
 // URL with a copy button + context-appropriate explainer. Caller passes:
@@ -30010,19 +30017,52 @@ function AppInner() {
     });
   };
 
+  // ─── Enquiries sync wrapper ──────────────────────────────────────────────
+  // Per-row upsert pattern. Previously this used wipe-and-reinsert on every
+  // mutation which caused IDs to mutate on every write, silently breaking any
+  // feature relying on stable enquiry references (reminders linked by
+  // related_id, push notification deep links, etc).
+  //
+  // Assumes every enquiry now carries a real UUID in `id` — guaranteed by
+  // the three creation paths that use newEnquiryId(): voice create_enquiry
+  // tool, manual Add Enquiry form, and inbox email-to-enquiry conversion.
   const setEnquiries = (updater) => {
     setEnquiriesRaw(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       if (!companyId) return next;
       (async () => {
         try {
-          await db.from("enquiries").delete().eq("company_id", companyId);
-          if (next.length > 0) {
-            await db.from("enquiries").insert(
-              next.map(e => ({ company_id: companyId, user_id: user.id, name: e.name, source: e.source, msg: e.msg, time: e.time, urgent: e.urgent || false, status: e.status || "new", phone: e.phone || "", email: e.email || "", address: e.address || "" }))
-            );
+          const prevIds = new Set(prev.map(e => e.id).filter(Boolean));
+          const nextIds = new Set(next.map(e => e.id).filter(Boolean));
+          // Delete rows that disappeared from the next state
+          for (const id of prevIds) {
+            if (!nextIds.has(id)) {
+              await db.from("enquiries").delete().eq("id", id).eq("company_id", companyId);
+            }
           }
-        } catch (e) { console.error("Enquiries sync:", e); }
+          // Insert new rows + update changed rows
+          for (const e of next) {
+            const row = {
+              company_id: companyId, user_id: user.id,
+              name: e.name, source: e.source, msg: e.msg, time: e.time,
+              urgent: e.urgent || false, status: e.status || "new",
+              phone: e.phone || "", email: e.email || "", address: e.address || "",
+            };
+            if (!e.id || !prevIds.has(e.id)) {
+              // New row. If e.id is already a uuid string, pass it through so
+              // the client's reference matches the DB row. If e.id is missing
+              // (shouldn't happen after the creation-path fixes, but defensive),
+              // let Postgres generate one.
+              if (e.id) row.id = e.id;
+              await db.from("enquiries").insert(row);
+            } else {
+              const old = prev.find(x => x.id === e.id);
+              if (JSON.stringify(old) !== JSON.stringify(e)) {
+                await db.from("enquiries").update(row).eq("id", e.id).eq("company_id", companyId);
+              }
+            }
+          }
+        } catch (err) { console.error("Enquiries sync:", err); }
       })();
       return next;
     });
