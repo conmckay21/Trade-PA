@@ -23,6 +23,7 @@
 //   always a normal JSON error response with the right status — never half-streamed.
 
 import { createClient } from '@supabase/supabase-js';
+import { withSentry } from "./lib/sentry.js";
 
 const supabaseAdmin = createClient(
   process.env.VITE_SUPABASE_URL,
@@ -60,7 +61,7 @@ async function isExemptUser(userId) {
   } catch { return false; }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -288,3 +289,5 @@ export default async function handler(req, res) {
     }
   }
 }
+
+export default withSentry(handler, { routeName: "claude" });
