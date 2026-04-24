@@ -1,6 +1,6 @@
 # Workers / Subcontractors unification — migration plan
 
-Status: **Session 1 DONE (2026-04-24)** — table created, backfilled, dual-write shim live
+Status: **Session 2 DONE (2026-04-24)** — all 21 reads migrated to team_members via tmReadWorkers/tmReadSubs helpers. Dual-write remains; drop legacy tables in Session 3.
 Last updated: 2026-04-24
 Author: forensic audit session
 
@@ -92,17 +92,28 @@ The `saveWorker` UI path writes to BOTH `workers` AND `subcontractors` when `typ
 
 Verified end-to-end on production: fake insert → mirror → idempotent re-upsert → clean delete. Database state returned to clean baseline after test.
 
-### Session 2 — read migration
+### Session 2 — read migration ✅ COMPLETE (2026-04-24)
 
-1. Replace all read call-sites (currently 32 total — 16 per table) one subsystem at a time. Order by blast radius:
-   1. `list_workers`, `list_subcontractors` (tool handlers — read only)
-   2. `log_worker_time`, `log_subcontractor_payment` (critical — data integrity)
-   3. `assign_worker_to_job`
-   4. `add_worker_document`
-   5. `SubcontractorsTab` UI component
-   6. Report / export paths
-2. Each replacement reads from `team_members` filtered by `engagement`. Fallback to old tables only if `team_members` row is missing (dual-write should make this rare).
-3. Regression-test after each subsystem.
+**Helpers added** (module-level, after mirror shim in App.jsx ~line 28489):
+- `tmReadWorkers(db, userId, { activeOnly, nameLike, limit })` — drop-in replacement for `from("workers").select(...)`. Queries team_members with `source_table='workers'` filter. Translates result rows to legacy workers shape (`type` from `engagement`, all workers-only columns). Returns `{ data, error }` like supabase-js.
+- `tmReadSubs(db, userId, { activeOnly, nameLike, limit })` — same pattern with `source_table='subcontractors'`. Translates to legacy subcontractors shape (`company` from `company_name`).
+
+Both helpers preserve legacy table-scope semantics exactly — subs reads get subcontractors-mirrored rows, workers reads get workers-mirrored rows. This means the `saveWorker type='subcontractor'` double-write still produces two rows for the same human, which Session 3 dedupes.
+
+`id` in returned rows comes from `source_id` where populated (all current rows have it — backfill + mirror both set it), so downstream `.eq("id", row.id)` against legacy tables still works. When Session 3 drops legacy tables, this behaviour naturally falls back to `tm.id`.
+
+**All 21 read call-sites migrated** across 3 groups:
+- **UI load (2)**: Subcontractors tab initial load (`db.from("subcontractors").select("*")` + `db.from("workers").select("*")` at lines ~25703/25705).
+- **Subcontractor handlers (10)**: add_subcontractor existence check, log_subcontractor_payment sub lookup + workers fallback, list_subcontractors, list_unpaid (by-id lookup via client-side filter), generate_subcontractor_statement, add_worker cross-table check, delete_subcontractor, update_subcontractor_payment, delete_subcontractor_payment, saveWorker's auto-sub-insert existingSub check.
+- **Worker handlers (9)**: add_subcontractor cross-table check, add_worker existence check, list_workers, assign_worker_to_job, log_worker_time (worker lookup + sub fallback), add_worker_document, update_worker, delete_worker.
+
+**Production verification**: team_members contains 1 subcontractor (Lewis Skelton, active=true, source_table='subcontractors', cis_rate=20), 0 workers — exactly matching the legacy state. Dual-write from Session 1 working as designed. No data loss expected on cutover.
+
+**Known short-term duplication** (accepted, Session 3 dedupes): none in current prod — saveWorker type='subcontractor' hasn't been called against the new mirror shim yet. First call would create one row for the user from `workers` table AND one row from the auto-`subcontractors` insert, both mirrored to team_members as separate rows with different source_table values.
+
+**Handler files:**
+- `tmReadWorkers` / `tmReadSubs`: `src/App.jsx` ~28489-28564
+- Example call site: `tmReadSubs(db, user?.id, { nameLike: input.name, limit: 1 })`
 
 ### Session 3 — write-to-team_members-only cutover
 
