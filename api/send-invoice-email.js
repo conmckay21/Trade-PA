@@ -1,242 +1,130 @@
-// api/transcribe.js
-// Server-side transcription endpoint — keeps API keys off the client.
-//
-// Cascade order: Grok STT (primary) → Deepgram (fallback) → Whisper (tertiary).
-// Returns the first successful transcript. If any provider errors or returns
-// empty text, we try the next one — users never see partial failures.
-//
-// ENFORCEMENT LAYER (unchanged from previous version):
-// - Requires Authorization: Bearer <Supabase access token>
-// - NO rate limiting or allowance check: tap-to-talk is "never capped" per pricing.
+// api/send-invoice-email.js
+// Sends invoice/quote/chase emails via Gmail or Outlook.
+// PDF is generated client-side (html2canvas + jsPDF) and passed as base64.
+// Body size is ~600KB-1MB, well within Vercel's 4.5MB limit at 1.5x scale.
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 import { withSentry } from "./lib/sentry.js";
 
-const supabaseAdmin = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+export const config = { maxDuration: 30 };
 
-async function getUserIdFromRequest(req) {
-  const authHeader = req.headers.authorization || req.headers.Authorization;
-  if (!authHeader) return null;
-  const token = authHeader.replace(/^Bearer\s+/i, '');
-  if (!token) return null;
-  try {
-    const { data, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !data?.user) return null;
-    return data.user.id;
-  } catch { return null; }
+function buildMime({ to, subject, htmlBody, pdfBase64, filename }) {
+  const boundary = "TPbnd" + Date.now();
+  const encSubject = `=?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`;
+
+  if (!pdfBase64) {
+    // Simple HTML email
+    return [
+      `To: ${to}`,
+      `Subject: ${encSubject}`,
+      "MIME-Version: 1.0",
+      'Content-Type: text/html; charset="UTF-8"',
+      "",
+      htmlBody,
+    ].join("\r\n");
+  }
+
+  // Multipart with PDF attachment
+  return [
+    `To: ${to}`,
+    `Subject: ${encSubject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "",
+    htmlBody,
+    `--${boundary}`,
+    `Content-Type: application/pdf; name="${filename}"`,
+    "Content-Transfer-Encoding: base64",
+    `Content-Disposition: attachment; filename="${filename}"`,
+    "",
+    pdfBase64.match(/.{1,76}/g).join("\n"),
+    `--${boundary}--`,
+  ].join("\r\n");
 }
 
 async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  // ─── AUTH GATE ───────────────────────────────────────────────────────────
-  const userId = await getUserIdFromRequest(req);
-  if (!userId) {
-    return res.status(401).json({ error: 'unauthorised', message: 'Valid auth token required.' });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { audio, mimeType = 'audio/webm' } = req.body;
-    if (!audio) return res.status(400).json({ error: 'No audio provided' });
-
-    const audioBuffer = Buffer.from(audio, 'base64');
-
-    // ─── PROVIDER CASCADE ──────────────────────────────────────────────────
-    // Each attempt returns { text } on success or throws / returns null on failure.
-    // We log which provider succeeded for production monitoring via Sentry.
-    //
-    // Accept rule: the transcript must be present AND at least 2 characters of
-    // real content after trimming. A provider returning "" or " " or "." counts
-    // as a failure — we fall through to the next provider. This catches the
-    // degraded-200 case (Grok observed returning empty strings during outages
-    // in early April) that the old `!== null` check missed silently.
-    const isUsable = (t) => typeof t === "string" && t.trim().length >= 2;
-
-    // 1. GROK STT (primary) — best entity recognition accuracy per xAI benchmarks
-    const grokResult = await tryGrokSTT(audioBuffer, mimeType);
-    if (isUsable(grokResult)) {
-      return res.status(200).json({ text: grokResult, provider: 'grok' });
+    if (!process.env.VITE_SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+      return res.status(500).json({ error: "Missing server env vars (VITE_SUPABASE_URL or SUPABASE_SERVICE_KEY)" });
     }
 
-    // 2. DEEPGRAM (fallback) — proven format support + UK accent tuning
-    const deepgramResult = await tryDeepgram(audioBuffer, mimeType);
-    if (isUsable(deepgramResult)) {
-      return res.status(200).json({ text: deepgramResult, provider: 'deepgram' });
+    const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+
+    const {
+      userId, to, subject,
+      body: htmlBody,
+      pdfBase64 = null,
+      filename = "Invoice.pdf",
+    } = req.body || {};
+
+    if (!userId || !to || !subject || !htmlBody) {
+      return res.status(400).json({ error: "userId, to, subject and body are required" });
     }
 
-    // 3. WHISPER (tertiary) — last resort
-    const whisperResult = await tryWhisper(audioBuffer, mimeType);
-    if (isUsable(whisperResult)) {
-      return res.status(200).json({ text: whisperResult, provider: 'whisper' });
+    const { data: conns, error: connErr } = await supabase
+      .from("email_connections")
+      .select("provider, access_token")
+      .eq("user_id", userId)
+      .limit(1);
+
+    if (connErr || !conns?.length) {
+      return res.status(400).json({ error: "No email account connected. Connect Gmail or Outlook in the Inbox tab." });
     }
 
-    // All three providers failed — return graceful empty transcript
-    console.error('[transcribe] all providers failed or returned empty');
-    return res.status(200).json({ text: '', provider: 'none' });
+    const { provider, access_token } = conns[0];
 
-  } catch (err) {
-    console.error('[transcribe] fatal error:', err.message);
-    return res.status(500).json({ error: err.message });
-  }
-}
+    if (provider === "gmail") {
+      const mime = buildMime({ to, subject, htmlBody, pdfBase64, filename });
+      const gmailRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ raw: Buffer.from(mime).toString("base64url") }),
+      });
 
-// ─── GROK STT ─────────────────────────────────────────────────────────────
-// xAI's Speech-to-Text endpoint (launched April 2026). Uses multipart/form-data.
-// Docs: https://docs.x.ai/developers/model-capabilities/audio/speech-to-text
-//
-// Note: xAI officially supports WAV, MP3, OGG, Opus, FLAC, AAC, MP4, M4A, MKV.
-// webm is NOT officially listed but is often accepted (webm is typically Opus-in-Matroska).
-// If Grok rejects the format, we fall through to Deepgram which handles webm natively.
-async function tryGrokSTT(audioBuffer, mimeType) {
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) {
-    console.log('[transcribe] XAI_API_KEY not set — skipping Grok');
-    return null;
-  }
-
-  try {
-    // Choose a reasonable filename extension from the incoming mimeType.
-    // Container formats Grok auto-detects — the extension is mostly cosmetic
-    // but using a recognised one helps edge cases.
-    const ext = mimeTypeToExtension(mimeType);
-    const filename = `recording.${ext}`;
-
-    // Build multipart form body. Native FormData (available in Node 18+).
-    const form = new FormData();
-    form.append('language', 'en');              // enables Inverse Text Normalization
-    form.append('format', 'true');              // "£1,240" instead of "one thousand two hundred forty pounds"
-    // `file` must be LAST per xAI docs — critical
-    form.append('file', new Blob([audioBuffer], { type: mimeType }), filename);
-
-    // Pin to EU-West-1 regional endpoint — our Vercel functions run in Dublin,
-    // so this keeps the hop inside Europe (~200ms faster than default routing
-    // which may land in US-East-1). Regional endpoints don't auto-fallback on
-    // xAI's side, but our Deepgram cascade catches that case.
-    const res = await fetch('https://eu-west-1.api.x.ai/v1/stt', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        // Content-Type is set automatically by fetch for FormData (with correct boundary)
-      },
-      body: form,
-    });
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '<no body>');
-      console.warn(`[transcribe] Grok STT HTTP ${res.status}: ${errText.slice(0, 300)}`);
-      return null;
-    }
-
-    const data = await res.json();
-    const text = (data?.text || '').trim();
-    if (!text) {
-      console.log('[transcribe] Grok returned empty text — falling through');
-      return null;
-    }
-    return text;
-  } catch (err) {
-    console.warn('[transcribe] Grok STT error:', err.message);
-    return null;
-  }
-}
-
-// ─── DEEPGRAM (FALLBACK) ──────────────────────────────────────────────────
-// Unchanged from the prior primary implementation — nova-2 with en-GB hint.
-// Kept as fallback because Grok may reject webm audio from some clients.
-async function tryDeepgram(audioBuffer, mimeType) {
-  const apiKey = process.env.DEEPGRAM_API_KEY;
-  if (!apiKey) {
-    console.log('[transcribe] DEEPGRAM_API_KEY not set — skipping Deepgram');
-    return null;
-  }
-
-  try {
-    const res = await fetch(
-      'https://api.deepgram.com/v1/listen?model=nova-2&language=en-GB&smart_format=true&punctuate=true',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Token ${apiKey}`,
-          'Content-Type': mimeType,
-        },
-        body: audioBuffer,
+      if (!gmailRes.ok) {
+        const err = await gmailRes.json().catch(() => ({}));
+        return res.status(500).json({ error: err.error?.message || `Gmail error ${gmailRes.status}` });
       }
-    );
+      return res.json({ success: true, provider: "gmail", hasAttachment: !!pdfBase64 });
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '<no body>');
-      console.warn(`[transcribe] Deepgram HTTP ${res.status}: ${errText.slice(0, 300)}`);
-      return null;
+    } else if (provider === "outlook") {
+      const attachments = pdfBase64 ? [{
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: filename, contentType: "application/pdf", contentBytes: pdfBase64,
+      }] : [];
+
+      const graphRes = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            subject,
+            body: { contentType: "HTML", content: htmlBody },
+            toRecipients: [{ emailAddress: { address: to } }],
+            attachments,
+          },
+        }),
+      });
+
+      if (!graphRes.ok && graphRes.status !== 202) {
+        const err = await graphRes.json().catch(() => ({}));
+        return res.status(500).json({ error: err.error?.message || `Outlook error ${graphRes.status}` });
+      }
+      return res.json({ success: true, provider: "outlook", hasAttachment: !!pdfBase64 });
+
+    } else {
+      return res.status(400).json({ error: `Unknown provider: ${provider}` });
     }
 
-    const data = await res.json();
-    const text = (data?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
-    if (!text) {
-      console.log('[transcribe] Deepgram returned empty text — falling through');
-      return null;
-    }
-    return text;
-  } catch (err) {
-    console.warn('[transcribe] Deepgram error:', err.message);
-    return null;
+  } catch (e) {
+    console.error("send-invoice-email:", e);
+    return res.status(500).json({ error: e?.message || "Unexpected error" });
   }
 }
 
-// ─── WHISPER (TERTIARY FALLBACK) ─────────────────────────────────────────
-// OpenAI Whisper as last resort. Slower and less accurate on accents than
-// Deepgram, but works when nothing else does.
-async function tryWhisper(audioBuffer, mimeType) {
-  const openAiKey = process.env.OPENAI_API_KEY;
-  if (!openAiKey) {
-    console.log('[transcribe] OPENAI_API_KEY not set — skipping Whisper');
-    return null;
-  }
-
-  try {
-    const ext = mimeTypeToExtension(mimeType);
-    const form = new FormData();
-    form.append('model', 'whisper-1');
-    form.append('language', 'en');
-    form.append('file', new Blob([audioBuffer], { type: mimeType }), `audio.${ext}`);
-
-    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${openAiKey}` },
-      body: form,
-    });
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '<no body>');
-      console.warn(`[transcribe] Whisper HTTP ${res.status}: ${errText.slice(0, 300)}`);
-      return null;
-    }
-
-    const data = await res.json();
-    const text = (data?.text || '').trim();
-    if (!text) return null;
-    return text;
-  } catch (err) {
-    console.warn('[transcribe] Whisper error:', err.message);
-    return null;
-  }
-}
-
-// ─── HELPERS ──────────────────────────────────────────────────────────────
-function mimeTypeToExtension(mimeType) {
-  const mt = String(mimeType || '').toLowerCase();
-  if (mt.includes('mp4')) return 'mp4';
-  if (mt.includes('m4a')) return 'm4a';
-  if (mt.includes('ogg')) return 'ogg';
-  if (mt.includes('webm')) return 'webm';
-  if (mt.includes('wav')) return 'wav';
-  if (mt.includes('mp3') || mt.includes('mpeg')) return 'mp3';
-  if (mt.includes('flac')) return 'flac';
-  if (mt.includes('aac')) return 'aac';
-  return 'webm'; // sensible default — most browsers record this
-}
-
-export default withSentry(handler, { routeName: "transcribe" });
+export default withSentry(handler, { routeName: "send-invoice-email" });
