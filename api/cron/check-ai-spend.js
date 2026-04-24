@@ -10,6 +10,7 @@
 // plus a flat email-pipeline baseline. Good enough for outlier detection.
 
 import { createClient } from '@supabase/supabase-js';
+import { withSentry } from "../lib/sentry.js";
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
@@ -82,7 +83,7 @@ async function sendAlertEmail(subject, html) {
   }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const start = Date.now();
 
   if (req.headers["authorization"] !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -221,3 +222,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, { routeName: "cron/check-ai-spend" });
