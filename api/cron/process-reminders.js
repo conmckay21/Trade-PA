@@ -15,12 +15,13 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { sendReminder } from "../lib/resend.js";
+import { withSentry } from "../lib/sentry.js";
 
 const QUERY_LOOKAHEAD_MS = 15 * 60 * 1000;       // 15 minutes
 const QUERY_LOOKBEHIND_MS = 24 * 60 * 60 * 1000;  // 24 hours
 const BATCH_LIMIT = 100;                           // process max 100 per run
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // ---- Auth check --------------------------------------------------------
   const auth = req.headers.authorization || "";
   if (!process.env.CRON_SECRET) {
@@ -130,3 +131,5 @@ export default async function handler(req, res) {
   console.log(`[process-reminders] done: sent=${results.sent} failed=${results.failed}`);
   return res.status(200).json(results);
 }
+
+export default withSentry(handler, { routeName: "cron/process-reminders" });
