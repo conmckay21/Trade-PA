@@ -21,6 +21,8 @@
 //   SUPABASE_SERVICE_KEY (or SUPABASE_SERVICE_ROLE_KEY)       — service key
 //                                                               ⚠ Server-only.
 
+import { withSentry } from "./lib/sentry.js";
+
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
   process.env.VITE_SUPABASE_URL;
@@ -586,7 +588,7 @@ async function handleResponse(req, res, action) {
 }
 
 // ─── Handler ────────────────────────────────────────────────────────────────
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return sendText(res, 500, "Portal service unavailable: env vars missing.");
   }
@@ -627,3 +629,5 @@ export default async function handler(req, res) {
     return sendHTML(res, 500, errorPage(null, "Something went wrong", `We couldn't load this page right now. Please try again in a moment. (${err.message.slice(0, 120)})`));
   }
 }
+
+export default withSentry(handler, { routeName: "portal" });
