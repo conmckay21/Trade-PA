@@ -28,14 +28,6 @@ const supabaseAdmin = createClient(
 // to keep the pricing page simple and avoid locking trial customers into
 // 12-month commitments before we know the product sticks. Can be added
 // back later without any data migration.
-//
-// Founding-member programme also removed Apr 2026 — the £39 locked-in
-// founding price became the standard Solo tier, so the separate
-// programme became redundant. Legacy subscription rows with
-// plan="solo_founding" still normalise to "solo" via normalizeTier() in
-// App.jsx. Related columns (is_founding_member, founding_member_slot_number,
-// founding_price_locked_until) remain in the subscriptions table for
-// any historic rows but aren't populated by new signups.
 const PLAN_CATALOGUE = {
   // Solo — £39/mo
   solo_monthly:       { priceEnv: "STRIPE_PRICE_SOLO_MONTHLY",       plan_code: "solo"     },
