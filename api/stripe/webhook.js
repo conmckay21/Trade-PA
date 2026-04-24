@@ -300,9 +300,6 @@ async function handler(req, res) {
             is_in_trial: isInTrial,
             trial_ends_at: trialEndsAt,
             trial_started_at: new Date().toISOString(),
-            is_founding_member: subscription.metadata?.is_founding_member === "true",
-            founding_member_slot_number: subscription.metadata?.founding_slot_number
-              ? parseInt(subscription.metadata.founding_slot_number) : null,
           }),
         });
         console.log(`[webhook] ✓ main sub ${subscription.id} backfilled`);
