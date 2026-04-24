@@ -2,7 +2,155 @@
 
 ---
 
+## 2026-04-24
+
+### Server-side errors now surface to Sentry 🚨
+
+Until now, errors happening server-side — failed reminder emails, broken Stripe webhooks, transcription cascades that all fail — went completely unnoticed unless a tradie complained. Sentry on the frontend was already catching browser errors, but the API routes were dark. Now wrapped with shared error capture across **every single API route** (52 of them — voice pipeline, Stripe webhooks, cron jobs, invoice emails, push notifications, Twilio call handlers, Xero/QuickBooks sync, OAuth callbacks, the lot). Anything that throws server-side now lands in Sentry within seconds with the route name, the user (where identifiable), and the full stack. Means future flaky behaviour gets diagnosed in minutes instead of "hmm, did anyone else hit that?".
+
+(One step on Connor's side to fully activate — see internal ops doc.)
+
+### Two small dedup fixes 🛠️
+
+**Cross-list duplicate catching now sees archived people too.** When you try to add the same person to both your workers and subcontractors lists, the warning we shipped yesterday only checked active records. So if you'd archived someone in one list and tried to add them to the other, it slipped through. Now caught — with a clear message saying they're archived and explaining how to restore.
+
+**Enquiry deletes are slightly more robust.** Tightened the comment on the enquiry-delete code path with a note about a deeper data-handling pattern that needs cleaning up in a future session — doesn't change behaviour today, just makes the intent obvious for anyone reading the code later.
+
+### Stage payments now show up on the job card 💰
+
+Yesterday's fix made stage payment invoices actually save to the database — but the only place to *see* them was the Invoices tab. Now they show up right on the job card itself, in the Profit tab, with the live status of each one. Set up a 30/40/30 split, the three stages appear as their own section showing the amount, the invoice number, and whether each is still a draft, sent, or paid. Quick visual at a glance: "1/3 paid". Tap any stage to jump to Invoices.
+
+### Refresh button up top 🔄
+
+A proper refresh icon next to the bell. Tap it and the app re-fetches your jobs, invoices, enquiries, materials, customers and notifications — without losing your place, kicking you out of any modal, or wiping the AI conversation. The icon spins while it's working. Should mean one less reason to close-and-reopen the app.
+
+### Bell badge counts what the bell actually shows
+
+Pre-existing quirk: the bell icon was counting overdue reminders + notifications + future reminders, but the panel it opened only showed notifications. So you'd clear all your notifications and the badge would still say "2" because it was secretly counting reminders that you'd never see in that panel. Now the badge counts only what the panel surfaces (overdue items + unread notifications), and tapping a red badge takes you straight to Reminders if that's what's actually urgent. Future reminders no longer add to the badge — those still surface via emails, browser push, and the Reminders view's own badge.
+
+---
+
 ## 2026-04-23
+
+### A handful of quiet fixes from the forensic audit 🔧
+
+A few things that were silently misbehaving and are now sorted:
+
+**Failed saves no longer vanish in silence.** If saving a daywork sheet or a compliance certificate ever hit a database error — bad network, odd characters, whatever — the previous code just quietly dropped it and the form closed like it worked. Now you get a clear message telling you what went wrong, so you know to retry instead of finding a missing record two weeks later.
+
+**Mark Done / Snooze on reminder emails now reliably work.** Background change: every reminder you set by voice now carries its proper database ID from the moment it's created. Before, there was a brief gap where the in-app reminder and the database copy had different IDs — which in rare cases meant tapping Mark Done from the reminder email didn't line up with the in-app entry. Fully aligned now.
+
+**"Delete the Patel enquiry" holds up across refreshes.** Small robustness fix — the delete-by-voice path for enquiries now matches by ID rather than object reference, so deletions stick cleanly even if the enquiries list has been refreshed from the server in the background.
+
+**Adding the same person twice across workers and subcontractors is now caught.** If you try to add "John Smith" as a subcontractor but he's already in your workers list (or the other way round), the AI will now tell you where he already lives and suggest updating the existing record, instead of quietly creating two separate entries for the same person. Longer-term the two lists will merge into one — see the internal migration doc — but this closes the gap in the meantime.
+
+### Chase button actually chases now 📨
+
+Before tonight, tapping the Chase button on an invoice just flipped its status from "overdue" back to "sent" — it didn't actually send a chase email. The AI voice command "chase the Patel invoice" worked perfectly; the button on screen did not. Two very different behaviours hiding behind the same ✉ icon. Fixed now: tapping Chase from either the Invoices list or the Payments dashboard sends a real chase email to the customer, same escalation tones as the voice command (gentle reminder → firm follow-up → final notice on chase #3), same PDF attachment, same payment link, same Supabase tracking. A "Chasing..." loading state keeps you informed while it's in flight, and you get a toast confirming which tone went out.
+
+Small related tweak: the Chase button now shows up on "sent" invoices too, not only "overdue" ones. Plenty of jobs sit unpaid for a week or two before they're technically overdue — no reason to wait before giving the customer a nudge.
+
+### Verbal triggers for Xero & QuickBooks expanded 🎙️
+
+The voice assistant now recognises a much wider range of natural phrasings for syncing invoices and receipts to your accounting software. All of these now work for Xero: *"upload that to Xero"*, *"fire it over to Xero"*, *"get that on Xero"*, *"pop that on Xero"*, *"post it to Xero"*, *"log it in Xero"*, *"chuck that in Xero"*, *"stick that on Xero"*, *"Xero that invoice"*. Plus the original triggers still work — "send to Xero", "sync to Xero", "push to Xero". QuickBooks has the same treatment (including shortcuts like "QB that one"). Supplier receipts (for bills, not sales invoices) have their own set: *"upload that receipt to Xero"*, *"log that receipt in Xero"*, etc. Point is you can talk to Trade PA like you'd tell a real PA to do it — no need to remember exact commands.
+
+### Four forensic-audit bug fixes 🔧
+
+**CIS rate now defaults correctly for new subbies and workers.** When you add a subcontractor without a UTR on file, the CIS deduction rate now defaults to **30%** (the HMRC rule for unverified subs), not 20%. If you've got the UTR, it still defaults to 20%. Previously everyone defaulted to 20% regardless — which could have under-deducted tax on unregistered subs and landed you with an HMRC bill later. The AI also now tells you when it's assumed 30% so you can verify and flip to 20% once you've checked the UTR with HMRC.
+
+**Sent invoices and quotes actually show as sent now.** When the AI sends an invoice or quote by email, it correctly flips from "draft" to "sent" status afterwards — previously it stayed marked as draft even after the email went out, which was confusing and risked double-sending. Paid and overdue invoices are never demoted.
+
+**Deleting a CIS statement no longer loses the record.** Under the hood, deleting now archives the statement rather than wiping it — keeps a copy for your HMRC 6-year record retention, but removes it from your active list. Matches the retention promise in the privacy policy.
+
+**Adding a worker twice by accident is now caught.** If you say "add John Smith as a worker" and he's already on your team, the AI now tells you he's already there instead of creating a duplicate. And if John was archived previously, adding him by the same name silently reactivates him with his time logs intact.
+
+### Proper Privacy Policy and Terms of Service live ⚖️
+Full-fat versions of both legal docs are now shipping — the earlier files were skeleton stubs. New versions cover everything regulators actually expect: Trade PA Ltd named as data controller, ICO registration reference (filled in once the ZA number arrives later this week), UK GDPR rights and lawful-basis tables, all 12 third-party processors listed with purpose and location, AI-provider no-training commitments, retention schedule, international transfer safeguards, consumer-contract cancellation rights, 30-day trial terms, all four subscription plans priced correctly, VAT status stated honestly (not yet VAT-registered — prices exclusive), AI output accuracy disclaimers, HMRC/CIS/tax responsibility clarifications, acceptable use, liability caps, and ICO complaints route. Around 3,500 words each. No more placeholder-only pages — these are the versions we'd hand to a solicitor for review without blushing.
+
+### Companies House — we're official ✅
+Trade PA Ltd is now registered in England &amp; Wales (Company No. 17176983). Landed the required Companies Act 2006 disclosures in all the places the law asks for:
+
+- All system emails (welcome, trial-ending, payment-failed, reminders, auth) carry "Trade PA Ltd · Registered in England &amp; Wales · Company No. 17176983" in the footer.
+- Terms of service and Privacy Policy contact cards updated — privacy policy now correctly names Trade PA Ltd as the data controller, terms names it as the contracting party.
+- Marketing site footers (about, pricing, terms, privacy) updated.
+- Customer portal page — quotes and invoices you share with clients now have a tiny "Trade PA Ltd · Company No. 17176983" disclosure below the "Delivered via Trade PA" line.
+
+Your own invoice PDFs are untouched — those are issued by **your** business, not Trade PA Ltd, and correctly show your trading name, VAT number, and (if you want) your own company number via Settings → Business Details.
+
+### Three invisible-but-real bugs fixed 🕵️
+A systematic sweep across every database write in the app turned up three columns the code was trying to write to that didn't actually exist in the database. Each one was causing a silent 400 error that users would never see:
+
+- **Customer phone on invoices** — voice was pulling the phone from the customer record and trying to save it on the invoice so chase tools wouldn't need to re-join tables. Wasn't persisting.
+- **Quote expiry extensions** — extending a quote's validity via the "extend" button was only updating the screen. On reload it reverted to the original expiry.
+- **Editing a worker's address** — saving any edit to a worker from the Workers tab was failing silently if the change included the address field.
+
+All three columns now exist. The writes that had been failing start succeeding the next time those features are used. No data lost; no action needed from you.
+
+### Archiving a sub or worker now keeps their records 🗃️
+Before: if you said "delete Joe" (a subbie), he was hard-deleted from the database — and because the payment records were linked to him by ID, the FK cascade wiped every CIS-deducted payment you'd ever logged for him. That's HMRC-reportable data you're legally required to keep for 6 years. Same risk for workers — delete them and their CSCS cards, right-to-work checks, insurance certs, and job assignment history all vanished.
+
+Now: "delete" for subs and workers means archive. They stop appearing in your active lists, but every payment record, document, time log and job assignment stays in the database untouched. The voice response tells you what was kept ("3 payment records kept for CIS reporting", "8 documents, 2 job assignments kept for HR records"). If you add someone with the same name as an archived contact, they're silently reactivated with their history intact — no need to re-add from scratch.
+
+### Voice commands now work across Schedule AND Jobs 🎯
+Turned out voice had a split brain. If you scheduled a job in your diary ("add Karen's kitchen for Tuesday") and later said "log 2 hours on Karen's kitchen", it would say "no job card found" — because the schedule entry and the rich job card were two different records and voice only looked at one. Now every voice command (log time, add materials, log expenses, add variations, add compliance certs, log daywork) works against scheduled jobs too — the first time you log something, the system quietly creates a job card from your schedule entry so everything attaches properly. The schedule entry stays in your diary; the job card shows up in Jobs with all the tracking. Same goes for "mark Karen's kitchen complete" — now updates both the Schedule entry and the Job Card in one go.
+
+### Deleting a job card no longer risks losing records 🛡️
+Before: if you said "delete Karen's kitchen" by mistake, you could silently lose every time log, customer signature, compliance certificate (CP12, EICR), daywork sheet, site photo, and variation order attached to it. All gone with one voice command. And if the job had any expenses logged against it, the delete would silently fail at the database level — the voice tool said "deleted!" but the job was still there.
+
+Now: nothing attached to the job is deleted. Time logs, certs, variations, photos — all survive the job deletion and become "unattached" records you can reassign or archive later. The voice response tells you exactly what was kept ("5 time logs, 2 certificates, 1 variation kept but unattached"). If the delete fails for any reason, the voice tool surfaces the actual error instead of pretending success.
+
+This is a quiet change but a significant one for HMRC compliance — you're required to keep business records for 6 years and a voice-triggered cascade delete was a legal risk.
+
+### Job expenses finally show up in job profit 📊
+If you said "log £30 parking on the Bishop job", the expense was saved but never actually linked to the job. The job's profit breakdown showed £0 for expenses no matter what. Now when you say "log £30 for fuel on the Jones rewire" or similar, the expense links properly and shows up in that job's profit reckoning. Works off customer name or job title. (Existing unlinked expenses stay where they are — this only affects new ones.)
+
+### Variation orders now update the job's headline total 📈
+When you added a £2k variation to a £10k job, the variation got saved but the job's main value stayed at £10k. Reports reading from the job's headline value came out wrong. Now adding a variation bumps the job's total — so a £10k job + £2k variation shows as £12k. The profit breakdown still shows the two lines separately, nothing changes there — just the top-line figure is honest now.
+
+### Compliance certs without an expiry date no longer error 📅
+Edge case: logging a cert (CP12, EICR, PAT) without specifying an expiry date was trying to save an empty string into a date field, which Postgres rejects. Fixed — empty expiry is now properly saved as "no expiry". Doesn't affect certs with expiries.
+
+### Two voice confirmations were mixed up 🏷️
+When adding a compliance cert or logging daywork and the system needed to disambiguate which job you meant, the prompt said "log daywork to" for certs and "add this certificate to" for daywork. Swapped. Purely cosmetic but confusing — you'd hear the wrong action label in the clarifying question.
+
+### Stage payments now actually save 🪜
+A subtle but bad bug we found by auditing the live database: when you said "set up 30/40/30 stage payments on Karen's job", the system was trying to save it but the column it was writing to didn't exist. Result: every stage-payments call has been silently failing since the feature was added. The column now exists, the migration is applied, the next time you say "set up stage payments on the Bishop job" it will actually save.
+
+### VAT-registered tradies — your VAT setting now sticks 💷
+If you've turned on VAT in your settings (because you're above the £85k threshold), every new invoice and quote created from now on — by voice OR by tapping "+ New Invoice" — will pre-fill VAT enabled at your default rate. Previously, even though the setting existed, every new invoice came in with VAT off and you had to toggle it manually. Same for CIS. So that's a lot of clicks saved per month. (Existing invoices unchanged.)
+
+### Invoices created from a job card now link back to the job 🔗
+When you said "invoice the Bishop kitchen" via voice and the system pulled the line items from the job card to build the invoice — the new invoice was created, but the job card had no idea its invoice existed. So the job stayed showing "no invoice yet" and you couldn't see the relationship. Fixed. The job card now stores the invoice ID and updates its status to "invoiced". Reverse lookups (and "what jobs need invoicing?" reports) now work properly.
+
+### "Mark paid in Xero" now syncs everywhere ✅
+If you used the specific "mark paid in Xero" voice command (separate from the generic "mark invoice paid"), it was only updating Xero — not QuickBooks if you also had that connected, no push notification, no analytics tracking. Now it does everything the generic mark-paid does, plus the explicit Xero confirmation. Same outcome whichever phrasing you use.
+
+### Email-approved quote acceptance now actually saves the invoice 🛟
+When you approved an email saying "yes I accept the quote" via the inbox, the system was creating the invoice in your screen but losing it before it hit the database. Result: the invoice would appear briefly then vanish on next refresh, and the original quote was getting deleted from the system. Now: the new invoice is properly saved, the quote is preserved (marked accepted), AND a job card is auto-created linking them — so when you log time or materials against that customer later, it all attaches to the right job. This brings email approvals in line with the way "Convert to Invoice" works when you tap it manually.
+
+### "I'll get a job booked in" emails no longer assume you're a plumber 🔧
+When an email-accepted quote didn't match any quote in your system (because you hadn't entered one), the app was creating a placeholder job with the type set to "Boiler Installation". If you're a sparks or a roofer that was obviously wrong. Removed the hardcoded type and the placeholder now goes to your Jobs tab as a proper job card, ready for you to fill in the details.
+
+### Mark-paid analytics now match across UI and voice 📊
+Internal — you won't see this directly. When you marked an invoice paid by tapping the button instead of saying it, the action wasn't being logged in our analytics. So the dashboard was undercounting tap-to-pay actions vs voice. Now both routes log the same event with the same data.
+
+### Voice deletes will always confirm before doing anything destructive 🛑
+Voice has a small risk: STT can mishear, especially on cellular. Saying "add a customer called Karen" could in rare cases be heard as "delete a customer called Karen". To be safe, the assistant will now ALWAYS confirm with you before calling any delete action — naming the exact thing being deleted (invoice number, customer name, job title) and waiting for a clear yes before proceeding. If your message is ambiguous (e.g. you have two customers called Smith), it'll list them and ask which one rather than guessing.
+
+### Onboarding won't re-trigger for returning users on slow connections 📱
+If you logged back into Trade PA on a train wifi, cellular out on site, or any flaky connection, the app sometimes thought you were a brand new user and tried to walk you through setup again. That was an old 600ms timing bug — the app was checking your profile too early before the data loaded. Fixed properly now: a specific server flag marks when you've completed setup, checked every login. No more false welcome screens. Also fixes a rare case where anyone whose business name ended with "'s Trades" got pushed through onboarding on every reinstall.
+
+### Voice transcripts won't ever be silent-empty again 🎙
+Minor under-the-hood fix. When our primary speech-to-text provider occasionally returned a blank transcript (rather than an actual error), the app was treating that as success and showing you nothing. Now an empty or too-short result counts as a miss and falls through to the backup providers. Much less likely you'll ever press mic, speak, and see no text come back.
+
+### Enquiry pushes from email approvals now actually fire 📩
+When you approved an enquiry email from the Inbox tab, the "📩 New Enquiry" push notification was supposed to pop up on your phone — but it was silently failing because of a plumbing issue. Fixed. Approve an enquiry email, get the push. Same as it was always meant to work.
+
+### I'll get a morning ping if anyone's costing more than expected 💰
+Internal thing — not user-facing. A new daily check runs at 09:15 UTC that estimates each user's monthly AI spend (Claude conversations, hands-free minutes, email scanning) and emails Connor if anyone is over £10/month. Quiet on normal days, surfaces outliers fast. Helps keep margins honest as user numbers grow.
+
+### Your AI knows what's waiting in your inbox, wherever you ask from 🧠
+Used to be: if you tapped the floating mic from somewhere other than the Inbox tab and asked "anything to approve?", the AI would have to go and check. Now it already knows how many are pending — a live count that updates whenever you approve or dismiss anything, on any screen. Faster answers, less back-and-forth.
 
 ### "Approve that" by voice now actually does the thing 🗣
 This one was a proper silent bug. When you approved an inbox action by voice — "approve that booking" or "yes, mark Dave's invoice as paid" — the action disappeared from your inbox like it worked, but nothing actually happened. No job on the calendar. No confirmation reply to the customer. No invoice marked paid. Approving through the Inbox tab's buttons worked fine; voice was the only path that was broken. Now voice runs the full approval — it creates the job, sends the reply from your own inbox, parses supplier PDFs, marks invoices paid — same as tapping the buttons. Dismissing by voice now also teaches the email classifier why you dismissed, so it stops making the same mistake. And whichever way you approve or dismiss, the other screen refreshes properly.
