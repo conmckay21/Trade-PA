@@ -4,6 +4,14 @@
 
 ## 2026-04-24
 
+### Pricing page rebuilt 💷
+
+The pricing page (tradespa.co.uk/pricing) now matches the actual product. We replaced the three old tiers (Solo £49 / Team £89 / Pro £129 with annual options) with the four real tiers — Solo £39, Pro Solo £59, Team £89, Business £129 — all monthly only, no annual lock-in. Conversation and hands-free caps on each card now match what the app actually allows. The Help Centre articles for plans, monthly limits and free trial have been refreshed to match. Annual plans, the Founding Member offer, and any references to "Pro" as a 10-user tier have all been retired. If you'd been confused by the page saying one thing and the app doing another — that's resolved.
+
+### Founding Member offer retired 👋
+
+We're retiring the Founding Member programme — the £39/mo Solo price that was originally locked in for the first 100 sign-ups is now just the standard Solo price for everyone. Removed the banner, the help article and the slot counter from the pricing page. Existing customers (none yet) wouldn't be affected; this is a forward-looking simplification so the pricing page tells one clean story instead of two.
+
 ### Pro Solo plan: cleaner capacity step-up 🎯
 
 Tightened the Pro Solo conversation cap to 200/month (was 300). Pro Solo now sits as a clean 2× capacity bump from Solo, giving you a logical ladder: 100 (Solo) → 200 (Pro Solo) → 400 (Team) → 800 (Business). If you're a heavy user who was comfortably running on 300, this is the moment to think about whether Team makes sense — you get extra capacity AND up to 5 user seats for £30 more.
