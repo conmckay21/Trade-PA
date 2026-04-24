@@ -50,7 +50,7 @@ const TIER_CONFIG = {
     priceText: "£59",
     priceDisplay: "1 user · £59/mo",
     userLimit: 1,
-    caps: { convos: 300, hf_hours: 3 },
+    caps: { convos: 200, hf_hours: 3 },
     colorKey: "amber",
     stripePlanKey: "pro_solo_monthly",
   },
@@ -854,7 +854,7 @@ function LandingPage({ onAuth }) {
           <div className="lp-pricing-grid">
             {[
               { name: "Solo", price: "£39", period: "/mo", users: "1 user", popular: false, plan: "solo_monthly", features: ["100 AI conversations per month", "1 hour hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Allowance resets 1st of month"] },
-              { name: "Pro Solo", price: "£59", period: "/mo", users: "1 user", popular: true, plan: "pro_solo_monthly", features: ["300 AI conversations per month", "3 hours hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Priority for new features"] },
+              { name: "Pro Solo", price: "£59", period: "/mo", users: "1 user", popular: true, plan: "pro_solo_monthly", features: ["200 AI conversations per month", "3 hours hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Priority for new features"] },
               { name: "Team", price: "£89", period: "/mo", users: "Up to 5 users", popular: false, plan: "team_monthly", features: ["400 AI conversations per month", "4 hours hands-free per month", "Team scheduling & per-user permissions", "Staff timesheets & GPS tracking", "All 43 features included"] },
               { name: "Business", price: "£129", period: "/mo", users: "Up to 10 users", popular: false, plan: "business_monthly", features: ["800 AI conversations per month", "8 hours hands-free per month", "Priority support", "Everything in Team, more capacity", "All 43 features included"] },
             ].map(p => (
@@ -3852,7 +3852,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               {(() => {
                 // Suggest the next tier up from the user's current one.
                 // Business is the ceiling — this block doesn't render above.
-                if (planTier === "solo") return "Pro Solo (£59/mo · 3× capacity), Team (£89/mo · 5 users) or Business (£129/mo · 10 users)";
+                if (planTier === "solo") return "Pro Solo (£59/mo · 2× capacity), Team (£89/mo · 5 users) or Business (£129/mo · 10 users)";
                 if (planTier === "pro_solo") return "Team (£89/mo · 5 users) or Business (£129/mo · 10 users)";
                 if (planTier === "team") return "Business — £129/mo · up to 10 users";
                 return "Business — £129/mo · up to 10 users";
