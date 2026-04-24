@@ -4,6 +4,7 @@
 
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
+import { withSentry } from "../lib/sentry.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -69,7 +70,7 @@ async function getUserIdFromRequest(req) {
   } catch { return null; }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
   const userId = await getUserIdFromRequest(req);
@@ -192,3 +193,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
+export default withSentry(handler, { routeName: "stripe/create-subscription" });
