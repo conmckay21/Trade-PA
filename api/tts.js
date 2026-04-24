@@ -15,6 +15,8 @@
 // No auth gate on TTS — text arrives from the client but the client only
 // speaks Claude's output, so content is effectively server-generated.
 
+import { withSentry } from "./lib/sentry.js";
+
 // Grok's 5 voices as of April 2026. If xAI adds more, extend this list.
 // Deepgram Aura fallback uses its own fixed voice (aura-asteria-en) and
 // doesn't honour the `voice` parameter — it's a fallback for outages, not
@@ -23,7 +25,7 @@
 const ALLOWED_VOICES = new Set(['eve', 'ara', 'leo', 'rex', 'sal']);
 const DEFAULT_VOICE = 'eve';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { text, voice } = req.body || {};
@@ -151,3 +153,5 @@ async function tryDeepgramTTS(text) {
     return null;
   }
 }
+
+export default withSentry(handler, { routeName: "tts" });
