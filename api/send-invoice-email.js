@@ -4,6 +4,7 @@
 // Body size is ~600KB-1MB, well within Vercel's 4.5MB limit at 1.5x scale.
 
 import { createClient } from "@supabase/supabase-js";
+import { withSentry } from "./lib/sentry.js";
 
 export const config = { maxDuration: 30 };
 
@@ -44,7 +45,7 @@ function buildMime({ to, subject, htmlBody, pdfBase64, filename }) {
   ].join("\r\n");
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
@@ -125,3 +126,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: e?.message || "Unexpected error" });
   }
 }
+
+export default withSentry(handler, { routeName: "send-invoice-email" });
