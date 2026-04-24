@@ -4,6 +4,18 @@
 
 ## 2026-04-24
 
+### Ran out of turns? Now you'll know 🕐
+
+If the assistant ever hits its internal processing limit midway through a big request, it now tells you directly instead of failing silently. You'll see a clear message saying "Hit my processing limit partway through — check what landed and let me know what to retry."
+
+### Delete confirmations are now harder to fool 🔐
+
+Fixed a real edge case: if you had multiple invoices for the same customer (say three Smith invoices) and asked to delete "the Smith invoice", the assistant used to silently delete the first match. It now lists the candidates and asks which one. Same for deleting jobs, customers, and enquiries. Also strengthened the voice-safety wording: if a delete is mixed in with other actions, the confirmation question is now phrased so that "yes" can't accidentally confirm the wrong thing.
+
+### Workers and subcontractors now read from a unified table 📚
+
+Internal plumbing: every place the app looks up workers or subbies now reads from a new unified `team_members` table instead of the two separate legacy tables. No visible change — same lists, same data, same UI. This is step 2 of 4 toward simplifying how people are tracked (the old tables stay in place for now and are still being written to in parallel, so nothing breaks). Voice tests over the coming week will confirm everything's working, then steps 3 and 4 will retire the old tables.
+
 ### Multi-action fixes: the assistant's better at juggling now 🤹
 
 When you rattle off several things at once — "invoice Smith £900, log 4 hours on Wilson, and remind me to chase Thompson" — the assistant was already pretty good at handling that, but there were some edge cases that needed tightening. Fixed a genuine bug where creating a new customer and invoicing them in the same breath meant the invoice couldn't find the customer's address (React state hadn't caught up yet — now it does, through a within-turn tracker). Raised the internal "how many rounds of tool-calling" limit from 5 to 8 so big batches don't get silently cut off mid-way. Added a batch of prompt rules covering: what to do when one action in a batch is ambiguous (do the clear ones first, ask about the ambiguous one), how to phrase delete confirmations when they're mixed with other actions (so "yes" can't be misread), how to handle a closing phrase that's fused with actions ("...thanks, that's everything"), how to link a mileage second-leg properly, and when NOT to claim "the biggest" or "the oldest" without checking.
