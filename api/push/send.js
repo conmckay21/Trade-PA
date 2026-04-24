@@ -1,5 +1,6 @@
 // api/push/send.js
 import webpush from "web-push";
+import { withSentry } from "../lib/sentry.js";
 
 webpush.setVapidDetails(
   "mailto:hello@tradespa.co.uk",
@@ -7,7 +8,7 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY
 );
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   const { userId, title, body, url, type, tag } = req.body;
   if (!userId || !title) return res.status(400).json({ error: "userId and title required" });
@@ -47,3 +48,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, { routeName: "push/send" });
