@@ -9233,9 +9233,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "delete_enquiry": {
           const match = (enquiries || []).find(e => e.name.toLowerCase().includes(input.name.toLowerCase()));
           if (!match) return `Couldn't find an enquiry from "${input.name}".`;
-          // Match by id where available (consistent with delete_customer one
-          // case below). Fall back to identity for in-memory-only enquiries
-          // that predate Supabase sync and have no id yet.
+          // Match by id where available. Fall back to identity for in-memory-
+          // only enquiries that predate Supabase sync and have no id yet.
+          // The Supabase write happens automatically via the setEnquiries
+          // wrapper (delete-all-then-reinsert pattern, see top-level setter).
+          // Note: that wrapper assigns NEW UUIDs on every reinsert, so any
+          // future feature relying on stable enquiry ids (e.g. reminders
+          // with related_id) needs the wrapper switched to per-row upsert
+          // first. Out of scope for this fix.
           setEnquiries(prev => (prev || []).filter(e => match.id ? e.id !== match.id : e !== match));
           setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Enquiries" });
           return `Enquiry from ${match.name} deleted.`;
@@ -10111,14 +10116,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             }
             return `${input.name} is already in your subcontractors.`;
           }
-          // Cross-table check: if this name is already an active worker, block
-          // the insert to avoid two records for the same person. Temporary
-          // until workers/subcontractors are unified — see
-          // docs/migrations/workers-subs-unification.md.
+          // Cross-table check: if this name is already in workers (active OR
+          // archived), block the insert to avoid two records for the same
+          // person. Mirrors within-table dedup behaviour which also catches
+          // archived rows. Temporary until workers/subcontractors are
+          // unified — see docs/migrations/workers-subs-unification.md.
           const crossW = await db.from("workers").select("id,name,type,active")
-            .eq("user_id", user?.id).eq("active", true).ilike("name", `%${input.name}%`).limit(1);
+            .eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (crossW.data?.length) {
             const w = crossW.data[0];
+            if (w.active === false) {
+              return `${w.name} is in your workers list but archived. Restore them in Workers if it's the same person, or use a different name to add as a separate subcontractor.`;
+            }
             return `${w.name} is already in your workers list${w.type === "subcontractor" ? " as a subcontractor" : ""}. Open Workers → ${w.name} to update their details, or remove them from workers first if you want to add them as a separate subcontractor record.`;
           }
           // HMRC rule: unregistered/unverified subs attract 30%, registered subs 20%.
@@ -11026,14 +11035,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             }
             return `${input.name} is already in your workers.`;
           }
-          // Cross-table check: if this name is already an active subcontractor,
-          // block the insert to avoid two records for the same person.
-          // Temporary until tables are unified — see
+          // Cross-table check: if this name is already in subcontractors
+          // (active OR archived), block the insert to avoid two records for
+          // the same person. Mirrors within-table dedup behaviour which also
+          // catches archived rows. Temporary until tables are unified — see
           // docs/migrations/workers-subs-unification.md.
           const crossS = await db.from("subcontractors").select("id,name,active")
-            .eq("user_id", user?.id).eq("active", true).ilike("name", `%${input.name}%`).limit(1);
+            .eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
           if (crossS.data?.length) {
             const s = crossS.data[0];
+            if (s.active === false) {
+              return `${s.name} is in your subcontractors list but archived. Restore them in Subcontractors if it's the same person, or use a different name to add as a separate worker.`;
+            }
             return `${s.name} is already in your subcontractors list. Open Subcontractors → ${s.name} to update their details, or remove them from subcontractors first if you want to add them as a worker.`;
           }
           // Same HMRC rule as add_subcontractor for the CIS default
