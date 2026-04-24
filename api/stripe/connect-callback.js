@@ -15,6 +15,7 @@
 // as "they came back" not "they finished" — always re-check the account.
 
 import Stripe from "stripe";
+import { withSentry } from "../lib/sentry.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -56,7 +57,7 @@ function redirectToApp(res, host, proto, params) {
   res.end();
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).send("GET only.");
@@ -102,3 +103,5 @@ export default async function handler(req, res) {
     return redirectToApp(res, host, proto, { stripe_connect: "error", reason: (err.message || "retrieve_failed").slice(0, 80) });
   }
 }
+
+export default withSentry(handler, { routeName: "stripe/connect-callback" });
