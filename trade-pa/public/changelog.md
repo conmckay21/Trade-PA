@@ -4,6 +4,10 @@
 
 ## 2026-04-24
 
+### Smarter AI routing: faster for simple stuff, full power for complex 🎯
+
+The AI assistant now uses two brains instead of one. Simple commands like "log 20 miles to Patel" or "show me my unpaid invoices" get routed to a faster, cheaper AI model (Claude Haiku 4.5). Complex requests that need careful thinking — multi-action batches, "chase the biggest overdue invoice", disambiguation when two customers share a name, mid-RAMS flow — still go to the most capable model (Claude Sonnet 4.6). The routing happens instantly in the background with zero extra wait time (it's a pattern match, not another AI call). You shouldn't notice any difference in quality for the hard stuff, and simple stuff might even feel snappier. A handful of other internal AI tasks — voice-to-form field filling, reminder time parsing, RAMS hazard suggestions — also moved to the faster model since they don't need the heavy lifter. These are small changes individually but together they materially change the economics at scale.
+
 ### Ran out of turns? Now you'll know 🕐
 
 If the assistant ever hits its internal processing limit midway through a big request, it now tells you directly instead of failing silently. You'll see a clear message saying "Hit my processing limit partway through — check what landed and let me know what to retry."
