@@ -11831,6 +11831,64 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   // On mid-stream errors Anthropic/our proxy emits an SSE 'error' event; we
   // convert it to { status:500, ok:false, data:{error:"..."} } so the caller
   // handles it the same way as any other failure.
+  // ─── Voice routing: simple → Haiku, complex → Sonnet ───────────────────────
+  // Heuristic classifier that decides which model handles a voice turn.
+  // Zero latency — pure JS pattern matching, no extra API call. Fires before
+  // the main Claude call.
+  //
+  // Design: SAFER TO OVER-FLAG AS COMPLEX than to miss. A miss sends a
+  // complex request to Haiku and the user feels a quality drop. A false
+  // positive sends a simple request to Sonnet and costs slightly more.
+  // So the patterns below err on the side of complex.
+  //
+  // Context forces complex regardless of text:
+  //   - Active RAMS session (state transitions need Sonnet)
+  //   - Inside a destructive confirmation (voice-safety critical)
+  //
+  // Text patterns that mark complex:
+  //   - Multi-action: "and", "also", "then" joining verbs
+  //   - Superlatives: "biggest", "oldest", "highest" etc. — list-then-act
+  //   - Disambiguation: "that one", "the X one", "whichever"
+  //   - Conditionals: "but first", "before", "unless", "if"
+  //   - Long: >20 words is rarely a single simple command
+  //
+  // Tune the patterns based on real voice telemetry (trackEvent logs every
+  // routing decision — see the call site).
+  const classifyIntentHeuristic = (text, { ramsActive = false, inConfirmation = false } = {}) => {
+    if (ramsActive) return "complex";
+    if (inConfirmation) return "complex";
+    if (!text || typeof text !== "string") return "complex";
+
+    const lower = text.toLowerCase();
+    const wordCount = text.trim().split(/\s+/).length;
+
+    // Any message over 20 words is probably not a trivially simple action
+    if (wordCount > 20) return "complex";
+
+    // Multi-action connectors followed by another action verb
+    // Patterns like "invoice Smith AND log 20 miles" or "X then Y"
+    const multiActionVerbs = /\b(and|also|then|plus|after that)\b[^.!?]*\b(log|add|create|delete|invoice|mark|send|chase|book|remind|set|update|show|list|pay|assign|scrap|remove|cancel)\b/i;
+    if (multiActionVerbs.test(text)) return "complex";
+
+    // Superlatives that require list-then-act reasoning
+    const superlatives = /\b(biggest|smallest|oldest|newest|highest|lowest|most|least|largest|earliest|latest)\b/i;
+    if (superlatives.test(text)) return "complex";
+
+    // Disambiguation pronouns — "that one", "the Smith one", "whichever"
+    const disambiguation = /\b(that one|that invoice|that job|that customer|the \w+ one|whichever|which one)\b/i;
+    if (disambiguation.test(text)) return "complex";
+
+    // Conditional phrasings — hold off, check first, unless, etc.
+    const conditionals = /\b(but first|before (you|i|we|sending|doing)|unless|if (he|she|they|it) (says|doesn'?t|hasn'?t)|hold off|wait until)\b/i;
+    if (conditionals.test(text)) return "complex";
+
+    // "Instead of X, Y" — action replacement
+    if (/\binstead of\b/i.test(lower)) return "complex";
+
+    // Default: simple
+    return "simple";
+  };
+
   const callClaudeStream = async (body, onTextDelta) => {
     const res = await fetch("/api/claude", {
       method: "POST",
@@ -12056,6 +12114,25 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       let data = null;
       let loopError = null;
 
+      // ─── Haiku/Sonnet routing (decision made ONCE per send, reused across
+      // every iteration of the agentic loop — switching model mid-loop would
+      // break prompt caching). Decision is based on the user's raw text plus
+      // whether we're in a stateful context (RAMS) that requires Sonnet.
+      const routeComplexity = classifyIntentHeuristic(text, {
+        ramsActive: !!ramsSession,
+        inConfirmation: false, // reserved for future destructive-confirm state
+      });
+      const routedModel = routeComplexity === "simple"
+        ? "claude-haiku-4-5-20251001"
+        : "claude-sonnet-4-6";
+      // Fire-and-forget telemetry — lets you see routing mix + tune heuristic
+      // over time. Metadata kept small to avoid PII in analytics.
+      trackEvent(db, user?.id, companyId, "model_route", routeComplexity, {
+        model: routedModel,
+        word_count: (text || "").trim().split(/\s+/).length,
+        rams_active: !!ramsSession,
+      });
+
       while (iteration < MAX_AGENTIC_ITERATIONS) {
         iteration += 1;
 
@@ -12063,7 +12140,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         // callClaudeStream returns { status, ok, data } so the downstream
         // limit/error handling below works identically to the non-streaming path.
         const streamResult = await callClaudeStream({
-          model: "claude-sonnet-4-6",
+          model: routedModel,
           max_tokens: 1000,
           system: [
             { type: "text", text: SYSTEM_STABLE, cache: true },
@@ -14977,7 +15054,7 @@ function MicButton({ form, setForm, accentColor }) {
             method: "POST",
             headers: await authHeaders(),
             body: JSON.stringify({
-              model: "claude-sonnet-4-6",
+              model: "claude-haiku-4-5-20251001",
               max_tokens: 400,
               messages: [{
                 role: "user",
@@ -16341,7 +16418,7 @@ Rules:
         method: "POST",
         headers: await authHeaders(),
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: "claude-haiku-4-5-20251001",
           max_tokens: 200,
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: text }],
@@ -18622,7 +18699,7 @@ function CustomerForm({ form, set, onSave, onCancel }) {
             method: "POST",
             headers: await authHeaders(),
             body: JSON.stringify({
-              model: "claude-sonnet-4-6",
+              model: "claude-haiku-4-5-20251001",
               max_tokens: 200,
               messages: [{ role: "user", content: normalisePrompt(fieldKey, text) }],
             }),
@@ -27777,7 +27854,7 @@ function RAMSTab({ user, brand, setContextHint }) {
         method: "POST",
         headers: await authHeaders(),
         body: JSON.stringify({
-          model: "claude-sonnet-4-6", max_tokens: 800,
+          model: "claude-haiku-4-5-20251001", max_tokens: 800,
           messages: [{ role: "user", content: `For this UK trade work: "${form.scope}", return ONLY JSON: {"hazard_ids": ["list of relevant hazard ids from: wah1,wah2,wah3,wah4,wah5,elec1,elec2,elec3,elec4,gas1,gas2,gas3,gas4,gas5,plumb1,plumb2,plumb3,plumb4,mh1,mh2,mh3,pt1,pt2,pt3,pt4,pt5,dust1,dust2,dust3,dust4,stf1,stf2,stf3,fire1,fire2,cs1,cs2,site1,site2,site3,site4"], "method_steps": ["up to 8 specific work steps"]}` }],
         }),
       });
