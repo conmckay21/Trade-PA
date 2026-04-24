@@ -3,6 +3,7 @@
 
 import Stripe from "stripe";
 import { sendWelcome, sendTrialEnding, sendPaymentFailed } from "../lib/resend.js";
+import { withSentry } from "../lib/sentry.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -173,7 +174,7 @@ function deriveTrialState(subscription) {
   return { isInTrial, trialEndsAt };
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
   const sig = req.headers["stripe-signature"];
@@ -425,3 +426,5 @@ export default async function handler(req, res) {
 }
 
 export const config = { api: { bodyParser: false } };
+
+export default withSentry(handler, { routeName: "stripe/webhook" });
