@@ -18,6 +18,7 @@
 // bodyParser disabled so we get the raw bytes Stripe needs to verify the sig.
 
 import Stripe from "stripe";
+import { withSentry } from "../lib/sentry.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const CONNECT_WEBHOOK_SECRET = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
@@ -84,7 +85,7 @@ async function sendPushToUser(req, userId, title, body, tag) {
 
 const fmtGBP = (pence) => `£${(pence / 100).toFixed(2)}`;
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).end();
@@ -160,3 +161,5 @@ export default async function handler(req, res) {
 
 // Required for stripe.webhooks.constructEvent to work with raw bytes
 export const config = { api: { bodyParser: false } };
+
+export default withSentry(handler, { routeName: "stripe/webhook-connect" });
