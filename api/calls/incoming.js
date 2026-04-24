@@ -1,8 +1,9 @@
 // api/calls/incoming.js
 import { createClient } from '@supabase/supabase-js';
+import { withSentry } from "../lib/sentry.js";
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { userId } = req.query;
   const callerNumber = req.body?.From || '';
   const normalised = callerNumber.replace(/\s/g, '');
@@ -136,3 +137,5 @@ export default async function handler(req, res) {
 </Response>`);
   }
 }
+
+export default withSentry(handler, { routeName: "calls/incoming" });
