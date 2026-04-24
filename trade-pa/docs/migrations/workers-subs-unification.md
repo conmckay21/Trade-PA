@@ -1,7 +1,7 @@
 # Workers / Subcontractors unification — migration plan
 
-Status: **PROPOSED** (not executed)
-Last updated: 2026-04-23
+Status: **Session 1 DONE (2026-04-24)** — table created, backfilled, dual-write shim live
+Last updated: 2026-04-24
 Author: forensic audit session
 
 ## Problem
@@ -75,15 +75,22 @@ Row-level security policies mirror the existing ones on `workers` and `subcontra
 
 This is a multi-session piece of work. Rough order:
 
-### Session 1 — schema + dual-write
+### Session 1 — schema + dual-write ✅ COMPLETE (2026-04-24)
 
-1. Create the `team_members` table and RLS policies.
-2. Write a shim layer in `App.jsx` that:
-   - On every `workers` insert, also writes to `team_members` with `engagement='employed'` or `engagement='self_employed'` (based on current `type`).
-   - On every `subcontractors` insert, also writes to `team_members` with `engagement='self_employed'`.
-   - On every `workers`/`subcontractors` update, mirrors the change to the corresponding `team_members` row.
-3. Backfill: copy existing `workers` and `subcontractors` rows into `team_members`. Do not drop old tables.
-4. Verify row counts match after backfill.
+1. ✅ Created the `team_members` table + RLS policy (`team_members_owner`: `auth.uid() = user_id`) + updated_at trigger.
+2. ✅ Added `source_table` + `source_id` columns (not in original design) to track which legacy row each mirror row came from, with a partial unique index on `(user_id, source_table, source_id) WHERE source_table IS NOT NULL` so the shim upsert is idempotent.
+3. ✅ Dual-write shim in `App.jsx` — three module-level helpers:
+   - `mirrorToTeamMembers(sourceTable, row)` — full-row upsert for inserts/updates, best-effort (never blocks the primary write).
+   - `setTeamMembersArchived(sourceTable, sourceId, userId, isArchived)` — targeted UPDATE for soft-delete/archive so we don't null-out other fields.
+   - `unmirrorFromTeamMembers(sourceTable, sourceId, userId)` — delete matching row. Called on hard deletes.
+4. ✅ Mirror calls added at 13 write sites across the AI tools (`add_worker`, `add_subcontractor`, `update_worker`, `delete_worker`, `delete_subcontractor`, worker/sub reactivation paths) and the UI (`saveSub`, `saveWorker`, `updateWorker`, `deleteWorker`).
+5. ✅ Backfill: 1 existing sub row mirrored (0 workers existed). Production row count verified.
+
+**Known short-term duplication** (intentional, fixed in Session 3):
+
+The `saveWorker` UI path writes to BOTH `workers` AND `subcontractors` when `type === "subcontractor"` — an old pattern that mirrors into two separate `team_members` rows for the same human (one with `source_table='workers'`, one with `source_table='subcontractors'`). Session 3 (read-cutover) will add a name-level dedupe. For now: accept the duplication, don't try to read from `team_members` as source-of-truth yet.
+
+Verified end-to-end on production: fake insert → mirror → idempotent re-upsert → clean delete. Database state returned to clean baseline after test.
 
 ### Session 2 — read migration
 
