@@ -12,6 +12,8 @@
 //   - Also does once-a-day (9am UTC) overdue-invoice chasing via user's own inbox
 //   - On Anthropic API failure, skips the last_checked advance so next run retries
 
+import { withSentry } from "./lib/sentry.js";
+
 async function supabaseFetch(path, opts = {}) {
   const url = `${process.env.VITE_SUPABASE_URL}/rest/v1${path}`;
   const res = await fetch(url, {
@@ -465,7 +467,7 @@ async function isDormant(userId) {
   return Date.now() - lastSignIn.getTime() > DORMANT_THRESHOLD_MS;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const start = Date.now();
 
   if (req.headers["authorization"] !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -599,3 +601,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withSentry(handler, { routeName: "email-cron" });
