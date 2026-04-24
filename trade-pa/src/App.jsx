@@ -8233,7 +8233,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "set_reminder",
-      description: "Set a reminder. Triggers: \"remind me to [thing]\", \"nudge me about [thing]\", \"don't let me forget to [thing]\". Prefer iso_time when the user gives a specific time. For vague phrasings (\"tomorrow morning\", \"next week\") pick a sensible time and confirm in the response: \"Reminder set for 9am tomorrow — ok?\" DEFAULTS: morning → 9am, afternoon → 2pm, evening → 6pm, no time → 9am that day. NOTE: When the reminder fires, it stays in the user's Upcoming list as 'Overdue' until they tap Done ✓ — it does NOT auto-disappear. So users can keep track of things they haven't actually followed through on. AFTER: \"Reminder set for [when]: [what].\"",
+      description: "Set a reminder. Triggers: \"remind me to [thing]\", \"nudge me about [thing]\", \"don't let me forget to [thing]\". Prefer iso_time when the user gives a specific time. For vague phrasings (\"tomorrow morning\", \"next week\") pick a sensible time and confirm in the response: \"Reminder set for 9am tomorrow — ok?\" DEFAULTS: morning → 9am, afternoon → 2pm, evening → 6pm, no time → 9am that day. NOTE: When the reminder fires, it stays in the user's Upcoming list as 'Overdue' until they tap Done ✓ — it does NOT auto-disappear. So users can keep track of things they haven't actually followed through on. LINKING TO A JOB/INVOICE/CUSTOMER/ENQUIRY: if the reminder is clearly about a specific entity in the user's data, set related_type + related_id so the reminder email can show live context (invoice amount + paid status, job address, etc). Examples that should be linked: \"chase the Patel invoice in 2 hours\" → related_type:\"invoice\", related_id:<invoice.id>. \"remind me to call Steve tomorrow\" where Steve is a customer → related_type:\"customer\", related_id:<customer.id>. \"follow up on the Smith kitchen job next week\" → related_type:\"job\", related_id:<job_card.id>. \"respond to that new enquiry by friday\" → related_type:\"enquiry\", related_id:<enquiry.id>. ONLY set these if you can clearly identify the specific entity — never guess. For free-form reminders (\"buy milk\", \"book car in for MOT\") leave both empty. AFTER: \"Reminder set for [when]: [what].\"",
       input_schema: {
         type: "object",
         properties: {
@@ -8241,6 +8241,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           iso_time: { type: "string", description: "ISO 8601 datetime for when to fire e.g. 2025-01-20T09:00:00. Use for specific times/dates." },
           minutes_from_now: { type: "number", description: "Minutes from now — use ONLY for purely relative times like 'in 30 minutes'" },
           time_label: { type: "string", description: "Human readable label e.g. 'Monday 9am', 'tomorrow at 3pm'" },
+          related_type: { type: "string", enum: ["job", "invoice", "customer", "enquiry"], description: "Type of entity this reminder is about. Only set when you can confidently identify the specific entity from the user's data. Leave empty for free-form reminders." },
+          related_id: { type: "string", description: "ID of the specific entity — must match a real job_cards.id, invoices.id, customers.id, or enquiries.id from the user's data. Only set alongside related_type." },
         },
         required: ["text"],
       },
@@ -9146,6 +9148,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             return "When would you like me to remind you? e.g. 'at 9am tomorrow' or 'in 2 hours'.";
           }
           if (isNaN(fireAt.getTime())) return "I couldn't understand that time. Try saying something like '9am tomorrow' or 'in 30 minutes'.";
+          // Validate optional related_type + related_id. We only trust them if
+          // BOTH are present — a lone related_type with no id is useless, and
+          // a lone id with no type is unroutable. The cron email renderer
+          // looks up the related row and degrades gracefully (plain template)
+          // if the ID turns out to be stale (entity deleted) by the time the
+          // reminder fires.
+          const VALID_RELATED_TYPES = ["job", "invoice", "customer", "enquiry"];
+          const relatedType = (input.related_type && VALID_RELATED_TYPES.includes(input.related_type) && input.related_id)
+            ? input.related_type : null;
+          const relatedId = relatedType ? String(input.related_id) : null;
           // Insert to DB first so the in-memory reminder carries the real
           // DB UUID — the 5-min cron and /api/reminders/action.js both match
           // reminders by that UUID. Fall back to a temp id if the write fails
@@ -9158,11 +9170,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               fire_at: fireAt.toISOString(),
               done: false,
               created_at: new Date().toISOString(),
+              related_type: relatedType,
+              related_id: relatedId,
             }).select().single();
             if (remErr) console.warn("Reminder Supabase write:", remErr.message);
             else if (remRow?.id) reminderId = remRow.id;
           } catch(e) { console.warn("Reminder Supabase write:", e.message); }
-          const reminder = { id: reminderId, text: input.text, time: fireAt.getTime(), timeLabel: input.time_label || fireAt.toLocaleString("en-GB"), done: false };
+          const reminder = { id: reminderId, text: input.text, time: fireAt.getTime(), timeLabel: input.time_label || fireAt.toLocaleString("en-GB"), done: false, related_type: relatedType, related_id: relatedId };
           onAddReminder(reminder);
           setLastAction({ type: "reminder", label: input.text, view: "Reminders" });
           const label = input.time_label || fireAt.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -10108,6 +10122,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 phone: input.phone || undefined,
               }).eq("id", hit.id).eq("user_id", user?.id).select().single();
               if (reErr) return `Failed to reactivate: ${reErr.message}`;
+              mirrorToTeamMembers("subcontractors", re);
               pendingWidgetRef.current = { type: "subcontractor_entry", data: re };
               return `${re.name} reactivated — CIS rate ${re.cis_rate}%. Past payment history preserved.`;
             }
@@ -10139,6 +10154,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             created_at: new Date().toISOString(),
           }).select().single();
           if (error) return `Failed to add subcontractor: ${error.message}`;
+          mirrorToTeamMembers("subcontractors", data);
           pendingWidgetRef.current = { type: "subcontractor_entry", data };
           const utrNote = !input.utr && !input.cis_rate ? " No UTR on file — HMRC requires 30% on unverified subbies. Set to 20% once you've verified their UTR with HMRC." : "";
           return `${data.name} added as a subcontractor — CIS rate ${data.cis_rate}%.${utrNote}`;
@@ -11028,6 +11044,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 ni_number: input.ni_number || undefined,
               }).eq("id", hit.id).eq("user_id", user?.id).select().single();
               if (wrErr) return `Failed to reactivate worker: ${wrErr.message}`;
+              mirrorToTeamMembers("workers", wr);
               return `${wr.name} reactivated${input.role ? ` as ${input.role}` : ""}. Past time logs preserved.`;
             }
             return `${input.name} is already in your workers.`;
@@ -11059,6 +11076,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             created_at: new Date().toISOString(),
           }).select().single();
           if (wErr) return `Failed to add worker: ${wErr.message}`;
+          mirrorToTeamMembers("workers", newWorker);
           const workerType = input.type === "employed" ? "employed staff member" : "subcontractor";
           const utrNote = (input.type !== "employed") && !input.utr && !input.cis_rate ? " No UTR — defaulted to 30% CIS per HMRC rules." : "";
           return `Worker added: ${input.name}${input.role ? ` (${input.role})` : ""} as a ${workerType}${input.day_rate ? ` — day rate ${fmtAmount(input.day_rate)}` : ""}${input.hourly_rate ? ` — hourly rate ${fmtAmount(input.hourly_rate)}` : ""}.${utrNote}`;
@@ -11214,6 +11232,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { error: arcErr } = await db.from("subcontractors")
             .update({ active: false }).eq("id", found[0].id).eq("user_id", user?.id);
           if (arcErr) return `Failed to archive: ${arcErr.message}`;
+          setTeamMembersArchived("subcontractors", found[0].id, user?.id, true);
           return `${found[0].name} archived.${payCount ? ` ${payCount} payment record${payCount > 1 ? "s" : ""} kept for CIS reporting.` : ""}`;
         }
         case "update_worker": {
@@ -11231,6 +11250,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (!Object.keys(updates).length) return `Nothing to update for ${w.name} — tell me what to change.`;
           const { error: wUpdErr } = await db.from("workers").update(updates).eq("id", w.id).eq("user_id", user?.id);
           if (wUpdErr) return `Failed to update: ${wUpdErr.message}`;
+          mirrorToTeamMembers("workers", { ...w, ...updates, user_id: user?.id });
           const changes = Object.entries(updates).map(([k,v]) => `${k.replace(/_/g," ")} → ${v}`).join(", ");
           return `${w.name} updated: ${changes}.`;
         }
@@ -11251,6 +11271,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { error: wArcErr } = await db.from("workers")
             .update({ active: false }).eq("id", wDel[0].id).eq("user_id", user?.id);
           if (wArcErr) return `Failed to archive: ${wArcErr.message}`;
+          setTeamMembersArchived("workers", wDel[0].id, user?.id, true);
           const kept = [
             assignCount ? `${assignCount} job assignment${assignCount > 1 ? "s" : ""}` : "",
             docCount ? `${docCount} document${docCount > 1 ? "s" : ""}` : "",
@@ -25606,7 +25627,10 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
   const saveSub = async () => {
     if (!subForm.name) return;
     const { data, error } = await db.from("subcontractors").insert({ user_id: user.id, ...subForm, created_at: new Date().toISOString() }).select().single();
-    if (!error && data) { setSubs(p => [...p, data]); setView("list"); setSubForm({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "" }); }
+    if (!error && data) {
+      mirrorToTeamMembers("subcontractors", data);
+      setSubs(p => [...p, data]); setView("list"); setSubForm({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "" });
+    }
   };
 
   const saveWorker = async () => {
@@ -25619,6 +25643,7 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
       active: true, created_at: new Date().toISOString(),
     }).select().single();
     if (!error && data) {
+      mirrorToTeamMembers("workers", data);
       // If subcontractor type, also add to legacy subcontractors table for CIS payment lookups
       if (workerForm.type === "subcontractor") {
         const { data: existingSub } = await db.from("subcontractors")
@@ -25630,7 +25655,13 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
             email: workerForm.email || "", phone: workerForm.phone || "",
             created_at: new Date().toISOString(),
           }).select().single();
-          if (newSub) setSubs(s => [...s, newSub]);
+          if (newSub) {
+            // Note: this creates a SECOND team_members row for the same human
+            // (one from workers above, one from this sub insert). Accepted
+            // short-term; Session 3 of the unification dedupes on name.
+            mirrorToTeamMembers("subcontractors", newSub);
+            setSubs(s => [...s, newSub]);
+          }
         }
       }
       setWorkers(w => [...w, data]);
@@ -25749,6 +25780,7 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
       ni_number: editingWorker.ni_number || "",
     }).eq("id", editingWorker.id).eq("user_id", user.id);
     if (!error) {
+      mirrorToTeamMembers("workers", { ...editingWorker, user_id: user.id });
       setWorkers(ws => ws.map(w => w.id === editingWorker.id ? { ...w, ...editingWorker } : w));
       setEditingWorker(null);
     }
@@ -25756,7 +25788,10 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
 
   const deleteWorker = async (id) => {
     const { error } = await db.from("workers").delete().eq("id", id).eq("user_id", user.id);
-    if (!error) { setWorkers(ws => ws.filter(w => w.id !== id)); setDeletingWorker(null); }
+    if (!error) {
+      unmirrorFromTeamMembers("workers", id, user.id);
+      setWorkers(ws => ws.filter(w => w.id !== id)); setDeletingWorker(null);
+    }
   };
 
   const generateStatement = (sub, month) => {
@@ -28243,6 +28278,113 @@ function newEnquiryId() {
   bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10
   const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+
+// ─── team_members dual-write shim ───────────────────────────────────────────
+// Session 1 of the workers+subcontractors unification. Every write to the
+// legacy `workers` or `subcontractors` tables is mirrored here, keeping
+// `team_members` in sync. Reads still come from the legacy tables — this
+// is purely about filling up team_members so Session 2 can start migrating
+// reads over without a backfill gap.
+//
+// Design notes:
+//   - Best-effort. If the mirror fails, we log and move on. The legacy
+//     primary write must never be affected by a team_members failure.
+//   - Idempotent via the uq_team_members_source unique index on
+//     (user_id, source_table, source_id). Re-running a mirror for the same
+//     legacy row is a no-op (or update if data changed).
+//   - `saveWorker` double-writes (workers + subcontractors) remain as-is for
+//     Session 1; they'll produce TWO team_members rows for the same human
+//     until Session 3 de-dupes. Acceptable short-term — documented in the
+//     migration doc.
+//   - db is the Supabase client (window._supabase wrapper). Falls back to
+//     window._supabase so the helper can be called from module scope before
+//     db is in lexical range.
+//
+// sourceTable: 'workers' | 'subcontractors'
+// sourceRow:   the row object just written to the legacy table (has id + user_id)
+async function mirrorToTeamMembers(sourceTable, sourceRow) {
+  if (!sourceRow || !sourceRow.id || !sourceRow.user_id) return;
+  const sb = (typeof window !== "undefined" && window._supabase) || null;
+  if (!sb) return;
+  try {
+    // Build the team_members row from the source, mapping fields across the
+    // schema shape differences between workers and subcontractors.
+    const row = {
+      user_id: sourceRow.user_id,
+      name: sourceRow.name || "",
+      active: sourceRow.active !== false, // default true; workers can be null
+      source_table: sourceTable,
+      source_id: sourceRow.id,
+    };
+    if (sourceTable === "workers") {
+      row.engagement = sourceRow.type === "employed" ? "employed" : "self_employed";
+      row.role = sourceRow.role || null;
+      row.day_rate = sourceRow.day_rate ?? null;
+      row.hourly_rate = sourceRow.hourly_rate ?? null;
+      row.utr = sourceRow.utr || null;
+      row.ni_number = sourceRow.ni_number || null;
+      row.cis_rate = sourceRow.cis_rate ?? null;
+      row.email = sourceRow.email || null;
+      row.phone = sourceRow.phone || null;
+      row.address = sourceRow.address || null;
+      row.start_date = sourceRow.start_date || null;
+      row.notes = sourceRow.notes || null;
+    } else if (sourceTable === "subcontractors") {
+      row.engagement = "self_employed";
+      row.company_name = sourceRow.company || null;
+      row.utr = sourceRow.utr || null;
+      row.cis_rate = sourceRow.cis_rate ?? null;
+      row.email = sourceRow.email || null;
+      row.phone = sourceRow.phone || null;
+    } else {
+      return; // unknown source_table — refuse to mirror
+    }
+    // Upsert via the partial unique index. onConflict targets the index columns.
+    const { error } = await sb.from("team_members")
+      .upsert(row, { onConflict: "user_id,source_table,source_id" });
+    if (error) console.warn(`[team_members mirror] ${sourceTable} ${sourceRow.id}:`, error.message);
+  } catch (err) {
+    console.warn(`[team_members mirror] threw for ${sourceTable} ${sourceRow.id}:`, err.message);
+  }
+}
+
+// Delete the team_members row mirrored from a legacy row. Called alongside
+// hard deletes on the legacy tables. Soft deletes (active=false) flow
+// through mirrorToTeamMembers instead — no delete needed.
+async function unmirrorFromTeamMembers(sourceTable, sourceId, userId) {
+  if (!sourceTable || !sourceId || !userId) return;
+  const sb = (typeof window !== "undefined" && window._supabase) || null;
+  if (!sb) return;
+  try {
+    const { error } = await sb.from("team_members")
+      .delete()
+      .eq("user_id", userId)
+      .eq("source_table", sourceTable)
+      .eq("source_id", sourceId);
+    if (error) console.warn(`[team_members unmirror] ${sourceTable} ${sourceId}:`, error.message);
+  } catch (err) {
+    console.warn(`[team_members unmirror] threw for ${sourceTable} ${sourceId}:`, err.message);
+  }
+}
+
+// Targeted update for soft-delete / archive flows — only touches the
+// `active` column on the mirrored team_members row. Using the full mirror
+// helper with a partial source row would null out other columns.
+async function setTeamMembersArchived(sourceTable, sourceId, userId, isArchived) {
+  if (!sourceTable || !sourceId || !userId) return;
+  const sb = (typeof window !== "undefined" && window._supabase) || null;
+  if (!sb) return;
+  try {
+    const { error } = await sb.from("team_members")
+      .update({ active: !isArchived, archived_at: isArchived ? new Date().toISOString() : null })
+      .eq("user_id", userId)
+      .eq("source_table", sourceTable)
+      .eq("source_id", sourceId);
+    if (error) console.warn(`[team_members archive] ${sourceTable} ${sourceId}:`, error.message);
+  } catch (err) {
+    console.warn(`[team_members archive] threw for ${sourceTable} ${sourceId}:`, err.message);
+  }
 }
 
 // ─── Portal link panel ──────────────────────────────────────────────────────
