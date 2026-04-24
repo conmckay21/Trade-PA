@@ -76,11 +76,10 @@ const TIER_CONFIG = {
   },
 };
 
-// Helper: normalize any tier key (including legacy "pro" and "solo_founding")
+// Helper: normalize any tier key (handles legacy "pro" → "business" rename)
 // to a canonical key that exists in TIER_CONFIG. Unknown keys fall back to solo.
 function normalizeTier(key) {
   if (key === "pro") return "business";          // legacy rename
-  if (key === "solo_founding") return "solo";    // founding flag handled separately
   return TIER_CONFIG[key] ? key : "solo";
 }
 
@@ -29491,7 +29490,7 @@ function AppInner() {
   const currentMonth = new Date().toISOString().slice(0, 7); // "2026-04"
   const [usageData, setUsageData] = useState({ conversations_used: 0, handsfree_seconds_used: 0 });
   // Caps come from TIER_CONFIG (single source of truth). getTierConfig
-  // handles legacy "pro" → "business" rename and the "solo_founding" flag.
+  // handles legacy "pro" → "business" rename.
   const usageCaps = getTierConfig(planTier).caps;
   // Custom assistant persona — state here in App (passed to AIAssistant as props)
   const [assistantSetupOpen, setAssistantSetupOpen] = useState(false);
@@ -29952,9 +29951,7 @@ function AppInner() {
       const sub = data[0];
 
       // Determine plan tier from DB's plan column (set by create-subscription.js).
-      // normalizeTier handles legacy "pro" → "business" rename and maps the
-      // "solo_founding" marker back to "solo" for UI purposes (founding status
-      // is tracked separately via sub.is_founding_member if a badge is needed).
+      // normalizeTier handles legacy "pro" → "business" rename.
       const rawPlan = sub.plan || "solo";
       const detectedPlan = normalizeTier(rawPlan);
       setPlanTier(detectedPlan);
