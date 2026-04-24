@@ -3,13 +3,14 @@
 // Called from the app's Settings page or on a schedule
 
 import { createClient } from "@supabase/supabase-js";
+import { withSentry } from "./lib/sentry.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { userId, userEmail, sendEmail = false, daysBack = 7 } = req.body;
@@ -118,3 +119,5 @@ export default async function handler(req, res) {
 
   return res.json({ report, errorCount: totalErrors });
 }
+
+export default withSentry(handler, { routeName: "error-report" });
