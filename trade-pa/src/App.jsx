@@ -9245,25 +9245,57 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Material added: ${input.item} x${matPayload.qty}${input.supplier ? ` from ${input.supplier}` : ""}${input.job ? ` for ${input.job}` : ""}.`;
         }
         case "delete_job": {
-          const match = (jobs || []).find(j => j.customer.toLowerCase().includes(input.customer.toLowerCase()) && (!input.job_type || j.type.toLowerCase().includes(input.job_type.toLowerCase())));
-          if (!match) return `Couldn't find a job for "${input.customer}". Check the Schedule tab.`;
+          const needle = (input.customer || "").toLowerCase();
+          const typeNeedle = (input.job_type || "").toLowerCase();
+          const candidates = (jobs || []).filter(j =>
+            (j.customer || "").toLowerCase().includes(needle) &&
+            (!typeNeedle || (j.type || "").toLowerCase().includes(typeNeedle))
+          );
+          if (candidates.length === 0) return `Couldn't find a job for "${input.customer}". Check the Schedule tab.`;
+          if (candidates.length > 1) {
+            const list = candidates.slice(0, 5).map(j => `${j.type} — ${j.date || "no date"}`).join("; ");
+            return `Found ${candidates.length} jobs for ${input.customer}: ${list}. Which one — tell me the job type or date.`;
+          }
+          const match = candidates[0];
           setJobs(prev => (prev || []).filter(j => j.id !== match.id));
           setLastAction({ type: "job", label: `Deleted: ${match.type} — ${match.customer}`, view: "Schedule" });
           return `Job deleted: ${match.type} for ${match.customer}.`;
         }
         case "delete_invoice": {
-          const match = (invoices || []).find(i =>
-            (input.invoice_id && i.id.toLowerCase() === input.invoice_id.toLowerCase()) ||
-            (input.customer && i.customer.toLowerCase().includes(input.customer.toLowerCase()))
-          );
-          if (!match) return `Couldn't find that invoice. Check the Invoices tab.`;
+          // Match logic:
+          //   - Exact invoice_id match → unambiguous, use that.
+          //   - Otherwise, find ALL customer-name matches. If 0: nothing to delete.
+          //     If 1: safe to delete. If 2+: refuse and list them — never silently
+          //     pick the first match on an ambiguous destructive action.
+          let match = null;
+          if (input.invoice_id) {
+            match = (invoices || []).find(i => (i.id || "").toLowerCase() === input.invoice_id.toLowerCase());
+            if (!match) return `Couldn't find invoice ${input.invoice_id}. Check the Invoices tab.`;
+          } else if (input.customer) {
+            const needle = input.customer.toLowerCase();
+            const candidates = (invoices || []).filter(i => (i.customer || "").toLowerCase().includes(needle));
+            if (candidates.length === 0) return `Couldn't find an invoice for "${input.customer}". Check the Invoices tab.`;
+            if (candidates.length > 1) {
+              const list = candidates.slice(0, 5).map(i => `${i.id} — ${i.customer} £${i.amount || 0} (${i.status || "open"})`).join("; ");
+              return `Found ${candidates.length} invoices for ${input.customer}: ${list}. Which one — tell me the invoice ID.`;
+            }
+            match = candidates[0];
+          } else {
+            return "Which invoice? Give me an invoice ID or customer name.";
+          }
           setInvoices(prev => (prev || []).filter(i => i.id !== match.id));
           setLastAction({ type: "invoice", label: `Deleted: ${match.id} — ${match.customer}`, view: "Invoices" });
           return `Invoice ${match.id} for ${match.customer} (${fmtAmount(match.amount)}) deleted.`;
         }
         case "delete_enquiry": {
-          const match = (enquiries || []).find(e => e.name.toLowerCase().includes(input.name.toLowerCase()));
-          if (!match) return `Couldn't find an enquiry from "${input.name}".`;
+          const needle = (input.name || "").toLowerCase();
+          const candidates = (enquiries || []).filter(e => (e.name || "").toLowerCase().includes(needle));
+          if (candidates.length === 0) return `Couldn't find an enquiry from "${input.name}".`;
+          if (candidates.length > 1) {
+            const list = candidates.slice(0, 5).map(e => `${e.name}${e.source ? ` via ${e.source}` : ""}${e.time ? ` · ${e.time}` : ""}`).join("; ");
+            return `Found ${candidates.length} enquiries from "${input.name}": ${list}. Which one — tell me the source or when it came in.`;
+          }
+          const match = candidates[0];
           // Match by id where available. Fall back to identity for any
           // in-memory-only enquiry that somehow escaped id assignment (every
           // creation path now calls newEnquiryId(), but defensive).
@@ -9274,8 +9306,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Enquiry from ${match.name} deleted.`;
         }
         case "delete_customer": {
-          const match = (customers || []).find(c => c.name.toLowerCase().includes(input.name.toLowerCase()));
-          if (!match) return `Couldn't find a customer named "${input.name}". Check the Customers tab.`;
+          const needle = (input.name || "").toLowerCase();
+          const candidates = (customers || []).filter(c => (c.name || "").toLowerCase().includes(needle));
+          if (candidates.length === 0) return `Couldn't find a customer named "${input.name}". Check the Customers tab.`;
+          if (candidates.length > 1) {
+            const list = candidates.slice(0, 5).map(c => `${c.name}${c.email ? ` · ${c.email}` : ""}${c.phone ? ` · ${c.phone}` : ""}`).join("; ");
+            return `Found ${candidates.length} customers matching "${input.name}": ${list}. Which one — tell me the email or phone.`;
+          }
+          const match = candidates[0];
           setCustomers(prev => (prev || []).filter(c => c.id !== match.id));
           setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Customers" });
           return `Customer ${match.name} deleted.`;
@@ -10124,7 +10162,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Here are your CIS statements:`;
         }
         case "add_subcontractor": {
-          const existing = await db.from("subcontractors").select("id,name,active").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const existing = await tmReadSubs(db, user?.id, { nameLike: input.name, limit: 1 });
           if (existing.data?.length) {
             const hit = existing.data[0];
             // If an archived subbie matches, silently unarchive + update
@@ -10150,8 +10188,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           // person. Mirrors within-table dedup behaviour which also catches
           // archived rows. Temporary until workers/subcontractors are
           // unified — see docs/migrations/workers-subs-unification.md.
-          const crossW = await db.from("workers").select("id,name,type,active")
-            .eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const crossW = await tmReadWorkers(db, user?.id, { nameLike: input.name, limit: 1 });
           if (crossW.data?.length) {
             const w = crossW.data[0];
             if (w.active === false) {
@@ -10177,13 +10214,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${data.name} added as a subcontractor — CIS rate ${data.cis_rate}%.${utrNote}`;
         }
         case "log_subcontractor_payment": {
-          const { data: subs } = await db.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
+          const { data: subs } = await tmReadSubs(db, user?.id, { nameLike: input.name || "", limit: 1 });
           const sub = subs?.[0];
           if (!sub) {
             // Not in subcontractors — check workers table too
-            const { data: wCheck } = await db.from("workers")
-              .select("id,name").eq("user_id", user?.id)
-              .ilike("name", `%${(input.name||"")}%`).limit(1);
+            const { data: wCheck } = await tmReadWorkers(db, user?.id, { nameLike: input.name || "", limit: 1 });
             if (wCheck?.length) return `${wCheck[0].name} is in your workers list, not subcontractors. Use "log worker time" to record their hours.`;
             return `Subcontractor "${input.name}" not found. Add them with "add a subcontractor" first.`;
           }
@@ -10241,10 +10276,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Payment logged for ${sub.name} — ${payDesc}gross ${fmtCurrency(gross)}, CIS deduction ${fmtCurrency(deduction)} (on ${payType === "price_work" && execLabour > 0 ? "labour only" : "full amount"}), net to pay ${fmtCurrency(net)}.`;
         }
         case "list_subcontractors": {
-          const { data } = await db.from("subcontractors").select("*")
-            .eq("user_id", user?.id).eq("active", true).order("name");
+          const { data } = await tmReadSubs(db, user?.id, { activeOnly: true });
           if (!data?.length) return "No subcontractors added yet. Say 'add subcontractor' to add one.";
-          pendingWidgetRef.current = { type: "subcontractor_list", data };
+          const sorted = data.slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+          pendingWidgetRef.current = { type: "subcontractor_list", data: sorted };
           return `Here are your subcontractors:`;
         }
         case "list_unpaid": {
@@ -10261,9 +10296,13 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               .order("date", { ascending: true });
             if (pays?.length) {
               const subIds = [...new Set(pays.map(p => p.subcontractor_id).filter(Boolean))];
-              const { data: subs } = subIds.length
-                ? await db.from("subcontractors").select("id, name").eq("user_id", user?.id).in("id", subIds)
+              // Session 2: read all active subs then filter client-side by id.
+              // (tmReadSubs doesn't support .in() directly — data volume here
+              // is small enough per user that this is fine.)
+              const { data: allSubs } = subIds.length
+                ? await tmReadSubs(db, user?.id)
                 : { data: [] };
+              const subs = (allSubs || []).filter(s => subIds.includes(s.id));
               const subMap = Object.fromEntries((subs || []).map(s => [s.id, s.name]));
               unpaidSubs = pays.map(p => ({ ...p, subcontractor_name: subMap[p.subcontractor_id] || "Unknown" }));
             }
@@ -10920,7 +10959,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }
         }
         case "generate_subcontractor_statement": {
-          const { data: subs } = await db.from("subcontractors").select("*").eq("user_id", user?.id).ilike("name", `%${(input.name||"")}%`).limit(1);
+          const { data: subs } = await tmReadSubs(db, user?.id, { nameLike: input.name || "", limit: 1 });
           const sub = subs?.[0];
           if (!sub) return `Subcontractor "${input.name}" not found.`;
           const month = input.month || new Date().toISOString().slice(0,7);
@@ -11053,7 +11092,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           // exists with the same name, silently reactivate + update. Otherwise
           // signal duplicate to stop double-adds from voice (e.g. "add John
           // Smith as a worker" said twice in a row).
-          const existingW = await db.from("workers").select("id,name,active").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const existingW = await tmReadWorkers(db, user?.id, { nameLike: input.name, limit: 1 });
           if (existingW.data?.length) {
             const hit = existingW.data[0];
             if (hit.active === false) {
@@ -11082,8 +11121,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           // the same person. Mirrors within-table dedup behaviour which also
           // catches archived rows. Temporary until tables are unified — see
           // docs/migrations/workers-subs-unification.md.
-          const crossS = await db.from("subcontractors").select("id,name,active")
-            .eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const crossS = await tmReadSubs(db, user?.id, { nameLike: input.name, limit: 1 });
           if (crossS.data?.length) {
             const s = crossS.data[0];
             if (s.active === false) {
@@ -11110,9 +11148,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Worker added: ${input.name}${input.role ? ` (${input.role})` : ""} as a ${workerType}${input.day_rate ? ` — day rate ${fmtAmount(input.day_rate)}` : ""}${input.hourly_rate ? ` — hourly rate ${fmtAmount(input.hourly_rate)}` : ""}.${utrNote}`;
         }
         case "list_workers": {
-          const { data: workerList } = await db.from("workers")
-            .select("*").eq("user_id", user?.id).eq("active", true).order("name");
-          const filtered = (workerList || []).filter(w =>
+          const { data: workerList } = await tmReadWorkers(db, user?.id, { activeOnly: true });
+          const sorted = (workerList || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+          const filtered = sorted.filter(w =>
             !input.type || input.type === "all" || w.type === input.type
           );
           if (!filtered.length) return `No workers found. Add workers by saying "add a worker".`;
@@ -11126,9 +11164,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "assign_worker_to_job": {
           // Find worker
-          const { data: wMatches } = await db.from("workers")
-            .select("id,name,role,day_rate,hourly_rate").eq("user_id", user?.id)
-            .ilike("name", `%${input.worker_name}%`).limit(1);
+          const { data: wMatches } = await tmReadWorkers(db, user?.id, { nameLike: input.worker_name, limit: 1 });
           if (!wMatches?.length) return `Worker "${input.worker_name}" not found. Add them first with "add a worker".`;
           const worker = wMatches[0];
           // Find job
@@ -11150,14 +11186,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "log_worker_time": {
           // Find worker — check workers table first, then subcontractors
-          const { data: wtMatches } = await db.from("workers")
-            .select("id,name,day_rate,hourly_rate").eq("user_id", user?.id)
-            .ilike("name", `%${input.worker_name}%`).limit(1);
+          const { data: wtMatches } = await tmReadWorkers(db, user?.id, { nameLike: input.worker_name, limit: 1 });
           if (!wtMatches?.length) {
             // Not in workers — check subcontractors table
-            const { data: subCheck } = await db.from("subcontractors")
-              .select("id,name,cis_rate").eq("user_id", user?.id)
-              .ilike("name", `%${input.worker_name}%`).limit(1);
+            const { data: subCheck } = await tmReadSubs(db, user?.id, { nameLike: input.worker_name, limit: 1 });
             if (subCheck?.length) {
               // Found as subcontractor — log via subcontractor_payments instead
               const sub = subCheck[0];
@@ -11212,8 +11244,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Time logged for ${wtWorker.name} on ${wtJob.customer} — ${wtJob.title || wtJob.type}: ${wtLabel} = ${fmtCurrency(wtTotal)}.`;
         }
         case "add_worker_document": {
-          const { data: wdMatches } = await db.from("workers")
-            .select("id,name").eq("user_id", user?.id).ilike("name", `%${input.worker_name}%`).limit(1);
+          const { data: wdMatches } = await tmReadWorkers(db, user?.id, { nameLike: input.worker_name, limit: 1 });
           if (!wdMatches?.length) return `Worker "${input.worker_name}" not found. Add them first.`;
           const wdWorker = wdMatches[0];
           const { error: wdErr } = await db.from("worker_documents").insert({
@@ -11246,7 +11277,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${expiredCount ? expiredCount + " expired, " : ""}${expiringCount} expiring in the next ${days} days.`;
         }
         case "delete_subcontractor": {
-          const { data: found } = await db.from("subcontractors").select("id,name,active").eq("user_id", user?.id).ilike("name", `%${input.name || ""}%`).limit(1);
+          const { data: found } = await tmReadSubs(db, user?.id, { nameLike: input.name || "", limit: 1 });
           if (!found?.length) return `Subcontractor not found.`;
           if (found[0].active === false) return `${found[0].name} is already archived.`;
           // Soft-delete only: hard DELETE would CASCADE wipe their entire
@@ -11264,7 +11295,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${found[0].name} archived.${payCount ? ` ${payCount} payment record${payCount > 1 ? "s" : ""} kept for CIS reporting.` : ""}`;
         }
         case "update_worker": {
-          const { data: wMatches } = await db.from("workers").select("*").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: wMatches } = await tmReadWorkers(db, user?.id, { nameLike: input.name, limit: 1 });
           if (!wMatches?.length) return `Worker "${input.name}" not found.`;
           const w = wMatches[0];
           const updates = {};
@@ -11283,7 +11314,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${w.name} updated: ${changes}.`;
         }
         case "delete_worker": {
-          const { data: wDel } = await db.from("workers").select("id,name,active").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: wDel } = await tmReadWorkers(db, user?.id, { nameLike: input.name, limit: 1 });
           if (!wDel?.length) return `Worker "${input.name}" not found.`;
           if (wDel[0].active === false) return `${wDel[0].name} is already archived.`;
           // Soft-delete only: hard DELETE would CASCADE wipe their
@@ -11308,7 +11339,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `${wDel[0].name} archived.${kept ? ` ${kept} kept for HR records.` : ""}`;
         }
         case "update_subcontractor_payment": {
-          const { data: subFind } = await db.from("subcontractors").select("id,name,cis_rate").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: subFind } = await tmReadSubs(db, user?.id, { nameLike: input.name, limit: 1 });
           if (!subFind?.length) return `Subcontractor "${input.name}" not found.`;
           const sub = subFind[0];
           let pQuery = db.from("subcontractor_payments").select("*").eq("user_id", user?.id).eq("subcontractor_id", sub.id).order("date", { ascending: false });
@@ -11343,7 +11374,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           return `Payment updated for ${sub.name}: gross ${fmtCurrency(spUpdates.gross)}, CIS -${fmtCurrency(spUpdates.deduction)}, net ${fmtCurrency(spUpdates.net)}.`;
         }
         case "delete_subcontractor_payment": {
-          const { data: subFindDel } = await db.from("subcontractors").select("id,name").eq("user_id", user?.id).ilike("name", `%${input.name}%`).limit(1);
+          const { data: subFindDel } = await tmReadSubs(db, user?.id, { nameLike: input.name, limit: 1 });
           if (!subFindDel?.length) return `Subcontractor "${input.name}" not found.`;
           let dpQuery = db.from("subcontractor_payments").select("id,gross,date").eq("user_id", user?.id).eq("subcontractor_id", subFindDel[0].id).order("date", { ascending: false });
           if (input.date) dpQuery = dpQuery.eq("date", input.date);
@@ -11676,7 +11707,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "FIND/SHOW INLINE: find_invoice, find_quote, find_job_card (always shows full card), list_invoices, list_jobs, list_materials, find_material_receipt, list_schedule, get_job_full (use this when user asks for detail on a job), list_expenses, list_cis_statements, list_subcontractors, list_reminders, list_enquiries, list_customers, list_mileage, list_stock, list_rams, get_report, list_inbox_actions (show pending email actions with email snippet for review)\n"
   + "UPDATE BRAND: update_brand (use during onboarding or when user wants to update business details)\n"
   + "DELETE: delete_job, delete_invoice, delete_enquiry, delete_customer, delete_material (DEFAULT count:1 — only set higher for explicit numeric requests like 'delete 3 blocks'; for 'delete all X', ask user to confirm the count first, never guess). Also delete_job_card, delete_subcontractor, delete_worker, delete_subcontractor_payment, delete_cis_statement, delete_expense, delete_mileage, delete_rams, delete_stock_item.\n"
-  + "DELETE CONFIRMATION RULE (NON-NEGOTIABLE): Before calling ANY delete_* tool, you MUST confirm with the user in your text reply, naming the EXACT thing being deleted (customer name, invoice number, job title — whatever identifies it precisely) and ONLY proceed if the user replies with a clear yes / confirm / delete it / go ahead. If the user's message is ambiguous (e.g. 'remove the Smith one' when there are multiple Smiths), list the candidates and ask which one — do not guess. Voice users on cellular often have STT mishearing risk where 'add' becomes 'delete' or a customer name gets mangled — the confirmation step protects them. ONLY exception: when the user has just been shown a list/find result and immediately follows with 'delete that' or 'remove that one' referring unambiguously to a single item shown. Even then, name the item back to them in your reply.\n"
+  + "DELETE CONFIRMATION RULE (NON-NEGOTIABLE): Before calling ANY delete_* tool, you MUST confirm with the user in your text reply, naming the EXACT thing being deleted (customer name, invoice number, job title — whatever identifies it precisely) and ONLY proceed if the user replies with a clear yes / confirm / delete it / go ahead. If the user's message is ambiguous (e.g. 'remove the Smith one' when there are multiple Smiths), list the candidates and ask which one — do not guess. INCLUDE THE UNIQUE IDENTIFIER IN THE CONFIRM QUESTION: not just 'the Smith invoice' but 'invoice INV-042 — Smith £450 — delete?' so the subsequent delete_ call can reference the exact ID and the user isn't accidentally confirming the wrong record on voice. Voice users on cellular often have STT mishearing risk where 'add' becomes 'delete' or a customer name gets mangled — the confirmation step protects them. MIXED-BATCH PHRASING: if the delete is in a batch with other actions, phrase the confirm explicitly so 'yes' can't be misread: 'Logged 20 miles. Now — deleting invoice INV-042 (Smith £450), yes to delete?' — not a bare 'yes?' after multiple actions. ONLY exception: when the user has just been shown a list/find result and immediately follows with 'delete that' or 'remove that one' referring unambiguously to a single item shown. Even then, name the item back to them in your reply.\n"
   + "- update_material_status updates ALL items with that name — one call updates all duplicates at once.\n"
   + "UPDATE: mark_invoice_paid, update_job_status, update_job_card (edit any field), update_invoice (edit any field/line item), update_material_status, convert_quote_to_invoice, assign_material_to_job, update_stock, delete_stock_item\n"
   + "LOG: log_time, log_mileage, add_job_note\n"
@@ -12206,9 +12237,31 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         return;
       }
 
-      // Hit iteration limit without natural end? Log it but still show what we have
+      // Hit iteration limit without natural end? Log it AND surface to the user —
+      // they need to know some of their requested actions may not have finished.
+      // A silent cap-hit means the user thinks everything worked when only the
+      // first few actions landed. Appending the notice to the streaming
+      // placeholder (if present) or as a fresh assistant line.
       if (iteration >= MAX_AGENTIC_ITERATIONS && data?.stop_reason === "tool_use") {
         console.warn("Agentic loop hit max iterations (" + MAX_AGENTIC_ITERATIONS + ")");
+        const capNotice = "\n\n⏱️ Hit my processing limit partway through — some of what you asked may not have finished. Check what landed and let me know what to retry.";
+        if (placeholderAdded) {
+          // Append to the streaming message we've been filling
+          setMessages(prev => {
+            const copy = prev.slice();
+            for (let i = copy.length - 1; i >= 0; i--) {
+              if (copy[i].streaming || copy[i].role === "assistant") {
+                const existingContent = typeof copy[i].content === "string" ? copy[i].content : "";
+                copy[i] = { ...copy[i], content: existingContent + capNotice, streaming: false };
+                break;
+              }
+            }
+            return copy;
+          });
+        } else {
+          // No placeholder — append as fresh assistant message
+          setMessages(prev => [...prev, { role: "assistant", content: capNotice.trimStart() }]);
+        }
       }
 
       // Silent-end guard (20 Apr 2026): when Claude chose not to respond
@@ -25640,14 +25693,18 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
   const load = async () => {
     setLoading(true);
     const [{ data: s }, { data: p }, { data: w }, { data: wd }] = await Promise.all([
-      db.from("subcontractors").select("*").eq("user_id", user.id).order("name"),
+      tmReadSubs(db, user.id),
       db.from("subcontractor_payments").select("*").eq("user_id", user.id).order("date", { ascending: false }),
-      db.from("workers").select("*").eq("user_id", user.id).eq("active", true).order("name"),
+      tmReadWorkers(db, user.id, { activeOnly: true }),
       db.from("worker_documents").select("*, workers(name)").eq("user_id", user.id).order("expiry_date", { ascending: true }),
     ]);
-    setSubs(s || []);
+    // tmReadSubs/tmReadWorkers don't take an order() clause — sort client-side
+    // to preserve the alphabetical-by-name behaviour the UI relied on.
+    const sSorted = (s || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    const wSorted = (w || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    setSubs(sSorted);
     setPayments(p || []);
-    setWorkers(w || []);
+    setWorkers(wSorted);
     setWorkerDocs(wd || []);
     setLoading(false);
   };
@@ -25685,8 +25742,7 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
       mirrorToTeamMembers("workers", data);
       // If subcontractor type, also add to legacy subcontractors table for CIS payment lookups
       if (workerForm.type === "subcontractor") {
-        const { data: existingSub } = await db.from("subcontractors")
-          .select("id").eq("user_id", user.id).ilike("name", workerForm.name).limit(1);
+        const { data: existingSub } = await tmReadSubs(db, user.id, { nameLike: workerForm.name, limit: 1 });
         if (!existingSub?.length) {
           const { data: newSub } = await db.from("subcontractors").insert({
             user_id: user.id, name: workerForm.name, company: "",
@@ -28424,6 +28480,85 @@ async function setTeamMembersArchived(sourceTable, sourceId, userId, isArchived)
   } catch (err) {
     console.warn(`[team_members archive] threw for ${sourceTable} ${sourceId}:`, err.message);
   }
+}
+
+// ─── Session 2: reads migration ─────────────────────────────────────────────
+// Reads now come from team_members instead of the legacy workers/subcontractors
+// tables. Each helper is a drop-in replacement for the legacy query pattern —
+// returns { data, error } in the same shape as a Supabase .from().select() call,
+// with each row translated to match the legacy table's column names so existing
+// call-sites don't need to change their field references.
+//
+// The `source_table` filter preserves legacy table-scope semantics exactly:
+//   - workers read → only rows mirrored from `workers`
+//   - subs read    → only rows mirrored from `subcontractors`
+// This means the short-term duplication from saveWorker's type='subcontractor'
+// double-write (one row from workers mirror, one from subcontractors mirror
+// for the same human) is preserved until Session 3 dedupes.
+//
+// id: we return source_id as `id` so callers can do downstream .eq("id", row.id)
+// against legacy tables — keeps referring records (payments, time logs) working
+// until Session 3 swaps them too.
+
+async function tmReadWorkers(db, userId, opts = {}) {
+  if (!db || !userId) return { data: [], error: null };
+  const { activeOnly = false, nameLike = null, limit = null } = opts;
+  let q = db.from("team_members").select("*")
+    .eq("user_id", userId).eq("source_table", "workers");
+  if (activeOnly) q = q.eq("active", true);
+  if (nameLike) q = q.ilike("name", `%${nameLike}%`);
+  if (limit) q = q.limit(limit);
+  const { data, error } = await q;
+  if (error) return { data: null, error };
+  return {
+    data: (data || []).map(r => ({
+      id: r.source_id || r.id,
+      user_id: r.user_id,
+      name: r.name,
+      type: r.engagement === "employed" ? "employed" : "subcontractor",
+      role: r.role,
+      email: r.email,
+      phone: r.phone,
+      day_rate: r.day_rate,
+      hourly_rate: r.hourly_rate,
+      utr: r.utr,
+      cis_rate: r.cis_rate,
+      ni_number: r.ni_number,
+      start_date: r.start_date,
+      active: r.active,
+      notes: r.notes,
+      address: r.address,
+      created_at: r.created_at,
+    })),
+    error: null,
+  };
+}
+
+async function tmReadSubs(db, userId, opts = {}) {
+  if (!db || !userId) return { data: [], error: null };
+  const { activeOnly = false, nameLike = null, limit = null } = opts;
+  let q = db.from("team_members").select("*")
+    .eq("user_id", userId).eq("source_table", "subcontractors");
+  if (activeOnly) q = q.eq("active", true);
+  if (nameLike) q = q.ilike("name", `%${nameLike}%`);
+  if (limit) q = q.limit(limit);
+  const { data, error } = await q;
+  if (error) return { data: null, error };
+  return {
+    data: (data || []).map(r => ({
+      id: r.source_id || r.id,
+      user_id: r.user_id,
+      name: r.name,
+      company: r.company_name,
+      utr: r.utr,
+      cis_rate: r.cis_rate,
+      email: r.email,
+      phone: r.phone,
+      active: r.active,
+      created_at: r.created_at,
+    })),
+    error: null,
+  };
 }
 
 // ─── Portal link panel ──────────────────────────────────────────────────────
