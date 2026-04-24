@@ -4,6 +4,20 @@
 
 ## 2026-04-24
 
+### Quiet groundwork: unified workers + subs table 🏗️
+
+Behind-the-scenes only — no user-visible change. Started consolidating the two separate lists (Workers and Subcontractors) that overlap heavily in practice, into a single underlying table. Today's step: created the new table, copied existing records into it, and wired every add/edit/delete to keep it in sync automatically. The old lists and UI work exactly as before. Over the next couple of sessions we'll migrate the reads over so you eventually see one unified list with a clear employed/self-employed filter instead of two lists you have to flip between.
+
+### Reminder emails now show context 📧
+
+Previously, reminder emails just showed the reminder text and three buttons — Mark Done, Snooze, Open App. Useful, but often you'd still need to open the app to figure out what the reminder was even about. Now when a reminder is about something specific — a particular invoice, job, customer, or enquiry — the email shows the relevant details inline. So a "chase the Patel invoice at 2pm" reminder email now shows the amount, the status (paid/sent/overdue), and the due date. A "call Steve tomorrow" reminder shows Steve's phone and email. A "follow up on the Miller kitchen job next week" shows the customer, address, job value, and current status. The status is live at send-time, so if the customer already paid the invoice, the email shows "Paid" and you can stop worrying. Reminders that aren't about anything specific (buy milk, MOT the van) look exactly as they did before — no change.
+
+Small related tidy: every transactional email now carries Trade PA Ltd's registered company name and Companies House number in the footer, as required under s.82 of the Companies Act.
+
+### Enquiries stay put 🗂️
+
+Subtle but serious fix. Every time an enquiry was added, edited, deleted, or status-changed, the whole enquiries table was being wiped and re-inserted behind the scenes — which meant every enquiry got a brand new database ID on every change. That was silent up until now but would've broken anything relying on stable enquiry IDs (reminders linked to a specific enquiry, deep links from push notifications, and so on). There was also a duplicate-insert bug in the inbox-to-enquiry flow that could create two records for the same email. Both fixed now with a proper per-row sync pattern. Existing enquiries are unaffected — they kept their most recent IDs. Nothing to do on your side.
+
 ### Server-side errors now surface to Sentry 🚨
 
 Until now, errors happening server-side — failed reminder emails, broken Stripe webhooks, transcription cascades that all fail — went completely unnoticed unless a tradie complained. Sentry on the frontend was already catching browser errors, but the API routes were dark. Now wrapped with shared error capture across **every single API route** (52 of them — voice pipeline, Stripe webhooks, cron jobs, invoice emails, push notifications, Twilio call handlers, Xero/QuickBooks sync, OAuth callbacks, the lot). Anything that throws server-side now lands in Sentry within seconds with the route name, the user (where identifiable), and the full stack. Means future flaky behaviour gets diagnosed in minutes instead of "hmm, did anyone else hit that?".
