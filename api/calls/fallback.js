@@ -2,7 +2,9 @@
 // Called by Twilio via the <Dial> action URL when the app client doesn't answer within 30s
 // Falls back to ringing the user's real mobile number
 
-export default async function handler(req, res) {
+import { withSentry } from "../lib/sentry.js";
+
+async function handler(req, res) {
   const { forwardTo, callerNumber } = req.query;
   const dialStatus = req.body?.DialCallStatus;
 
@@ -31,3 +33,5 @@ export default async function handler(req, res) {
   </Dial>
 </Response>`);
 }
+
+export default withSentry(handler, { routeName: "calls/fallback" });
