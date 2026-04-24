@@ -1626,25 +1626,7 @@ const ARTICLES = [
       "You can upgrade or downgrade at any time from the Stripe billing portal — prorated automatically.",
       "Start on Solo if you're a sole trader — the moment you need more users or more capacity, switch. Nothing is lost in the switch.",
     ],
-    related: ["free-trial", "founding-member", "monthly-limits", "manage-billing"],
-  },
-  {
-    slug: "founding-member",
-    title: "Founding Member lifetime pricing",
-    category: "getting-paid",
-    summary: "The first 100 Solo subscribers get a locked-in rate — lower than Solo pricing, forever, for as long as their subscription stays active.",
-    steps: [
-      "At signup, if spots remain you'll see a Founding Member option on the pricing page.",
-      "Pick it, start your trial as normal, and your plan is tagged as Founding.",
-      "Your monthly (or annual) rate is locked from day 31 — it will never go up, even when standard Solo pricing rises.",
-      "If your subscription lapses, the locked-in rate is lost and a new signup would be at standard pricing.",
-    ],
-    tips: [
-      "Founding Member is capped at 100 subscribers total. Once the counter on the pricing page hits zero, the offer is gone permanently.",
-      "Limits are the same as Solo (500 conversations, 5 hands-free hours per month) — the benefit is the locked-in price, not extra capacity.",
-      "You can still switch up to Team or Pro later. If you do, you'd be paying standard Team or Pro pricing from then on — the founding rate only applies while you're on Solo.",
-    ],
-    related: ["subscription-plans", "free-trial"],
+    related: ["free-trial", "monthly-limits", "manage-billing"],
   },
   {
     slug: "monthly-limits",
