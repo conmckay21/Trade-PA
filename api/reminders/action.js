@@ -11,13 +11,14 @@
 // Returns a friendly HTML confirmation page with a link back to the app.
 
 import { createClient } from "@supabase/supabase-js";
+import { withSentry } from "../lib/sentry.js";
 
 const APP_URL = process.env.APP_URL || "https://tradespa.co.uk";
 const SNOOZE_MS = 60 * 60 * 1000; // 1 hour
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { r: reminderId, u: userId, a: action } = req.query;
 
   if (!reminderId || !userId || !action) {
@@ -170,3 +171,5 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+export default withSentry(handler, { routeName: "reminders/action" });
