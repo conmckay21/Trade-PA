@@ -4,6 +4,10 @@
 
 ## 2026-04-24
 
+### Top-up add-ons resized for the new plans 🔋
+
+The mid-month add-ons have been resized to make sense alongside the smaller per-tier caps. Previously a top-up gave you +500 conversations or +10 hours hands-free for £39/£19 — sized for plans that don't exist anymore. The new top-ups: **+100 conversations for £25**, **+1 hour hands-free for £5**, or a **combo (+100 conv + 1 hour hands-free) for £28** (saves you £2). Same one-off model — you're charged on your saved card, the extra capacity is live within seconds and expires at your next billing rollover. If you regularly need extra, upgrading a tier is still the cheaper route long-term.
+
 ### Pricing page rebuilt 💷
 
 The pricing page (tradespa.co.uk/pricing) now matches the actual product. We replaced the three old tiers (Solo £49 / Team £89 / Pro £129 with annual options) with the four real tiers — Solo £39, Pro Solo £59, Team £89, Business £129 — all monthly only, no annual lock-in. Conversation and hands-free caps on each card now match what the app actually allows. The Help Centre articles for plans, monthly limits and free trial have been refreshed to match. Annual plans, the Founding Member offer, and any references to "Pro" as a 10-user tier have all been retired. If you'd been confused by the page saying one thing and the app doing another — that's resolved.
