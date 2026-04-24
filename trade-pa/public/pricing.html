@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Pricing — Trade PA | AI-powered PA for UK tradespeople from £49/mo</title>
-  <meta name="description" content="Simple, honest pricing for Trade PA. Solo (£49/mo), Team (£89/mo), Pro (£129/mo). All plans: 30-day free trial, every feature included, cancel anytime. Founding Member lifetime pricing for the first 100 sign-ups." />
+  <title>Pricing — Trade PA | AI-powered PA for UK tradespeople from £39/mo</title>
+  <meta name="description" content="Simple, honest pricing for Trade PA. Solo (£39/mo), Pro Solo (£59/mo), Team (£89/mo), Business (£129/mo). All plans: 30-day free trial, every feature included, cancel anytime." />
   <link rel="canonical" href="https://www.tradespa.co.uk/pricing.html" />
 
   <!-- Open Graph / Twitter -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Pricing — Trade PA" />
-  <meta property="og:description" content="AI-powered admin for UK tradespeople. From £49/mo. 30-day free trial." />
+  <meta property="og:description" content="AI-powered admin for UK tradespeople. From £39/mo. 30-day free trial." />
   <meta property="og:url" content="https://www.tradespa.co.uk/pricing.html" />
   <meta name="twitter:card" content="summary_large_image" />
 
@@ -32,12 +32,26 @@
       {
         "@type": "Offer",
         "name": "Solo",
-        "price": "49.00",
+        "price": "39.00",
         "priceCurrency": "GBP",
         "url": "https://www.tradespa.co.uk/signup.html?plan=solo_monthly",
         "priceSpecification": {
           "@type": "UnitPriceSpecification",
-          "price": "49.00",
+          "price": "39.00",
+          "priceCurrency": "GBP",
+          "unitText": "month"
+        },
+        "availability": "https://schema.org/InStock"
+      },
+      {
+        "@type": "Offer",
+        "name": "Pro Solo",
+        "price": "59.00",
+        "priceCurrency": "GBP",
+        "url": "https://www.tradespa.co.uk/signup.html?plan=pro_solo_monthly",
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "price": "59.00",
           "priceCurrency": "GBP",
           "unitText": "month"
         },
@@ -59,10 +73,10 @@
       },
       {
         "@type": "Offer",
-        "name": "Pro",
+        "name": "Business",
         "price": "129.00",
         "priceCurrency": "GBP",
-        "url": "https://www.tradespa.co.uk/signup.html?plan=pro_monthly",
+        "url": "https://www.tradespa.co.uk/signup.html?plan=business_monthly",
         "priceSpecification": {
           "@type": "UnitPriceSpecification",
           "price": "129.00",
@@ -126,39 +140,6 @@
       margin: 0 auto; line-height: 1.7;
     }
 
-    /* Founding banner */
-    .founding-banner {
-      max-width: 820px; margin: 40px auto 0;
-      background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04));
-      border: 1px solid rgba(245,158,11,0.35);
-      border-radius: 16px; padding: 24px 28px;
-      display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
-    }
-    .founding-banner .badge {
-      font-family: var(--mono); font-size: 10px; color: var(--amber);
-      background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4);
-      padding: 4px 10px; border-radius: 100px; font-weight: 700;
-      letter-spacing: 0.1em; text-transform: uppercase; flex-shrink: 0;
-    }
-    .founding-banner .info { flex: 1; min-width: 220px; }
-    .founding-banner h3 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-    .founding-banner p { font-size: 13px; color: var(--muted); line-height: 1.6; }
-    .founding-banner .counter {
-      font-family: var(--mono); font-size: 14px; color: var(--amber);
-      font-weight: 700; white-space: nowrap; flex-shrink: 0;
-      padding: 10px 14px; background: rgba(245,158,11,0.1);
-      border: 1px solid rgba(245,158,11,0.3); border-radius: 10px;
-      text-align: center;
-    }
-    .founding-banner .counter small { display: block; font-size: 10px; color: var(--muted); font-weight: 400; margin-top: 2px; }
-    .founding-banner .cta {
-      background: var(--amber); color: #000; font-weight: 700; font-size: 13px;
-      padding: 11px 18px; border-radius: 8px; white-space: nowrap; flex-shrink: 0;
-    }
-    .founding-banner .cta:hover { opacity: 0.9; }
-    .founding-banner.sold-out .cta { display: none; }
-    .founding-banner.sold-out .counter { color: var(--muted); background: transparent; border-color: var(--border); }
-
     /* Sections */
     .section { padding: 64px 24px; }
     .section-label {
@@ -176,7 +157,7 @@
     }
 
     /* Plan cards */
-    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; max-width: 1040px; margin: 0 auto; }
+    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; max-width: 1100px; margin: 0 auto; }
     .plan {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 20px; padding: 44px 32px 36px; position: relative;
@@ -293,8 +274,6 @@
       .section { padding: 48px 20px; }
       .plans, .addon-grid, .phone-tiers, .phone-icon-grid { grid-template-columns: 1fr; }
       .plan { padding: 36px 24px 28px; }
-      .founding-banner { flex-direction: column; text-align: center; align-items: stretch; }
-      .founding-banner .info { text-align: center; }
     }
   </style>
 </head>
@@ -314,25 +293,12 @@
     <div class="hero-label">Pricing</div>
     <h1>Every feature. Every plan. No hidden tiers.</h1>
     <p class="sub">Start with a 30-day free trial on any plan. No charge until day 31. Cancel anytime.</p>
-
-    <div class="founding-banner" id="foundingBanner" style="display:none;">
-      <div class="badge">Limited</div>
-      <div class="info">
-        <h3>Founding Member pricing</h3>
-        <p>The first 100 sign-ups lock in <strong style="color:var(--amber);">£39/mo</strong> for life on the Solo plan. No price rises, ever, while your subscription stays active.</p>
-      </div>
-      <div class="counter" id="foundingCounter">
-        <span id="foundingRemaining">100</span> / 100
-        <small>SPOTS LEFT</small>
-      </div>
-      <a href="/signup.html?plan=solo_founding" class="cta" id="foundingCTA">Claim yours →</a>
-    </div>
   </header>
 
   <section class="section" style="padding-top:32px;">
     <div class="section-head">
       <div class="section-label">Plans</div>
-      <h2>Solo, Team or Pro.</h2>
+      <h2>Solo, Pro Solo, Team or Business.</h2>
       <p class="sub">Every plan includes every feature. The difference is users and monthly AI capacity.</p>
     </div>
 
@@ -340,12 +306,11 @@
       <div class="plan">
         <div class="plan-top-stripe"></div>
         <div class="plan-name">Solo</div>
-        <div class="plan-price">£49<span class="period">/mo</span></div>
-        <p class="plan-annual">or £529/year · save £59</p>
+        <div class="plan-price">£39<span class="period">/mo</span></div>
         <p class="plan-users">1 user</p>
         <ul class="plan-features">
-          <li><span class="check">✓</span> 500 AI conversations per month</li>
-          <li><span class="check">✓</span> 5 hours hands-free per month</li>
+          <li><span class="check">✓</span> 100 AI conversations per month</li>
+          <li><span class="check">✓</span> 1 hour hands-free per month</li>
           <li><span class="check">✓</span> Tap-to-talk voice — never capped</li>
           <li><span class="check">✓</span> All 43 features included</li>
           <li><span class="check">✓</span> Allowance resets 1st of month</li>
@@ -356,15 +321,29 @@
       <div class="plan popular">
         <div class="plan-popular-badge">MOST POPULAR</div>
         <div class="plan-top-stripe"></div>
+        <div class="plan-name">Pro Solo</div>
+        <div class="plan-price">£59<span class="period">/mo</span></div>
+        <p class="plan-users">1 user</p>
+        <ul class="plan-features">
+          <li><span class="check">✓</span> 200 AI conversations per month</li>
+          <li><span class="check">✓</span> 3 hours hands-free per month</li>
+          <li><span class="check">✓</span> Tap-to-talk voice — never capped</li>
+          <li><span class="check">✓</span> All 43 features included</li>
+          <li><span class="check">✓</span> Priority for new features</li>
+        </ul>
+        <a href="/signup.html?plan=pro_solo_monthly" class="plan-cta">Start free trial →</a>
+      </div>
+
+      <div class="plan">
+        <div class="plan-top-stripe"></div>
         <div class="plan-name">Team</div>
         <div class="plan-price">£89<span class="period">/mo</span></div>
-        <p class="plan-annual">or £961/year · save £107</p>
         <p class="plan-users">Up to 5 users</p>
         <ul class="plan-features">
-          <li><span class="check">✓</span> 1,500 AI conversations per month</li>
-          <li><span class="check">✓</span> 15 hours hands-free per month</li>
-          <li><span class="check">✓</span> Team scheduling & per-user permissions</li>
-          <li><span class="check">✓</span> Staff timesheets & GPS tracking</li>
+          <li><span class="check">✓</span> 400 AI conversations per month</li>
+          <li><span class="check">✓</span> 4 hours hands-free per month</li>
+          <li><span class="check">✓</span> Team scheduling &amp; per-user permissions</li>
+          <li><span class="check">✓</span> Staff timesheets &amp; GPS tracking</li>
           <li><span class="check">✓</span> All 43 features included</li>
         </ul>
         <a href="/signup.html?plan=team_monthly" class="plan-cta">Start free trial →</a>
@@ -372,18 +351,17 @@
 
       <div class="plan">
         <div class="plan-top-stripe"></div>
-        <div class="plan-name">Pro</div>
+        <div class="plan-name">Business</div>
         <div class="plan-price">£129<span class="period">/mo</span></div>
-        <p class="plan-annual">or £1,393/year · save £155</p>
         <p class="plan-users">Up to 10 users</p>
         <ul class="plan-features">
-          <li><span class="check">✓</span> 2,500 AI conversations per month</li>
-          <li><span class="check">✓</span> 25 hours hands-free per month</li>
+          <li><span class="check">✓</span> 800 AI conversations per month</li>
+          <li><span class="check">✓</span> 8 hours hands-free per month</li>
           <li><span class="check">✓</span> Priority support</li>
           <li><span class="check">✓</span> Everything in Team, more capacity</li>
           <li><span class="check">✓</span> All 43 features included</li>
         </ul>
-        <a href="/signup.html?plan=pro_monthly" class="plan-cta">Start free trial →</a>
+        <a href="/signup.html?plan=business_monthly" class="plan-cta">Start free trial →</a>
       </div>
     </div>
   </section>
@@ -461,7 +439,7 @@
       <details class="faq-item">
         <summary>How does the 30-day free trial work?</summary>
         <div class="faq-answer">
-          Pick any plan, enter your card, and use the app as normal for 30 days — everything's unlocked. Your card is saved but not charged. On day 31 the first payment is taken automatically, unless you cancel before then. During the trial you get Solo-level limits (500 conversations, 5 hands-free hours) regardless of which plan you picked — the higher caps kick in once your first payment is taken.
+          Pick any plan, enter your card, and use the app as normal for 30 days — everything's unlocked. Your card is saved but not charged. On day 31 the first payment is taken automatically, unless you cancel before then. During the trial you get a generous taster allowance (50 conversations, 30 minutes hands-free) regardless of which plan you picked — your full plan caps kick in the moment your first payment is taken.
         </div>
       </details>
 
@@ -469,13 +447,6 @@
         <summary>Can I cancel anytime?</summary>
         <div class="faq-answer">
           Yes. Cancel any time before day 31 and you won't be charged. Cancel after day 31 and your subscription ends at the next billing date — you keep access until then, no prorated refunds. Cancellation is one tap inside the app, via Settings → Plan & billing → Manage subscription.
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary>What's the Founding Member offer?</summary>
-        <div class="faq-answer">
-          The first 100 Solo subscribers lock in <strong>£39/mo</strong> (vs £49/mo standard) for as long as their subscription stays active. Your locked-in rate never goes up, even when standard Solo pricing rises. It's capped at 100 subscribers total — once the counter hits zero, the offer is gone permanently. The limits are the same as Solo (500 conversations, 5 hands-free hours) — the benefit is the locked-in price.
         </div>
       </details>
 
@@ -546,32 +517,6 @@
     </div>
     <div>© Trade PA Ltd · Company No. 17176983 · Registered in England &amp; Wales</div>
   </footer>
-
-  <script>
-    // Fetch live founding-slot count from /api/founding-slots.
-    // Fails silently if endpoint is unreachable — banner just stays hidden,
-    // which is better than showing a broken counter.
-    (async () => {
-      const banner = document.getElementById("foundingBanner");
-      try {
-        const res = await fetch("/api/founding-slots");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data || typeof data.remaining !== "number") return;
-
-        document.getElementById("foundingRemaining").textContent = data.remaining;
-        banner.style.display = "flex";
-
-        if (!data.available || data.remaining <= 0) {
-          banner.classList.add("sold-out");
-          document.getElementById("foundingCounter").innerHTML =
-            'SOLD OUT<small>STANDARD PRICING APPLIES</small>';
-        }
-      } catch (e) {
-        console.warn("[founding-slots] fetch failed:", e);
-      }
-    })();
-  </script>
 
 </body>
 </html>
