@@ -3,6 +3,7 @@
 // Runs nightly at 17:00 UTC (6pm UK winter / 6pm UK summer with offset)
 
 import { createClient } from '@supabase/supabase-js';
+import { withSentry } from "../lib/sentry.js";
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
@@ -57,7 +58,7 @@ function getTomorrow() {
   return tomorrow;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // Vercel cron jobs call with CRON_SECRET header — reject anything else
   if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: 'Unauthorised' });
@@ -151,3 +152,5 @@ export default async function handler(req, res) {
     results,
   });
 }
+
+export default withSentry(handler, { routeName: "cron/evening-briefing" });
