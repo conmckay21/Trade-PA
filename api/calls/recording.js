@@ -3,6 +3,7 @@
 // Whether answered on app or mobile (conference bridge keeps Twilio in the middle)
 // Transcribes via Deepgram (primary) or Whisper (fallback) — keys server-side only
 import { waitUntil } from "@vercel/functions";
+import { withSentry } from "../lib/sentry.js";
 
 async function transcribeAudio(audioBytes) {
   // Try Deepgram first (faster, cheaper, no OpenAI dependency)
@@ -273,7 +274,9 @@ Respond ONLY with JSON:
   }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   res.status(200).json({ received: true });
   waitUntil(processRecording(req));
 }
+
+export default withSentry(handler, { routeName: "calls/recording" });
