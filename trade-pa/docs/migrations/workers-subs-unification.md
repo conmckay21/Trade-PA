@@ -1,7 +1,7 @@
 # Workers / Subcontractors unification — migration plan
 
-Status: **Session 2 DONE (2026-04-24)** — all 21 reads migrated to team_members via tmReadWorkers/tmReadSubs helpers. Dual-write remains; drop legacy tables in Session 3.
-Last updated: 2026-04-24
+Status: **Session 3 DONE (2026-04-25)** — write cutover complete, FKs redirected to team_members, legacy tables deprecated. Session 4 (drop legacy tables) pending after sync period.
+Last updated: 2026-04-25
 Author: forensic audit session
 
 ## Problem
@@ -115,17 +115,38 @@ Both helpers preserve legacy table-scope semantics exactly — subs reads get su
 - `tmReadWorkers` / `tmReadSubs`: `src/App.jsx` ~28489-28564
 - Example call site: `tmReadSubs(db, user?.id, { nameLike: input.name, limit: 1 })`
 
-### Session 3 — write-to-team_members-only cutover
+### Session 3 — write-to-team_members-only cutover ✅ COMPLETE (2026-04-25)
 
-1. Switch the dual-write layer to write only to `team_members`, no longer to the old tables.
-2. Observe for a sync period (1-2 weeks) to catch any missed read paths that broke.
-3. Add a migration warning / database comment to mark `workers` and `subcontractors` as deprecated.
+**DB migration applied**: `2026-04-25_workers_subs_session3_fk_cutover.sql`
+1. ✅ Remapped `subcontractor_payments.subcontractor_id` from legacy id to `team_members.id` (1 row affected: Lewis Skelton's CIS payment).
+2. ✅ Remapped `job_workers.worker_id` and `worker_documents.worker_id` similarly (0 rows each — empty in production).
+3. ✅ Dropped 3 legacy FK constraints (`job_workers_worker_id_fkey`, `subcontractor_payments_subcontractor_id_fkey`, `worker_documents_worker_id_fkey`).
+4. ✅ Added 3 new FK constraints pointing at `team_members(id)`. ON DELETE NO ACTION preserved — matches the soft-delete pattern (code uses `active=false + archived_at` for deletions; hard delete would orphan payment/assignment/doc records).
+5. ✅ `COMMENT ON TABLE` markers added: `workers` and `subcontractors` are now deprecated, no new writes.
 
-### Session 4 — drop old tables
+**Code changes**: 12 write sites refactored to write directly to `team_members`:
+- `saveSub`, `saveWorker`, `updateWorker`, `deleteWorker` UI handlers
+- `add_subcontractor` (insert + reactivate paths) AI tool
+- `add_worker` (insert + reactivate paths) AI tool
+- `update_worker`, `delete_worker`, `delete_subcontractor` AI tools
+- `saveWorker` auto-sub-insert duplication path **dropped entirely** — one human, one row, in the tab they were added from. Cross-tab visibility deferred (UI affordance can be added later if users want to move someone between tabs).
 
-1. Back up old tables.
-2. Drop `workers` and `subcontractors`.
-3. Clean up shim layer.
+**Read helpers updated**: `tmReadWorkers` / `tmReadSubs` now return `tm.id` as `id` (was `source_id || tm.id`). Rationale: writes target `team_members` directly now, so the legacy-id passthrough trick is no longer needed. New rows have `source_id=null` and the read helpers transparently return `tm.id` for them. The 1 pre-Session-3 row (Lewis) keeps its `source_id` populated but it's no longer referenced.
+
+**Mirror helpers** (`mirrorToTeamMembers`, `setTeamMembersArchived`, `unmirrorFromTeamMembers`): kept defined but no longer called from any write path. Marked for removal in Session 4 cleanup.
+
+**FK behaviour change to be aware of**: ON DELETE NO ACTION + the "everything is in team_members now" reality means hard-deleting a `team_members` row with linked payments / job assignments / documents will FAIL at the DB level. This is correct — the code never hard-deletes (only soft-deletes), so the constraint is a safety net. If a hard-delete is ever needed (GDPR right-to-erasure), the linked records must be deleted or repointed first.
+
+### Session 4 — drop old tables (PENDING)
+
+Run after a sync period (1-2 weeks of clean operation on Session 3 code).
+
+1. Verify zero writes have hit `workers` / `subcontractors` since Session 3 deploy (audit Sentry logs + DB write timestamps).
+2. Back up old tables (CSV export or pg_dump).
+3. Drop `workers` and `subcontractors` tables.
+4. Remove `mirrorToTeamMembers`, `unmirrorFromTeamMembers`, `setTeamMembersArchived` helpers from App.jsx.
+5. Drop `source_table` and `source_id` columns from `team_members` (or keep nullable for archaeology — decision pending).
+6. Optionally migrate `tmReadWorkers` / `tmReadSubs` filter from `source_table` to `engagement` if UI semantics permit (might be a separate UX decision).
 
 ## Risks and mitigations
 
