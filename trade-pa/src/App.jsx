@@ -10167,16 +10167,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             // If an archived subbie matches, silently unarchive + update
             // details. Otherwise signal the duplicate (existing pattern).
             if (hit.active === false) {
-              const { data: re, error: reErr } = await db.from("subcontractors").update({
+              // Session 3: direct team_members update. Map "company" back to
+              // company_name for the team_members shape.
+              const { data: tmRe, error: reErr } = await db.from("team_members").update({
                 active: true,
-                company: input.company || undefined,
+                archived_at: null,
+                company_name: input.company || undefined,
                 utr: input.utr || undefined,
                 cis_rate: input.cis_rate ? parseInt(input.cis_rate) : undefined,
                 email: input.email || undefined,
                 phone: input.phone || undefined,
               }).eq("id", hit.id).eq("user_id", user?.id).select().single();
               if (reErr) return `Failed to reactivate: ${reErr.message}`;
-              mirrorToTeamMembers("subcontractors", re);
+              const re = {
+                id: tmRe.id, name: tmRe.name,
+                company: tmRe.company_name, utr: tmRe.utr,
+                cis_rate: tmRe.cis_rate, email: tmRe.email, phone: tmRe.phone,
+                active: tmRe.active, created_at: tmRe.created_at,
+              };
               pendingWidgetRef.current = { type: "subcontractor_entry", data: re };
               return `${re.name} reactivated — CIS rate ${re.cis_rate}%. Past payment history preserved.`;
             }
@@ -10200,14 +10208,28 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           // No UTR = unregistered = 30%. UTR on file = assume registered at 20%
           // (tradie's job to verify with HMRC — we just hold the starting point).
           const defaultCisRate = input.utr ? 20 : 30;
-          const { data, error } = await db.from("subcontractors").insert({
+          // Session 3: direct write to team_members. Translate result back to
+          // legacy subcontractors shape for the widget payload (existing
+          // widget consumers read `company`, not `company_name`).
+          const { data: tmRow, error } = await db.from("team_members").insert({
             user_id: user?.id,
-            name: input.name, company: input.company || "", utr: input.utr || "",
-            cis_rate: parseInt(input.cis_rate) || defaultCisRate, email: input.email || "", phone: input.phone || "",
-            created_at: new Date().toISOString(),
+            name: input.name,
+            engagement: "self_employed",
+            company_name: input.company || null,
+            utr: input.utr || null,
+            cis_rate: parseInt(input.cis_rate) || defaultCisRate,
+            email: input.email || null,
+            phone: input.phone || null,
+            active: true,
+            source_table: "subcontractors",
           }).select().single();
           if (error) return `Failed to add subcontractor: ${error.message}`;
-          mirrorToTeamMembers("subcontractors", data);
+          const data = {
+            id: tmRow.id, user_id: tmRow.user_id, name: tmRow.name,
+            company: tmRow.company_name, utr: tmRow.utr, cis_rate: tmRow.cis_rate,
+            email: tmRow.email, phone: tmRow.phone, active: tmRow.active,
+            created_at: tmRow.created_at,
+          };
           pendingWidgetRef.current = { type: "subcontractor_entry", data };
           const utrNote = !input.utr && !input.cis_rate ? " No UTR on file — HMRC requires 30% on unverified subbies. Set to 20% once you've verified their UTR with HMRC." : "";
           return `${data.name} added as a subcontractor — CIS rate ${data.cis_rate}%.${utrNote}`;
@@ -11097,20 +11119,28 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             if (hit.active === false) {
               const reactivateType = input.type || "subcontractor";
               const reactivateCisRate = parseInt(input.cis_rate) || (input.utr ? 20 : 30);
-              const { data: wr, error: wrErr } = await db.from("workers").update({
+              // Session 3: direct update to team_members. Map legacy "type"
+              // back to engagement; only set cis_rate for self-employed.
+              const reactivateEngagement = reactivateType === "employed" ? "employed" : "self_employed";
+              const { data: tmWr, error: wrErr } = await db.from("team_members").update({
                 active: true,
-                type: reactivateType,
+                archived_at: null,
+                engagement: reactivateEngagement,
                 role: input.role || undefined,
                 email: input.email || undefined,
                 phone: input.phone || undefined,
                 day_rate: parseFloat(input.day_rate || 0) || undefined,
                 hourly_rate: parseFloat(input.hourly_rate || 0) || undefined,
                 utr: input.utr || undefined,
-                cis_rate: reactivateType === "subcontractor" ? reactivateCisRate : undefined,
+                cis_rate: reactivateEngagement === "self_employed" ? reactivateCisRate : null,
                 ni_number: input.ni_number || undefined,
               }).eq("id", hit.id).eq("user_id", user?.id).select().single();
               if (wrErr) return `Failed to reactivate worker: ${wrErr.message}`;
-              mirrorToTeamMembers("workers", wr);
+              const wr = {
+                id: tmWr.id, name: tmWr.name,
+                type: tmWr.engagement === "employed" ? "employed" : "subcontractor",
+                role: tmWr.role,
+              };
               return `${wr.name} reactivated${input.role ? ` as ${input.role}` : ""}. Past time logs preserved.`;
             }
             return `${input.name} is already in your workers.`;
@@ -11130,18 +11160,26 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           }
           // Same HMRC rule as add_subcontractor for the CIS default
           const workerDefaultCis = input.utr ? 20 : 30;
-          const { data: newWorker, error: wErr } = await db.from("workers").insert({
+          // Session 3: direct write to team_members. Map "type" → engagement;
+          // ni_number applies for employed; cis_rate for self_employed.
+          const newEngagement = input.type === "employed" ? "employed" : "self_employed";
+          const { data: newTm, error: wErr } = await db.from("team_members").insert({
             user_id: user?.id,
-            name: input.name, type: input.type || "subcontractor",
-            role: input.role || "", email: input.email || "", phone: input.phone || "",
+            name: input.name,
+            engagement: newEngagement,
+            role: input.role || null,
+            email: input.email || null,
+            phone: input.phone || null,
             day_rate: parseFloat(input.day_rate || 0) || null,
             hourly_rate: parseFloat(input.hourly_rate || 0) || null,
-            utr: input.utr || "", cis_rate: parseInt(input.cis_rate) || workerDefaultCis,
-            ni_number: input.ni_number || "", active: true,
-            created_at: new Date().toISOString(),
+            utr: input.utr || null,
+            cis_rate: newEngagement === "self_employed" ? (parseInt(input.cis_rate) || workerDefaultCis) : null,
+            ni_number: input.ni_number || null,
+            active: true,
+            source_table: "workers",
           }).select().single();
           if (wErr) return `Failed to add worker: ${wErr.message}`;
-          mirrorToTeamMembers("workers", newWorker);
+          const newWorker = { id: newTm.id, name: newTm.name };
           const workerType = input.type === "employed" ? "employed staff member" : "subcontractor";
           const utrNote = (input.type !== "employed") && !input.utr && !input.cis_rate ? " No UTR — defaulted to 30% CIS per HMRC rules." : "";
           return `Worker added: ${input.name}${input.role ? ` (${input.role})` : ""} as a ${workerType}${input.day_rate ? ` — day rate ${fmtAmount(input.day_rate)}` : ""}${input.hourly_rate ? ` — hourly rate ${fmtAmount(input.hourly_rate)}` : ""}.${utrNote}`;
@@ -11287,10 +11325,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { count: payCount } = await db.from("subcontractor_payments")
             .select("id", { count: "exact", head: true })
             .eq("user_id", user?.id).eq("subcontractor_id", found[0].id);
-          const { error: arcErr } = await db.from("subcontractors")
-            .update({ active: false }).eq("id", found[0].id).eq("user_id", user?.id);
+          // Session 3: soft-delete via team_members. archived_at + active=false.
+          const { error: arcErr } = await db.from("team_members")
+            .update({ active: false, archived_at: new Date().toISOString() })
+            .eq("id", found[0].id).eq("user_id", user?.id);
           if (arcErr) return `Failed to archive: ${arcErr.message}`;
-          setTeamMembersArchived("subcontractors", found[0].id, user?.id, true);
           return `${found[0].name} archived.${payCount ? ` ${payCount} payment record${payCount > 1 ? "s" : ""} kept for CIS reporting.` : ""}`;
         }
         case "update_worker": {
@@ -11306,9 +11345,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (input.phone) updates.phone = input.phone;
           if (input.utr) updates.utr = input.utr;
           if (!Object.keys(updates).length) return `Nothing to update for ${w.name} — tell me what to change.`;
-          const { error: wUpdErr } = await db.from("workers").update(updates).eq("id", w.id).eq("user_id", user?.id);
+          const { error: wUpdErr } = await db.from("team_members").update(updates).eq("id", w.id).eq("user_id", user?.id);
           if (wUpdErr) return `Failed to update: ${wUpdErr.message}`;
-          mirrorToTeamMembers("workers", { ...w, ...updates, user_id: user?.id });
           const changes = Object.entries(updates).map(([k,v]) => `${k.replace(/_/g," ")} → ${v}`).join(", ");
           return `${w.name} updated: ${changes}.`;
         }
@@ -11326,10 +11364,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             db.from("worker_documents").select("id", { count: "exact", head: true }).eq("user_id", user?.id).eq("worker_id", wDel[0].id),
             db.from("time_logs").select("id", { count: "exact", head: true }).eq("user_id", user?.id).eq("worker", wDel[0].name),
           ]);
-          const { error: wArcErr } = await db.from("workers")
-            .update({ active: false }).eq("id", wDel[0].id).eq("user_id", user?.id);
+          // Session 3: soft-delete via team_members. archived_at + active=false.
+          const { error: wArcErr } = await db.from("team_members")
+            .update({ active: false, archived_at: new Date().toISOString() })
+            .eq("id", wDel[0].id).eq("user_id", user?.id);
           if (wArcErr) return `Failed to archive: ${wArcErr.message}`;
-          setTeamMembersArchived("workers", wDel[0].id, user?.id, true);
           const kept = [
             assignCount ? `${assignCount} job assignment${assignCount > 1 ? "s" : ""}` : "",
             docCount ? `${docCount} document${docCount > 1 ? "s" : ""}` : "",
@@ -25798,44 +25837,77 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
 
   const saveSub = async () => {
     if (!subForm.name) return;
-    const { data, error } = await db.from("subcontractors").insert({ user_id: user.id, ...subForm, created_at: new Date().toISOString() }).select().single();
+    // Session 3: direct write to team_members. source_table='subcontractors'
+    // preserved for tmReadSubs filter compatibility (Subcontractors tab shows
+    // anyone added via "Add Subcontractor"). engagement is always self_employed
+    // — anyone you pay via CIS counts as a self-employed sub from the
+    // unification model's perspective.
+    const { data, error } = await db.from("team_members").insert({
+      user_id: user.id,
+      name: subForm.name,
+      engagement: "self_employed",
+      company_name: subForm.company || null,
+      utr: subForm.utr || null,
+      cis_rate: parseInt(subForm.cis_rate) || 20,
+      email: subForm.email || null,
+      phone: subForm.phone || null,
+      active: true,
+      source_table: "subcontractors",
+    }).select().single();
     if (!error && data) {
-      mirrorToTeamMembers("subcontractors", data);
-      setSubs(p => [...p, data]); setView("list"); setSubForm({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "" });
+      // Translate to legacy subcontractors shape for in-memory state — UI code
+      // (statements, payment lookups) reads `company`, not `company_name`.
+      setSubs(p => [...p, {
+        id: data.id, user_id: data.user_id, name: data.name,
+        company: data.company_name, utr: data.utr, cis_rate: data.cis_rate,
+        email: data.email, phone: data.phone, active: data.active,
+        created_at: data.created_at,
+      }]);
+      setView("list");
+      setSubForm({ name: "", utr: "", cis_rate: 20, email: "", phone: "", company: "" });
     }
   };
 
   const saveWorker = async () => {
     if (!workerForm.name) return;
-    const { data, error } = await db.from("workers").insert({
-      user_id: user.id, ...workerForm,
+    // Session 3: direct write to team_members. source_table='workers' for
+    // Workers-tab filter. engagement maps from form's type field.
+    //
+    // Pre-Session-3 the saveWorker handler ALSO inserted into the legacy
+    // subcontractors table when type='subcontractor' so the same human
+    // appeared in both Workers and Subcontractors tabs. That created two
+    // team_members rows per human via the dual-write mirror. Session 3
+    // drops that auto-duplication: one human, one row, in the Workers tab
+    // they were added from. Users wanting the same person in Subcontractors
+    // tab add them separately (or we add a UI move-tab affordance later).
+    const engagement = workerForm.type === "employed" ? "employed" : "self_employed";
+    const { data, error } = await db.from("team_members").insert({
+      user_id: user.id,
+      name: workerForm.name,
+      engagement,
+      role: workerForm.role || null,
       day_rate: parseFloat(workerForm.day_rate) || null,
       hourly_rate: parseFloat(workerForm.hourly_rate) || null,
-      cis_rate: parseInt(workerForm.cis_rate) || 20,
-      active: true, created_at: new Date().toISOString(),
+      utr: workerForm.utr || null,
+      cis_rate: engagement === "self_employed" ? (parseInt(workerForm.cis_rate) || 20) : null,
+      ni_number: workerForm.ni_number || null,
+      email: workerForm.email || null,
+      phone: workerForm.phone || null,
+      active: true,
+      source_table: "workers",
     }).select().single();
     if (!error && data) {
-      mirrorToTeamMembers("workers", data);
-      // If subcontractor type, also add to legacy subcontractors table for CIS payment lookups
-      if (workerForm.type === "subcontractor") {
-        const { data: existingSub } = await tmReadSubs(db, user.id, { nameLike: workerForm.name, limit: 1 });
-        if (!existingSub?.length) {
-          const { data: newSub } = await db.from("subcontractors").insert({
-            user_id: user.id, name: workerForm.name, company: "",
-            utr: workerForm.utr || "", cis_rate: parseInt(workerForm.cis_rate) || 20,
-            email: workerForm.email || "", phone: workerForm.phone || "",
-            created_at: new Date().toISOString(),
-          }).select().single();
-          if (newSub) {
-            // Note: this creates a SECOND team_members row for the same human
-            // (one from workers above, one from this sub insert). Accepted
-            // short-term; Session 3 of the unification dedupes on name.
-            mirrorToTeamMembers("subcontractors", newSub);
-            setSubs(s => [...s, newSub]);
-          }
-        }
-      }
-      setWorkers(w => [...w, data]);
+      // Translate to legacy workers shape for in-memory state.
+      setWorkers(w => [...w, {
+        id: data.id, user_id: data.user_id, name: data.name,
+        type: data.engagement === "employed" ? "employed" : "subcontractor",
+        role: data.role, email: data.email, phone: data.phone,
+        day_rate: data.day_rate, hourly_rate: data.hourly_rate,
+        utr: data.utr, cis_rate: data.cis_rate, ni_number: data.ni_number,
+        active: data.active, address: data.address,
+        start_date: data.start_date, notes: data.notes,
+        created_at: data.created_at,
+      }]);
       setView("list");
       setWorkerForm({ name: "", type: "subcontractor", role: "", email: "", phone: "", day_rate: "", hourly_rate: "", utr: "", cis_rate: 20, ni_number: "" });
     }
@@ -25941,27 +26013,34 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
 
   const updateWorker = async () => {
     if (!editingWorker) return;
-    const { error } = await db.from("workers").update({
-      name: editingWorker.name, type: editingWorker.type,
-      role: editingWorker.role || "", email: editingWorker.email || "",
-      phone: editingWorker.phone || "", address: editingWorker.address || "",
+    // Session 3: update team_members directly. Mapping legacy workers shape
+    // back to team_members columns. id is now tm.id (read helpers updated).
+    const engagement = editingWorker.type === "employed" ? "employed" : "self_employed";
+    const { error } = await db.from("team_members").update({
+      name: editingWorker.name,
+      engagement,
+      role: editingWorker.role || null,
+      email: editingWorker.email || null,
+      phone: editingWorker.phone || null,
+      address: editingWorker.address || null,
       day_rate: parseFloat(editingWorker.day_rate) || null,
       hourly_rate: parseFloat(editingWorker.hourly_rate) || null,
-      utr: editingWorker.utr || "", cis_rate: parseInt(editingWorker.cis_rate) || 20,
-      ni_number: editingWorker.ni_number || "",
+      utr: editingWorker.utr || null,
+      cis_rate: engagement === "self_employed" ? (parseInt(editingWorker.cis_rate) || 20) : null,
+      ni_number: editingWorker.ni_number || null,
     }).eq("id", editingWorker.id).eq("user_id", user.id);
     if (!error) {
-      mirrorToTeamMembers("workers", { ...editingWorker, user_id: user.id });
       setWorkers(ws => ws.map(w => w.id === editingWorker.id ? { ...w, ...editingWorker } : w));
       setEditingWorker(null);
     }
   };
 
   const deleteWorker = async (id) => {
-    const { error } = await db.from("workers").delete().eq("id", id).eq("user_id", user.id);
+    // Session 3: delete from team_members directly.
+    const { error } = await db.from("team_members").delete().eq("id", id).eq("user_id", user.id);
     if (!error) {
-      unmirrorFromTeamMembers("workers", id, user.id);
-      setWorkers(ws => ws.filter(w => w.id !== id)); setDeletingWorker(null);
+      setWorkers(ws => ws.filter(w => w.id !== id));
+      setDeletingWorker(null);
     }
   };
 
@@ -28567,14 +28646,13 @@ async function setTeamMembersArchived(sourceTable, sourceId, userId, isArchived)
 //
 // The `source_table` filter preserves legacy table-scope semantics exactly:
 //   - workers read → only rows mirrored from `workers`
-//   - subs read    → only rows mirrored from `subcontractors`
-// This means the short-term duplication from saveWorker's type='subcontractor'
-// double-write (one row from workers mirror, one from subcontractors mirror
-// for the same human) is preserved until Session 3 dedupes.
+// Reads return team_members.id as `id` post-Session-3 cutover (was source_id
+// pre-cutover so legacy table writes still worked). Now all writes target
+// team_members directly, so id and source_id are unified — return tm.id.
 //
-// id: we return source_id as `id` so callers can do downstream .eq("id", row.id)
-// against legacy tables — keeps referring records (payments, time logs) working
-// until Session 3 swaps them too.
+// The `source_table` filter preserves legacy table-scope semantics: workers
+// reads return rows added via "Add Worker", subs reads return rows added via
+// "Add Subcontractor". One human, one row, in the tab they were added to.
 
 async function tmReadWorkers(db, userId, opts = {}) {
   if (!db || !userId) return { data: [], error: null };
@@ -28588,7 +28666,7 @@ async function tmReadWorkers(db, userId, opts = {}) {
   if (error) return { data: null, error };
   return {
     data: (data || []).map(r => ({
-      id: r.source_id || r.id,
+      id: r.id,
       user_id: r.user_id,
       name: r.name,
       type: r.engagement === "employed" ? "employed" : "subcontractor",
@@ -28622,7 +28700,7 @@ async function tmReadSubs(db, userId, opts = {}) {
   if (error) return { data: null, error };
   return {
     data: (data || []).map(r => ({
-      id: r.source_id || r.id,
+      id: r.id,
       user_id: r.user_id,
       name: r.name,
       company: r.company_name,
