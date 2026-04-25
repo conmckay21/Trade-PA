@@ -1,6 +1,6 @@
 # Workers / Subcontractors unification — migration plan
 
-Status: **Session 3 DONE (2026-04-25)** — write cutover complete, FKs redirected to team_members, legacy tables deprecated. Session 4 (drop legacy tables) pending after sync period.
+Status: **MIGRATION COMPLETE (2026-04-25)** — all 4 sessions landed same day. Workers and Subcontractors are unified into team_members; legacy tables dropped.
 Last updated: 2026-04-25
 Author: forensic audit session
 
@@ -137,16 +137,42 @@ Both helpers preserve legacy table-scope semantics exactly — subs reads get su
 
 **FK behaviour change to be aware of**: ON DELETE NO ACTION + the "everything is in team_members now" reality means hard-deleting a `team_members` row with linked payments / job assignments / documents will FAIL at the DB level. This is correct — the code never hard-deletes (only soft-deletes), so the constraint is a safety net. If a hard-delete is ever needed (GDPR right-to-erasure), the linked records must be deleted or repointed first.
 
-### Session 4 — drop old tables (PENDING)
+### Session 4 — drop legacy tables ✅ COMPLETE (2026-04-25)
 
-Run after a sync period (1-2 weeks of clean operation on Session 3 code).
+Decision to land Session 4 same-day as Session 3: production had zero traffic and trials hadn't started. The original plan called for a 1-2 week sync period to catch missed code paths via real traffic, but with no traffic to observe, calendar time provided no validation. Instead, an exhaustive audit confirmed safety:
+- Zero `from("workers")` / `from("subcontractors")` references in App.jsx (write paths refactored Session 3, read paths Session 2).
+- Zero references in api/ folder.
+- Zero Postgres functions or views referenced the legacy tables.
+- Zero remaining FK constraints — Session 3 had redirected all 3.
+- Production data state: 1 row already migrated cleanly (Lewis Skelton).
 
-1. Verify zero writes have hit `workers` / `subcontractors` since Session 3 deploy (audit Sentry logs + DB write timestamps).
-2. Back up old tables (CSV export or pg_dump).
-3. Drop `workers` and `subcontractors` tables.
-4. Remove `mirrorToTeamMembers`, `unmirrorFromTeamMembers`, `setTeamMembersArchived` helpers from App.jsx.
-5. Drop `source_table` and `source_id` columns from `team_members` (or keep nullable for archaeology — decision pending).
-6. Optionally migrate `tmReadWorkers` / `tmReadSubs` filter from `source_table` to `engagement` if UI semantics permit (might be a separate UX decision).
+**One Session 3 blind spot caught and fixed**: 5 `select("*, workers(name)")` FK-join sites in App.jsx (worker_documents UI load, document expiry alerts, AI doc-expiry tools, doc save flow). After Session 3's FK redirect, the relationship Supabase resolved was `team_members`, not `workers`, so the join syntax silently broke. Fixed by replacing all 5 with `select("*, team_members(name)")`. Plus 1 consumer site updated (`d.workers?.name` → `d.team_members?.name`).
+
+**DB migration applied**: `2026-04-25_workers_subs_session4_drop_legacy_tables.sql`
+1. ✅ Dropped `workers` table.
+2. ✅ Dropped `subcontractors` table.
+3. ✅ team_members + dependents (job_workers, subcontractor_payments, worker_documents) intact and working.
+
+**Code changes**:
+- Removed `mirrorToTeamMembers`, `unmirrorFromTeamMembers`, `setTeamMembersArchived` helper functions from App.jsx (now ~100 lines lighter).
+- Updated 5 FK-join sites + 1 consumer site to reference `team_members` instead of `workers`.
+- App.jsx clean: zero references to legacy tables anywhere.
+
+**What's NOT in scope for this completion** (deferred):
+- `team_members.source_table` and `source_id` columns kept populated. Live read helpers (`tmReadWorkers` / `tmReadSubs`) still filter by `source_table` to preserve UI tab semantics. Migrating those filters to use `engagement` is a UX-affecting decision (would change which humans appear in which tab) and is parked for a future product-design session.
+
+## Migration retrospective
+
+Total scope: 4 sessions. Original timeline projected 2-4 weeks. Actual time elapsed: ~36 hours. Why fast:
+1. Zero production traffic → no need for the calendar-based "sync period."
+2. Surgical-edit discipline — every refactor compile-tested before next.
+3. Database state held at 1 row throughout — migrations took milliseconds.
+4. Comprehensive pre-cutover audits caught risk areas before they bit.
+
+**Lessons for the next big migration:**
+- Supabase's FK-join syntax (`from(X).select("*, Y(...)")`) is invisibly coupled to FK constraint names. Any FK redirect requires a manual sweep of join syntax. Worth adding a custom lint rule or pre-deploy grep check.
+- "Sync period" guidance from migration playbooks assumes traffic. For pre-launch, replace it with explicit code/RPC/view audits.
+- Ship the helper-deprecation cleanup in the same session as the FK migration. Splitting them creates a window where dead code ships to production.
 
 ## Risks and mitigations
 
