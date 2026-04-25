@@ -886,9 +886,9 @@ function LandingPage({ onAuth }) {
             <p style={{ color: "#888", fontSize: 14, maxWidth: 560, margin: "0 auto 24px", lineHeight: 1.7 }}>Busy month? Top up any plan with one-off usage add-ons. No subscription change, no commitment — just a boost for the current billing period.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, maxWidth: 700, margin: "0 auto 16px" }}>
               {[
-                { label: "+100 AI conversations", price: "£25", desc: "Extra allowance for a busy month" },
-                { label: "+1 hour hands-free", price: "£5", desc: "Extra hands-free time, top-up only" },
-                { label: "+100 conv & +1h combo", price: "£28", desc: "Save £2 vs buying both separately" },
+                { label: "+200 AI conversations", price: "£39", desc: "Extra allowance for a busy month" },
+                { label: "+2 hours hands-free", price: "£19", desc: "Extra hands-free time, top-up only" },
+                { label: "+200 conv & +2h combo", price: "£55", desc: "Save £3 vs buying both separately" },
               ].map(a => (
                 <div key={a.label} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: 14, textAlign: "left" }}>
                   <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, color: "#f0f0f0", marginBottom: 6 }}>{a.label}</div>
@@ -3006,9 +3006,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
   const [addonBusy, setAddonBusy] = useState(false);
   const [addonResult, setAddonResult] = useState(null);   // { type, message, displayName? }
   const ADDON_DISPLAY = {
-    conversations: { title: "+100 conversations", subtitle: "100 extra AI conversations, active right away. Expires end of this month.", pricePence: 2500 },
-    handsfree:     { title: "+1 hour hands-free", subtitle: "1 extra hour of hands-free mic time, active right away. Expires end of this month.", pricePence: 500 },
-    combo:         { title: "+100 conversations & +1 hour hands-free", subtitle: "Both combined — 100 conversations and 1 hour of hands-free, active right away. Expires end of this month.", pricePence: 2800 },
+    conversations: { title: "+200 conversations", subtitle: "200 extra AI conversations, active right away. Expires end of this month.", pricePence: 3900 },
+    handsfree:     { title: "+2 hours hands-free", subtitle: "2 extra hours of hands-free mic time, active right away. Expires end of this month.", pricePence: 1900 },
+    combo:         { title: "+200 conversations & +2 hours hands-free", subtitle: "Both combined — 200 conversations and 2 hours of hands-free, active right away. Expires end of this month.", pricePence: 5500 },
   };
   const purchaseAddon = async (addonType) => {
     setAddonBusy(true);
@@ -4053,9 +4053,9 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         }
 
         const items = [
-          { key: "conversations", label: "+100 conversations",         price: "£25 one-off",            highlight: false },
-          { key: "handsfree",     label: "+1 hour hands-free",         price: "£5 one-off",             highlight: false },
-          { key: "combo",         label: "+100 conv & +1h hands-free", price: "£28 one-off · save £2",  highlight: true  },
+          { key: "conversations", label: "+200 conversations",         price: "£39 one-off",            highlight: false },
+          { key: "handsfree",     label: "+2 hours hands-free",        price: "£19 one-off",            highlight: false },
+          { key: "combo",         label: "+200 conv & +2h hands-free", price: "£55 one-off · save £3",  highlight: true  },
         ];
 
         return (
@@ -14474,7 +14474,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                       cursor: limitBusy ? "not-allowed" : "pointer",
                       opacity: limitBusy ? 0.6 : 1,
                     }}
-                  >{limitBusy ? "Processing..." : "+100 conversations · £25"}</button>
+                  >{limitBusy ? "Processing..." : "+200 conversations · £39"}</button>
                   <button
                     onClick={() => buyAddonAndRetry("combo")}
                     disabled={limitBusy}
@@ -14491,7 +14491,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                       cursor: limitBusy ? "not-allowed" : "pointer",
                       opacity: limitBusy ? 0.6 : 1,
                     }}
-                  >Combo · +100 conv & +1h · £28</button>
+                  >Combo · +200 conv & +2h · £55</button>
                 </div>
               )}
               {showUpgrade && (
