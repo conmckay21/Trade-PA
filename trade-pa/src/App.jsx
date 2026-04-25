@@ -7191,7 +7191,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
     const cutoff = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
     db.from("worker_documents")
-      .select("*, workers(name)").eq("user_id", user.id)
+      .select("*, team_members(name)").eq("user_id", user.id)
       .lte("expiry_date", cutoff).gte("expiry_date", today)
       .order("expiry_date", { ascending: true }).limit(5)
       .then(({ data }) => { if (data?.length) setExpiryAlerts(data); });
@@ -11299,11 +11299,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const cutoff = new Date(Date.now() + days * 86400000).toISOString().slice(0,10);
           const today = new Date().toISOString().slice(0,10);
           const { data: expiring } = await db.from("worker_documents")
-            .select("*, workers(name)").eq("user_id", user?.id)
+            .select("*, team_members(name)").eq("user_id", user?.id)
             .lte("expiry_date", cutoff).gte("expiry_date", today)
             .order("expiry_date", { ascending: true });
           const { data: expired } = await db.from("worker_documents")
-            .select("*, workers(name)").eq("user_id", user?.id)
+            .select("*, team_members(name)").eq("user_id", user?.id)
             .lt("expiry_date", today).order("expiry_date", { ascending: false }).limit(5);
           const docs = [...(expired || []).map(d => ({...d, status: "expired"})),
                        ...(expiring || []).map(d => ({...d, status: "expiring"}))];
@@ -13787,7 +13787,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                             return (
                               <div key={i} style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                 <div>
-                                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{d.workers?.name || "Unknown"}</div>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{d.team_members?.name || "Unknown"}</div>
                                   <div style={{ fontSize: 11, color: C.muted }}>{(d.doc_type || "").replace(/_/g," ").toUpperCase()}{d.doc_number ? ` · ${d.doc_number}` : ""}</div>
                                 </div>
                                 <div style={{ textAlign: "right" }}>
@@ -25811,7 +25811,7 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
       tmReadSubs(db, user.id),
       db.from("subcontractor_payments").select("*").eq("user_id", user.id).order("date", { ascending: false }),
       tmReadWorkers(db, user.id, { activeOnly: true }),
-      db.from("worker_documents").select("*, workers(name)").eq("user_id", user.id).order("expiry_date", { ascending: true }),
+      db.from("worker_documents").select("*, team_members(name)").eq("user_id", user.id).order("expiry_date", { ascending: true }),
     ]);
     // tmReadSubs/tmReadWorkers don't take an order() clause — sort client-side
     // to preserve the alphabetical-by-name behaviour the UI relied on.
@@ -25917,7 +25917,7 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
     if (!docForm.worker_id || !docForm.doc_type) return;
     const { data, error } = await db.from("worker_documents").insert({
       user_id: user.id, ...docForm, created_at: new Date().toISOString(),
-    }).select("*, workers(name)").single();
+    }).select("*, team_members(name)").single();
     if (!error && data) {
       setWorkerDocs(d => [...d, data]);
       setView("list");
@@ -28530,112 +28530,12 @@ function newEnquiryId() {
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
 
-// ─── team_members dual-write shim ───────────────────────────────────────────
-// Session 1 of the workers+subcontractors unification. Every write to the
-// legacy `workers` or `subcontractors` tables is mirrored here, keeping
-// `team_members` in sync. Reads still come from the legacy tables — this
-// is purely about filling up team_members so Session 2 can start migrating
-// reads over without a backfill gap.
-//
-// Design notes:
-//   - Best-effort. If the mirror fails, we log and move on. The legacy
-//     primary write must never be affected by a team_members failure.
-//   - Idempotent via the uq_team_members_source unique index on
-//     (user_id, source_table, source_id). Re-running a mirror for the same
-//     legacy row is a no-op (or update if data changed).
-//   - `saveWorker` double-writes (workers + subcontractors) remain as-is for
-//     Session 1; they'll produce TWO team_members rows for the same human
-//     until Session 3 de-dupes. Acceptable short-term — documented in the
-//     migration doc.
-//   - db is the Supabase client (window._supabase wrapper). Falls back to
-//     window._supabase so the helper can be called from module scope before
-//     db is in lexical range.
-//
-// sourceTable: 'workers' | 'subcontractors'
-// sourceRow:   the row object just written to the legacy table (has id + user_id)
-async function mirrorToTeamMembers(sourceTable, sourceRow) {
-  if (!sourceRow || !sourceRow.id || !sourceRow.user_id) return;
-  const sb = (typeof window !== "undefined" && window._supabase) || null;
-  if (!sb) return;
-  try {
-    // Build the team_members row from the source, mapping fields across the
-    // schema shape differences between workers and subcontractors.
-    const row = {
-      user_id: sourceRow.user_id,
-      name: sourceRow.name || "",
-      active: sourceRow.active !== false, // default true; workers can be null
-      source_table: sourceTable,
-      source_id: sourceRow.id,
-    };
-    if (sourceTable === "workers") {
-      row.engagement = sourceRow.type === "employed" ? "employed" : "self_employed";
-      row.role = sourceRow.role || null;
-      row.day_rate = sourceRow.day_rate ?? null;
-      row.hourly_rate = sourceRow.hourly_rate ?? null;
-      row.utr = sourceRow.utr || null;
-      row.ni_number = sourceRow.ni_number || null;
-      row.cis_rate = sourceRow.cis_rate ?? null;
-      row.email = sourceRow.email || null;
-      row.phone = sourceRow.phone || null;
-      row.address = sourceRow.address || null;
-      row.start_date = sourceRow.start_date || null;
-      row.notes = sourceRow.notes || null;
-    } else if (sourceTable === "subcontractors") {
-      row.engagement = "self_employed";
-      row.company_name = sourceRow.company || null;
-      row.utr = sourceRow.utr || null;
-      row.cis_rate = sourceRow.cis_rate ?? null;
-      row.email = sourceRow.email || null;
-      row.phone = sourceRow.phone || null;
-    } else {
-      return; // unknown source_table — refuse to mirror
-    }
-    // Upsert via the partial unique index. onConflict targets the index columns.
-    const { error } = await sb.from("team_members")
-      .upsert(row, { onConflict: "user_id,source_table,source_id" });
-    if (error) console.warn(`[team_members mirror] ${sourceTable} ${sourceRow.id}:`, error.message);
-  } catch (err) {
-    console.warn(`[team_members mirror] threw for ${sourceTable} ${sourceRow.id}:`, err.message);
-  }
-}
-
-// Delete the team_members row mirrored from a legacy row. Called alongside
-// hard deletes on the legacy tables. Soft deletes (active=false) flow
-// through mirrorToTeamMembers instead — no delete needed.
-async function unmirrorFromTeamMembers(sourceTable, sourceId, userId) {
-  if (!sourceTable || !sourceId || !userId) return;
-  const sb = (typeof window !== "undefined" && window._supabase) || null;
-  if (!sb) return;
-  try {
-    const { error } = await sb.from("team_members")
-      .delete()
-      .eq("user_id", userId)
-      .eq("source_table", sourceTable)
-      .eq("source_id", sourceId);
-    if (error) console.warn(`[team_members unmirror] ${sourceTable} ${sourceId}:`, error.message);
-  } catch (err) {
-    console.warn(`[team_members unmirror] threw for ${sourceTable} ${sourceId}:`, err.message);
-  }
-}
-
-// Targeted update for soft-delete / archive flows — only touches the
-// `active` column on the mirrored team_members row. Using the full mirror
-// helper with a partial source row would null out other columns.
-async function setTeamMembersArchived(sourceTable, sourceId, userId, isArchived) {
-  if (!sourceTable || !sourceId || !userId) return;
-  const sb = (typeof window !== "undefined" && window._supabase) || null;
-  if (!sb) return;
-  try {
-    const { error } = await sb.from("team_members")
-      .update({ active: !isArchived, archived_at: isArchived ? new Date().toISOString() : null })
-      .eq("user_id", userId)
-      .eq("source_table", sourceTable)
-      .eq("source_id", sourceId);
-    if (error) console.warn(`[team_members archive] ${sourceTable} ${sourceId}:`, error.message);
-  } catch (err) {
-    console.warn(`[team_members archive] threw for ${sourceTable} ${sourceId}:`, err.message);
-  }
-}
+// ─── Workers/subs unification reads ─────────────────────────────────────────
+// Sessions 1-4 of the workers+subcontractors unification (2026-04-24/25)
+// merged the legacy `workers` and `subcontractors` tables into a single
+// `team_members` table. The dual-write mirror helpers used during the
+// migration window have been removed (Session 4). Reads come via the
+// helpers below; writes go directly to team_members in the call sites.
 
 // ─── Session 2: reads migration ─────────────────────────────────────────────
 // Reads now come from team_members instead of the legacy workers/subcontractors
