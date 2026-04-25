@@ -19,30 +19,31 @@ const supabaseAdmin = createClient(
 // not hours, because that's what check_usage_allowance reads against
 // usage_tracking.handsfree_seconds_used.
 //
-// Addon pack sizes refreshed Apr 2026 to match new tier caps (Solo 100 / 200 / 400 / 800).
-// Old packs were sized for the retired 500/1500/2500-cap tiers and would have
-// undercut the upgrade ladder.
+// Quantities refreshed Apr 2026 (+500/+10h → +200/+2h) to match new tier caps.
+// Prices unchanged — same Stripe price objects, no env var changes needed.
+// (Old env var names retained even though numeric labels are now stale; the
+// suffix is just a label, the actual price/qty is read from this catalogue.)
 const ADDON_CATALOGUE = {
   conversations: {
-    priceEnv: "STRIPE_PRICE_ADDON_CONV_100",
-    display_name: "+100 AI conversations",
-    price_paid_pence: 2500,
-    conversations_added: 100,
+    priceEnv: "STRIPE_PRICE_ADDON_CONV_500",
+    display_name: "+200 AI conversations",
+    price_paid_pence: 3900,
+    conversations_added: 200,
     handsfree_seconds_added: 0,
   },
   handsfree: {
-    priceEnv: "STRIPE_PRICE_ADDON_HF_1H",
-    display_name: "+1 hour hands-free",
-    price_paid_pence: 500,
+    priceEnv: "STRIPE_PRICE_ADDON_HF_10",
+    display_name: "+2 hours hands-free",
+    price_paid_pence: 1900,
     conversations_added: 0,
-    handsfree_seconds_added: 3600, // 1 hour × 3600
+    handsfree_seconds_added: 7200, // 2 hours × 3600
   },
   combo: {
     priceEnv: "STRIPE_PRICE_ADDON_COMBO",
-    display_name: "+100 conversations & +1 hour hands-free",
-    price_paid_pence: 2800,
-    conversations_added: 100,
-    handsfree_seconds_added: 3600,
+    display_name: "+200 conversations & +2 hours hands-free",
+    price_paid_pence: 5500,
+    conversations_added: 200,
+    handsfree_seconds_added: 7200,
   },
 };
 
