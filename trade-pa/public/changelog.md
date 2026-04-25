@@ -2,6 +2,12 @@
 
 ---
 
+## 2026-04-25
+
+### Workers & Subcontractors: one tab, one row, one human 👷
+
+Behind the scenes we've finished merging your Workers and Subcontractors lists onto a single shared spine in the database. Up to now adding a "self-employed worker" was secretly creating two records for the same human (one in Workers, one in Subcontractors) — that auto-duplication is gone. From now on: one human = one row, in the tab you added them from. Soft-delete still preserves all CIS payment history, time logs, job assignments, and document records exactly as before. Edits and archive flows now write to the unified table directly. No action needed on your end — your existing Lewis Skelton record (and any payments tied to him) carry over cleanly.
+
 ## 2026-04-24
 
 ### Top-up add-ons resized for the new plans 🔋
