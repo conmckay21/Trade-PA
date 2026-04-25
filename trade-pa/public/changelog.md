@@ -6,7 +6,7 @@
 
 ### Top-up add-ons resized for the new plans 🔋
 
-The mid-month add-ons have been resized to make sense alongside the smaller per-tier caps. Previously a top-up gave you +500 conversations or +10 hours hands-free for £39/£19 — sized for plans that don't exist anymore. The new top-ups: **+100 conversations for £25**, **+1 hour hands-free for £5**, or a **combo (+100 conv + 1 hour hands-free) for £28** (saves you £2). Same one-off model — you're charged on your saved card, the extra capacity is live within seconds and expires at your next billing rollover. If you regularly need extra, upgrading a tier is still the cheaper route long-term.
+The mid-month add-ons have been resized to make sense alongside the smaller per-tier caps. Prices stay where they were (£39, £19, £55), but the boost you get is now matched to the new plan caps. The new top-ups: **+200 conversations for £39**, **+2 hours hands-free for £19**, or a **combo (+200 conv + 2 hours hands-free) for £55** (saves you £3). Same one-off model — you're charged on your saved card, the extra capacity is live within seconds and expires at your next billing rollover. If you regularly need extra, upgrading a tier is still the cheaper route long-term.
 
 ### Pricing page rebuilt 💷
 
