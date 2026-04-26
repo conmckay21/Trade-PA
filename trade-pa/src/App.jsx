@@ -7134,7 +7134,7 @@ Return only JSON, no other text.` },
   );
 }
 
-function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 100, hf_hours: 1 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {}, pendingInboxCount = 0 }) {
+function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, sendPush, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 100, hf_hours: 1 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {}, pendingInboxCount = 0 }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -9370,9 +9370,16 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             (input.customer && (i.customer || "").toLowerCase().includes(input.customer.toLowerCase()))
           );
           if (!match) return `Couldn't find an unpaid invoice matching that. Check the Invoices tab.`;
+          // Persist to DB. Without this the UI shows "paid" but a reload drops
+          // the change. Schema check 2026-04-25: invoices has status + due, no
+          // paid_date column.
+          const { error: paidUpdErr } = await db.from("invoices")
+            .update({ status: "paid", due: "Paid" })
+            .eq("id", match.id).eq("user_id", user?.id);
+          if (paidUpdErr) return `Couldn't mark ${match.customer}'s invoice as paid: ${paidUpdErr.message}.`;
           setInvoices(prev => (prev || []).map(i => i.id === match.id ? { ...i, status: "paid", due: "Paid" } : i));
           syncInvoiceToAccounting(user?.id, { ...match, status: "paid" });
-          sendPush({ title: "💰 Invoice Paid", body: `${match.customer} paid ${fmtAmount(match.amount)}`, url: "/", type: "invoice_paid", tag: "invoice-paid" });
+          if (typeof sendPush === "function") sendPush({ title: "💰 Invoice Paid", body: `${match.customer} paid ${fmtAmount(match.amount)}`, url: "/", type: "invoice_paid", tag: "invoice-paid" });
           setLastAction({ type: "invoice", label: `Paid: ${match.id} — ${match.customer}`, view: "Invoices" });
           // Analytics: invoice marked paid. Tracking amount helps us see
           // typical ticket size per tradie — informs value-prop messaging.
@@ -11570,7 +11577,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             // paid everywhere" — partial-sync was a silent gotcha for users
             // running both systems.
             syncInvoiceToAccounting(user?.id, { ...inv, status: "paid" });
-            sendPush({ title: "💰 Invoice Paid", body: `${inv.customer} paid ${fmtAmount(inv.amount)}`, url: "/", type: "invoice_paid", tag: "invoice-paid" });
+            if (typeof sendPush === "function") sendPush({ title: "💰 Invoice Paid", body: `${inv.customer} paid ${fmtAmount(inv.amount)}`, url: "/", type: "invoice_paid", tag: "invoice-paid" });
             trackEvent(db, user?.id, companyId, "payment", "invoice_marked_paid", {
               amount: inv.amount,
               invoice_id: inv.id,
@@ -31326,7 +31333,7 @@ function AppInner() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} setContextHint={setContextHint} />}
         {view === "Expenses" && <ExpensesTab user={user} setContextHint={setContextHint} />}
         {view === "CIS" && <CISStatementsTab user={user} setContextHint={setContextHint} />}
-        <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} assistantVoice={assistantVoice} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} pendingInboxCount={pendingInboxCount} /></div>
+        <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} sendPush={sendPush} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} assistantVoice={assistantVoice} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} pendingInboxCount={pendingInboxCount} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Notifications" && (
           <Notifications
