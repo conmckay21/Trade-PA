@@ -3041,6 +3041,224 @@ function CertificationsCard({ brand, setBrand }) {
   );
 }
 
+// ─── Recently Deleted (holding bay UI) ───────────────────────────────────
+//
+// Lists soft-deleted rows from across all soft-delete tables, grouped by
+// type. Tap → Restore (clear deleted_at + cascade_id) or Delete forever
+// (hard DELETE). 14-day retention is enforced server-side by the
+// purge_expired_soft_deletes() pg_cron job — we just show what's still
+// in the bay.
+//
+// Only loads top 100 most-recently-deleted across all tables to keep
+// initial render fast — a Trash with 5,000 items is unlikely on a
+// pre-launch product but defensive cap regardless.
+function RecentlyDeleted({ user }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(null); // {action, table, id} while a restore/purge is in flight
+
+  // Tables we surface in the trash + display config (icon, label, summary builder)
+  const TABLE_DISPLAY = {
+    invoices:               { label: "Invoice",          icon: "🧾", sumKey: "amount", title: r => `${r.customer || "—"} · ${r.id || ""}` },
+    jobs:                   { label: "Job",              icon: "🛠️", title: r => `${r.customer || "—"} · ${r.type || ""}` },
+    job_cards:              { label: "Job card",         icon: "📋", title: r => `${r.customer || "—"} · ${r.title || r.type || ""}` },
+    customers:              { label: "Customer",         icon: "👤", title: r => r.name || "—" },
+    enquiries:              { label: "Enquiry",          icon: "📩", title: r => r.customer || r.name || "—" },
+    materials:              { label: "Material",         icon: "🧱", title: r => `${r.name || "—"} · ${r.qty || 1}` },
+    expenses:               { label: "Expense",          icon: "💸", title: r => `${r.description || "—"} · £${r.amount || 0}` },
+    mileage_logs:           { label: "Mileage log",      icon: "🚗", title: r => `${r.miles || 0} miles · ${r.from || ""} → ${r.to || ""}` },
+    time_logs:              { label: "Time log",         icon: "⏱️", title: r => `${r.hours || 0}h · ${r.notes || ""}` },
+    stock_items:            { label: "Stock item",       icon: "📦", title: r => `${r.name || "—"} × ${r.qty || 0}` },
+    cis_statements:         { label: "CIS statement",    icon: "🏗️", title: r => `${r.contractor_name || "—"}` },
+    subcontractor_payments: { label: "Sub payment",      icon: "💷", title: r => `£${r.gross_amount || r.amount || 0}` },
+    daywork_sheets:         { label: "Daywork sheet",    icon: "📝", title: r => r.title || "Daywork" },
+    variation_orders:       { label: "Variation order",  icon: "📐", title: r => r.title || `VO ${r.id || ""}` },
+    purchase_orders:        { label: "Purchase order",   icon: "🛒", title: r => `${r.supplier || "—"} · PO ${r.id || ""}` },
+    purchase_order_items:   { label: "PO item",          icon: "📦", title: r => r.description || "—" },
+    compliance_docs:        { label: "Compliance doc",   icon: "📄", title: r => r.doc_type || "Doc" },
+    trade_certificates:     { label: "Certificate",      icon: "📜", title: r => r.cert_label || r.cert_type || "Cert" },
+    worker_documents:       { label: "Worker doc",       icon: "🪪", title: r => r.doc_type || "Doc" },
+    rams_documents:         { label: "RAMS",             icon: "⚠️", title: r => r.title || "RAMS" },
+    documents:              { label: "Document",         icon: "📁", title: r => r.title || r.filename || "Document" },
+    reminders:              { label: "Reminder",         icon: "⏰", title: r => r.title || r.message || "Reminder" },
+    customer_contacts:      { label: "Customer contact", icon: "📇", title: r => r.name || r.email || "—" },
+    call_logs:              { label: "Call log",         icon: "📞", title: r => `${r.from_number || "—"} · ${r.duration_seconds || 0}s` },
+    user_commands:          { label: "Custom command",   icon: "🎙️", title: r => r.phrase || "—" },
+    job_notes:              { label: "Job note",         icon: "🗒️", title: r => (r.body || "").slice(0, 60) },
+    job_photos:             { label: "Job photo",        icon: "📷", title: r => r.caption || "Photo" },
+    job_drawings:           { label: "Drawing",          icon: "🖼️", title: r => r.title || "Drawing" },
+    job_workers:            { label: "Job assignment",   icon: "🧑‍🔧", title: r => `Worker on job ${r.job_id || ""}` },
+  };
+  const TABLE_NAMES = Object.keys(TABLE_DISPLAY);
+
+  const loadItems = async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    try {
+      const all = [];
+      // Fan-out across all tables. Using .withDeleted() to bypass the
+      // auto-filter and .neq("deleted_at", null) — but we ONLY want
+      // soft-deleted rows here, so use .gt("deleted_at", "1970…") which
+      // selects any non-null deleted_at value.
+      // 100 most recent per table to keep this snappy; total cap of ~2800.
+      await Promise.all(TABLE_NAMES.map(async (table) => {
+        try {
+          const { data, error } = await db.from(table)
+            .withDeleted()
+            .select("*")
+            .eq("user_id", user.id)
+            .not("deleted_at", "is", null)
+            .order("deleted_at", { ascending: false })
+            .limit(50);
+          if (error) {
+            // Some tables might not have deleted_at if migration is partial —
+            // skip gracefully rather than blowing up the whole list.
+            return;
+          }
+          for (const row of (data || [])) {
+            all.push({ ...row, _sourceTable: table });
+          }
+        } catch {}
+      }));
+      // Sort merged list by deleted_at descending
+      all.sort((a, b) => (b.deleted_at || "").localeCompare(a.deleted_at || ""));
+      setItems(all.slice(0, 200));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadItems(); }, [user?.id]);
+
+  const restoreItem = async (item) => {
+    setBusy({ action: "restore", table: item._sourceTable, id: item.id });
+    try {
+      // Restoring: clear deleted_at and deleted_cascade_id. Also restore
+      // any siblings that share the cascade_id — that's the whole point
+      // of the cascade approach (deleted as a group, restored as a group).
+      const cascadeId = item.deleted_cascade_id;
+      // Restore the row itself
+      await db.from(item._sourceTable)
+        .withDeleted()
+        .update({ deleted_at: null, deleted_cascade_id: null })
+        .eq("id", item.id)
+        .eq("user_id", user.id);
+      // Restore siblings sharing cascade_id (they'll be in their own tables).
+      // We don't know which tables — sweep them all. Cheap because the
+      // cascade_id index is partial.
+      if (cascadeId) {
+        await Promise.all(TABLE_NAMES.map(async (t) => {
+          if (t === item._sourceTable) return; // already done
+          try {
+            await db.from(t)
+              .withDeleted()
+              .update({ deleted_at: null, deleted_cascade_id: null })
+              .eq("deleted_cascade_id", cascadeId)
+              .eq("user_id", user.id);
+          } catch {}
+        }));
+      }
+      await loadItems();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const purgeItem = async (item) => {
+    if (!confirm(`Permanently delete this ${TABLE_DISPLAY[item._sourceTable]?.label || "item"}? This can't be undone.`)) return;
+    setBusy({ action: "purge", table: item._sourceTable, id: item.id });
+    try {
+      // Hard delete via escape hatch
+      await db.from(item._sourceTable)
+        .hardDelete()
+        .eq("id", item.id)
+        .eq("user_id", user.id);
+      await loadItems();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const fmtAge = (ts) => {
+    if (!ts) return "";
+    const ms = Date.now() - new Date(ts).getTime();
+    const days = Math.floor(ms / 86400000);
+    if (days >= 1) return `${days}d ago`;
+    const hrs = Math.floor(ms / 3600000);
+    if (hrs >= 1) return `${hrs}h ago`;
+    const mins = Math.floor(ms / 60000);
+    return mins < 1 ? "just now" : `${mins}m ago`;
+  };
+  const fmtExpiry = (ts) => {
+    if (!ts) return "";
+    const ms = new Date(ts).getTime() + (14 * 86400000) - Date.now();
+    if (ms <= 0) return "expired";
+    const days = Math.floor(ms / 86400000);
+    if (days >= 1) return `${days}d left`;
+    const hrs = Math.floor(ms / 3600000);
+    return `${hrs}h left`;
+  };
+
+  return (
+    <div style={S.card}>
+      <div style={S.sectionTitle}>Recently deleted</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+        Anything you've deleted in the last 14 days. Tap Restore to bring it back, or Delete forever to remove it permanently. After 14 days items are removed automatically.
+      </div>
+      {loading ? (
+        <div style={{ padding: "20px 0", textAlign: "center", color: C.muted, fontSize: 12 }}>Loading…</div>
+      ) : items.length === 0 ? (
+        <div style={{ padding: "24px 0", textAlign: "center", color: C.muted, fontSize: 13 }}>
+          ✨ Nothing here. Anything you delete shows up for 14 days.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {items.map(item => {
+            const cfg = TABLE_DISPLAY[item._sourceTable] || { label: item._sourceTable, icon: "📄", title: () => "—" };
+            const itemBusy = busy && busy.table === item._sourceTable && busy.id === item.id;
+            return (
+              <div key={`${item._sourceTable}:${item.id}`} style={{
+                background: C.surfaceHigh,
+                border: `1px solid ${C.border}`,
+                borderRadius: 10,
+                padding: "10px 12px",
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+              }}>
+                <div style={{ fontSize: 18, flexShrink: 0 }} aria-hidden>{cfg.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 1 }}>
+                    {cfg.label}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {cfg.title(item)}
+                  </div>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
+                    Deleted {fmtAge(item.deleted_at)} · {fmtExpiry(item.deleted_at)}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <button
+                    onClick={() => restoreItem(item)}
+                    disabled={!!busy}
+                    style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 10px", opacity: itemBusy ? 0.5 : 1 }}
+                  >{itemBusy && busy.action === "restore" ? "…" : "Restore"}</button>
+                  <button
+                    onClick={() => purgeItem(item)}
+                    disabled={!!busy}
+                    style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", color: C.red, opacity: itemBusy ? 0.5 : 1 }}
+                  >{itemBusy && busy.action === "purge" ? "…" : "Delete"}</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit, openAssistantSetup, openFeedback, assistantName, assistantWakeWords, userCommandsCount, usageData, usageCaps }) {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [saved, setSaved] = useState(false);
@@ -3383,6 +3601,18 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         </svg>
       ),
       iconTint: "neutral",
+    },
+    {
+      id: "recently-deleted",
+      group: "WORKFLOW",
+      name: "Recently deleted",
+      sub: "Restore items deleted in the last 14 days",
+      icon: (
+        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 12a9 9 0 1015 6.7L21 21M3 12V7m0 5h5" />
+        </svg>
+      ),
+      iconTint: "amber",
     },
     // Admin views moved to the separate portal at admin.tradespa.co.uk —
     // see the trade-pa-admin repo. Admins sign in there with the same
@@ -5172,6 +5402,10 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Contact the account owner to change your access permissions.</div>
         )}
       </div>
+      )}
+
+      {subview === "recently-deleted" && (
+        <RecentlyDeleted user={user} />
       )}
 
       {subview === "help" && (<>
@@ -8338,6 +8572,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       },
     },
     {
+      name: "restore_recently_deleted",
+      description: "Restore something the user just deleted. Triggers: \"undo that delete\", \"actually no, bring it back\", \"restore the [type] I just deleted\", \"I didn't mean to delete that\", \"oops, can you bring [name] back\". WHEN TO USE: any time the user signals regret about a recent delete or asks for an undo. ASK FOR DETAILS only if the request is vague — \"the [customer] invoice\" or \"the [name] customer\" is enough. AFTER: \"[Item] restored — back in your [Invoices/Customers/etc].\" If multiple matches, list them and ask which.",
+      input_schema: {
+        type: "object",
+        properties: {
+          item_type: { type: "string", description: "What they want restored — invoice, customer, job, expense, material, reminder, etc. Optional if user said 'the last thing I deleted'." },
+          name_or_id: { type: "string", description: "Customer name or invoice/job ID to disambiguate which item." },
+        },
+        required: [],
+      },
+    },
+    {
       name: "create_customer",
       description: "Save a new customer or update an existing one. Triggers: \"add a customer\", \"save this contact\", \"new client\", \"put [name] on file\". ASK IF MISSING: if only a name is given, log it and ask \"Got a phone number or email for them?\" — don't block on contact details. DEFAULTS: if an existing customer by the same name is found, treat as an update not a duplicate. AFTER: confirm with \"[Name] saved\" plus whatever contact details were captured.",
       input_schema: {
@@ -9339,6 +9585,121 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           setEnquiries(prev => (prev || []).filter(e => match.id ? e.id !== match.id : e !== match));
           setLastAction({ type: "enquiry", label: `Deleted: ${match.name}`, view: "Enquiries" });
           return `Enquiry from ${match.name} deleted.`;
+        }
+        case "restore_recently_deleted": {
+          // Restore from the holding bay. Strategy:
+          //   - If item_type given: scope to that table.
+          //   - If name_or_id given: filter by name or id matches.
+          //   - If neither given: most-recent-deleted across all soft-delete
+          //     tables (the "undo last delete" case).
+          //
+          // Always restores the WHOLE cascade group (rows sharing
+          // deleted_cascade_id) so a customer-restore brings their invoices
+          // and jobs back together — matches what was deleted.
+          const RESTORE_TABLE_MAP = {
+            invoice: "invoices", invoices: "invoices",
+            customer: "customers", customers: "customers",
+            job: "jobs", jobs: "jobs",
+            "job card": "job_cards", "job_card": "job_cards", "job-card": "job_cards",
+            enquiry: "enquiries", enquiries: "enquiries",
+            material: "materials", materials: "materials",
+            expense: "expenses", expenses: "expenses",
+            mileage: "mileage_logs",
+            "time log": "time_logs", "time_log": "time_logs",
+            stock: "stock_items",
+            cis: "cis_statements",
+            payment: "subcontractor_payments",
+            daywork: "daywork_sheets",
+            variation: "variation_orders",
+            "purchase order": "purchase_orders", "purchase_order": "purchase_orders",
+            certificate: "trade_certificates", cert: "trade_certificates",
+            reminder: "reminders", reminders: "reminders",
+            document: "documents", doc: "documents",
+            rams: "rams_documents",
+            compliance: "compliance_docs",
+          };
+          const ALL_TABLES = [...new Set(Object.values(RESTORE_TABLE_MAP))];
+          const tablesToScan = input.item_type
+            ? [RESTORE_TABLE_MAP[(input.item_type || "").toLowerCase().trim()]].filter(Boolean)
+            : ALL_TABLES;
+          if (input.item_type && tablesToScan.length === 0) {
+            return `I don't know how to restore "${input.item_type}". Try "invoice", "customer", "job", "expense", or have a look in Settings → Recently deleted.`;
+          }
+
+          // Find candidates across the relevant tables
+          const candidates = [];
+          for (const table of tablesToScan) {
+            const { data } = await db.from(table)
+              .withDeleted()
+              .select("*")
+              .eq("user_id", user?.id)
+              .not("deleted_at", "is", null)
+              .order("deleted_at", { ascending: false })
+              .limit(20);
+            for (const row of (data || [])) {
+              candidates.push({ ...row, _table: table });
+            }
+          }
+          // Filter by name_or_id if given
+          let filtered = candidates;
+          if (input.name_or_id) {
+            const n = input.name_or_id.toLowerCase();
+            filtered = candidates.filter(r =>
+              (r.id && String(r.id).toLowerCase().includes(n)) ||
+              (r.name && r.name.toLowerCase().includes(n)) ||
+              (r.customer && r.customer.toLowerCase().includes(n)) ||
+              (r.title && r.title.toLowerCase().includes(n)) ||
+              (r.description && r.description.toLowerCase().includes(n))
+            );
+          }
+
+          if (filtered.length === 0) {
+            return input.name_or_id
+              ? `Couldn't find anything in your recently-deleted that matches "${input.name_or_id}". Check Settings → Recently deleted for the full list.`
+              : `Nothing in your recently-deleted to restore. Settings → Recently deleted shows what's there for the next 14 days.`;
+          }
+          // Most-recent fallback if no name filter and no item_type — pick most-recently-deleted
+          let target;
+          if (filtered.length > 1 && !input.name_or_id && !input.item_type) {
+            target = filtered.sort((a, b) => (b.deleted_at || "").localeCompare(a.deleted_at || ""))[0];
+          } else if (filtered.length > 1) {
+            const list = filtered.slice(0, 5).map(r =>
+              `${r._table}: ${r.id || r.name || r.customer || r.title || "—"} (deleted ${(r.deleted_at || "").slice(0, 10)})`
+            ).join("; ");
+            return `Found ${filtered.length} recently-deleted items matching that: ${list}. Which one — give me the ID or specify the type.`;
+          } else {
+            target = filtered[0];
+          }
+
+          // Restore target + cascade siblings
+          const cascadeId = target.deleted_cascade_id;
+          await db.from(target._table)
+            .withDeleted()
+            .update({ deleted_at: null, deleted_cascade_id: null })
+            .eq("id", target.id)
+            .eq("user_id", user?.id);
+          let cascadeCount = 0;
+          if (cascadeId) {
+            for (const t of ALL_TABLES) {
+              if (t === target._table) continue;
+              const { data: restored } = await db.from(t)
+                .withDeleted()
+                .update({ deleted_at: null, deleted_cascade_id: null })
+                .eq("deleted_cascade_id", cascadeId)
+                .eq("user_id", user?.id)
+                .select();
+              cascadeCount += (restored || []).length;
+            }
+          }
+          // Friendly summary
+          const itemLabel = target._table.replace(/s$/, "").replace(/_/g, " ");
+          const ident = target.id || target.name || target.customer || target.title || "";
+          const cascadeNote = cascadeCount > 0 ? ` Plus ${cascadeCount} related item${cascadeCount === 1 ? "" : "s"} restored too.` : "";
+          // Force a refresh of in-memory state so UI shows the restored row.
+          // Easy way: rely on the user's next navigation to re-pull. Mark
+          // lastAction so they have a tap-target.
+          setLastAction({ type: "restore", label: `Restored ${itemLabel}${ident ? ": " + ident : ""}`, view: "Home" });
+          return `Restored ${itemLabel}${ident ? " " + ident : ""}.${cascadeNote} Tap the relevant tab to see it.`;
         }
         case "delete_customer": {
           const needle = (input.name || "").toLowerCase();
