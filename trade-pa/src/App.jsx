@@ -1598,6 +1598,48 @@ function fmtAmount(n) {
   const hasDecimals = num % 1 !== 0;
   return "£" + num.toLocaleString("en-GB", { minimumFractionDigits: hasDecimals ? 2 : 0, maximumFractionDigits: 2 });
 }
+
+// ─── File → Claude vision content block (shared helper) ────────────────────
+// Used by every receipt/invoice scan flow (supplier receipts, subcontractor
+// invoices, AI receipt scan from chat). Centralises the FileReader → base64
+// dance and the PDF-vs-image content-block shape.
+//
+// Returns { fileContent, dataUrl, base64 } so callers that need the dataUrl
+// for previews or the raw base64 for storage still have both.
+//
+// This used to be inlined in 4 different call sites with subtle variations —
+// some used `reader`, some `r`, some captured `dataUrl` and some didn't.
+// Refactored 26 Apr 2026 to one source of truth.
+async function fileToContentBlock(file) {
+  const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+  const { base64, dataUrl } = await new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const full = e.target.result;
+      res({ base64: full.split(",")[1], dataUrl: full });
+    };
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+  const fileContent = isPdf
+    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+    : { type: "image",    source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
+  return { fileContent, dataUrl, base64, isPdf };
+}
+
+// ─── Sub-contractor invoice scan prompt (shared) ────────────────────────────
+// Two of the four sub invoice scan call sites used different prompts (one
+// terse, one detailed) for the same task. Standardised to the detailed one
+// because it handles the "labour and materials not split out" case correctly,
+// which the terse version silently fudged.
+const SUB_INVOICE_SCAN_PROMPT =
+  "You are reading a UK subcontractor invoice. Extract and return ONLY valid JSON with these keys: " +
+  "subcontractor_name, invoice_number, date (YYYY-MM-DD), labour_amount (number, ex-VAT), " +
+  "material_items (array of {desc, amount} ex-VAT), materials_total (number, sum of material_items), " +
+  "gross_total (number, labour + materials ex-VAT), vat_rate (0, 5, or 20), vat_amount (number), " +
+  "description (brief summary of work). " +
+  "If labour and materials are not split out separately, put full amount in labour_amount and leave material_items empty.";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared email template — ensures consistent branding across all outbound emails
 function buildEmailHTML(brand, { heading, body, showBacs = false, invoiceId = "" }) {
@@ -6363,25 +6405,10 @@ function Materials({ materials, setMaterials, user, setContextHint }) {
     setScanResult(null);
     setScanImageData(null);
     try {
-      const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
-
-      const { base64, dataUrl } = await new Promise((res, rej) => {
-        const reader = new FileReader();
-        reader.onload = e => {
-          const full = e.target.result;
-          res({ base64: full.split(",")[1], dataUrl: full });
-        };
-        reader.onerror = rej;
-        reader.readAsDataURL(file);
-      });
+      const { fileContent, dataUrl } = await fileToContentBlock(file);
 
       setScanImageData(dataUrl);
       setScanImageType(file.type || "image/jpeg");
-
-      // Build the content block — PDFs as document, images as image
-      const fileContent = isPdf
-        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
-        : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
 
       const response = await fetch("/api/claude", {
         method: "POST",
@@ -12134,7 +12161,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         .filter(m => m.role === "user" || m.role === "assistant")
         .filter(m => typeof m.content === "string")
         .map(m => ({ role: m.role, content: m.content }));
-      const apiMessages = rawMessages.reduce((acc, msg) => {
+      const apiMessagesUntrimmed = rawMessages.reduce((acc, msg) => {
         if (acc.length > 0 && acc[acc.length - 1].role === msg.role) {
           // Merge consecutive same-role messages
           acc[acc.length - 1] = { ...acc[acc.length - 1], content: acc[acc.length - 1].content + " " + msg.content };
@@ -12143,6 +12170,67 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         return acc;
       }, []);
+
+      // ─── Conversation history trimming ──────────────────────────────────
+      // Background: every turn appends to the conversation, and we send the
+      // FULL history back to Claude on each call. After ~6 turns of normal
+      // back-and-forth (especially with big tool results), we hit input
+      // token limits. This is what bit Connor at turn 6 in the 26 Apr voice
+      // test.
+      //
+      // Strategy: keep the most recent N pairs of turns AND stay under a
+      // rough token budget, whichever is smaller. We approximate tokens as
+      // characters / 4 (a standard rough heuristic — actual tokenisation is
+      // a bit fewer for English prose, more for code/JSON, but this is in
+      // the right ballpark and over-estimating is the safer side).
+      //
+      // We also preserve the FIRST user turn (original task framing) when
+      // trimming long sessions — it gives Claude orientation.
+      const HISTORY_TURN_BUDGET = 12;          // last 12 messages (≈6 user/assistant pairs)
+      const HISTORY_CHAR_BUDGET = 80000;       // ≈20k tokens — Haiku 200k limit, leave plenty of room for tools+system+response
+      const trimHistory = (msgs) => {
+        if (!Array.isArray(msgs) || msgs.length <= HISTORY_TURN_BUDGET) {
+          // Even short histories can blow the char budget if a tool dumped a big payload
+          let chars = msgs.reduce((acc, m) => acc + (typeof m.content === "string" ? m.content.length : 0), 0);
+          if (chars <= HISTORY_CHAR_BUDGET) return msgs;
+        }
+        // Keep first user turn for context anchoring + last (TURN_BUDGET-1) turns
+        const firstUserIdx = msgs.findIndex(m => m.role === "user");
+        const head = firstUserIdx >= 0 ? [msgs[firstUserIdx]] : [];
+        let tail = msgs.slice(-(HISTORY_TURN_BUDGET - head.length));
+        // If head and tail overlap (head index is within tail range), drop the
+        // duplicate from tail.
+        if (head.length && tail.includes(head[0])) {
+          tail = tail.filter(m => m !== head[0]);
+        }
+        // Ensure user/assistant alternation is preserved at the join.
+        // If head ends with role X and tail starts with role X, drop the
+        // first tail item.
+        if (head.length && tail.length && head[head.length - 1].role === tail[0].role) {
+          tail = tail.slice(1);
+        }
+        // If we have no head (no user turn found, edge case) tail must START
+        // with a user turn — Claude API rejects assistant-first conversations.
+        if (head.length === 0) {
+          while (tail.length && tail[0].role === "assistant") tail = tail.slice(1);
+        }
+        let trimmed = [...head, ...tail];
+
+        // Char-budget pass: progressively drop oldest non-head turns until
+        // we fit. Never drop the first head item (anchor) or the very last
+        // user turn (the current question).
+        const charsOf = (arr) => arr.reduce((a, m) => a + (typeof m.content === "string" ? m.content.length : 0), 0);
+        while (charsOf(trimmed) > HISTORY_CHAR_BUDGET && trimmed.length > 2) {
+          // Drop second item (oldest after head anchor)
+          trimmed.splice(head.length, 1);
+          // Re-fix alternation if break
+          if (head.length && trimmed[head.length] && trimmed[head.length].role === head[head.length - 1].role) {
+            trimmed.splice(head.length, 1);
+          }
+        }
+        return trimmed;
+      };
+      const apiMessages = trimHistory(apiMessagesUntrimmed);
 
       // ═══════════════════════════════════════════════════════════════
       // AGENTIC LOOP — iterate while Claude keeps calling tools.
@@ -12322,10 +12410,24 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             }
             // Build a tool_result block to send back to Claude next iteration.
             // Keep it short — Claude only needs to know success/fail and any key info.
+            //
+            // Truncation: tool implementations have grown over time and a
+            // few return verbose JSON dumps (large lists, etc.). Anything
+            // over 2000 chars gets truncated for the next iteration — Claude
+            // doesn't need to re-see every row to keep reasoning, and the
+            // visible widget already shows the data to the user. The full
+            // result still flows to allToolResults for the user-facing
+            // text path; only the BACK-to-Claude copy is trimmed.
+            const TOOL_RESULT_MAX_CHARS = 2000;
+            let toolResultForClaude = result || "Done.";
+            if (typeof toolResultForClaude === "string" && toolResultForClaude.length > TOOL_RESULT_MAX_CHARS) {
+              toolResultForClaude = toolResultForClaude.slice(0, TOOL_RESULT_MAX_CHARS) +
+                ` … [truncated ${toolResultForClaude.length - TOOL_RESULT_MAX_CHARS} chars — full data shown to user via widget]`;
+            }
             iterToolResults.push({
               type: "tool_result",
               tool_use_id: block.id,
-              content: result || "Done.",
+              content: toolResultForClaude,
             });
           }
         }
@@ -12338,11 +12440,39 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         // Otherwise, prepare for next iteration:
         // 1. Append the assistant's response (with tool_use blocks) to the conversation
         // 2. Append a user message containing the tool_result blocks
+        // 3. Re-trim — agentic chains can grow workingMessages substantially
+        //    within a single turn (each tool round-trip adds 2 messages),
+        //    so we apply the same budget here. We DON'T trim through tool_use
+        //    pairs though (that would orphan a tool_result), so we use a
+        //    char-budget-only pass for in-loop trimming.
         workingMessages = [
           ...workingMessages,
           { role: "assistant", content: data.content },
           { role: "user", content: iterToolResults },
         ];
+        // In-loop char budget guard. Drop oldest pairs (assistant+user) from
+        // beyond the original head until under budget. Always keep at least
+        // the last 4 messages (current tool round-trip + the previous one).
+        // Critically: must drop COMPLETE assistant→user pairs together, never
+        // orphan a tool_use without its matching tool_result.
+        const charsOf = (arr) => arr.reduce((a, m) => a + (
+          typeof m.content === "string" ? m.content.length :
+          Array.isArray(m.content) ? JSON.stringify(m.content).length : 0
+        ), 0);
+        let safety = 0;
+        while (charsOf(workingMessages) > HISTORY_CHAR_BUDGET && workingMessages.length > 4 && safety++ < 20) {
+          // Find first (assistant, user) pair starting after index 0.
+          // Walk forward looking for assistant immediately followed by user.
+          let cutAt = -1;
+          for (let i = 1; i < workingMessages.length - 1; i++) {
+            if (workingMessages[i].role === "assistant" && workingMessages[i + 1].role === "user") {
+              cutAt = i;
+              break;
+            }
+          }
+          if (cutAt < 0) break; // no clean pair to drop — bail out, oversize is preferable to corrupt
+          workingMessages.splice(cutAt, 2);
+        }
 
         // If this iteration made no tool calls at all, something's wrong — break out
         if (iterToolUseBlocks.length === 0) {
@@ -12377,28 +12507,37 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       // Hit iteration limit without natural end? Log it AND surface to the user —
       // they need to know some of their requested actions may not have finished.
       // A silent cap-hit means the user thinks everything worked when only the
-      // first few actions landed. Appending the notice to the streaming
-      // placeholder (if present) or as a fresh assistant line.
+      // first few actions landed.
+      //
+      // Strong-UI approach (26 Apr 2026): render as its own visually distinct
+      // amber warning card via kind="iteration_cap". Previously we appended a
+      // ⏱️ line to the AI's reply text — easy to miss after a long response.
+      // The dedicated card draws the eye and includes a Retry-friendly
+      // framing.
       if (iteration >= MAX_AGENTIC_ITERATIONS && data?.stop_reason === "tool_use") {
         console.warn("Agentic loop hit max iterations (" + MAX_AGENTIC_ITERATIONS + ")");
-        const capNotice = "\n\n⏱️ Hit my processing limit partway through — some of what you asked may not have finished. Check what landed and let me know what to retry.";
+        // Finalise the streaming placeholder (if any) without injecting the
+        // notice — it'll appear as its own card below the reply.
         if (placeholderAdded) {
-          // Append to the streaming message we've been filling
           setMessages(prev => {
             const copy = prev.slice();
             for (let i = copy.length - 1; i >= 0; i--) {
-              if (copy[i].streaming || copy[i].role === "assistant") {
-                const existingContent = typeof copy[i].content === "string" ? copy[i].content : "";
-                copy[i] = { ...copy[i], content: existingContent + capNotice, streaming: false };
+              if (copy[i].streaming) {
+                copy[i] = { ...copy[i], streaming: false };
                 break;
               }
             }
             return copy;
           });
-        } else {
-          // No placeholder — append as fresh assistant message
-          setMessages(prev => [...prev, { role: "assistant", content: capNotice.trimStart() }]);
         }
+        // Append the dedicated iteration-cap notice as a flagged message.
+        // The message renderer special-cases kind === "iteration_cap" to
+        // show a high-visibility amber-bordered card.
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          kind: "iteration_cap",
+          content: "Hit my processing limit partway through — some of what you asked may not have finished. Check the screens for what landed, and let me know what to retry.",
+        }]);
       }
 
       // Silent-end guard (20 Apr 2026): when Claude chose not to respond
@@ -12895,23 +13034,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     setMessages(prev => [...prev, { role: "user", content: "Scan this subcontractor invoice" }]);
     setLoading(true);
     try {
-      const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
-      const { base64, dataUrl } = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = e => { const f = e.target.result; res({ base64: f.split(",")[1], dataUrl: f }); };
-        r.onerror = rej;
-        r.readAsDataURL(file);
-      });
-      const fileContent = isPdf
-        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
-        : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
+      const { fileContent } = await fileToContentBlock(file);
       const resp = await fetch("/api/claude", {
         method: "POST",
         headers: await authHeaders(),
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 1500,
-          messages: [{ role: "user", content: [fileContent, { type: "text", text: "You are reading a UK subcontractor invoice. Extract and return ONLY valid JSON: { subcontractor_name, invoice_number, date (YYYY-MM-DD), labour_amount (ex-VAT), material_items (array of {desc, amount} ex-VAT), materials_total, gross_total, vat_rate, vat_amount, description }" }] }],
+          messages: [{ role: "user", content: [fileContent, { type: "text", text: SUB_INVOICE_SCAN_PROMPT }] }],
         }),
       });
       const data = await resp.json();
@@ -13413,10 +13543,38 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0" }}>
             {messages.map((m, i) => (
               <div key={i}>
-                <div style={S.aiMsg(m.role)}>
-                  <div style={S.avatar(m.role)}>{m.role === "user" ? (brand.tradingName?.[0] || "U") : "⚡"}</div>
-                  <div style={S.aiBubble(m.role)}>{m.content}</div>
-                </div>
+                {m.kind === "iteration_cap" ? (
+                  // High-visibility amber-bordered card. Distinct from regular
+                  // assistant bubbles so the user can't miss "some of what you
+                  // asked may not have finished." Visual language matches the
+                  // global C.amber accent without being alarming-red, since
+                  // partial success isn't a failure.
+                  <div style={{
+                    margin: "8px 4px 12px 44px",
+                    background: "rgba(245,158,11,0.08)",
+                    border: `1px solid ${C.amber}`,
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                    display: "flex",
+                    gap: 10,
+                    alignItems: "flex-start",
+                  }}>
+                    <div style={{ fontSize: 18, lineHeight: 1.1, flexShrink: 0 }}>⏱️</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.amber, fontFamily: "'DM Mono', ui-monospace, monospace", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>
+                        Processing limit reached
+                      </div>
+                      <div style={{ fontSize: 13, color: C.text, lineHeight: 1.45 }}>
+                        {m.content}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={S.aiMsg(m.role)}>
+                    <div style={S.avatar(m.role)}>{m.role === "user" ? (brand.tradingName?.[0] || "U") : "⚡"}</div>
+                    <div style={S.aiBubble(m.role)}>{m.content}</div>
+                  </div>
+                )}
                 {m.widget && (
                   <div style={{ paddingLeft: 44, paddingRight: 4, marginBottom: 8 }}>
                     {(m.widget.type === "invoice" || m.widget.type === "quote") && (() => {
@@ -25780,23 +25938,14 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
     setScanError("");
     setScanning(true);
     try {
-      const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
-      const { base64, dataUrl } = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = e => { const f = e.target.result; res({ base64: f.split(",")[1], dataUrl: f }); };
-        r.onerror = rej;
-        r.readAsDataURL(file);
-      });
-      const fileContent = isPdf
-        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
-        : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
+      const { fileContent } = await fileToContentBlock(file);
       const resp = await fetch("/api/claude", {
         method: "POST",
         headers: await authHeaders(),
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 1500,
-          messages: [{ role: "user", content: [fileContent, { type: "text", text: "You are reading a UK subcontractor invoice. Extract and return ONLY valid JSON with these keys: subcontractor_name, invoice_number, date (YYYY-MM-DD), labour_amount (number, ex-VAT), material_items (array of {desc, amount} ex-VAT), materials_total (number, sum of material_items), gross_total (number, labour + materials ex-VAT), vat_rate (0, 5, or 20), vat_amount (number), description (brief summary of work). If labour and materials are not split out separately, put full amount in labour_amount and leave material_items empty." }] }],
+          messages: [{ role: "user", content: [fileContent, { type: "text", text: SUB_INVOICE_SCAN_PROMPT }] }],
         }),
       });
       const data = await resp.json();
@@ -30601,16 +30750,7 @@ function AppInner() {
 
   const handleScanReceipt = async (file) => {
     if (!file) return null;
-    const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
-    const { base64, dataUrl } = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = e => { const f = e.target.result; res({ base64: f.split(",")[1], dataUrl: f }); };
-      r.onerror = rej;
-      r.readAsDataURL(file);
-    });
-    const fileContent = isPdf
-      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
-      : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
+    const { fileContent } = await fileToContentBlock(file);
     const resp = await fetch("/api/claude", {
       method: "POST",
       headers: await authHeaders(),
