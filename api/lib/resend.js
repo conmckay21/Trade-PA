@@ -18,7 +18,7 @@ const PRIVACY_URL    = `${APP_URL}/privacy`;
 // registered number, place of registration. Rendered in the shared footer
 // of every transactional email. Single source of truth: change here, it
 // propagates to welcome / trial-ending / payment-failed / reminder / auth.
-const COMPANY_LEGAL = "Trade PA Ltd · Registered in England &amp; Wales · Company No. 17176983";
+const COMPANY_LEGAL = "Trade PA Ltd · Registered in England &amp; Wales · Company No. 17176983 · ICO Ref ZC132378";
 
 const FROM_HELLO   = `Trade PA <${HELLO_EMAIL}>`;
 const FROM_BILLING = `Trade PA Billing <${BILLING_EMAIL}>`;
