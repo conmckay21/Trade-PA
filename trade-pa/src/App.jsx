@@ -1963,10 +1963,23 @@ function buildInvoiceHTML(brand, inv) {
 function downloadInvoicePDF(brand, inv) {
   try {
   const html = buildInvoiceHTML(brand, inv);
+  openHtmlPreview(html);
+  } catch (err) {
+    console.error("PDF generation error:", err);
+    alert("Could not generate PDF: " + err.message);
+  }
+}
 
-  // iOS PWA mode (navigator.standalone) skips window.open entirely
+// Shared helper: open arbitrary HTML in a print-friendly preview that ALSO
+// works on iOS standalone PWAs. window.open is silently blocked or strands
+// the user (no chrome, no back button) inside the standalone wrapper, which
+// is the #1 "I'm trapped" complaint we've had during testing. Cascade:
+//   1. Non-PWA browsers → window.open new tab (works fine)
+//   2. PWA / popup-blocked / window.open returns null →
+//      dispatch trade-pa-show-pdf event, App-level PDFOverlay renders an
+//      in-app fullscreen iframe with a clear ✕ Close button.
+function openHtmlPreview(html) {
   const isIOSPWA = window.navigator.standalone === true;
-
   if (!isIOSPWA) {
     try {
       const win = window.open("", "_blank");
@@ -1977,14 +1990,7 @@ function downloadInvoicePDF(brand, inv) {
       }
     } catch (e) {}
   }
-
-  // Fallback: React PDFOverlay via custom event
   window.dispatchEvent(new CustomEvent("trade-pa-show-pdf", { detail: html }));
-
-  } catch (err) {
-    console.error("PDF generation error:", err);
-    alert("Could not generate PDF: " + err.message);
-  }
 }
 
 // ─── PDF Overlay (iOS PWA fallback) ──────────────────────────────────────────
@@ -8517,8 +8523,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     },
     {
       name: "list_invoices",
-      description: "Show a list of invoices inline. ALWAYS use filter: 'unpaid' for outstanding/due/unpaid/awaiting payment queries. Use filter: 'paid' for paid/cleared. Triggers: \"show unpaid invoices\", \"what's due\", \"who owes me\", \"list invoices\", \"outstanding bills\". AFTER: summarise total if meaningful — \"[N] unpaid totalling £[X].\"",
-      input_schema: { type: "object", properties: { filter: { type: "string", enum: ["all", "unpaid", "overdue", "paid"], description: "unpaid = outstanding/awaiting payment. paid = settled/collected. overdue = past due date. all = everything." } } },
+      description: "Show a list of invoices inline. ALWAYS use filter: 'unpaid' for outstanding/due/unpaid/awaiting payment queries. Use filter: 'paid' for paid/cleared. Use sort_by: 'amount_desc' for biggest/highest, 'amount_asc' for smallest/lowest, 'date_desc' (default) for newest. Triggers: \"show unpaid invoices\", \"what's due\", \"who owes me\", \"biggest unpaid\", \"largest outstanding\". AFTER: summarise total if meaningful — \"[N] unpaid totalling £[X].\"",
+      input_schema: { type: "object", properties: {
+        filter: { type: "string", enum: ["all", "unpaid", "overdue", "paid"], description: "unpaid = outstanding/awaiting payment. paid = settled/collected. overdue = past due date. all = everything." },
+        sort_by: { type: "string", enum: ["date_desc", "amount_desc", "amount_asc"], description: "How to sort. amount_desc for 'biggest' / 'largest' / 'highest', amount_asc for 'smallest' / 'lowest', date_desc (default) for newest first." },
+      } },
     },
     {
       name: "list_jobs",
@@ -9579,6 +9588,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "list_invoices": {
           const filter = (input.filter || "all").toLowerCase().trim();
+          const sortBy = (input.sort_by || "date_desc").toLowerCase().trim();
           // Always query Supabase directly — React state can be stale if a previous sync failed
           const { data: freshRows } = await db
             .from("invoices")
@@ -9597,6 +9607,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (filter === "unpaid") list = list.filter(i => i.status !== "paid");
           if (filter === "overdue") list = list.filter(i => i.status === "overdue");
           if (filter === "paid") list = list.filter(i => i.status === "paid");
+          // Apply sort. Default DB order is date_desc (newest first). Sort by
+          // grossAmount when available so VAT-inclusive totals are used —
+          // matches what the user sees on screen.
+          if (sortBy === "amount_desc") list = [...list].sort((a, b) => (b.grossAmount || b.amount) - (a.grossAmount || a.amount));
+          if (sortBy === "amount_asc")  list = [...list].sort((a, b) => (a.grossAmount || a.amount) - (b.grossAmount || b.amount));
           const filterLabel = filter === "all" ? "" : filter === "unpaid" ? "outstanding " : filter + " ";
           if (!list.length) return `No ${filterLabel}invoices found.`;
           pendingWidgetRef.current = { type: "invoice_list", data: list.slice(0, 10) };
@@ -12404,20 +12419,33 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         return;
       }
 
-      // Combine Claude text + tool results — but avoid duplicating
-      const toolResultText = allToolResults.join(" ").trim();
+      // Combine Claude text + tool results.
+      //
+      // Tool result strings (e.g. "Lewis Skelton archived. Worker added: Lewis
+      // Skelton (electrician) as a subcontractor.") are for Claude to consume,
+      // not the user. When Claude has written a substantive natural-language
+      // reply ("All sorted — moved Lewis to the Workers tab."), appending the
+      // raw tool results creates an awkward two-paragraph effect with Claude's
+      // friendly summary first then a robotic recap of every step.
+      //
+      // Rule: trust Claude's reply when it has any real content. Fall back to
+      // tool result text ONLY when the reply is empty or trivially short
+      // (e.g. "Done.", "OK"). Never append raw "Error executing..." strings —
+      // those belong in logs/Sentry, not chat.
+      const cleanToolResults = allToolResults.filter(t => {
+        const lower = (t || "").toLowerCase();
+        return !lower.startsWith("error executing") && !lower.includes("can't find variable");
+      });
+      const toolResultText = cleanToolResults.join(" ").trim();
+      const replyTrim = allReplyText.trim();
+      const replyIsSubstantive = replyTrim.length >= 12; // "OK"/"Done."/"Sorted." → fallback; longer → trust
       let finalReply;
-      if (allReplyText.trim() && toolResultText) {
-        const replyLower = allReplyText.trim().toLowerCase();
-        const toolLower = toolResultText.toLowerCase();
-        const firstToolWords = toolLower.split(" ").slice(0, 8).join(" ");
-        const strictDuplicate = firstToolWords.length > 15 && replyLower.includes(firstToolWords);
-        // If a widget is present AND Claude already wrote 80+ chars, the tool result text
-        // is redundant — the widget shows it visually and Claude described it conversationally.
-        const widgetCoversIt = allWidgets.length > 0 && allReplyText.trim().length > 80;
-        finalReply = (strictDuplicate || widgetCoversIt) ? allReplyText.trim() : [allReplyText.trim(), toolResultText].join(" ").trim();
+      if (replyIsSubstantive) {
+        finalReply = replyTrim;
+      } else if (toolResultText) {
+        finalReply = toolResultText;
       } else {
-        finalReply = (allReplyText.trim() || toolResultText || "Done.").trim();
+        finalReply = replyTrim || "Done.";
       }
 
       // For widget display: prefer the last list/data widget; fall back to last action widget
@@ -21747,10 +21775,7 @@ function buildComplianceDocHTML(doc, job, brand) {
 
 function printComplianceDoc(doc, job, brand) {
   const html = buildComplianceDocHTML(doc, job, brand);
-  const win = window.open("", "_blank");
-  win.document.write(html);
-  win.document.close();
-  win.onload = () => win.print();
+  openHtmlPreview(html);
 }
 
 async function emailComplianceDoc(doc, job, customers, user, connection, brand) {
@@ -22449,7 +22474,7 @@ function CertificatesTab({ job, brand, customers, user, connection }) {
                   </div>
                   {cert.signature && <div style={{ fontSize: 11, color: C.green, marginBottom: 6 }}>✓ Signed</div>}
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => { const w = window.open("","_blank"); w.document.write(cert.html_content); w.document.close(); }}>⬇ View/Print</button>
+                    <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => openHtmlPreview(cert.html_content)}>⬇ View/Print</button>
                     <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.blue }} onClick={() => emailCert(cert)}>✉ Email</button>
                     {!cert.signature && <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green }} onClick={() => { setPendingSig(cert); setShowSig(true); }}>✍ Sign</button>}
                   </div>
@@ -24499,8 +24524,10 @@ function CISStatementsTab({ user, setContextHint }) {
                     title="CIS statement PDF attached"
                     style={{ fontSize: 10, background: C.blue + "22", color: C.blue, border: `1px solid ${C.blue}44`, borderRadius: 4, padding: "1px 5px", cursor: "pointer", flexShrink: 0 }}
                     onClick={() => {
-                      const win = window.open();
-                      win.document.write(`<iframe src="${s.attachment_data}" width="100%" height="100%" style="border:none;position:fixed;top:0;left:0;"></iframe>`);
+                      // Wrap the data URI in an HTML iframe page so openHtmlPreview's
+                      // PDFOverlay path can render it consistently across PWA/browser.
+                      const html = `<html><body style="margin:0"><iframe src="${s.attachment_data}" width="100%" height="100%" style="border:none;position:fixed;top:0;left:0;"></iframe></body></html>`;
+                      openHtmlPreview(html);
                     }}
                   >📄 View PDF</div>
                 )}
