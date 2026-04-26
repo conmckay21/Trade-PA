@@ -4,6 +4,22 @@
 
 ## 2026-04-25
 
+### "Show me my biggest unpaid invoice" now works 📊
+
+The voice AI can now sort invoices by amount, so "show me my biggest unpaid", "smallest one", "highest outstanding" etc. all return the right order. Previously it would pull the list but couldn't sort by amount, leaving you to scan it yourself.
+
+### PDF/certificate viewing on iPhone — fixed the "trapped" screen 📱
+
+When you tapped View/Print on a certificate, the print preview opened but had no obvious way back into the app on iPhone. Same issue for compliance docs and CIS statement PDFs. All three now open in an in-app overlay with a clear ✕ Close button at the top, so you're never stranded.
+
+### AI no longer leaks error messages or step-by-step recaps into chat 🧹
+
+Two related fixes. (1) If a behind-the-scenes tool call hit a snag, the AI was tacking the raw error text onto the end of its reply. (2) When the AI completed a multi-step action (e.g. moving someone from Subcontractors to Workers), it would say a friendly summary like "All sorted" and THEN append every tool's verbose confirmation ("Lewis Skelton archived. Worker added..."). Both fixed: the chat now shows only the AI's natural-language summary; technical details stay in the logs.
+
+### "Mark invoice paid" via voice now actually works ✅
+
+Two bugs fixed when the AI marked invoices as paid: (1) it would crash with a "can't find variable" error before doing anything, and (2) even when it appeared to work, the change wasn't actually saved to the database — refreshing the page brought the invoice back as unpaid. Both are properly fixed: the AI now correctly marks the invoice paid in the database, fires the push notification, and persists across reloads. If you'd been hitting issues asking the AI to mark something paid, give it another go.
+
 ### Workers & Subcontractors fully unified 👷
 
 The behind-the-scenes refactor is done. We've finished merging Workers and Subcontractors onto a single shared spine in the database — one human now means one record, in whichever tab you added them from. The auto-duplication bug (where adding a self-employed worker secretly created a second record in Subcontractors) is fixed. CIS payments, time logs, job assignments, document expiry alerts and worker history all carry over cleanly. Soft-delete still preserves everything for HMRC and HR records as before. Result: cleaner data, faster queries, no functional change to the UI you see day-to-day.
