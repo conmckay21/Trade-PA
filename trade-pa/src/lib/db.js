@@ -11,6 +11,16 @@
 // Session 4b: no changes in this file — BIGINT temp-id handling lives
 //   entirely in writeQueue.js. db.js just routes writes there; writeQueue
 //   now accepts customers/materials inserts and handles them.
+// Session 5 (26 Apr 2026): soft-delete holding bay integration.
+//   - Reads against any SOFT_DELETE_TABLE auto-inject `.is("deleted_at", null)`
+//     so callers can't accidentally see deleted rows. Zero-touch from
+//     consumer code.
+//   - Writes via .delete() are auto-rewritten to .update({ deleted_at,
+//     deleted_cascade_id }) for soft-delete tables. Hard-delete escape
+//     hatch: .hardDelete().
+//   - CASCADE_MAP defines parent → children relationships; when a parent
+//     is soft-deleted, children inherit the same cascade_id so a future
+//     restore can bring back exactly that set.
 
 import { supabase } from "../supabase.js";
 import {
@@ -20,6 +30,79 @@ import {
   deleteCachedRows,
 } from "./offlineDb.js";
 import { handleOfflineWrite } from "./writeQueue.js";
+
+// ─── Soft-delete configuration ────────────────────────────────────────
+//
+// Tables in this set have `deleted_at` + `deleted_cascade_id` columns and
+// participate in the holding bay (14-day buffer, then permanent purge by
+// pg_cron). Reads auto-filter out deleted rows; .delete() rewrites to
+// .update({ deleted_at, deleted_cascade_id }).
+//
+// Must match the migration `soft_delete_holding_bay_columns` exactly.
+// Adding a table here without the migration → reads break (column not
+// found). Adding the column without listing it here → reads see deleted
+// rows (no auto-filter).
+const SOFT_DELETE_TABLES = new Set([
+  "customers", "enquiries", "jobs", "job_cards", "job_notes",
+  "job_photos", "job_drawings", "job_workers",
+  "invoices", "expenses", "mileage_logs", "time_logs", "materials",
+  "stock_items",
+  "cis_statements", "subcontractor_payments", "daywork_sheets",
+  "variation_orders", "purchase_orders", "purchase_order_items",
+  "compliance_docs", "trade_certificates", "worker_documents",
+  "rams_documents", "documents",
+  "reminders", "customer_contacts", "call_logs", "user_commands",
+]);
+
+// Cascade map: when a row in `parent` is soft-deleted, the listed children
+// (table + foreign-key column) are also soft-deleted with the same
+// cascade_id. Restoring the parent restores everything that shares the id.
+//
+// Conservative: only cascades that match real domain semantics. Deleting
+// a customer cascades to invoices/jobs/enquiries/contacts, but NOT to
+// call_logs (you might still want call records even after the customer's
+// gone for compliance/accounting reasons).
+const CASCADE_MAP = {
+  customers: [
+    { table: "invoices", fk: "customer_id" },
+    { table: "jobs", fk: "customer_id" },
+    { table: "job_cards", fk: "customer_id" },
+    { table: "enquiries", fk: "customer_id" },
+    { table: "customer_contacts", fk: "customer_id" },
+    { table: "reminders", fk: "customer_id" },
+  ],
+  jobs: [
+    { table: "job_workers", fk: "job_id" },
+    { table: "time_logs", fk: "job_id" },
+    { table: "mileage_logs", fk: "job_id" },
+    { table: "job_drawings", fk: "job_id" },
+  ],
+  job_cards: [
+    { table: "job_notes", fk: "job_card_id" },
+    { table: "job_photos", fk: "job_card_id" },
+    { table: "job_drawings", fk: "job_card_id" },
+    { table: "compliance_docs", fk: "job_card_id" },
+    { table: "trade_certificates", fk: "job_id" },
+    { table: "variation_orders", fk: "job_card_id" },
+    { table: "daywork_sheets", fk: "job_card_id" },
+  ],
+  purchase_orders: [
+    { table: "purchase_order_items", fk: "purchase_order_id" },
+  ],
+};
+
+// UUID generator — uses crypto.randomUUID where available (modern browsers,
+// Node 14+), falls back to a Math.random impl with v4 shape.
+function newCascadeId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 function cacheDisabled() {
   try {
@@ -57,6 +140,12 @@ function makeSpec(table) {
     range: null,
     single: false,
     maybeSingle: false,
+    // Soft-delete state — set by the proxy from SOFT_DELETE_TABLES /
+    // .hardDelete() / .withDeleted() escape hatches.
+    isSoftDelete: SOFT_DELETE_TABLES.has(table),
+    bypassSoftDeleteFilter: false,
+    bypassSoftDelete: false,
+    cascadeId: null,
   };
 }
 
@@ -102,6 +191,13 @@ function applyQuerySpec(rows, spec) {
     spec.filters.every(f => matchValue(row, f.col, f.op, f.val))
   );
 
+  // For cached reads on soft-delete tables: also hide deleted rows so
+  // offline behaviour matches online (the auto-injected filter is in
+  // spec.filters for online; this catches it for cache).
+  if (spec.isSoftDelete && !spec.bypassSoftDeleteFilter && spec.operation === "select") {
+    out = out.filter(r => r.deleted_at == null);
+  }
+
   if (spec.order) {
     const { col, ascending } = spec.order;
     out = [...out].sort((a, b) => {
@@ -135,7 +231,82 @@ function buildOfflineSpec(spec) {
   };
 }
 
+// ─── Soft-delete cascade execution ────────────────────────────────────
+//
+// Called after a soft-delete on a parent table. Looks up children via
+// CASCADE_MAP and soft-deletes them with the same cascade_id so a future
+// restore can bring back exactly the set deleted together. Best-effort:
+// failures are logged but don't roll back the parent.
+async function cascadeSoftDelete(parentTable, parentIds, cascadeId, userId) {
+  const children = CASCADE_MAP[parentTable];
+  if (!children || !children.length || !parentIds.length) return;
+
+  for (const { table, fk } of children) {
+    try {
+      const updates = {
+        deleted_at: new Date().toISOString(),
+        deleted_cascade_id: cascadeId,
+      };
+      // Use raw supabase here — we already are the cascade, no need to
+      // recurse through the proxy. .is(deleted_at,null) prevents
+      // re-stamping rows already in the holding bay.
+      let q = supabase.from(table).update(updates).in(fk, parentIds).is("deleted_at", null);
+      if (userId) q = q.eq("user_id", userId);
+      const result = await q;
+      if (result.error) {
+        console.warn(`[soft-delete cascade] ${parentTable} → ${table} failed:`, result.error.message);
+      }
+    } catch (err) {
+      console.warn(`[soft-delete cascade] ${parentTable} → ${table} threw:`, err.message);
+    }
+  }
+}
+
+// ─── Soft-delete operation rewriter ──────────────────────────────────
+//
+// Intercepts .delete() on a soft-delete table and rewrites it to an
+// equivalent .update({ deleted_at, deleted_cascade_id }) with the same
+// filters. Triggers cascade. Returns a Supabase-shape result object.
+async function executeSoftDelete(spec) {
+  const cascadeId = spec.cascadeId || newCascadeId();
+  const updates = {
+    deleted_at: new Date().toISOString(),
+    deleted_cascade_id: cascadeId,
+  };
+
+  // Rebuild update query with the original filters
+  let q = supabase.from(spec.table).update(updates);
+  for (const f of spec.filters) {
+    q = q[f.op](f.col, f.val);
+  }
+  // .select() so we get affected rows back — needed for cascade lookup.
+  q = q.select();
+  const result = await q;
+
+  if (result.error) {
+    return result;
+  }
+
+  const hitIds = (result.data || []).map(r => r.id);
+  const userId = result.data?.[0]?.user_id || null;
+  if (hitIds.length) {
+    await cascadeSoftDelete(spec.table, hitIds, cascadeId, userId);
+  }
+
+  // Mirror Supabase delete() shape so caller code expecting { data, error }
+  // works unchanged.
+  return { data: result.data, error: null, count: result.data?.length || 0 };
+}
+
 async function executeWithCache(realBuilder, spec) {
+  // ─── Soft-delete rewrite ────────────────────────────────────────────
+  // Intercept delete() on soft-delete tables → rewrite to update().
+  // bypassSoftDelete is set when caller used .hardDelete() escape hatch
+  // (e.g. the React-state-sync deletes that should stay hard).
+  if (spec.operation === "delete" && spec.isSoftDelete && !spec.bypassSoftDelete) {
+    return await executeSoftDelete(spec);
+  }
+
   if (spec.operation !== "select") {
     if (cacheDisabled()) return await realBuilder;
 
@@ -238,12 +409,56 @@ function wrapBuilder(realBuilder, spec) {
           executeWithCache(target, spec).then(onFulfilled, onRejected);
       }
 
+      // ─── Soft-delete escape hatches ─────────────────────────────────
+      // Not on the real Supabase builder — handled here before falling
+      // through to the real proxy methods.
+      //
+      // .hardDelete() — bypass soft-delete rewrite, do a real DELETE.
+      //   Used for React-state-sync deletes (line 30487+) where the row
+      //   has already been removed in-memory and we're just reconciling.
+      //
+      // .withDeleted() — include soft-deleted rows in a SELECT. Used
+      //   by the Recently Deleted UI to show what's in the holding bay.
+      if (prop === "hardDelete") {
+        return () => {
+          spec.operation = "delete";
+          spec.bypassSoftDelete = true;
+          // Return a wrapped real-delete builder so callers can chain
+          // .eq() etc. on it.
+          const realDel = supabase.from(spec.table).delete();
+          return wrapBuilder(realDel, spec);
+        };
+      }
+      if (prop === "withDeleted") {
+        return () => {
+          spec.bypassSoftDeleteFilter = true;
+          return proxy;
+        };
+      }
+
       const value = target[prop];
       if (typeof value !== "function") return value;
 
       return (...args) => {
         if (prop === "select") {
           spec.operation = spec.operation ?? "select";
+          // ─── Auto-inject soft-delete filter ──────────────────────────
+          // SELECT against a soft-delete table → hide deleted rows by
+          // default. Skipped if .withDeleted() was called first.
+          if (spec.isSoftDelete && !spec.bypassSoftDeleteFilter && !spec.softDeleteFilterApplied) {
+            spec.filters.push({ op: "is", col: "deleted_at", val: null });
+            spec.softDeleteFilterApplied = true;
+            const selectResult = value.apply(target, args);
+            // Chain .is(deleted_at, null) onto the real builder
+            const filteredResult = (selectResult && typeof selectResult.is === "function")
+              ? selectResult.is("deleted_at", null)
+              : selectResult;
+            if (filteredResult === target) return proxy;
+            if (filteredResult && typeof filteredResult === "object" && typeof filteredResult.then === "function") {
+              return wrapBuilder(filteredResult, spec);
+            }
+            return filteredResult;
+          }
         } else if (prop === "insert") {
           spec.operation = "insert";
           spec.data = args[0];
