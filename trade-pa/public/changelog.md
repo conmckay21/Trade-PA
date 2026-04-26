@@ -2,6 +2,20 @@
 
 ---
 
+## 2026-04-26
+
+### Receipt and invoice scanning: tidier behind the scenes 🧹
+
+The same file-handling logic was implemented in four different places (supplier receipts, subcontractor invoices, AI receipt scan from chat, and the bulk import flow). Two of them were also using slightly different prompts when reading the same kind of subcontractor invoice — meaning identical PDFs could come back with subtly different parsed fields depending on which screen you scanned from. All four now share a single helper, with one canonical prompt for sub invoices. No change to what you see — receipts and invoices scan exactly the same — but it's about 120 fewer lines of code for us to keep in sync going forward.
+
+### Long voice conversations no longer hit a wall 💬
+
+Previously the AI would stop responding after about 6-7 turns of back-and-forth, especially after running tools that returned big lists. Behind the scenes, the conversation history was growing unboundedly and tripping API token limits. Now the system keeps the most recent turns in context (last ~12 messages or 80k characters, whichever's smaller) plus the original framing, and trims tool results that return verbose data so they don't bloat the context. You should be able to have much longer voice sessions without hitting that wall.
+
+### Clearer warning when the AI runs out of steps ⏱️
+
+When the AI takes on a complex multi-step request (e.g. "log the CP12, chase Thompson, invoice Patel, add a reminder for tomorrow"), there's a built-in cap on how many steps it can chain together in one go — for safety. If it hits that cap mid-task, you used to get a small ⏱️ note tucked into the bottom of the AI's reply, easy to miss. Now you get a clearly-visible amber warning card so you know to check what landed and what to retry.
+
 ## 2026-04-25
 
 ### ICO data-protection registration ✅
