@@ -4,6 +4,10 @@
 
 ## 2026-04-26
 
+### Recently Deleted: a 14-day safety net 🛟
+
+Big new safety feature. From now on, anything you delete — invoices, jobs, customers, materials, expenses, reminders, certificates, anything — goes into a holding bay for 14 days before being permanently removed. If you delete something by mistake (or the AI misinterprets a voice command), you can restore it with one tap. Two ways in: **Settings → Recently deleted** for the full list, or just say "undo that" / "actually no, restore the [thing] I just deleted" to the AI. Cascade-aware too: if you delete a customer, then change your mind, restoring them brings their invoices and jobs back as well — exactly the set that was deleted together. After 14 days items are gone permanently. Tested across all 29 user-facing data tables.
+
 ### Receipt and invoice scanning: tidier behind the scenes 🧹
 
 The same file-handling logic was implemented in four different places (supplier receipts, subcontractor invoices, AI receipt scan from chat, and the bulk import flow). Two of them were also using slightly different prompts when reading the same kind of subcontractor invoice — meaning identical PDFs could come back with subtly different parsed fields depending on which screen you scanned from. All four now share a single helper, with one canonical prompt for sub invoices. No change to what you see — receipts and invoices scan exactly the same — but it's about 120 fewer lines of code for us to keep in sync going forward.
