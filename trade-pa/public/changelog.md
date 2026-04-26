@@ -4,6 +4,10 @@
 
 ## 2026-04-25
 
+### ICO data-protection registration ✅
+
+Trade PA Ltd is now registered with the UK Information Commissioner's Office (registration ZC132378), which is the legal requirement for any business processing personal data commercially in the UK. The ICO reference is now displayed alongside the Companies House number in every relevant place — website footers, transactional emails, customer-facing portal pages, and the privacy policy. The previous `[ICO_REG_NUMBER]` placeholders in the privacy policy have been filled in. Nothing changes about how your data is handled — this just makes the regulatory paperwork official.
+
 ### "Show me my biggest unpaid invoice" now works 📊
 
 The voice AI can now sort invoices by amount, so "show me my biggest unpaid", "smallest one", "highest outstanding" etc. all return the right order. Previously it would pull the list but couldn't sort by amount, leaving you to scan it yourself.
