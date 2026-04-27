@@ -58,36 +58,42 @@ const SOFT_DELETE_TABLES = new Set([
 // (table + foreign-key column) are also soft-deleted with the same
 // cascade_id. Restoring the parent restores everything that shares the id.
 //
-// Conservative: only cascades that match real domain semantics. Deleting
-// a customer cascades to invoices/jobs/enquiries/contacts, but NOT to
-// call_logs (you might still want call records even after the customer's
-// gone for compliance/accounting reasons).
+// IMPORTANT: every entry MUST point to a real FK column on the child table.
+// Earlier versions of this map referenced columns that don't exist (e.g.
+// invoices.customer_id, job_cards.job_card_id) and silently no-op'd because
+// the cascade is best-effort. Fixed 27 Apr 2026 after audit (Finding 1.6).
+//
+// Schema reality:
+//   - invoices/jobs/job_cards/enquiries store customer as TEXT, not FK.
+//     So deleting a customer does NOT cascade to these. Safer semantic
+//     anyway — you might want to keep an invoice record for HMRC after the
+//     customer's gone.
+//   - All "job notes/photos/compliance/etc" link to jobs.id via job_id,
+//     not to job_cards. So they cascade with the parent jobs row.
+//   - job_cards itself has no FK children — its UI children all link
+//     to jobs.id.
+//   - reminders use polymorphic related_id/related_type — not handleable
+//     by the simple FK-column cascade. They're left to the holding-bay
+//     auto-purge instead.
+//   - purchase_order_items uses `po_id`, not `purchase_order_id`.
+//   - mileage_logs has no job link in schema — stays uncascaded.
 const CASCADE_MAP = {
   customers: [
-    { table: "invoices", fk: "customer_id" },
-    { table: "jobs", fk: "customer_id" },
-    { table: "job_cards", fk: "customer_id" },
-    { table: "enquiries", fk: "customer_id" },
     { table: "customer_contacts", fk: "customer_id" },
-    { table: "reminders", fk: "customer_id" },
   ],
   jobs: [
-    { table: "job_workers", fk: "job_id" },
-    { table: "time_logs", fk: "job_id" },
-    { table: "mileage_logs", fk: "job_id" },
-    { table: "job_drawings", fk: "job_id" },
-  ],
-  job_cards: [
-    { table: "job_notes", fk: "job_card_id" },
-    { table: "job_photos", fk: "job_card_id" },
-    { table: "job_drawings", fk: "job_card_id" },
-    { table: "compliance_docs", fk: "job_card_id" },
-    { table: "trade_certificates", fk: "job_id" },
-    { table: "variation_orders", fk: "job_card_id" },
-    { table: "daywork_sheets", fk: "job_card_id" },
+    { table: "job_workers",         fk: "job_id" },
+    { table: "time_logs",           fk: "job_id" },
+    { table: "job_drawings",        fk: "job_id" },
+    { table: "job_notes",           fk: "job_id" },
+    { table: "job_photos",          fk: "job_id" },
+    { table: "compliance_docs",     fk: "job_id" },
+    { table: "variation_orders",    fk: "job_id" },
+    { table: "daywork_sheets",      fk: "job_id" },
+    { table: "trade_certificates",  fk: "job_id" },
   ],
   purchase_orders: [
-    { table: "purchase_order_items", fk: "purchase_order_id" },
+    { table: "purchase_order_items", fk: "po_id" },
   ],
 };
 
