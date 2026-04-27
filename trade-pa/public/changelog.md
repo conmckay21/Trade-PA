@@ -4,6 +4,10 @@
 
 ## 2026-04-26
 
+### Late-night timestamps now stay on the correct day 🌙
+
+Subtle but important fix. If you logged something after midnight UK time — a CIS statement, a time entry, a stage payment, a job-card date — Trade PA was sometimes filing it as the *previous* day. The reason: the system was using the server's UTC clock to stamp dates rather than your local UK clock, so anything entered between 00:00 and 01:00 BST (or 23:00–00:00 the night before in UK summer) could end up dated wrong. Worst case: a CIS statement logged at 00:30 on 1 November would file under October — wrong tax month, wrong HMRC submission. Fixed across 29 places where dates and months are auto-stamped. Anything you log from now on uses your actual UK wall-clock time.
+
 ### Recently Deleted: a 14-day safety net 🛟
 
 Big new safety feature. From now on, anything you delete — invoices, jobs, customers, materials, expenses, reminders, certificates, anything — goes into a holding bay for 14 days before being permanently removed. If you delete something by mistake (or the AI misinterprets a voice command), you can restore it with one tap. Two ways in: **Settings → Recently deleted** for the full list, or just say "undo that" / "actually no, restore the [thing] I just deleted" to the AI. Cascade-aware too: if you delete a customer, then change your mind, restoring them brings their invoices and jobs back as well — exactly the set that was deleted together. After 14 days items are gone permanently. Tested across all 29 user-facing data tables.
