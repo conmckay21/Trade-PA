@@ -1,22 +1,68 @@
 // ─── middleware.js ─────────────────────────────────────────────────────
 //
-// Prerender.io integration for SEO.
+// Two responsibilities, branched by request path:
 //
-// Problem: Trade PA is a React SPA. When Googlebot / Bingbot / Facebook's
-// social crawler / Twitter's card scraper hit tradespa.co.uk they see an
-// empty <div id="root"></div> shell because React hasn't executed yet.
-// That kills organic discoverability and shared-link previews.
+// 1. /api/*  — IP-based rate limiting (defense in depth on top of per-user
+//              rate limits in individual route handlers).
+// 2. Other   — Prerender.io proxy for SEO (bots get pre-rendered HTML).
 //
-// Fix: detect bot user agents and transparently proxy those requests
-// through Prerender.io. Prerender.io renders the page in a headless
-// browser, caches the result, and returns fully-rendered HTML to the bot.
-// Real users go through untouched.
+// Vercel only allows ONE middleware.js file per project, hence the
+// branching. Each path runs its own logic; the other is skipped.
 //
-// Runs as Vercel Edge Middleware — fires on every request, negligible
-// latency for non-bot requests (< 1ms).
+// ─── IP rate limiting notes ────────────────────────────────────────────
+// Implemented with an in-memory Map (no external store). This is a
+// deliberate trade-off:
+//   + Zero infra dependencies, no extra cost
+//   + Catches the common bot-probing case (single IP, high RPS)
+//   - Per-edge-node only. Vercel runs hundreds of edge nodes globally
+//     and cold-starts them frequently, so a determined attacker hitting
+//     different edge nodes evades the limit
+//   - Doesn't help with distributed attacks (those need Cloudflare/WAF)
+//
+// Upgrade path when scale demands it: replace the Map with Upstash Redis
+// or @vercel/kv. The check function signature stays the same.
+//
+// Limit is 100 req/min per IP across all /api/* routes — generous for
+// real users (a heavy-use voice session does ~20-30 req/min), tight
+// enough to cap bot probing at ~6000/hour per IP.
 
 const PRERENDER_TOKEN = process.env.PRERENDER_TOKEN;
 
+// ─── IP rate-limit state ───────────────────────────────────────────────
+const ipBuckets = new Map();
+const IP_LIMIT_MAX = 100;
+const IP_LIMIT_WINDOW_MS = 60_000;
+
+function getClientIp(request) {
+  // Vercel sets x-forwarded-for, x-real-ip. Take the first (original client).
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+  return request.headers.get("x-real-ip") || "unknown";
+}
+
+function checkIpRateLimit(ip) {
+  const now = Date.now();
+  const entry = ipBuckets.get(ip) || { resetAt: now + IP_LIMIT_WINDOW_MS, count: 0 };
+  if (now > entry.resetAt) {
+    entry.resetAt = now + IP_LIMIT_WINDOW_MS;
+    entry.count = 0;
+  }
+  entry.count += 1;
+  ipBuckets.set(ip, entry);
+  // Lazy GC — every ~1% of requests, drop expired buckets if Map is large.
+  if (ipBuckets.size > 5000 && Math.random() < 0.01) {
+    for (const [k, v] of ipBuckets.entries()) {
+      if (v.resetAt < now) ipBuckets.delete(k);
+    }
+  }
+  return {
+    allowed: entry.count <= IP_LIMIT_MAX,
+    remaining: Math.max(0, IP_LIMIT_MAX - entry.count),
+    resetAt: entry.resetAt,
+  };
+}
+
+// ─── Prerender.io configuration ────────────────────────────────────────
 // User agents that should be served pre-rendered HTML.
 const BOT_USER_AGENTS = [
   "googlebot",
@@ -103,6 +149,35 @@ function shouldPrerender(request) {
 }
 
 export default async function middleware(request) {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+
+  // Branch 1: /api/* → IP rate limit check
+  if (pathname.startsWith("/api/")) {
+    const ip = getClientIp(request);
+    const rl = checkIpRateLimit(ip);
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({
+          error: "Too many requests from this IP — please slow down.",
+          resetAt: new Date(rl.resetAt).toISOString(),
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+            "X-RateLimit-Limit": String(IP_LIMIT_MAX),
+            "X-RateLimit-Remaining": String(rl.remaining),
+          },
+        }
+      );
+    }
+    // Pass through — let the route handler do its thing
+    return;
+  }
+
+  // Branch 2: non-API → Prerender.io for SEO bots
   if (!shouldPrerender(request)) {
     // Returning undefined lets Vercel serve the normal response.
     return;
@@ -139,6 +214,8 @@ export default async function middleware(request) {
 }
 
 export const config = {
-  // Run on all routes except API and static assets.
-  matcher: "/((?!api|assets|favicon.ico).*)",
+  // Match /api/* (for rate limit) AND all non-asset paths (for Prerender).
+  // The previous matcher excluded /api entirely; expanding it so the rate
+  // limit branch can fire on API routes.
+  matcher: "/((?!_next|assets|favicon.ico).*)",
 };
