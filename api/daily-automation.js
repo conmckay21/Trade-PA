@@ -129,23 +129,26 @@ async function handler(req, res) {
         }
 
         // ─── 2. APPOINTMENT REMINDERS ───────────────────────────────────
-        // Jobs scheduled for tomorrow, not completed/cancelled, no reminder sent
+        // Jobs scheduled for tomorrow, not completed/cancelled, no reminder sent.
+        //
+        // Fixed 27 Apr 2026: previously this query selected non-existent
+        // columns `date` and `date_obj` on job_cards, so the date comparison
+        // always failed silently and no reminders were ever sent. The actual
+        // scheduling column is `start_date` (DATE type, YYYY-MM-DD format).
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowStr = tomorrow.toISOString().slice(0, 10); // YYYY-MM-DD
 
         const jobsRes = await fetch(
-          `${SB_URL}/rest/v1/job_cards?user_id=eq.${userId}&status=neq.completed&status=neq.cancelled&reminder_sent=is.null&select=id,customer,address,type,title,date,date_obj&limit=20`,
+          `${SB_URL}/rest/v1/job_cards?user_id=eq.${userId}&status=neq.completed&status=neq.cancelled&reminder_sent=is.null&start_date=eq.${tomorrowStr}&select=id,customer,address,type,title,start_date&limit=20`,
           { headers: sbHeaders }
         );
         const upcomingJobs = await jobsRes.json();
 
         if (Array.isArray(upcomingJobs)) {
           for (const j of upcomingJobs) {
-            // Check if job is tomorrow — match against date_obj or date string
-            const jobDate = j.date_obj ? new Date(j.date_obj).toISOString().slice(0, 10) : null;
-            const dateMatch = jobDate === tomorrowStr || (j.date || "").includes(tomorrowStr);
-            if (!dateMatch) continue;
+            // Filtered server-side via start_date=eq, so every row here is
+            // for tomorrow — no need to re-check client-side.
 
             // Look up customer email
             const custRes = await fetch(
