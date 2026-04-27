@@ -1,8 +1,17 @@
 // api/distance.js — UK mileage calculator for Trade PA
 // Uses postcodes.io (free, no API key, government-backed) for geocoding
 // Handles voice-transcribed postcodes: "P 063 Sugar Golf" → "PO6 3SG"
+//
+// SECURITY (forensic audit Finding 2.5, fixed 27 Apr 2026):
+// Previously unauthenticated. Free for use as a geocoding/routing proxy.
+// Could burn through postcodes.io's IP rate limit (Vercel egress IP) and
+// trip a temporary ban that affects legitimate users. Defense in depth:
+// require JWT + rate limit per user. postcodes.io is ~3500 lookups/day per
+// IP soft cap, so 60 lookups/hour/user across the user base is ~580 users
+// at full saturation — comfortable headroom.
 
 import { withSentry } from "./lib/sentry.js";
+import { requireAuth, checkInMemoryRateLimit } from "./lib/auth.js";
 
 const PHONETIC = {
   alpha:'A', bravo:'B', charlie:'C', delta:'D', echo:'E', foxtrot:'F',
@@ -116,6 +125,17 @@ async function getCoords(address) {
 
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+
+  const rl = checkInMemoryRateLimit(userId, "distance", { maxRequests: 60, windowMs: 60 * 60_000 });
+  if (!rl.allowed) {
+    return res.status(429).json({
+      error: "Rate limit exceeded — try again shortly.",
+      resetAt: new Date(rl.resetAt).toISOString(),
+    });
+  }
 
   const { from, to } = req.body || {};
   if (!from || !to) return res.status(400).json({ error: 'from and to required' });
