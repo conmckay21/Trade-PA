@@ -2,6 +2,13 @@
 // Receives feedback from the FeedbackModal and emails it to the Trade PA
 // team using Gmail SMTP via nodemailer.
 //
+// SECURITY (forensic audit Finding 2.4, fixed 27 Apr 2026):
+// Previously unauthenticated. An attacker could spam thetradepa@gmail.com
+// indefinitely, triggering Google's spam-detection and risking inbox
+// suspension. Now: requires verified JWT and applies a per-user rate limit
+// of 5 messages/hour (real users send 0-2 per session, 5/hour is generous
+// for a genuine flurry of bug reports during a single sitting).
+//
 // Setup (one-time):
 //   1. Sign in to thetradepa@gmail.com
 //   2. Enable 2-Step Verification (Google Account → Security)
@@ -17,6 +24,7 @@
 
 import nodemailer from "nodemailer";
 import { withSentry } from "./lib/sentry.js";
+import { requireAuth, checkInMemoryRateLimit } from "./lib/auth.js";
 
 const FEEDBACK_TO = "thetradepa@gmail.com";
 
@@ -43,9 +51,20 @@ function getTransporter() {
 async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+
+  const rl = checkInMemoryRateLimit(userId, "feedback", { maxRequests: 5, windowMs: 60 * 60_000 });
+  if (!rl.allowed) {
+    return res.status(429).json({
+      error: "You've sent a lot of feedback in the last hour — try again shortly. We've got plenty to work on already, thank you!",
+      resetAt: new Date(rl.resetAt).toISOString(),
+    });
+  }
 
   try {
     const { type, message, screenshot, context } = req.body || {};
