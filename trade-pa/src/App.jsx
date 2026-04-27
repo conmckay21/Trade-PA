@@ -1659,6 +1659,89 @@ async function fileToContentBlock(file) {
   return { fileContent, dataUrl, base64, isPdf };
 }
 
+// ─── Receipt storage helpers ────────────────────────────────────────────────
+// Receipts moved from browser localStorage / DB-column-as-blob to Supabase
+// Storage bucket `receipts` (27 Apr 2026, forensic audit Finding 1.1).
+//
+// Why: localStorage is per-device — scan a receipt on your phone, it's
+// invisible on your desktop. DB-column-as-blob bloats the DB and triggers
+// Supabase Free-tier ceiling at ~100 users × 50 receipts. Storage scales
+// independently and gives signed URLs for cross-device viewing.
+//
+// Path convention: receipts/{userId}/{receiptId}.{ext}
+// RLS policies ensure each user can only read/write their own folder.
+//
+// Functions:
+//   uploadReceiptToStorage(file, userId, receiptId) — upload + return path
+//   getReceiptViewUrl(material) — signed-URL preferred, falls back to legacy
+async function uploadReceiptToStorage(file, userId, receiptId) {
+  if (!file || !userId || !receiptId) return null;
+  const ext = (file.name || "").split(".").pop()?.toLowerCase() ||
+    (file.type === "application/pdf" ? "pdf" : "jpg");
+  const path = `${userId}/${receiptId}.${ext}`;
+  try {
+    const { error } = await window._supabase.storage
+      .from("receipts")
+      .upload(path, file, {
+        contentType: file.type || "application/octet-stream",
+        upsert: false,
+      });
+    if (error) {
+      console.warn("[receipts] upload failed:", error.message);
+      return null;
+    }
+    return path;
+  } catch (err) {
+    console.warn("[receipts] upload threw:", err.message);
+    return null;
+  }
+}
+
+// Generate a temporary (1 hour) signed URL for viewing a stored receipt.
+// Returns null on failure — callers should fall back to legacy paths.
+async function getSignedReceiptUrl(storagePath) {
+  if (!storagePath) return null;
+  try {
+    const { data, error } = await window._supabase.storage
+      .from("receipts")
+      .createSignedUrl(storagePath, 3600);
+    if (error || !data?.signedUrl) {
+      console.warn("[receipts] signed URL failed:", error?.message);
+      return null;
+    }
+    return data.signedUrl;
+  } catch (err) {
+    console.warn("[receipts] signed URL threw:", err.message);
+    return null;
+  }
+}
+
+// Resolve a material's receipt to a viewable URL, in priority order:
+//   1. Storage path (preferred — cross-device, durable)
+//   2. In-memory receiptImage dataURL (camelCase, post-scan in-session)
+//   3. localStorage cache (legacy per-device backup)
+//   4. DB receipt_image (legacy column, 1 row in production)
+// Returns null if nothing usable found.
+async function getReceiptViewUrl(material) {
+  if (!material) return null;
+  const path = material.receiptStoragePath || material.receipt_storage_path;
+  if (path) {
+    const signed = await getSignedReceiptUrl(path);
+    if (signed) return signed;
+    // Storage failed — fall through to legacy paths
+  }
+  if (material.receiptImage) return material.receiptImage;
+  if (material.receiptId) {
+    try {
+      const cached = localStorage.getItem(`trade-pa-receipt-${material.receiptId}`);
+      if (cached) return cached;
+    } catch {}
+  }
+  if (material.receipt_image) return material.receipt_image; // legacy DB column
+  return null;
+}
+
+
 // ─── Sub-contractor invoice scan prompt (shared) ────────────────────────────
 // Two of the four sub invoice scan call sites used different prompts (one
 // terse, one detailed) for the same task. Standardised to the detailed one
@@ -3345,9 +3428,8 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
     try {
       const res = await fetch("/api/error-report", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({
-          userId: user?.id,
           userEmail: brand?.email || user?.email,
           sendEmail: !!(brand?.email || user?.email),
           daysBack: 30,
@@ -6540,26 +6622,40 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, us
   const statusColor = { to_order: C.red, ordered: C.blue, collected: C.green };
   const statusLabel = { to_order: "To Order", ordered: "Ordered", collected: "Collected" };
 
-  const viewReceipt = () => {
-    const img = m.receiptImage || localStorage.getItem(`trade-pa-receipt-${m.receiptId}`);
-    if (img) {
-      const overlay = document.createElement("div");
-      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
-      const closeBtn = document.createElement("button");
-      closeBtn.textContent = "← Back to app";
-      closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
-      closeBtn.onclick = () => document.body.removeChild(overlay);
-      const imgEl = document.createElement("img");
-      imgEl.src = img;
-      imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
-      overlay.appendChild(closeBtn);
-      overlay.appendChild(imgEl);
-      document.body.appendChild(overlay);
-    } else if (m.receiptSource === "email" && m.receiptFilename) {
-      alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was received via email. Open your Inbox to view the original.`);
-    } else {
-      alert("Invoice image not available.");
+  const viewReceipt = async () => {
+    // Resolution order: Storage signed URL → in-memory dataURL → localStorage cache → legacy DB column.
+    // getReceiptViewUrl walks these in priority order and returns the first match.
+    const url = await getReceiptViewUrl(m);
+    if (!url) {
+      if (m.receiptSource === "email" && m.receiptFilename) {
+        alert(`Invoice: ${m.receiptFilename}\n\nThis invoice was received via email. Open your Inbox to view the original.`);
+      } else {
+        alert("Invoice image not available.");
+      }
+      return;
     }
+
+    // PDF? Use an iframe; otherwise an img element.
+    const isPdf = url.toLowerCase().includes(".pdf") || url.startsWith("data:application/pdf");
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "← Back to app";
+    closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
+    closeBtn.onclick = () => document.body.removeChild(overlay);
+    overlay.appendChild(closeBtn);
+    if (isPdf) {
+      const frame = document.createElement("iframe");
+      frame.src = url;
+      frame.style.cssText = "width:100%;max-width:900px;height:80vh;border:none;background:#fff;border-radius:8px";
+      overlay.appendChild(frame);
+    } else {
+      const imgEl = document.createElement("img");
+      imgEl.src = url;
+      imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
+      overlay.appendChild(imgEl);
+    }
+    document.body.appendChild(overlay);
   };
 
   return (
@@ -6612,7 +6708,7 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, us
             <button onClick={() => fetch("/api/quickbooks/create-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, material: m }) }).then(r => r.json()).then(d => alert(d.error ? `QuickBooks: ${d.error}` : "✓ Bill created in QuickBooks")).catch(() => alert("QuickBooks not connected"))}
               style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", fontSize: 12, color: "#2CA01C", borderColor: "#2CA01C44" }}>↑ QB Bill</button>
           </div>
-          {(m.receiptId || m.receiptSource || m.receiptImage) && (
+          {(m.receiptId || m.receiptSource || m.receiptImage || m.receiptStoragePath) && (
             <div onClick={viewReceipt} style={{ fontSize: 12, background: C.green + "22", color: C.green, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
               🧾 {m.receiptFilename || "View Invoice"}
             </div>
@@ -6623,7 +6719,7 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, us
   );
 }
 
-function Materials({ materials, setMaterials, user, setContextHint }) {
+function Materials({ materials, setMaterials, user, companyId, setContextHint }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showSuppliers, setShowSuppliers] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
@@ -6631,6 +6727,7 @@ function Materials({ materials, setMaterials, user, setContextHint }) {
   const [scanResult, setScanResult] = useState(null);
   const [scanImageData, setScanImageData] = useState(null);
   const [scanImageType, setScanImageType] = useState("image/jpeg");
+  const [scanFile, setScanFile] = useState(null); // Original File object — used to upload to Supabase Storage on save
   const [scanError, setScanError] = useState("");
   const fileRef = useRef();
   const uploadRef = useRef();
@@ -6673,6 +6770,7 @@ function Materials({ materials, setMaterials, user, setContextHint }) {
     setScanError("");
     setScanResult(null);
     setScanImageData(null);
+    setScanFile(file); // Hold the original File for Storage upload at save time
     try {
       const { fileContent, dataUrl } = await fileToContentBlock(file);
 
@@ -6744,39 +6842,89 @@ Return only JSON, no other text.` },
   const addScannedMaterials = async () => {
     if (!scanResult) return;
     const receiptId = `rcpt_${Date.now()}`;
-    // Store image in localStorage as backup
-    if (scanImageData) {
+
+    // ─── Upload to Supabase Storage (preferred path) ───────────────────────
+    // Storage gives cross-device receipts (scan on phone, view on desktop)
+    // and avoids browser localStorage's 5MB ceiling. Falls back to
+    // localStorage if upload fails (offline / network glitch) so the
+    // receipt isn't lost.
+    let receiptStoragePath = null;
+    if (scanFile && user?.id) {
+      receiptStoragePath = await uploadReceiptToStorage(scanFile, user.id, receiptId);
+    }
+    // Local fallback — only stored if Storage upload didn't succeed.
+    // Saves bandwidth + browser storage when the canonical copy is in cloud.
+    if (!receiptStoragePath && scanImageData) {
       try { localStorage.setItem(`trade-pa-receipt-${receiptId}`, scanImageData); } catch {}
     }
-    const newMaterials = (scanResult.items || []).map(item => {
-      const vatRate = parseInt(scanResult.vatRate || 0);
-      const vatEnabled = vatRate > 0;
-      // Use unitPriceExVat if AI provided it, otherwise calculate from gross
+
+    // ─── Persist materials to DB (was previously React-state-only) ─────────
+    // Build INSERT payloads. Receipt fields go on each row so any item
+    // from the same receipt links back to the same scan. The supplier
+    // and date come from the scanResult.
+    const vatRate = parseInt(scanResult.vatRate || 0);
+    const vatEnabled = vatRate > 0;
+    const insertPayloads = (scanResult.items || []).map(item => {
       const exVatPrice = item.unitPriceExVat
         || (scanResult.pricesIncVat && vatEnabled
           ? parseFloat((item.unitPrice / (1 + vatRate / 100)).toFixed(4))
           : item.unitPrice) || 0;
       return {
+        user_id: user?.id,
+        company_id: companyId || null,
         item: item.item,
         qty: item.qty || 1,
-        unitPrice: parseFloat(exVatPrice.toFixed(2)),
+        unit_price: parseFloat(exVatPrice.toFixed(2)),
         supplier: scanResult.supplier || "",
         job: scanResult.jobRef || "",
         status: "ordered",
-        vatEnabled,
-        vatRate: vatEnabled ? vatRate : null,
-        dueDate: scanResult.date || "",
-        receiptId,
-        receiptImage: scanImageData || "",
-        receiptDate: scanResult.date || "",
+        receipt_id: receiptId,
+        receipt_source: "scan",
+        receipt_filename: scanFile?.name || null,
+        receipt_storage_path: receiptStoragePath,  // null if upload failed (legacy fallback)
+        created_at: new Date().toISOString(),
       };
     });
+
+    let insertedRows = [];
+    if (user?.id && insertPayloads.length > 0) {
+      const { data, error } = await db.from("materials").insert(insertPayloads).select();
+      if (error) {
+        console.warn("Materials insert failed:", error.message);
+        setSyncMsg("⚠️ Saved locally — couldn't sync to cloud. Try again.");
+        setTimeout(() => setSyncMsg(""), 4000);
+      } else {
+        insertedRows = data || [];
+      }
+    }
+
+    // Map DB rows → in-memory shape (camelCase + extra UI fields).
+    // If the DB insert failed, fall back to the original payload shape.
+    const newMaterials = (insertedRows.length > 0 ? insertedRows : insertPayloads).map((row, idx) => ({
+      id: row.id || `tmp_${Date.now()}_${idx}`,
+      item: row.item,
+      qty: row.qty,
+      unitPrice: row.unit_price,
+      supplier: row.supplier,
+      job: row.job,
+      status: row.status,
+      vatEnabled,
+      vatRate: vatEnabled ? vatRate : null,
+      dueDate: scanResult.date || "",
+      receiptId,
+      receiptSource: "scan",
+      receiptFilename: row.receipt_filename || scanFile?.name || "",
+      receiptStoragePath,  // for cross-device viewing
+      receiptImage: receiptStoragePath ? "" : (scanImageData || ""), // only carry inline if storage failed
+      receiptDate: scanResult.date || "",
+    }));
     setMaterials(prev => [...(prev || []), ...newMaterials]);
-    // Sync to Xero as bill, attaching the image
+
+    // ─── Sync to Xero as bill, attaching the image ─────────────────────────
     if (user?.id) {
       fetch("/api/xero/create-bill", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({
           userId: user.id,
           bill: { ...scanResult, jobRef: "" },
@@ -6785,17 +6933,62 @@ Return only JSON, no other text.` },
         }),
       }).catch(() => {});
     }
+
     setScanResult(null);
     setScanImageData(null);
+    setScanFile(null);
     setShowScanner(false);
     setSyncMsg(`✓ ${newMaterials.length} items added from receipt`);
     setTimeout(() => setSyncMsg(""), 3000);
   };
 
-  const saveAll = () => {
+  const saveAll = async () => {
     const valid = rows.filter(r => r.item.trim());
     if (!valid.length) return;
-    setMaterials(prev => [...(prev || []), ...valid.map(r => ({ ...r, qty: parseInt(r.qty) || 1, unitPrice: parseFloat(r.unitPrice) || 0 }))]);
+
+    // ─── Persist to DB ─────────────────────────────────────────────────────
+    // Previously: only setMaterials() — entries vanished on refresh.
+    // Fixed 27 Apr 2026 alongside scanner persistence (forensic audit).
+    const insertPayloads = valid.map(r => ({
+      user_id: user?.id,
+      company_id: companyId || null,
+      item: r.item,
+      qty: parseInt(r.qty) || 1,
+      unit_price: parseFloat(r.unitPrice) || 0,
+      supplier: r.supplier || "",
+      job: r.job || "",
+      status: r.status || "to_order",
+      created_at: new Date().toISOString(),
+    }));
+
+    let insertedRows = [];
+    if (user?.id) {
+      const { data, error } = await db.from("materials").insert(insertPayloads).select();
+      if (error) {
+        console.warn("Materials manual insert failed:", error.message);
+        setSyncMsg("⚠️ Saved locally — couldn't sync to cloud. Try again.");
+        setTimeout(() => setSyncMsg(""), 4000);
+      } else {
+        insertedRows = data || [];
+      }
+    }
+
+    // Map DB rows → in-memory shape (camelCase). Fall back to local-shape
+    // if insert failed so user still sees their entries until they retry.
+    const newMaterials = (insertedRows.length > 0 ? insertedRows : insertPayloads).map((row, idx) => ({
+      id: row.id || `tmp_${Date.now()}_${idx}`,
+      item: row.item,
+      qty: row.qty,
+      unitPrice: row.unit_price,
+      supplier: row.supplier,
+      job: row.job,
+      status: row.status,
+      vatEnabled: valid[idx].vatEnabled || false,
+      vatRate: valid[idx].vatEnabled ? (valid[idx].vatRate || 20) : null,
+      dueDate: valid[idx].dueDate || "",
+    }));
+    setMaterials(prev => [...(prev || []), ...newMaterials]);
+
     setRows([emptyRow()]);
     setShowAdd(false);
   };
@@ -6813,8 +7006,28 @@ Return only JSON, no other text.` },
 
   const deleteSupplier = (i) => setSuppliers(prev => prev.filter((_, j) => j !== i));
   const dial = (phone) => { if (phone) window.location.href = `tel:${phone.replace(/\s/g, "")}`; };
-  const cycleStatus = (i) => setMaterials(prev => (prev || []).map((x, j) => j === i ? { ...x, status: x.status === "to_order" ? "ordered" : x.status === "ordered" ? "collected" : "to_order" } : x));
-  const deleteMaterial = (i) => setMaterials(prev => (prev || []).filter((_, j) => j !== i));
+  const cycleStatus = async (i) => {
+    const target = (materials || [])[i];
+    if (!target) return;
+    const next = target.status === "to_order" ? "ordered" : target.status === "ordered" ? "collected" : "to_order";
+    setMaterials(prev => (prev || []).map((x, j) => j === i ? { ...x, status: next } : x));
+    if (target.id && user?.id) {
+      try {
+        await db.from("materials").update({ status: next }).eq("id", target.id).eq("user_id", user.id);
+      } catch (err) { console.warn("cycleStatus DB update failed:", err.message); }
+    }
+  };
+  const deleteMaterial = async (i) => {
+    const target = (materials || [])[i];
+    if (!target) return;
+    setMaterials(prev => (prev || []).filter((_, j) => j !== i));
+    // Soft-delete via the db wrapper (.delete() on materials triggers the holding-bay path)
+    if (target.id && user?.id) {
+      try {
+        await db.from("materials").delete().eq("id", target.id).eq("user_id", user.id);
+      } catch (err) { console.warn("deleteMaterial DB delete failed:", err.message); }
+    }
+  };
 
   const jobList = [...new Set((materials || []).map(m => m.job).filter(Boolean))];
   const filtered = filterJob === "all" ? (materials || []) : (materials || []).filter(m => m.job === filterJob);
@@ -10090,9 +10303,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             (m.supplier || "").toLowerCase().includes(term)
           );
           if (!match) return `No material found matching "${input.item || input.supplier}".`;
-          const img = match.receiptImage || (match.receiptId ? localStorage.getItem(`trade-pa-receipt-${match.receiptId}`) : null);
-          if (!img && !match.receiptSource) return `Found "${match.item}" from ${match.supplier || "unknown supplier"} but no receipt has been scanned for it yet.`;
-          pendingWidgetRef.current = { type: "material_receipt", data: { ...match, resolvedImage: img } };
+          // Resolution order: Storage signed URL > inline > localStorage > legacy DB column.
+          const resolvedImage = await getReceiptViewUrl(match);
+          if (!resolvedImage && !match.receiptSource) return `Found "${match.item}" from ${match.supplier || "unknown supplier"} but no receipt has been scanned for it yet.`;
+          pendingWidgetRef.current = { type: "material_receipt", data: { ...match, resolvedImage } };
           return `Here's the receipt for ${match.item}${match.supplier ? ` from ${match.supplier}` : ""}:`;
         }
         case "list_schedule": {
@@ -10474,7 +10688,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             try {
               const distRes = await fetch("/api/distance", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: await authHeaders(),
                 body: JSON.stringify({ from: input.from_location, to: input.to_location }),
               });
               if (distRes.ok) {
@@ -14124,6 +14338,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                     {m.widget.type === "material_receipt" && (() => {
                       const mat = m.widget.data;
                       const img = mat.resolvedImage;
+                      // PDF detection: signed URLs end in .pdf?token=..., dataURLs start with data:application/pdf
+                      const isPdf = img && (img.toLowerCase().includes(".pdf") || img.startsWith("data:application/pdf"));
                       return (
                         <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
                           <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -14134,9 +14350,19 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                             <div style={{ fontSize: 10, color: mat.status === "to_order" ? C.red : mat.status === "ordered" ? C.amber : C.green }}>{mat.status?.replace(/_/g, " ")}</div>
                           </div>
                           {img ? (
-                            <div style={{ background: "#fff" }}>
-                              <img src={img} alt="Receipt" style={{ width: "100%", display: "block", borderRadius: "0 0 10px 10px" }} />
-                            </div>
+                            isPdf ? (
+                              <div style={{ background: "#fff", padding: 8 }}>
+                                <iframe
+                                  src={img}
+                                  title="Receipt PDF"
+                                  style={{ width: "100%", height: 480, border: "none", background: "#fff" }}
+                                />
+                              </div>
+                            ) : (
+                              <div style={{ background: "#fff" }}>
+                                <img src={img} alt="Receipt" style={{ width: "100%", display: "block", borderRadius: "0 0 10px 10px" }} />
+                              </div>
+                            )
                           ) : mat.receiptSource === "email" ? (
                             <div style={{ padding: "14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>
                               📧 Invoice received via email — open your Inbox to view the original.
@@ -15947,7 +16173,7 @@ function FeedbackModal({ open, onClose, user, brand, currentView }) {
     try {
       const res = await fetch("/api/feedback", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({
           type,
           message: message.trim(),
@@ -30400,7 +30626,7 @@ function AppInner() {
           return;
         }
 
-        const tokenRes = await fetch("/api/calls/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id }) });
+        const tokenRes = await fetch("/api/calls/token", { method: "POST", headers: await authHeaders() });
         const { token } = await tokenRes.json();
         if (!token) return;
 
@@ -30421,7 +30647,7 @@ function AppInner() {
 
         d.on("tokenWillExpire", async () => {
           try {
-            const r = await fetch("/api/calls/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.id }) });
+            const r = await fetch("/api/calls/token", { method: "POST", headers: await authHeaders() });
             const rd = await r.json();
             if (rd.token) d.updateToken(rd.token);
           } catch {}
@@ -30828,7 +31054,8 @@ function AppInner() {
         receiptId: m.receipt_id || "",
         receiptSource: m.receipt_source || "",
         receiptFilename: m.receipt_filename || "",
-        receiptImage: m.receipt_image || "", // base64 image stored in Supabase
+        receiptStoragePath: m.receipt_storage_path || "", // Supabase Storage path (preferred)
+        receiptImage: m.receipt_image || "", // legacy base64 column — only one row in prod
       })));
       if (cust.data) setCustomersRaw(cust.data);
       if (contacts.data) setCustomerContactsRaw(contacts.data.map(c => ({
@@ -31893,7 +32120,7 @@ function AppInner() {
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} customerContacts={customerContacts} setCustomerContacts={setCustomerContacts} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} setContextHint={setContextHint} companyId={companyId} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}
         {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}
-        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} setContextHint={setContextHint} />}
+        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} companyId={companyId} setContextHint={setContextHint} />}
         {view === "Expenses" && <ExpensesTab user={user} setContextHint={setContextHint} />}
         {view === "CIS" && <CISStatementsTab user={user} setContextHint={setContextHint} />}
         <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} sendPush={sendPush} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} assistantVoice={assistantVoice} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} pendingInboxCount={pendingInboxCount} /></div>
