@@ -1,9 +1,20 @@
 // api/error-report.js
 // Generates a structured error report from pa_error_log and optionally emails it
 // Called from the app's Settings page or on a schedule
+//
+// SECURITY (forensic audit Finding 2.3, fixed 27 Apr 2026):
+// Previously accepted `userId` from request body without verifying it
+// matched the caller. An authenticated user could harvest any other user's
+// pa_error_log by passing their userId. Now: userId is derived from the
+// verified JWT only.
+//
+// userEmail is still accepted from the body — it's the "send to" address.
+// Since the data fetched is scoped to the authenticated user, the worst
+// an attacker can do is email their own data to an external address.
 
 import { createClient } from "@supabase/supabase-js";
 import { withSentry } from "./lib/sentry.js";
+import { requireAuth } from "./lib/auth.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -13,8 +24,10 @@ const supabase = createClient(
 async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { userId, userEmail, sendEmail = false, daysBack = 7 } = req.body;
-  if (!userId) return res.status(400).json({ error: "userId required" });
+  const userId = await requireAuth(req, res);
+  if (!userId) return; // 401 already sent
+
+  const { userEmail, sendEmail = false, daysBack = 7 } = req.body || {};
 
   const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
 
