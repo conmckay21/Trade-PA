@@ -1,16 +1,28 @@
 // api/calls/token.js
+//
+// Mints a Twilio Voice access token for the authenticated user.
+//
+// SECURITY (forensic audit Finding 2.1, fixed 27 Apr 2026):
+// Previously this endpoint accepted `userId` from the request body without
+// verifying it matched the calling user. Anyone with API access could
+// request a token for ANY user — receive their incoming calls, initiate
+// outgoing calls billed to their Twilio account.
+// Now: identity is derived from the verified JWT only. Body is ignored.
+
 import twilio from "twilio";
 import { withSentry } from "../lib/sentry.js";
+import { requireAuth } from "../lib/auth.js";
 
 async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { userId } = req.body || {};
-  if (!userId) return res.status(400).json({ error: "userId required" });
+  const userId = await requireAuth(req, res);
+  if (!userId) return; // 401 already sent
 
   const { AccessToken } = twilio.jwt;
   const { VoiceGrant } = AccessToken;
 
+  // Sanitize the verified userId for use as a Twilio identity (alnum + _ -)
   const identity = userId.replace(/[^a-zA-Z0-9_-]/g, "_");
 
   try {
@@ -28,7 +40,6 @@ async function handler(req, res) {
 
     token.addGrant(voiceGrant);
 
-    console.log(`✓ Token generated for identity: ${identity} region: ie1`);
     return res.status(200).json({ token: token.toJwt(), identity });
   } catch (err) {
     console.error("Token generation error:", err.message);
