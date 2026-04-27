@@ -2,6 +2,45 @@
 
 ---
 
+## 2026-04-27 (later)
+
+### Trade PA's brain just got a lot more focused 🧠
+
+When you say "create invoice for Smith £450", Trade PA used to be handed a list of every tool it could possibly use — 43 of them, including how to update brand settings, how to start RAMS documents, how to log mileage, and so on. That's a huge mental load for an instruction that needs maybe 5 of those tools. Now Trade PA only sees the tools relevant to what you're actually asking. Average 54% reduction in tool overhead per request. Two practical effects: faster responses (Claude isn't reading through irrelevant options), and lower running costs (which lets us keep prices low). Nothing changes about what Trade PA can do — it can do all 43 things still — it just gets a smaller, more focused list per task.
+
+### Quiet bug-fix sweep 🛠️
+
+Three pre-existing bugs found during the audit, all fixed:
+- **Mark Paid button** inside an expanded Materials row was crashing silently because of a code-organisation issue. Now works properly.
+- **Daily appointment-reminder cron** has been failing silently for a long time — it was looking for a database column that doesn't exist. Reminders for tomorrow's jobs now actually send. Once you have customer email addresses in the system, the day-before reminder emails will just start arriving.
+- **Holding-bay cascade for customer deletion** was trying to cascade-delete invoices and jobs via a foreign-key column that doesn't exist (those tables store customer name as text instead). Cleaned up. Deleting a customer no longer pretends to delete invoices it can't touch — invoices keep their independent holding-bay safety net.
+
+### Uptime monitoring setup guide 📡
+
+Wrote a step-by-step guide for setting up UptimeRobot to monitor 6 critical Trade PA endpoints (marketing site, /api/claude, the reminders cron, Stripe webhook, customer portal, plus a canary check on Anthropic's own API). Free tier covers everything — 30 minutes of one-time setup. After that, if anything goes down you get an SMS within 10 minutes instead of finding out from a customer.
+
+---
+
+## 2026-04-27
+
+### Faster everything, especially as you grow 🏎️
+
+Quiet under-the-hood work that you'll notice if you have a lot of data: every dashboard read, every list view, every time the AI asks "what are my unpaid invoices" — they all just got a lot faster. Added 25 database indexes that the system can use to skip straight to your data instead of scanning everything. At the moment the difference is invisible (small data sets are fast either way). Once you have a few hundred invoices and a few hundred jobs, this is the difference between "instant" and "spinning wheel for two seconds." Built for the scale we're aiming at, not the scale we have today.
+
+### Tightened up several behind-the-scenes endpoints 🔒
+
+Found and fixed a handful of API routes that weren't checking who was calling them — meaning a determined someone could have done things like generate Twilio voice tokens for other users, run up a Puppeteer-PDF tab on the server, or spam the bug-report inbox. None of these had been exploited (production traffic is just you), but they're closed now anyway. Also added an IP-based speed limit at the edge: any single IP that hammers the API gets a polite 429 ("slow down") after 100 requests in a minute. Real users never hit this; bots probing the URLs will.
+
+### Receipts now sync across devices 🧾📱➡️💻
+
+Until today, scanning a receipt on your phone meant the receipt image only lived on that phone — open the app on your laptop and you'd see the line items but no actual scan. Receipts now go to secure cloud storage, so you can scan on the van and pull up the same receipt in the office. Bonus: each receipt is private to your account (signed-URL access only). Behind the scenes, this also lets us keep growing without bloating the database with image data.
+
+### Materials properly save now 💾
+
+Genuine pre-existing bug found during the scaling audit: materials added via the manual "Add Material" form OR via the receipt-scan flow weren't actually saving to the database — they'd disappear on refresh. (The AI's "add material" tool was working fine.) Both UI flows now persist properly. Cycling status (To Order → Ordered → Collected) and deleting a material also save correctly. If you'd added materials and they vanished — that's why. Should not happen again.
+
+---
+
 ## 2026-04-26
 
 ### Late-night timestamps now stay on the correct day 🌙
