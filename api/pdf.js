@@ -2,6 +2,12 @@
 // Generates a PDF from HTML using Puppeteer + Chromium on Vercel.
 // Called by email send endpoints to attach invoice/quote PDFs.
 //
+// SECURITY (forensic audit Finding 2.2, fixed 27 Apr 2026):
+// Previously unauthenticated. Anyone could spin up Chromium DoS (each
+// invocation eats ~50MB RAM + ~3s CPU). Now requires a verified JWT and
+// applies a per-user rate limit (PDFs are reasonable to want at 30/hour
+// max for an honest tradie).
+//
 // Deploy this alongside the app — add these to package.json dependencies:
 //   "@sparticuz/chromium": "^123.0.0"
 //   "puppeteer-core": "^22.0.0"
@@ -9,10 +15,25 @@
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
 import { withSentry } from "./lib/sentry.js";
+import { requireAuth, checkInMemoryRateLimit } from "./lib/auth.js";
 
 async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+
+  // 30 PDFs/hour/user. Real tradies generate < 5/hour. 30 is a generous
+  // cap that absorbs reasonable burst behaviour (e.g. month-end batch
+  // invoicing) without enabling DoS.
+  const rl = checkInMemoryRateLimit(userId, "pdf", { maxRequests: 30, windowMs: 60 * 60_000 });
+  if (!rl.allowed) {
+    return res.status(429).json({
+      error: "Rate limit exceeded — 30 PDFs/hour. Try again shortly.",
+      resetAt: new Date(rl.resetAt).toISOString(),
+    });
   }
 
   const { html } = req.body || {};
