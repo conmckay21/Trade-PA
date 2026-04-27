@@ -1599,6 +1599,38 @@ function fmtAmount(n) {
   return "£" + num.toLocaleString("en-GB", { minimumFractionDigits: hasDecimals ? 2 : 0, maximumFractionDigits: 2 });
 }
 
+// ─── Local-date helpers (timezone-safe wall-clock dates) ─────────────────────
+//
+// THE BUG WE'RE FIXING: `localDate()` returns the
+// UTC date, NOT the user's local date. For UK users in BST (summer) this
+// means anything logged after midnight local time (23:00–23:59 UTC) gets
+// stored as the *previous* day. Worst case: a CIS statement logged on
+// 1 November at 00:15 BST gets filed as 31 October — wrong tax month.
+//
+// These helpers return the user's wall-clock date as a string. They use
+// `Intl.DateTimeFormat("en-GB", ...)` which respects the runtime's timezone
+// (browser-local on the client, UTC inside server functions). For our app
+// the call sites are all client-side, so "browser local" is effectively
+// UK time for our UK-only product.
+//
+// Use these everywhere we'd previously have written `new Date().toISOString().slice(0, X)`:
+//   localDate(d?)      → "YYYY-MM-DD"     (replaces .slice(0,10))
+//   localMonth(d?)     → "YYYY-MM"        (replaces .slice(0,7))
+//   localYear(d?)      → "YYYY"           (replaces .slice(0,4))
+//
+// Optional `d` argument lets you pass a specific Date — defaults to now.
+function localDate(d = new Date()) {
+  // en-CA gives ISO-style YYYY-MM-DD output in any locale's calendar.
+  // Same numeric output as toISOString().slice(0,10) but timezone-respecting.
+  return d.toLocaleDateString("en-CA");
+}
+function localMonth(d = new Date()) {
+  return localDate(d).slice(0, 7);
+}
+function localYear(d = new Date()) {
+  return localDate(d).slice(0, 4);
+}
+
 // ─── File → Claude vision content block (shared helper) ────────────────────
 // Used by every receipt/invoice scan flow (supplier receipts, subcontractor
 // invoices, AI receipt scan from chat). Centralises the FileReader → base64
@@ -6556,7 +6588,7 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, us
             <button
               onClick={async () => {
                 const paidValue = !m.paid;
-                const paid_on = paidValue ? new Date().toISOString().slice(0, 10) : null;
+                const paid_on = paidValue ? localDate() : null;
                 if (m.id) {
                   await db.from("materials").update({ paid: paidValue, paid_on }).eq("id", m.id).eq("user_id", user?.id);
                 }
@@ -7459,7 +7491,7 @@ function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, en
   React.useEffect(() => {
     if (!user?.id) return;
     const cutoff = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDate();
     db.from("worker_documents")
       .select("*, team_members(name)").eq("user_id", user.id)
       .lte("expiry_date", cutoff).gte("expiry_date", today)
@@ -10519,7 +10551,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             if (expJob) expJobId = expJob.id;
           }
           // Dedup: same description + amount + date = duplicate
-          const expDate = input.exp_date || new Date().toISOString().slice(0,10);
+          const expDate = input.exp_date || localDate();
           const { data: existingExp } = await db.from("expenses")
             .select("id").eq("user_id", user?.id).eq("exp_date", expDate)
             .ilike("description", input.description || "").eq("amount", amount).limit(1);
@@ -10530,7 +10562,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             description: input.description || "",
             amount,
             miles: input.exp_type === "mileage" ? parseFloat(input.miles) : null,
-            exp_date: input.exp_date || new Date().toISOString().slice(0,10),
+            exp_date: input.exp_date || localDate(),
             job_id: expJobId,
           }).select().single();
           if (error) return `Failed to log expense: ${error.message}`;
@@ -10546,7 +10578,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "log_cis_statement": {
           const gross = parseFloat(input.gross_amount) || 0;
           const deduction = parseFloat(input.deduction_amount) || 0;
-          const taxMonth = (input.tax_month || new Date().toISOString().slice(0,7)) + "-01";
+          const taxMonth = (input.tax_month || localMonth()) + "-01";
           // Dedup: same contractor + same month = duplicate.
           // Excluding archived rows so if a tradie archives one and re-adds, it works.
           const { data: existingCis } = await db.from("cis_statements")
@@ -10557,7 +10589,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { data, error } = await db.from("cis_statements").insert({
             user_id: user?.id,
             contractor_name: input.contractor_name || "",
-            tax_month: (input.tax_month || new Date().toISOString().slice(0,7)) + "-01",
+            tax_month: (input.tax_month || localMonth()) + "-01",
             gross_amount: gross,
             deduction_amount: deduction,
             net_amount: gross - deduction,
@@ -10786,7 +10818,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             doc_type: input.doc_type || "", doc_number: input.doc_number || "",
             // Postgres rejects empty string in date columns — must be null
             // when the user hasn't given an expiry. Same for issued_date.
-            issued_date: input.issued_date || new Date().toISOString().slice(0,10),
+            issued_date: input.issued_date || localDate(),
             expiry_date: input.expiry_date || null, notes: input.notes || "",
           }).select().single();
           if (error) return `Failed to add certificate: ${error.message}`;
@@ -10840,7 +10872,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (certErr) return certErr;
           const jc = [jcMatch];
                     const total = (parseFloat(input.hours) || 0) * (parseFloat(input.rate) || 0);
-          const sheetDate = input.date || new Date().toISOString().slice(0,10);
+          const sheetDate = input.date || localDate();
           // Dedup: same job + same date + same total = duplicate
           const { data: existingDw } = await db.from("daywork_sheets")
             .select("id").eq("job_id", jc[0].id).eq("user_id", user?.id)
@@ -10848,7 +10880,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (existingDw?.length) return ""; // Silent dedup
           const { data, error } = await db.from("daywork_sheets").insert({
             job_id: jc[0].id, user_id: user?.id,
-            sheet_date: input.date || new Date().toISOString().slice(0,10),
+            sheet_date: input.date || localDate(),
             worker_name: input.worker_name || brand?.ownerName || "",
             hours: parseFloat(input.hours) || 0,
             rate: parseFloat(input.rate) || 0,
@@ -11396,7 +11428,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           const { data: subs } = await tmReadSubs(db, user?.id, { nameLike: input.name || "", limit: 1 });
           const sub = subs?.[0];
           if (!sub) return `Subcontractor "${input.name}" not found.`;
-          const month = input.month || new Date().toISOString().slice(0,7);
+          const month = input.month || localMonth();
           const { data: payments } = await db.from("subcontractor_payments").select("*").eq("user_id", user?.id).eq("subcontractor_id", sub.id).gte("date", month + "-01").lte("date", month + "-31");
           if (!payments?.length) return `No payments found for ${sub.name} in ${month}.`;
           const totalGross = payments.reduce((s,p) => s + parseFloat(p.gross||0), 0);
@@ -11628,7 +11660,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             user_id: user?.id, job_id: assignJob.id, worker_id: worker.id,
             role: input.role || worker.role || "", rate: input.rate || worker.day_rate || null,
             rate_type: input.rate_type || "day_rate",
-            start_date: input.start_date || new Date().toISOString().slice(0,10),
+            start_date: input.start_date || localDate(),
             created_at: new Date().toISOString(),
           });
           if (jwErr) return `Failed to assign worker: ${jwErr.message}`;
@@ -11648,7 +11680,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               if (spType === "day_rate" && input.days) spGross = parseFloat(input.days) * parseFloat(input.rate || 0);
               if (spType === "hourly" && input.hours) spGross = parseFloat(input.hours) * parseFloat(input.rate || 0);
               if (!spGross) return `How much is ${sub.name} being paid? Give me an amount, days × rate, or hours × rate.`;
-              const spDate = input.date || new Date().toISOString().slice(0,10);
+              const spDate = input.date || localDate();
               const spDeduction = parseFloat(((spGross * (sub.cis_rate || 0)) / 100).toFixed(2));
               const spNet = parseFloat((spGross - spDeduction).toFixed(2));
               let spJobId = null, spJobRef = "";
@@ -11680,7 +11712,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           if (wtType === "hourly") { wtHours = parseFloat(input.hours || 0); wtTotal = wtHours * parseFloat(input.rate || wtWorker.hourly_rate || 0); }
           else if (wtType === "day_rate") { wtHours = parseFloat(input.days || 0) * 8; wtTotal = parseFloat(input.days || 0) * parseFloat(input.rate || wtWorker.day_rate || 0); }
           else { wtTotal = parseFloat(input.total || 0); }
-          const today = new Date().toISOString().slice(0,10);
+          const today = localDate();
           const { error: wtLogErr } = await db.from("time_logs").insert({
             job_id: wtJob.id, user_id: user?.id,
             log_date: input.date || today, labour_type: wtType,
@@ -11710,7 +11742,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         case "list_expiring_documents": {
           const days = parseInt(input.days || 30);
           const cutoff = new Date(Date.now() + days * 86400000).toISOString().slice(0,10);
-          const today = new Date().toISOString().slice(0,10);
+          const today = localDate();
           const { data: expiring } = await db.from("worker_documents")
             .select("*, team_members(name)").eq("user_id", user?.id)
             .lte("expiry_date", cutoff).gte("expiry_date", today)
@@ -21033,7 +21065,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
             await window._supabase.from("cis_statements").insert({
               user_id: user.id,
               contractor_name: cis.contractor_name || d.contractor_name || "Unknown Contractor",
-              tax_month: ((cis.tax_month || d.tax_month || new Date().toISOString().slice(0,7))) + "-01",
+              tax_month: ((cis.tax_month || d.tax_month || localMonth())) + "-01",
               gross_amount: cis.gross_amount || parseFloat(d.gross_amount) || 0,
               deduction_amount: cis.deduction_amount || parseFloat(d.deduction_amount) || 0,
               net_amount: cis.net_amount || ((cis.gross_amount || 0) - (cis.deduction_amount || 0)) || 0,
@@ -21051,7 +21083,7 @@ ${!existingCustomer ? `<p>It would also be helpful to have:</p>
         await window._supabase.from("cis_statements").insert({
           user_id: user.id,
           contractor_name: d.contractor_name || "Unknown Contractor",
-          tax_month: (d.tax_month || new Date().toISOString().slice(0,7)) + "-01",
+          tax_month: (d.tax_month || localMonth()) + "-01",
           gross_amount: parseFloat(d.gross_amount) || 0,
           deduction_amount: parseFloat(d.deduction_amount) || 0,
           net_amount: (parseFloat(d.gross_amount) || 0) - (parseFloat(d.deduction_amount) || 0),
@@ -23091,10 +23123,10 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
   const [daysheets, setDaysheets] = useState([]);
   const [saving, setSaving] = useState(false);
   const [addNote, setAddNote] = useState("");
-  const [addTime, setAddTime] = useState({ date: new Date().toISOString().slice(0,10), labour_type: "hourly", hours: "", days: "", rate: "", total: "", worker: "", description: "" });
+  const [addTime, setAddTime] = useState({ date: localDate(), labour_type: "hourly", hours: "", days: "", rate: "", total: "", worker: "", description: "" });
   const [addVO, setAddVO] = useState({ vo_number: "", description: "", amount: "" });
   const [addDoc, setAddDoc] = useState({ doc_type: "", doc_number: "", issued_date: "", expiry_date: "", notes: "" });
-  const [addDaysheet, setAddDaysheet] = useState({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" });
+  const [addDaysheet, setAddDaysheet] = useState({ sheet_date: localDate(), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" });
   const [emailConnection, setEmailConnection] = useState(null);
   const [showSignature, setShowSignature] = useState(false);
   const [editingJob, setEditingJob] = useState(false);
@@ -23373,7 +23405,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
         const basicPayload = { job_id: selected.id, user_id: user.id, hours, rate, description: `${addTime.description || ""}${type !== "hourly" ? ` [${type}: ${fmtCurrency(total)}]` : ""}` };
         const { data: d2, error: e2 } = await db.from("time_logs").insert(basicPayload).select().single();
         if (e2) { alert(`Failed to log labour: ${e2.message}\n\nPlease run the SQL migration in Supabase to add missing columns.`); return; }
-        if (d2) { setTimeLogs(prev => [{ ...d2, labour_type: type, total, days, log_date: addTime.date }, ...prev]); setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" }); }
+        if (d2) { setTimeLogs(prev => [{ ...d2, labour_type: type, total, days, log_date: addTime.date }, ...prev]); setAddTime({ date: localDate(), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" }); }
       } else {
         alert(`Failed to log labour: ${error.message}`);
       }
@@ -23382,7 +23414,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
 
     if (data) {
       setTimeLogs(prev => [data, ...prev]);
-      setAddTime({ date: new Date().toISOString().slice(0,10), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" });
+      setAddTime({ date: localDate(), labour_type: type, hours: "", days: "", rate: "", total: "", worker: "", description: "" });
     }
   }
 
@@ -23402,7 +23434,7 @@ function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setCo
     if (!addDaysheet.hours || !addDaysheet.rate || !selected) return;
     const { data, error } = await db.from("daywork_sheets").insert({ job_id: selected.id, user_id: user.id, ...addDaysheet, hours: parseFloat(addDaysheet.hours), rate: parseFloat(addDaysheet.rate) }).select().single();
     if (error) { alert(`Couldn't save daywork sheet: ${error.message}`); return; }
-    if (data) { setDaysheets(prev => [data, ...prev]); setAddDaysheet({ sheet_date: new Date().toISOString().slice(0,10), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" }); }
+    if (data) { setDaysheets(prev => [data, ...prev]); setAddDaysheet({ sheet_date: localDate(), worker_name: "", hours: "", rate: "", description: "", contractor_name: "" }); }
   }
 
   const COMPLIANCE_TYPES = ["Gas Safety Certificate","Boiler Commissioning Sheet","EICR","Electrical Installation Certificate","Minor Works Certificate","PAT Testing","Pressure Test Certificate","Part P Certificate","Oil Safety Certificate","Other"];
@@ -24705,7 +24737,7 @@ function ExpensesTab({ user, setContextHint }) {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ exp_type: "mileage", description: "", amount: "", miles: "", exp_date: new Date().toISOString().slice(0,10) });
+  const [form, setForm] = useState({ exp_type: "mileage", description: "", amount: "", miles: "", exp_date: localDate() });
   const [filterMonth, setFilterMonth] = useState("all");
 
   useEffect(() => {
@@ -24745,7 +24777,7 @@ function ExpensesTab({ user, setContextHint }) {
     if (data) {
       setExpenses(prev => [data, ...prev]);
       setShowAdd(false);
-      setForm({ exp_type: "mileage", description: "", amount: "", miles: "", exp_date: new Date().toISOString().slice(0,10) });
+      setForm({ exp_type: "mileage", description: "", amount: "", miles: "", exp_date: localDate() });
       setReceiptData(null);
     }
   }
@@ -24930,7 +24962,7 @@ function CISStatementsTab({ user, setContextHint }) {
     setContextHint(`CIS: ${statements.length} statements · £${Math.round(totalDed).toLocaleString()} deductions`);
     return () => { if (setContextHint) setContextHint(null); };
   }, [statements, setContextHint]);
-  const [form, setForm] = useState({ contractor_name: "", tax_month: new Date().toISOString().slice(0,7), gross_amount: "", deduction_amount: "", notes: "" });
+  const [form, setForm] = useState({ contractor_name: "", tax_month: localMonth(), gross_amount: "", deduction_amount: "", notes: "" });
   const [search, setSearch] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
 
@@ -24959,7 +24991,7 @@ function CISStatementsTab({ user, setContextHint }) {
     if (data) {
       setStatements(prev => [data, ...prev]);
       setShowAdd(false);
-      setForm({ contractor_name: "", tax_month: new Date().toISOString().slice(0,7), gross_amount: "", deduction_amount: "", notes: "" });
+      setForm({ contractor_name: "", tax_month: localMonth(), gross_amount: "", deduction_amount: "", notes: "" });
     }
   }
 
@@ -26636,7 +26668,7 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
   });
 
   const markPaymentPaid = async (pay, paidValue) => {
-    const paid_on = paidValue ? new Date().toISOString().slice(0, 10) : null;
+    const paid_on = paidValue ? localDate() : null;
     const { error } = await db
       .from("subcontractor_payments")
       .update({ paid: paidValue, paid_on })
@@ -26750,7 +26782,7 @@ function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
               </div>
             ) : visibleWorkers.map(w => {
               const wDocs = workerDocs.filter(d => d.worker_id === w.id);
-              const today = new Date().toISOString().slice(0,10);
+              const today = localDate();
               const expiredDocs = wDocs.filter(d => d.expiry_date && d.expiry_date < today);
               const soonDocs = wDocs.filter(d => d.expiry_date && d.expiry_date >= today && d.expiry_date <= new Date(Date.now()+30*86400000).toISOString().slice(0,10));
               return (
@@ -30012,7 +30044,7 @@ function AppInner() {
   }, [user?.id]);
 
   // ── Fair-use caps: usage tracking ─────────────────────────────
-  const currentMonth = new Date().toISOString().slice(0, 7); // "2026-04"
+  const currentMonth = localMonth(); // "2026-04"
   const [usageData, setUsageData] = useState({ conversations_used: 0, handsfree_seconds_used: 0 });
   // Caps come from TIER_CONFIG (single source of truth). getTierConfig
   // handles legacy "pro" → "business" rename.
