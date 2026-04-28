@@ -2,6 +2,14 @@
 
 ---
 
+## 2026-04-28 (later)
+
+### More cleanup in the engine room — landing page and login 🧹
+
+Round two of today's tidy-up. Pulled the marketing landing page (the one new visitors see at tradespa.co.uk) and the login / signup / forgot-password screen out of the giant main file and into their own dedicated files. The two little animated demo cards on the landing page (the voice transcript that types itself out, and the AI inbox queue that auto-approves) live alongside the landing page itself rather than scattered around. Nothing changes about how Trade PA looks or works — same landing page copy, same trial / pricing layout, same login flow, same forgot-password flow, same Supabase auth under the hood. Just easier to find and safer to change going forward. If anything looks even slightly off — landing page sections, the voice / inbox demo animations, the log in or sign up screen, the forgot-password reset link — let us know.
+
+---
+
 ## 2026-04-28
 
 ### More tidying in the engine room 🧹
