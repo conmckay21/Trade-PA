@@ -6,14 +6,21 @@
 // Phase 1 Session 2: cache read/write/merge helpers.
 // Phase 1 Session 4: pending_writes helpers activated.
 // Phase 1 Session 4b: retry / discard helpers for failed writes.
-// Phase 1 Session 4b.1 (NOW): removed 'quotes' from TIER_2 — Trade PA
-//   uses the invoices table with is_quote flag rather than a separate
-//   quotes table. Prewarm was logging '1 failed' every login for no reason.
+// Phase 1 Session 4b.1: removed 'quotes' from TIER_2 — Trade PA uses the
+//   invoices table with is_quote flag rather than a separate quotes table.
+//   Prewarm was logging '1 failed' every login for no reason.
+// Phase 1 Session 4b.2 (NOW, 28 Apr 2026): removed 'workers' and
+//   'subcontractors' from TIER_2 — these tables were unified into
+//   'team_members' on 24-25 April 2026, leaving prewarm logging
+//   '2 failed' every login (BUG-001). Replaced with 'team_members' in
+//   the same tier. Bumped DB_VERSION to 2 with a v1→v2 cleanup that
+//   drops the now-orphan workers + subcontractors object stores so
+//   existing user devices don't carry stale empty stores forever.
 
 import { openDB } from "idb";
 
 const DB_NAME = "tradepa-offline";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // ─── Table tiers ──────────────────────────────────────────────────────
 
@@ -38,9 +45,8 @@ export const TIER_2_TABLES = [
   "invoices",
   "compliance_docs",
   "documents",
-  "subcontractors",
+  "team_members",
   "subcontractor_payments",
-  "workers",
   "worker_documents",
   "purchase_orders",
 ];
@@ -57,7 +63,19 @@ export function getOfflineDb() {
   }
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(idb) {
+      upgrade(idb, oldVersion) {
+        // v1 → v2 (28 Apr 2026, BUG-001): drop orphan stores for the
+        // 'workers' and 'subcontractors' tables — both were unified into
+        // 'team_members' upstream and the local stores have no live
+        // queries pointing at them. The for-loop below then picks up
+        // 'team_members' as a new store needing creation.
+        if (oldVersion < 2) {
+          for (const stale of ["workers", "subcontractors"]) {
+            if (idb.objectStoreNames.contains(stale)) {
+              idb.deleteObjectStore(stale);
+            }
+          }
+        }
         for (const table of CACHED_TABLES) {
           if (!idb.objectStoreNames.contains(table)) {
             const store = idb.createObjectStore(table, { keyPath: "id" });
