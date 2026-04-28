@@ -32,6 +32,7 @@ export function InvoiceModal({ brand, onClose, onSent, initialData, invoices, us
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
+  const [savedAsDraft, setSavedAsDraft] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const isVatRegistered = !!(brand.vatNumber && (isExemptAccount(user?.email) || brand.registrationVerifications?.vatNumber?.verified));
 
@@ -59,7 +60,7 @@ export function InvoiceModal({ brand, onClose, onSent, initialData, invoices, us
   const hasAmount = form.cisEnabled ? (form.labour || form.materials) : (lineItemsTotal !== null || !!form.amount);
   const valid = form.customer && (isEditing || form.email) && hasAmount;
 
-  const send = () => {
+  const send = (asDraft = false) => {
     try {
       const finalDesc = form.lineItems && form.lineItems.length > 0
         ? form.lineItems.map(l => l.amount && l.amount !== "" ? `${l.desc || l.description}|${l.amount}` : (l.desc || l.description || "")).filter(Boolean).join("\n")
@@ -71,7 +72,7 @@ export function InvoiceModal({ brand, onClose, onSent, initialData, invoices, us
         customer: form.customer, email: form.email, address: form.address,
         amount: finalAmount,
         grossAmount: finalGross,
-        due: `Due in ${form.due} days`, status: initialData?.status || "sent",
+        due: `Due in ${form.due} days`, status: initialData?.status || (asDraft ? "draft" : "sent"),
         description: finalDesc, paymentMethod: form.paymentMethod || "bacs",
         lineItems: form.lineItems || [],
         vatEnabled: form.vatEnabled, vatRate: form.vatZeroRated ? 0 : vatRate,
@@ -84,6 +85,7 @@ export function InvoiceModal({ brand, onClose, onSent, initialData, invoices, us
       if (isEditing) {
         onSent(payload);
       } else {
+        setSavedAsDraft(asDraft);
         setSent(true);
         setTimeout(() => onSent(payload), 1500);
       }
@@ -97,10 +99,10 @@ export function InvoiceModal({ brand, onClose, onSent, initialData, invoices, us
       <div style={{ ...S.card, maxWidth: 880, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
         {sent ? (
           <div style={{ textAlign: "center", padding: 40 }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>{isEditing ? "✅" : "✅"}</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: C.green, marginBottom: 8 }}>{isEditing ? "Invoice Updated!" : "Invoice Sent!"}</div>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>{savedAsDraft ? "📝" : "✅"}</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.green, marginBottom: 8 }}>{isEditing ? "Invoice Updated!" : savedAsDraft ? "Saved as Draft" : "Invoice Sent!"}</div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>
-              {isEditing ? "Changes saved successfully." : (form.paymentMethod === "card" || form.paymentMethod === "both") ? `Payment link sent to ${form.email}` : `BACS details sent to ${form.email}`}
+              {isEditing ? "Changes saved successfully." : savedAsDraft ? "Saved to your invoices list — send to the customer when you're ready." : (form.paymentMethod === "card" || form.paymentMethod === "both") ? `Payment link sent to ${form.email}` : `BACS details sent to ${form.email}`}
             </div>
             {form.vatEnabled && (
               <div style={{ ...S.card, background: C.surfaceHigh, padding: 14, display: "inline-block", textAlign: "left", marginBottom: 16 }}>
@@ -341,10 +343,14 @@ export function InvoiceModal({ brand, onClose, onSent, initialData, invoices, us
 
                 <div style={{ display: "flex", gap: 10 }}>
                   {isEditing
-                    ? <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>Save Changes →</button>
-                    : (form.paymentMethod === "card" || form.paymentMethod === "both")
-                      ? <button style={S.btn("stripe", !valid)} disabled={!valid} onClick={send}><span style={{ fontWeight: 900 }}>S</span> Send via Stripe →</button>
-                      : <button style={S.btn("primary", !valid)} disabled={!valid} onClick={send}>Send Invoice →</button>
+                    ? <button style={S.btn("primary", !valid)} disabled={!valid} onClick={() => send(false)}>Save Changes →</button>
+                    : <>
+                        <button style={S.btn("ghost", !valid)} disabled={!valid} onClick={() => send(true)}>Save as Draft</button>
+                        {(form.paymentMethod === "card" || form.paymentMethod === "both")
+                          ? <button style={S.btn("stripe", !valid)} disabled={!valid} onClick={() => send(false)}><span style={{ fontWeight: 900 }}>S</span> Send via Stripe →</button>
+                          : <button style={S.btn("primary", !valid)} disabled={!valid} onClick={() => send(false)}>Send Invoice →</button>
+                        }
+                      </>
                   }
                 </div>
               </div>
