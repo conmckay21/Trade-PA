@@ -1,6 +1,23 @@
 # What's new
 
-2026-04-28
+## 2026-04-28
+
+### Invoices & quotes ✉️
+- Send button now attaches a proper PDF to invoice and quote emails 📎 — your customers get a copy they can save and print
+- Type a customer's email once and we'll save it to their record — no more retyping when you send them more invoices later
+- The orange "View & Pay Online" button now reliably appears in every invoice email so customers can pay you in two taps
+
+### Reminders 🔔
+- Reminders now sync across all your devices — set one on your phone, see it on your iPad
+- Marking a reminder done makes it stay done (was un-ticking itself for some users)
+
+### Behind the scenes 🛠️
+- Cleaned up startup errors that some users were seeing in the browser console
+- Removed an old duplicate file that wasn't being used
+
+---
+
+## 2026-04-28
 
 🧹 Internal tidy-up: the AI Assistant code now lives in its own file. No change to how it works — voice, tools, hands-free and chat all run exactly the same. Just easier for us to keep building on top of it. 
 
