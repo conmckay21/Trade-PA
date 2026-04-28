@@ -59,6 +59,15 @@ import { FeedbackModal } from "./modals/FeedbackModal.jsx";
 import { InvoiceModal } from "./modals/InvoiceModal.jsx";
 import { QuoteModal } from "./modals/QuoteModal.jsx";
 import { AssignToJobModal } from "./modals/AssignToJobModal.jsx";
+// ─── P7 prelude: cross-cutters lifted to lib/ (28 Apr 2026) ────────────────
+// Hoisted ahead of view extraction so each extracted view can import these
+// directly. Verbatim moves — no behavioural changes.
+import { statusColor, statusLabel } from "./lib/status.js";
+import { SUB_INVOICE_SCAN_PROMPT } from "./lib/scan-prompts.js";
+import { isSameDay } from "./lib/date-helpers.js";
+import { portalCtaBlock } from "./lib/portal-extras.js";
+import { syncInvoiceToAccounting } from "./lib/accounting.js";
+import { tmReadWorkers, tmReadSubs } from "./lib/team-members.js";
 
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
@@ -79,48 +88,14 @@ class ErrorBoundary extends Component {
 }
 window._supabase = db;
 
-// ─── Sync invoice to accounting software ─────────────────────────────────────
-async function syncInvoiceToAccounting(userId, invoice) {
-  if (!userId || !invoice) return;
-  try {
-    if (invoice.status === "paid") {
-      // Mark as paid in Xero
-      fetch("/api/xero/mark-paid", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, invoiceId: invoice.id }),
-      }).catch(() => {});
-      // Mark as paid in QuickBooks
-      fetch("/api/quickbooks/mark-paid", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, invoiceId: invoice.id }),
-      }).catch(() => {});
-    } else {
-      // Create invoice in both systems
-      fetch("/api/xero/create-invoice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, invoice }),
-      }).catch(() => {});
-      fetch("/api/quickbooks/create-invoice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, invoice }),
-      }).catch(() => {});
-    }
-  } catch (e) {
-    console.log("Accounting sync skipped:", e.message);
-  }
-}
+// (syncInvoiceToAccounting moved to ./lib/accounting.js — P7 prelude)
 
 
 const JOBS = [];
 const INVOICES_INIT = [];
 const ENQUIRIES = [];
 const MATERIALS = [];
-const statusColor = { confirmed: C.green, pending: C.amber, quote_sent: C.blue, overdue: C.red, due: C.amber, paid: C.green, to_order: C.red, ordered: C.amber, collected: C.green, sent: C.amber, draft: C.muted };
-const statusLabel = { confirmed: "Confirmed", pending: "Pending", quote_sent: "Quote Sent", overdue: "Overdue", due: "Due Today", paid: "Paid", to_order: "To Order", ordered: "Ordered", collected: "Collected", sent: "Sent", draft: "Draft" };
+// (statusColor + statusLabel moved to ./lib/status.js — P7 prelude)
 
 // ── Shared list utilities (Phase 3: jobs / invoices / materials etc.) ──────
 // Module-scope so list screens share one source of truth. Hoisted after
@@ -134,13 +109,7 @@ const statusLabel = { confirmed: "Confirmed", pending: "Pending", quote_sent: "Q
 
 
 // which the terse version silently fudged.
-const SUB_INVOICE_SCAN_PROMPT =
-  "You are reading a UK subcontractor invoice. Extract and return ONLY valid JSON with these keys: " +
-  "subcontractor_name, invoice_number, date (YYYY-MM-DD), labour_amount (number, ex-VAT), " +
-  "material_items (array of {desc, amount} ex-VAT), materials_total (number, sum of material_items), " +
-  "gross_total (number, labour + materials ex-VAT), vat_rate (0, 5, or 20), vat_amount (number), " +
-  "description (brief summary of work). " +
-  "If labour and materials are not split out separately, put full amount in labour_amount and leave material_items empty.";
+// (SUB_INVOICE_SCAN_PROMPT moved to ./lib/scan-prompts.js — P7 prelude)
 
 // Shared helper: open arbitrary HTML in a print-friendly preview that ALSO
 
@@ -4063,9 +4032,7 @@ function formatDayLabel(date) {
   return date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
-function isSameDay(a, b) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
+// (isSameDay moved to ./lib/date-helpers.js — P7 prelude)
 
 function Schedule({ jobs, setJobs, customers, setContextHint }) {
   const [weekOffset, setWeekOffset] = useState(0);
@@ -25489,101 +25456,8 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
 // reads return rows added via "Add Worker", subs reads return rows added via
 // "Add Subcontractor". One human, one row, in the tab they were added to.
 
-async function tmReadWorkers(db, userId, opts = {}) {
-  if (!db || !userId) return { data: [], error: null };
-  const { activeOnly = false, nameLike = null, limit = null } = opts;
-  let q = db.from("team_members").select("*")
-    .eq("user_id", userId).eq("source_table", "workers");
-  if (activeOnly) q = q.eq("active", true);
-  if (nameLike) q = q.ilike("name", `%${nameLike}%`);
-  if (limit) q = q.limit(limit);
-  const { data, error } = await q;
-  if (error) return { data: null, error };
-  return {
-    data: (data || []).map(r => ({
-      id: r.id,
-      user_id: r.user_id,
-      name: r.name,
-      type: r.engagement === "employed" ? "employed" : "subcontractor",
-      role: r.role,
-      email: r.email,
-      phone: r.phone,
-      day_rate: r.day_rate,
-      hourly_rate: r.hourly_rate,
-      utr: r.utr,
-      cis_rate: r.cis_rate,
-      ni_number: r.ni_number,
-      start_date: r.start_date,
-      active: r.active,
-      notes: r.notes,
-      address: r.address,
-      created_at: r.created_at,
-    })),
-    error: null,
-  };
-}
-
-async function tmReadSubs(db, userId, opts = {}) {
-  if (!db || !userId) return { data: [], error: null };
-  const { activeOnly = false, nameLike = null, limit = null } = opts;
-  let q = db.from("team_members").select("*")
-    .eq("user_id", userId).eq("source_table", "subcontractors");
-  if (activeOnly) q = q.eq("active", true);
-  if (nameLike) q = q.ilike("name", `%${nameLike}%`);
-  if (limit) q = q.limit(limit);
-  const { data, error } = await q;
-  if (error) return { data: null, error };
-  return {
-    data: (data || []).map(r => ({
-      id: r.id,
-      user_id: r.user_id,
-      name: r.name,
-      company: r.company_name,
-      utr: r.utr,
-      cis_rate: r.cis_rate,
-      email: r.email,
-      phone: r.phone,
-      active: r.active,
-      created_at: r.created_at,
-    })),
-    error: null,
-  };
-}
-
-// ─── Email portal CTA block ─────────────────────────────────────────────────
-// Shared HTML for the "View & Pay Online" button that goes into outbound
-// emails (initial send, AI send, chase). Wording adapts to quote vs invoice
-// and whether Stripe is connected. Includes a plain-text URL fallback line
-// below the button for email clients that block images / buttons, and for
-// readability when customers forward or print the email.
-//
-// Call from any email body template:
-//   const cta = portalCtaBlock({ token, isQuote, stripeReady, accent });
-//   body: `<p>Dear ${name},</p><p>Please find your invoice attached.</p>${cta}...`
-//
-// Returns empty string if no token — renders nothing so templates don't
-// need a conditional wrapper. Safe to interpolate unconditionally.
-function portalCtaBlock({ token, isQuote, stripeReady, accent }) {
-  if (!token) return "";
-  const url = portalUrl(token);
-  const label = isQuote
-    ? "View &amp; Accept Online &rarr;"
-    : stripeReady ? "View &amp; Pay Online &rarr;" : "View Online &rarr;";
-  const subtext = isQuote
-    ? "No login required &middot; one tap to accept"
-    : stripeReady ? "No login required &middot; pay by card or bank transfer"
-                  : "No login required &middot; view invoice and bank details";
-  // tp-cta class lets buildEmailHTML's <style> block force the amber bg +
-  // white text in dark-mode email clients. Inline !important on the anchor
-  // is belt-and-braces for clients that strip <style> entirely (older
-  // Outlook, some webmail readers).
-  return `
-      <p style="text-align:center;margin:20px 0 4px;">
-        <a href="${url}" class="tp-cta" style="display:inline-block;background:${accent} !important;color:#ffffff !important;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.02em;">${label}</a>
-      </p>
-      <p style="text-align:center;color:#666 !important;font-size:12px;margin:0 0 10px;">${subtext}</p>
-      <p style="text-align:center;color:#888 !important;font-size:11px;margin:0 0 20px;word-break:break-all;">Or paste this link into your browser:<br/><a href="${url}" style="color:#666 !important;text-decoration:underline;">${url}</a></p>`;
-}
+// (tmReadWorkers, tmReadSubs moved to ./lib/team-members.js — P7 prelude)
+// (portalCtaBlock moved to ./lib/portal-extras.js — P7 prelude)
 
 // ─── iCalendar (.ics) generator ──────────────────────────────────────────────
 // Builds an RFC 5545 VCALENDAR from a jobs array. Used by both the in-app
