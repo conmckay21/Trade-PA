@@ -1,0 +1,8 @@
+{
+  "appId": "uk.co.tradespa.app",
+  "appName": "Trade PA",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
