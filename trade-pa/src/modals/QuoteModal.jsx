@@ -29,6 +29,7 @@ export function QuoteModal({ brand, onClose, onSent, initialData, invoices, user
   const isEditing = !!initialData;
   const [tab, setTab] = useState("form");
   const [sent, setSent] = useState(false);
+  const [savedAsDraft, setSavedAsDraft] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const isVatRegistered = !!(brand.vatNumber && (isExemptAccount(user?.email) || brand.registrationVerifications?.vatNumber?.verified));
 
@@ -49,7 +50,7 @@ export function QuoteModal({ brand, onClose, onSent, initialData, invoices, user
   const hasAmount = form.cisEnabled ? (form.labour || form.materials) : (lineItemsTotal !== null || !!form.amount);
   const valid = form.customer && hasAmount;
 
-  const send = () => {
+  const send = (asDraft = false) => {
     try {
       const id = initialData?.id || nextQuoteId(invoices);
       const finalDesc = form.lineItems && form.lineItems.length > 0
@@ -60,7 +61,7 @@ export function QuoteModal({ brand, onClose, onSent, initialData, invoices, user
         id, customer: form.customer, email: form.email, address: form.address,
         amount: finalAmount,
         grossAmount: form.cisEnabled ? cisGross : grossAmount,
-        due: `Valid for ${form.validDays} days`, status: initialData?.status || "sent",
+        due: `Valid for ${form.validDays} days`, status: initialData?.status || (asDraft ? "draft" : "sent"),
         description: finalDesc, lineItems: form.lineItems || [], isQuote: true,
         vatEnabled: form.vatEnabled, vatRate: form.vatRate, vatType: form.vatType,
         jobRef: form.jobRef || "", poNumber: form.poNumber || "",
@@ -71,6 +72,7 @@ export function QuoteModal({ brand, onClose, onSent, initialData, invoices, user
       if (isEditing) {
         onSent(payload);
       } else {
+        setSavedAsDraft(asDraft);
         setSent(true);
         setTimeout(() => onSent(payload), 1000);
       }
@@ -84,9 +86,9 @@ export function QuoteModal({ brand, onClose, onSent, initialData, invoices, user
       <div style={{ ...S.card, maxWidth: 880, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
         {sent ? (
           <div style={{ textAlign: "center", padding: 40 }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: C.blue, marginBottom: 8 }}>{isEditing ? "Quote Updated!" : "Quote Created!"}</div>
-            <div style={{ fontSize: 12, color: C.muted }}>{isEditing ? "Changes saved successfully." : `Quote sent to ${form.email || form.customer}. Valid for ${form.validDays} days.`}</div>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>{savedAsDraft ? "📝" : "📋"}</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.blue, marginBottom: 8 }}>{isEditing ? "Quote Updated!" : savedAsDraft ? "Saved as Draft" : "Quote Created!"}</div>
+            <div style={{ fontSize: 12, color: C.muted }}>{isEditing ? "Changes saved successfully." : savedAsDraft ? "Saved to your quotes list — send to the customer when you're ready." : `Quote sent to ${form.email || form.customer}. Valid for ${form.validDays} days.`}</div>
           </div>
         ) : (
           <>
@@ -293,7 +295,13 @@ export function QuoteModal({ brand, onClose, onSent, initialData, invoices, user
                 </div>
 
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button style={{ ...S.btn("primary", !valid), background: valid ? C.blue : undefined }} disabled={!valid} onClick={send}>{isEditing ? "Save Changes →" : "Send Quote →"}</button>
+                  {isEditing
+                    ? <button style={{ ...S.btn("primary", !valid), background: valid ? C.blue : undefined }} disabled={!valid} onClick={() => send(false)}>Save Changes →</button>
+                    : <>
+                        <button style={S.btn("ghost", !valid)} disabled={!valid} onClick={() => send(true)}>Save as Draft</button>
+                        <button style={{ ...S.btn("primary", !valid), background: valid ? C.blue : undefined }} disabled={!valid} onClick={() => send(false)}>Send Quote →</button>
+                      </>
+                  }
                 </div>
               </div>
           </>
