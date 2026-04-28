@@ -1,5 +1,13 @@
 # What's new
 
+## 2026-04-28
+
+### 🛠️ Internal restructure (Phase 7 — sub-batch C, Phase 7 complete)
+
+Nothing changes about how Trade PA looks or works. We've moved the last and biggest screens — Invoices, Quotes, Payments, Customers, Jobs and Certificates — into their own files. App.jsx is now under 14,000 lines (down from 32,000 a few days ago). Same screens, same buttons, same data. Phase 7 is finished — what remains for the cleanup is mostly the AI Assistant module and the top-level routing, both planned for upcoming phases.
+
+---
+
 🛠️ Internal restructure (Phase 7 — sub-batch B)
 Nothing changes about how Trade PA looks or works. We've moved 6 more screens — Materials, Inbox, Enquiries, RAMS, Subcontractors and Reports — into their own dedicated files behind the scenes. App.jsx is now under 20,000 lines (down from 32,000 a few days ago). Same screens, same buttons, same data.
 
