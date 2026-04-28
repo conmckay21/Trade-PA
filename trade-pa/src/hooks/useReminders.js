@@ -1,84 +1,317 @@
-import { useState, useEffect } from "react";
-import { db } from "../lib/db.js";
+// ─── offlineDb.js ──────────────────────────────────────────────────────
+//
+// IndexedDB store for the offline read-cache and pending-writes queue.
+//
+// Phase 1 Session 1: schema defined.
+// Phase 1 Session 2: cache read/write/merge helpers.
+// Phase 1 Session 4: pending_writes helpers activated.
+// Phase 1 Session 4b: retry / discard helpers for failed writes.
+// Phase 1 Session 4b.1: removed 'quotes' from TIER_2 — Trade PA uses the
+//   invoices table with is_quote flag rather than a separate quotes table.
+//   Prewarm was logging '1 failed' every login for no reason.
+// Phase 1 Session 4b.2 (NOW, 28 Apr 2026): removed 'workers' and
+//   'subcontractors' from TIER_2 — these tables were unified into
+//   'team_members' on 24-25 April 2026, leaving prewarm logging
+//   '2 failed' every login (BUG-001). Replaced with 'team_members' in
+//   the same tier. Bumped DB_VERSION to 2 with a v1→v2 cleanup that
+//   drops the now-orphan workers + subcontractors object stores so
+//   existing user devices don't carry stale empty stores forever.
 
-export function useReminders(userId) {
-  const [reminders, setRemindersRaw] = useState([]);
+import { openDB } from "idb";
 
-  // Load from localStorage once userId is known.
-  // Falls back to Supabase if local cache is empty (handles app reloads,
-  // new devices, or fresh installs where AI-set reminders went straight
-  // to the database but never made it into local cache).
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const saved = localStorage.getItem(`trade-pa-reminders-${userId}`);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          // Keep ALL reminders — overdue items must stay visible until
-          // the user explicitly marks them Done ✓ or deletes them.
-          // Only drop very old completed ones (>30 days) to avoid bloat.
-          const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-          const valid = parsed.filter(r => !r.done || r.time > cutoff);
-          if (!cancelled) setRemindersRaw(valid);
-          if (valid.length > 0) return; // local cache hit, skip Supabase hydration
+const DB_NAME = "tradepa-offline";
+const DB_VERSION = 2;
+
+// ─── Table tiers ──────────────────────────────────────────────────────
+
+export const TIER_1_TABLES = [
+  "jobs",
+  "job_cards",
+  "job_notes",
+  "job_photos",
+  "customers",
+  "customer_contacts",
+  "materials",
+  "stock_items",
+  "time_logs",
+  "mileage_logs",
+  "daywork_sheets",
+  "variation_orders",
+  "rams_documents",
+  "trade_certificates",
+];
+
+export const TIER_2_TABLES = [
+  "invoices",
+  "compliance_docs",
+  "documents",
+  "team_members",
+  "subcontractor_payments",
+  "worker_documents",
+  "purchase_orders",
+];
+
+export const CACHED_TABLES = [...TIER_1_TABLES, ...TIER_2_TABLES];
+
+// ─── Database initialisation ──────────────────────────────────────────
+
+let dbPromise = null;
+
+export function getOfflineDb() {
+  if (typeof window === "undefined" || !("indexedDB" in window)) {
+    return null;
+  }
+  if (!dbPromise) {
+    dbPromise = openDB(DB_NAME, DB_VERSION, {
+      upgrade(idb, oldVersion) {
+        // v1 → v2 (28 Apr 2026, BUG-001): drop orphan stores for the
+        // 'workers' and 'subcontractors' tables — both were unified into
+        // 'team_members' upstream and the local stores have no live
+        // queries pointing at them. The for-loop below then picks up
+        // 'team_members' as a new store needing creation.
+        if (oldVersion < 2) {
+          for (const stale of ["workers", "subcontractors"]) {
+            if (idb.objectStoreNames.contains(stale)) {
+              idb.deleteObjectStore(stale);
+            }
+          }
         }
-        // Local empty — hydrate from Supabase
-        const { data } = await db
-          .from("reminders")
-          .select("*")
-          .eq("user_id", userId)
-          .order("fire_at", { ascending: false })
-          .limit(200);
-        if (cancelled) return;
-        if (data && data.length > 0) {
-          const hydrated = data.map(r => ({
-            id: r.id ? `r${r.id}` : `r${Date.parse(r.created_at) || Date.now()}`,
-            text: r.text,
-            time: Date.parse(r.fire_at),
-            timeLabel: new Date(r.fire_at).toLocaleString("en-GB"),
-            done: !!r.done,
-            fired: !!r.fired,
-          })).filter(r => !isNaN(r.time));
-          setRemindersRaw(hydrated);
-          try { localStorage.setItem(`trade-pa-reminders-${userId}`, JSON.stringify(hydrated)); } catch {}
+        for (const table of CACHED_TABLES) {
+          if (!idb.objectStoreNames.contains(table)) {
+            const store = idb.createObjectStore(table, { keyPath: "id" });
+            store.createIndex("user_id", "user_id", { unique: false });
+            store.createIndex("updated_at", "updated_at", { unique: false });
+          }
         }
-      } catch (e) {
-        console.warn("Reminders load:", e.message);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [userId]);
+        if (!idb.objectStoreNames.contains("pending_writes")) {
+          const pw = idb.createObjectStore("pending_writes", {
+            keyPath: "id",
+            autoIncrement: true,
+          });
+          pw.createIndex("created_at", "created_at", { unique: false });
+          pw.createIndex("status", "status", { unique: false });
+          pw.createIndex("table", "table", { unique: false });
+        }
+        if (!idb.objectStoreNames.contains("_cache_meta")) {
+          idb.createObjectStore("_cache_meta", { keyPath: "key" });
+        }
+      },
+      blocked() {
+        console.warn("[offlineDb] upgrade blocked by an older tab still open");
+      },
+      blocking() {
+        console.warn("[offlineDb] a newer version is trying to upgrade");
+      },
+    });
+  }
+  return dbPromise;
+}
 
-  const persist = (next) => {
-    if (userId) {
-      try { localStorage.setItem(`trade-pa-reminders-${userId}`, JSON.stringify(next)); } catch {}
+export function isCached(table) {
+  return CACHED_TABLES.includes(table);
+}
+
+// ─── Row-level cache helpers ─────────────────────────────────────────
+
+export async function cacheRows(table, rows) {
+  if (!isCached(table)) return;
+  if (!Array.isArray(rows)) rows = [rows];
+  if (rows.length === 0) return;
+
+  const idb = await getOfflineDb();
+  if (!idb) return;
+
+  try {
+    const tx = idb.transaction(table, "readwrite");
+    const store = tx.objectStore(table);
+    for (const row of rows) {
+      if (!row || row.id == null) continue;
+      const existing = await store.get(row.id);
+      const merged = existing ? { ...existing, ...row } : row;
+      await store.put(merged);
     }
-  };
+    await tx.done;
+    await writeMeta(`${table}:last_cached`, Date.now());
+  } catch (err) {
+    console.warn(`[offlineDb] cacheRows(${table}) failed:`, err);
+  }
+}
 
-  const add = (reminder) => setRemindersRaw(prev => {
-    const next = [reminder, ...prev];
-    persist(next);
-    return next;
-  });
-  const dismiss = (id) => setRemindersRaw(prev => {
-    const next = prev.map(r => r.id === id ? { ...r, done: true } : r);
-    persist(next);
-    return next;
-  });
-  // Mark as 'fired' (alert shown) without marking complete — reminder stays
-  // in Upcoming as Overdue until user explicitly confirms with "Done ✓".
-  const markFired = (id) => setRemindersRaw(prev => {
-    const next = prev.map(r => r.id === id ? { ...r, fired: true } : r);
-    persist(next);
-    return next;
-  });
-  const remove = (id) => setRemindersRaw(prev => {
-    const next = prev.filter(r => r.id !== id);
-    persist(next);
-    return next;
-  });
+export async function readCachedRows(table) {
+  if (!isCached(table)) return [];
+  const idb = await getOfflineDb();
+  if (!idb) return [];
+  try {
+    return await idb.getAll(table);
+  } catch (err) {
+    console.warn(`[offlineDb] readCachedRows(${table}) failed:`, err);
+    return [];
+  }
+}
 
-  return { reminders, add, dismiss, markFired, remove };
+export async function deleteCachedRows(table, ids) {
+  if (!isCached(table)) return;
+  if (!Array.isArray(ids)) ids = [ids];
+  if (ids.length === 0) return;
+
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    const tx = idb.transaction(table, "readwrite");
+    await Promise.all(ids.map((id) => tx.objectStore(table).delete(id)));
+    await tx.done;
+  } catch (err) {
+    console.warn(`[offlineDb] deleteCachedRows(${table}) failed:`, err);
+  }
+}
+
+export async function clearPendingFlag(table, ids) {
+  if (!isCached(table)) return;
+  if (!Array.isArray(ids)) ids = [ids];
+  if (ids.length === 0) return;
+
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    const tx = idb.transaction(table, "readwrite");
+    const store = tx.objectStore(table);
+    for (const id of ids) {
+      const row = await store.get(id);
+      if (row && (row._pendingSync || row._tempId)) {
+        delete row._pendingSync;
+        delete row._tempId;
+        await store.put(row);
+      }
+    }
+    await tx.done;
+  } catch (err) {
+    console.warn(`[offlineDb] clearPendingFlag(${table}) failed:`, err);
+  }
+}
+
+// ─── Cache bookkeeping ────────────────────────────────────────────────
+
+async function writeMeta(key, value) {
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    await idb.put("_cache_meta", { key, value, updated_at: Date.now() });
+  } catch (err) {
+    console.warn(`[offlineDb] writeMeta(${key}) failed:`, err);
+  }
+}
+
+export async function readMeta(key) {
+  const idb = await getOfflineDb();
+  if (!idb) return null;
+  try {
+    const row = await idb.get("_cache_meta", key);
+    return row?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearAllCache() {
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  const tx = idb.transaction(
+    [...CACHED_TABLES, "pending_writes", "_cache_meta"],
+    "readwrite"
+  );
+  await Promise.all([
+    ...CACHED_TABLES.map((t) => tx.objectStore(t).clear()),
+    tx.objectStore("pending_writes").clear(),
+    tx.objectStore("_cache_meta").clear(),
+  ]);
+  await tx.done;
+}
+
+export async function getCacheStats() {
+  const idb = await getOfflineDb();
+  if (!idb) return null;
+
+  const perTable = {};
+  for (const t of CACHED_TABLES) {
+    const rows = await idb.count(t);
+    const lastCached = await readMeta(`${t}:last_cached`);
+    perTable[t] = { rows, lastCached };
+  }
+  const allPw = await idb.getAll("pending_writes");
+  const pending = allPw.filter((e) => e.status === "pending").length;
+  const failed = allPw.filter((e) => e.status === "failed").length;
+
+  return { perTable, pending, failed };
+}
+
+// ─── Pending writes queue helpers ─────────────────────────────────────
+
+export async function addPendingWrite(entry) {
+  const idb = await getOfflineDb();
+  if (!idb) throw new Error("[offlineDb] IndexedDB unavailable");
+  const id = await idb.add("pending_writes", {
+    ...entry,
+    status: entry.status || "pending",
+    attempts: entry.attempts || 0,
+    created_at: entry.created_at || new Date().toISOString(),
+  });
+  return id;
+}
+
+export async function listPendingWrites(statusFilter = "pending") {
+  const idb = await getOfflineDb();
+  if (!idb) return [];
+  try {
+    const all = await idb.getAll("pending_writes");
+    const filtered = statusFilter == null
+      ? all
+      : all.filter((e) => e.status === statusFilter);
+    filtered.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return filtered;
+  } catch (err) {
+    console.warn("[offlineDb] listPendingWrites failed:", err);
+    return [];
+  }
+}
+
+export async function countPendingWrites() {
+  const idb = await getOfflineDb();
+  if (!idb) return 0;
+  try {
+    return await idb.countFromIndex("pending_writes", "status", "pending");
+  } catch {
+    return 0;
+  }
+}
+
+export async function updatePendingWrite(id, updates) {
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    const existing = await idb.get("pending_writes", id);
+    if (!existing) return;
+    await idb.put("pending_writes", { ...existing, ...updates });
+  } catch (err) {
+    console.warn(`[offlineDb] updatePendingWrite(${id}) failed:`, err);
+  }
+}
+
+export async function deletePendingWrite(id) {
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    await idb.delete("pending_writes", id);
+  } catch (err) {
+    console.warn(`[offlineDb] deletePendingWrite(${id}) failed:`, err);
+  }
+}
+
+export async function putPendingWrite(id, entry) {
+  const idb = await getOfflineDb();
+  if (!idb) return;
+  try {
+    await idb.put("pending_writes", { ...entry, id });
+  } catch (err) {
+    console.warn(`[offlineDb] putPendingWrite(${id}) failed:`, err);
+  }
 }
