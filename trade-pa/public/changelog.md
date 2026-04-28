@@ -2,6 +2,14 @@
 
 ---
 
+## 2026-04-28 (yet later)
+
+### Round four of the engine-room tidy 🧹
+
+Pulled the four pop-up windows that float on top of the app (the new-invoice form, the new-quote form, the bug/feedback report form, and the "assign material to a job" picker) out of the giant main file into their own dedicated `modals/` folder. By far the biggest tidy of the day — over 900 lines moved across. The invoice and quote forms in particular are dense, lots of fields and validation logic, so getting them out into their own files is a real win for safer changes going forward. Same as before — nothing changes about how Trade PA looks or works. Same invoice form, same quote form, same VAT and CIS calculations, same Domestic Reverse Charge handling, same line-item builder, same voice mic on form fields, same feedback-with-screenshot reporter, same "assign material to a job" flow. If anything looks even slightly off — creating an invoice or quote, editing an existing one, sending feedback (especially with a pasted screenshot), or assigning a material to a job from the AI assistant or from a job card — let us know.
+
+---
+
 ## 2026-04-28 (later still)
 
 ### Round three of the engine-room tidy 🧹
