@@ -1,8 +1,14 @@
 # What's new
 
+2026-04-28
+
+🧹 Internal tidy-up: the AI Assistant code now lives in its own file. No change to how it works — voice, tools, hands-free and chat all run exactly the same. Just easier for us to keep building on top of it. 
+
+---
+
 ## 2026-04-28
 
-### 🛠️ Internal restructure (Phase 8)
+### 🛠️ Internal restructure 
 
 Nothing changes about how Trade PA looks or works. We've moved the four bottom-tab landing screens — Jobs, Diary, Accounts and People hubs — into their own dedicated files. Same screens, same buttons, same data.
 
@@ -10,26 +16,26 @@ Nothing changes about how Trade PA looks or works. We've moved the four bottom-t
 
 ## 2026-04-28
 
-### 🛠️ Internal restructure (Phase 7 — sub-batch C, Phase 7 complete)
+### 🛠️ Internal restructure 
 
 Nothing changes about how Trade PA looks or works. We've moved the last and biggest screens — Invoices, Quotes, Payments, Customers, Jobs and Certificates — into their own files. App.jsx is now under 14,000 lines (down from 32,000 a few days ago). Same screens, same buttons, same data. Phase 7 is finished — what remains for the cleanup is mostly the AI Assistant module and the top-level routing, both planned for upcoming phases.
 
 ---
 
-🛠️ Internal restructure (Phase 7 — sub-batch B)
+🛠️ Internal restructure 
 Nothing changes about how Trade PA looks or works. We've moved 6 more screens — Materials, Inbox, Enquiries, RAMS, Subcontractors and Reports — into their own dedicated files behind the scenes. App.jsx is now under 20,000 lines (down from 32,000 a few days ago). Same screens, same buttons, same data.
 
 ---
 
 2026-04-28
-🛠️ Internal restructure (Phase 7 — sub-batch A)
+🛠️ Internal restructure 
 Nothing changes about how Trade PA looks or works. We've moved 10 smaller screens — Schedule, Mileage, Stock, Documents, Reviews, Expenses, CIS, Purchase Orders, Recently Deleted and Dashboard — into their own dedicated files behind the scenes. Same screens, same buttons, same data. This makes the rest of the refactor safer and the app easier to maintain going forward.
 
 ---
 
 ## 2026-04-28
 
-### 🛠️ Internal restructure (Phase 7 prelude)
+### 🛠️ Internal restructure 
 
 Nothing changes about how Trade PA looks or works. We're tidying the codebase behind the scenes so future updates ship faster and with fewer surprises. This is the warm-up step ahead of the bigger view-extraction phase coming next.
 
