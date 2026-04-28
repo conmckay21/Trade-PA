@@ -70,6 +70,78 @@ function LineItemsDisplay({ inv }) {
   );
 }
 
+// Generate a base64-encoded PDF from the invoice HTML template. The
+// /api/send-invoice-email endpoint expects pdfBase64 — raw base64 of the
+// PDF bytes, no `data:` prefix. Pre-fix the client sent pdfHtml (raw HTML)
+// which the endpoint silently ignored, so emails went out attachment-free.
+//
+// html2canvas + jspdf are heavy (~700KB combined). They're lazy-imported so
+// they only land in the bundle the user downloads when they actually tap
+// Send — not on app boot. (BUG-008 PDF half, 28 Apr 2026)
+async function generatePdfBase64(htmlString) {
+  const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+    import("html2canvas"),
+    import("jspdf"),
+  ]);
+
+  // Render the invoice HTML offscreen at A4 width (794px @ 96dpi) so the
+  // captured canvas has the right aspect ratio for the printed page.
+  const container = document.createElement("div");
+  container.style.position = "absolute";
+  container.style.left = "-99999px";
+  container.style.top = "0";
+  container.style.width = "794px";
+  container.innerHTML = htmlString;
+  document.body.appendChild(container);
+
+  try {
+    // Wait for any web fonts in use to be ready before capturing — without
+    // this, html2canvas can capture text in fallback fonts on slow loads.
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+    // One paint tick for layout to settle (helps with images sized via CSS).
+    await new Promise((r) => setTimeout(r, 50));
+
+    const canvas = await html2canvas(container, {
+      scale: 1.5,            // matches the "~600KB-1MB at 1.5x" the endpoint comment expects
+      useCORS: true,         // brand logos may be cross-origin (Supabase Storage)
+      backgroundColor: "#ffffff",
+      logging: false,
+    });
+
+    // A4 dimensions in millimetres
+    const pdfWidthMm = 210;
+    const pdfHeightMm = 297;
+    const imgWidthMm = pdfWidthMm;
+    const imgHeightMm = (canvas.height * imgWidthMm) / canvas.width;
+
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+    const imgData = canvas.toDataURL("image/png");
+
+    // Multi-page: invoices with many line items can be taller than A4. We
+    // splice the same image across pages by negative-positioning successive
+    // additions — standard jsPDF + html2canvas pattern for long content.
+    let heightLeft = imgHeightMm;
+    let position = 0;
+    pdf.addImage(imgData, "PNG", 0, position, imgWidthMm, imgHeightMm);
+    heightLeft -= pdfHeightMm;
+    while (heightLeft > 0) {
+      position -= pdfHeightMm;
+      pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, position, imgWidthMm, imgHeightMm);
+      heightLeft -= pdfHeightMm;
+    }
+
+    // output("datauristring") returns "data:application/pdf;base64,XXXX".
+    // Strip the prefix; the endpoint wants raw base64.
+    const dataUri = pdf.output("datauristring");
+    return dataUri.split(",")[1] || "";
+  } finally {
+    if (container.parentNode) container.parentNode.removeChild(container);
+  }
+}
+
 async function sendDocumentEmail(doc, brand, customers, userId, setSending, customerContacts = []) {
   if (!userId) { alert("Please log in first."); return false; }
 
@@ -179,13 +251,24 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending, cust
 
   if (setSending) setSending(doc.id);
   try {
-    // Generate PDF from the same invoice HTML template
-    const pdfHtml = buildInvoiceHTML(brand, doc);
+    // Generate a PDF from the invoice HTML template. The endpoint expects
+    // pdfBase64 (raw base64 of PDF bytes); historical client code sent
+    // pdfHtml which the endpoint silently ignored, so emails went out
+    // attachment-free. If PDF generation fails (OOM, blocked image, etc.)
+    // we still send the email — the customer gets the body + portal CTA.
+    // (BUG-008 PDF fix, 28 Apr 2026)
     const filename = `${docType}-${doc.id}.pdf`;
+    let pdfBase64 = null;
+    try {
+      const html = buildInvoiceHTML(brand, doc);
+      pdfBase64 = await generatePdfBase64(html);
+    } catch (e) {
+      console.warn("Invoice PDF generation failed; sending without attachment:", e);
+    }
     const res = await fetch("/api/send-invoice-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, to: toEmail, subject, body, pdfHtml, filename }),
+      body: JSON.stringify({ userId, to: toEmail, subject, body, pdfBase64, filename }),
     });
     if (!res.ok) {
       // Fallback to basic send if new endpoint not deployed
