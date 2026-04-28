@@ -2,6 +2,14 @@
 
 ---
 
+## 2026-04-28 (and finally)
+
+### Save invoices and quotes as drafts before sending 📝
+
+Quick UX fix on the back of the modal cleanup. When you create a new invoice or quote, you now get two buttons instead of one: **Save as Draft** (saves to your invoices/quotes list with status "Draft" so you can come back to it) and **Send Invoice / Send Quote** (saves with status "Sent", as before). Editing an existing invoice or quote still shows just one button — Save Changes — same as before. Useful for when you want to build up a quote over a few sessions, or get customer agreement on a draft before raising it formally. The "Draft" status was already supported throughout the app (it's filterable in your invoices list, the AI knows about it, etc.) — the modal just didn't have a way to write that status until now.
+
+---
+
 ## 2026-04-28 (yet later)
 
 ### Round four of the engine-room tidy 🧹
