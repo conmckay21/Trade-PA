@@ -116,20 +116,26 @@ async function generatePdfBase64(htmlString) {
     const imgWidthMm = pdfWidthMm;
     const imgHeightMm = (canvas.height * imgWidthMm) / canvas.width;
 
-    const pdf = new jsPDF({ unit: "mm", format: "a4" });
-    const imgData = canvas.toDataURL("image/png");
+    // compress: true asks jsPDF to deflate-compress object streams.
+    // JPEG (q=0.85) instead of PNG is the bigger win — PNG is uncompressed
+    // for raster content and easily produces 5-8MB payloads on multi-page
+    // invoices, busting Vercel's 4.5MB function-body limit (413 Content
+    // Too Large). JPEG at 0.85 is typically 8-10x smaller and still print-
+    // legible at this scale. (BUG-008 413 fix, 28 Apr 2026)
+    const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
+    const imgData = canvas.toDataURL("image/jpeg", 0.85);
 
     // Multi-page: invoices with many line items can be taller than A4. We
     // splice the same image across pages by negative-positioning successive
     // additions — standard jsPDF + html2canvas pattern for long content.
     let heightLeft = imgHeightMm;
     let position = 0;
-    pdf.addImage(imgData, "PNG", 0, position, imgWidthMm, imgHeightMm);
+    pdf.addImage(imgData, "JPEG", 0, position, imgWidthMm, imgHeightMm);
     heightLeft -= pdfHeightMm;
     while (heightLeft > 0) {
       position -= pdfHeightMm;
       pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, imgWidthMm, imgHeightMm);
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidthMm, imgHeightMm);
       heightLeft -= pdfHeightMm;
     }
 
@@ -264,6 +270,17 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending, cust
       pdfBase64 = await generatePdfBase64(html);
     } catch (e) {
       console.warn("Invoice PDF generation failed; sending without attachment:", e);
+    }
+    // Vercel function bodies cap at 4.5MB. Subject + htmlBody + JSON wrap
+    // add ~20-30KB; we guard pdfBase64 at 3.5MB to leave headroom and avoid
+    // surprise 413s on pathological invoices (many pages with embedded
+    // photos). Email still goes out, just sans attachment.
+    if (pdfBase64 && pdfBase64.length > 3_500_000) {
+      console.warn(
+        `Invoice PDF too large (${(pdfBase64.length / 1_000_000).toFixed(1)}MB); ` +
+        "sending without attachment to avoid 413."
+      );
+      pdfBase64 = null;
     }
     const res = await fetch("/api/send-invoice-email", {
       method: "POST",
