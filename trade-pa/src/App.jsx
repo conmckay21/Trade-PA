@@ -112,6 +112,12 @@ import {
 } from "./views/Invoices.jsx";
 import { Customers } from "./views/Customers.jsx";
 import { JobsTab } from "./views/Jobs.jsx";
+// ─── P8: Hubs (28 Apr 2026) ────────────────────────────────────────────────
+// Verbatim moves — no behavioural changes.
+import { JobsHub } from "./views/hubs/JobsHub.jsx";
+import { DiaryHub } from "./views/hubs/DiaryHub.jsx";
+import { AccountsHub } from "./views/hubs/AccountsHub.jsx";
+import { PeopleHub } from "./views/hubs/PeopleHub.jsx";
 
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
@@ -11234,195 +11240,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 // (ReportsTab moved to ./views/Reports.jsx — P7-7B)
 // (SubcontractorsTab moved to ./views/Subcontractors.jsx — P7-7B)
 // (RAMS cluster — HAZARD_LIBRARY/METHOD_LIBRARY/COSHH_SUBSTANCES/RAMSTab moved to ./views/RAMS.jsx — P7-7B)
-function JobsHub({ setView, jobs, enquiries, materials }) {
-  const newEnquiries = (enquiries || []).filter(e => !e.status || e.status === "new");
-  const activeJobs = (jobs || []).filter(j => j.status !== "complete" && j.status !== "completed");
-  return (
-    <HubPage
-      title="Jobs"
-      sub="Work in progress and the paperwork behind it"
-      rows={[
-        {
-          name: "Jobs",
-          meta: activeJobs.length > 0 ? `${activeJobs.length} active job${activeJobs.length === 1 ? "" : "s"}` : "No active jobs",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /></svg>,
-          onClick: () => setView("Jobs"),
-        },
-        {
-          name: "Enquiries",
-          meta: newEnquiries.length > 0 ? `${newEnquiries.length} new enquir${newEnquiries.length === 1 ? "y" : "ies"}` : "No new enquiries",
-          tint: newEnquiries.length > 0 ? "warn" : null,
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
-          onClick: () => setView("Enquiries"),
-        },
-        {
-          name: "Materials",
-          meta: (materials || []).length > 0 ? `${materials.length} item${materials.length === 1 ? "" : "s"} logged` : "No materials logged",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
-          onClick: () => setView("Materials"),
-        },
-        {
-          name: "Stock",
-          meta: "Van and site inventory",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>,
-          onClick: () => setView("Stock"),
-        },
-        {
-          name: "RAMS",
-          meta: "Risk assessment and method statements",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
-          onClick: () => setView("RAMS"),
-        },
-        {
-          name: "Documents",
-          meta: "Certificates, reports, shared files",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-          onClick: () => setView("Documents"),
-        },
-      ]}
-    />
-  );
-}
-
-// ─── DiaryHub — Diary bottom-tab landing ────────────────────────────────────
-function DiaryHub({ setView, jobs, reminders }) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const todayJobs = (jobs || []).filter(j => j.dateObj && isSameDay(new Date(j.dateObj), today));
-  const upcomingReminders = (reminders || []).filter(r => !r.done && !r.dismissed);
-  return (
-    <HubPage
-      title="Diary"
-      sub="Schedule, reminders, and what's coming up"
-      rows={[
-        {
-          name: "Schedule",
-          meta: todayJobs.length > 0 ? `${todayJobs.length} job${todayJobs.length === 1 ? "" : "s"} today` : "Nothing scheduled today",
-          tint: todayJobs.length > 0 ? "warn" : null,
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 11h18" /></svg>,
-          onClick: () => setView("Schedule"),
-        },
-        {
-          name: "Reminders",
-          meta: upcomingReminders.length > 0 ? `${upcomingReminders.length} pending` : "Nothing pending",
-          tint: upcomingReminders.length > 0 ? "warn" : null,
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
-          onClick: () => setView("Reminders"),
-        },
-      ]}
-    />
-  );
-}
-
-// ─── AccountsHub — Accounts bottom-tab landing ──────────────────────────────
-function AccountsHub({ setView, invoices }) {
-  const allInvoices = (invoices || []).filter(i => !i.isQuote);
-  const allQuotes = (invoices || []).filter(i => i.isQuote);
-  const overdue = allInvoices.filter(i => i.status === "overdue" || i.status === "due");
-  const overdueValue = overdue.reduce((s, i) => s + (i.amount || 0), 0);
-  const outstanding = allInvoices.filter(i => i.status !== "paid");
-  return (
-    <HubPage
-      title="Accounts"
-      sub="Money in, money out, and HMRC-ready records"
-      rows={[
-        {
-          name: "Invoices",
-          meta: overdueValue > 0
-            ? `${fmtAmount(overdueValue)} overdue · ${outstanding.length} outstanding`
-            : outstanding.length > 0
-              ? `${outstanding.length} outstanding`
-              : "All paid up",
-          tint: overdueValue > 0 ? "urgent" : outstanding.length > 0 ? "warn" : "ok",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-          onClick: () => setView("Invoices"),
-        },
-        {
-          name: "Quotes",
-          meta: allQuotes.length > 0 ? `${allQuotes.length} quote${allQuotes.length === 1 ? "" : "s"}` : "No quotes",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12h6m-3-3v6m9-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-          onClick: () => setView("Quotes"),
-        },
-        {
-          name: "Payments",
-          meta: "Stripe and bank transfers",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 10h.01M18 14h.01" /></svg>,
-          onClick: () => setView("Payments"),
-        },
-        {
-          name: "Expenses",
-          meta: "Receipts, tools, materials spend",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
-          onClick: () => setView("Expenses"),
-        },
-        {
-          name: "Mileage",
-          meta: "HMRC-rate tracking, auto-calculated",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></svg>,
-          onClick: () => setView("Mileage"),
-        },
-        {
-          name: "CIS",
-          meta: "Construction industry scheme statements",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
-          onClick: () => setView("CIS"),
-        },
-        {
-          name: "Reports",
-          meta: "P&L, income, expenses summaries",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
-          onClick: () => setView("Reports"),
-        },
-      ]}
-    />
-  );
-}
-
-// ─── PeopleHub — People bottom-tab landing ──────────────────────────────────
-function PeopleHub({ setView, customers, enquiries }) {
-  const customerCount = (customers || []).length;
-  const newEnquiryCount = (enquiries || []).filter(e => !e.status || e.status === "new").length;
-  return (
-    <HubPage
-      title="People"
-      sub="Customers, team, and the inbox"
-      rows={[
-        {
-          name: "Customers",
-          meta: customerCount > 0 ? `${customerCount} customer${customerCount === 1 ? "" : "s"}` : "No customers yet",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M5 21c0-3.87 3.13-7 7-7s7 3.13 7 7" /></svg>,
-          onClick: () => setView("Customers"),
-        },
-        {
-          name: "Inbox Actions",
-          meta: newEnquiryCount > 0 ? `${newEnquiryCount} new message${newEnquiryCount === 1 ? "" : "s"}` : "AI suggests actions from email",
-          tint: newEnquiryCount > 0 ? "warn" : null,
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" /></svg>,
-          onClick: () => setView("Inbox"),
-        },
-        {
-          name: "Workers",
-          meta: "PAYE staff and self-employed labour on your team",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
-          onClick: () => setView("Workers"),
-        },
-        {
-          name: "Subcontractors",
-          meta: "Your go-to people for overflow work",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a3 3 0 015.36-1.857M17 4a3 3 0 100 6 3 3 0 000-6zM12 12a4 4 0 100-8 4 4 0 000 8zM7 4a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-          onClick: () => setView("Subcontractors"),
-        },
-        {
-          name: "Reviews",
-          meta: "Google, Checkatrade, Trustpilot feedback",
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>,
-          onClick: () => setView("Reviews"),
-        },
-      ]}
-    />
-  );
-}
-
-
+// (JobsHub moved to ./views/hubs/JobsHub.jsx — P8)
+// (DiaryHub moved to ./views/hubs/DiaryHub.jsx — P8)
+// (AccountsHub moved to ./views/hubs/AccountsHub.jsx — P8)
+// (PeopleHub moved to ./views/hubs/PeopleHub.jsx — P8)
 function AppInner() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
