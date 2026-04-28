@@ -1,317 +1,252 @@
-// ─── offlineDb.js ──────────────────────────────────────────────────────
+// ─── useReminders.js ──────────────────────────────────────────────────────
 //
-// IndexedDB store for the offline read-cache and pending-writes queue.
+// Reminders sync hook. Reads + writes flow through Supabase as the source
+// of truth, with localStorage as a fast-paint cache.
 //
-// Phase 1 Session 1: schema defined.
-// Phase 1 Session 2: cache read/write/merge helpers.
-// Phase 1 Session 4: pending_writes helpers activated.
-// Phase 1 Session 4b: retry / discard helpers for failed writes.
-// Phase 1 Session 4b.1: removed 'quotes' from TIER_2 — Trade PA uses the
-//   invoices table with is_quote flag rather than a separate quotes table.
-//   Prewarm was logging '1 failed' every login for no reason.
-// Phase 1 Session 4b.2 (NOW, 28 Apr 2026): removed 'workers' and
-//   'subcontractors' from TIER_2 — these tables were unified into
-//   'team_members' on 24-25 April 2026, leaving prewarm logging
-//   '2 failed' every login (BUG-001). Replaced with 'team_members' in
-//   the same tier. Bumped DB_VERSION to 2 with a v1→v2 cleanup that
-//   drops the now-orphan workers + subcontractors object stores so
-//   existing user devices don't carry stale empty stores forever.
+// History:
+// - Pre-28 Apr 2026: writes (add/dismiss/markFired/remove) only touched
+//   localStorage + React state, never Supabase. The mount loader was
+//   localStorage-first, skipping Supabase entirely whenever the cache had
+//   any entries. Two consequences:
+//     • Reminders set on device A never appeared on device B (BUG-004).
+//     • Cron-fired reminders kept re-firing because dismissals never made
+//       it to Supabase, where the cron job reads the `done` flag (BUG-007).
+//   The AI tool path (`set_reminder`) wrote straight to the table but the
+//   UI path silently bypassed it.
+//
+// Fix (28 Apr 2026 — BUG-004 + BUG-007):
+// - Mount: localStorage paint → always Supabase hydrate (no more skip).
+// - Migration: any local-only entries (id format `r${Date.now()}` rather
+//   than `r${db_id}`) get inserted into Supabase the first time we hydrate
+//   on a device that previously only had local writes. No data loss.
+// - Mutations: every add/dismiss/markFired/remove writes to Supabase first
+//   (or in parallel), then updates local state and persists localStorage.
+// - Visibility: when the tab regains focus we re-hydrate from Supabase so
+//   updates from other devices show up.
+// - id format: locally-created reminders get `r${Date.now()}` until the
+//   Supabase insert returns; afterwards we replace the temp id with
+//   `r${db_id}` so subsequent dismiss/remove ops have a real db id.
+//
+// Schema assumptions (reminders table):
+//   id, user_id, text, fire_at (timestamptz), done (bool), fired (bool),
+//   related_type, related_id, created_at
+// `related_type` / `related_id` are populated by the AI `set_reminder`
+// tool; this hook preserves them on hydrate but doesn't write them from
+// the UI path (no UI affordance for related_type yet).
 
-import { openDB } from "idb";
+import { useState, useEffect } from "react";
+import { db } from "../lib/db.js";
 
-const DB_NAME = "tradepa-offline";
-const DB_VERSION = 2;
+// id helpers ──────────────────────────────────────────────────────────────
+// Local ids look like `r${Date.now()}` (a 13-digit ms epoch).
+// Supabase-backed ids look like `r${row.id}` where row.id is the real db
+// primary key. We strip the leading "r" to get the db id; if the result
+// is a 13-digit number it's almost certainly a local-only id and the row
+// hasn't reached Supabase yet — callers handle that case by skipping the
+// Supabase write.
+const stripPrefix = (id) => String(id || "").replace(/^r/, "");
+const isLocalOnlyId = (id) => /^r\d{13}$/.test(String(id || ""));
 
-// ─── Table tiers ──────────────────────────────────────────────────────
+const REMINDER_CUTOFF_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-export const TIER_1_TABLES = [
-  "jobs",
-  "job_cards",
-  "job_notes",
-  "job_photos",
-  "customers",
-  "customer_contacts",
-  "materials",
-  "stock_items",
-  "time_logs",
-  "mileage_logs",
-  "daywork_sheets",
-  "variation_orders",
-  "rams_documents",
-  "trade_certificates",
-];
+function rowToReminder(r) {
+  return {
+    id: r.id != null ? `r${r.id}` : `r${Date.parse(r.created_at) || Date.now()}`,
+    text: r.text,
+    time: Date.parse(r.fire_at),
+    timeLabel: new Date(r.fire_at).toLocaleString("en-GB"),
+    done: !!r.done,
+    fired: !!r.fired,
+    related_type: r.related_type || null,
+    related_id: r.related_id || null,
+  };
+}
 
-export const TIER_2_TABLES = [
-  "invoices",
-  "compliance_docs",
-  "documents",
-  "team_members",
-  "subcontractor_payments",
-  "worker_documents",
-  "purchase_orders",
-];
+export function useReminders(userId) {
+  const [reminders, setRemindersRaw] = useState([]);
 
-export const CACHED_TABLES = [...TIER_1_TABLES, ...TIER_2_TABLES];
+  const persist = (next) => {
+    if (!userId) return;
+    try { localStorage.setItem(`trade-pa-reminders-${userId}`, JSON.stringify(next)); } catch {}
+  };
 
-// ─── Database initialisation ──────────────────────────────────────────
+  // ── Hydrate from Supabase (with local-only migration) ──────────────────
+  // Pulled out of the mount effect so it can be called from the visibility
+  // listener too. `migrate=true` only on the first call per session — after
+  // that, local-only entries that survived have already been pushed.
+  const hydrateFromSupabase = async (uid, migrate = false) => {
+    if (!uid) return;
+    let { data, error } = await db
+      .from("reminders")
+      .select("*")
+      .eq("user_id", uid)
+      .order("fire_at", { ascending: false })
+      .limit(200);
+    if (error) { console.warn("Reminders hydrate:", error.message); return; }
+    let hydrated = (data || []).map(rowToReminder).filter(r => !isNaN(r.time));
 
-let dbPromise = null;
-
-export function getOfflineDb() {
-  if (typeof window === "undefined" || !("indexedDB" in window)) {
-    return null;
-  }
-  if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(idb, oldVersion) {
-        // v1 → v2 (28 Apr 2026, BUG-001): drop orphan stores for the
-        // 'workers' and 'subcontractors' tables — both were unified into
-        // 'team_members' upstream and the local stores have no live
-        // queries pointing at them. The for-loop below then picks up
-        // 'team_members' as a new store needing creation.
-        if (oldVersion < 2) {
-          for (const stale of ["workers", "subcontractors"]) {
-            if (idb.objectStoreNames.contains(stale)) {
-              idb.deleteObjectStore(stale);
+    // Migrate local-only entries (in localStorage but not in Supabase) on
+    // first hydration. Spot them by id format: 13-digit local timestamp.
+    if (migrate) {
+      try {
+        const saved = localStorage.getItem(`trade-pa-reminders-${uid}`);
+        if (saved) {
+          const local = JSON.parse(saved);
+          const supabaseIds = new Set(hydrated.map(h => h.id));
+          const orphaned = local.filter(r =>
+            isLocalOnlyId(r.id) && !supabaseIds.has(r.id) && !r.done
+          );
+          if (orphaned.length > 0) {
+            const rows = orphaned.map(r => ({
+              user_id: uid,
+              text: r.text,
+              fire_at: new Date(r.time).toISOString(),
+              done: !!r.done,
+              fired: !!r.fired,
+            }));
+            const { data: inserted, error: insErr } = await db
+              .from("reminders").insert(rows).select();
+            if (insErr) {
+              console.warn("Reminders migrate insert:", insErr.message);
+            } else if (inserted) {
+              hydrated = hydrated.concat(inserted.map(rowToReminder).filter(r => !isNaN(r.time)));
             }
           }
         }
-        for (const table of CACHED_TABLES) {
-          if (!idb.objectStoreNames.contains(table)) {
-            const store = idb.createObjectStore(table, { keyPath: "id" });
-            store.createIndex("user_id", "user_id", { unique: false });
-            store.createIndex("updated_at", "updated_at", { unique: false });
-          }
-        }
-        if (!idb.objectStoreNames.contains("pending_writes")) {
-          const pw = idb.createObjectStore("pending_writes", {
-            keyPath: "id",
-            autoIncrement: true,
-          });
-          pw.createIndex("created_at", "created_at", { unique: false });
-          pw.createIndex("status", "status", { unique: false });
-          pw.createIndex("table", "table", { unique: false });
-        }
-        if (!idb.objectStoreNames.contains("_cache_meta")) {
-          idb.createObjectStore("_cache_meta", { keyPath: "key" });
-        }
-      },
-      blocked() {
-        console.warn("[offlineDb] upgrade blocked by an older tab still open");
-      },
-      blocking() {
-        console.warn("[offlineDb] a newer version is trying to upgrade");
-      },
-    });
-  }
-  return dbPromise;
-}
-
-export function isCached(table) {
-  return CACHED_TABLES.includes(table);
-}
-
-// ─── Row-level cache helpers ─────────────────────────────────────────
-
-export async function cacheRows(table, rows) {
-  if (!isCached(table)) return;
-  if (!Array.isArray(rows)) rows = [rows];
-  if (rows.length === 0) return;
-
-  const idb = await getOfflineDb();
-  if (!idb) return;
-
-  try {
-    const tx = idb.transaction(table, "readwrite");
-    const store = tx.objectStore(table);
-    for (const row of rows) {
-      if (!row || row.id == null) continue;
-      const existing = await store.get(row.id);
-      const merged = existing ? { ...existing, ...row } : row;
-      await store.put(merged);
-    }
-    await tx.done;
-    await writeMeta(`${table}:last_cached`, Date.now());
-  } catch (err) {
-    console.warn(`[offlineDb] cacheRows(${table}) failed:`, err);
-  }
-}
-
-export async function readCachedRows(table) {
-  if (!isCached(table)) return [];
-  const idb = await getOfflineDb();
-  if (!idb) return [];
-  try {
-    return await idb.getAll(table);
-  } catch (err) {
-    console.warn(`[offlineDb] readCachedRows(${table}) failed:`, err);
-    return [];
-  }
-}
-
-export async function deleteCachedRows(table, ids) {
-  if (!isCached(table)) return;
-  if (!Array.isArray(ids)) ids = [ids];
-  if (ids.length === 0) return;
-
-  const idb = await getOfflineDb();
-  if (!idb) return;
-  try {
-    const tx = idb.transaction(table, "readwrite");
-    await Promise.all(ids.map((id) => tx.objectStore(table).delete(id)));
-    await tx.done;
-  } catch (err) {
-    console.warn(`[offlineDb] deleteCachedRows(${table}) failed:`, err);
-  }
-}
-
-export async function clearPendingFlag(table, ids) {
-  if (!isCached(table)) return;
-  if (!Array.isArray(ids)) ids = [ids];
-  if (ids.length === 0) return;
-
-  const idb = await getOfflineDb();
-  if (!idb) return;
-  try {
-    const tx = idb.transaction(table, "readwrite");
-    const store = tx.objectStore(table);
-    for (const id of ids) {
-      const row = await store.get(id);
-      if (row && (row._pendingSync || row._tempId)) {
-        delete row._pendingSync;
-        delete row._tempId;
-        await store.put(row);
+      } catch (e) {
+        console.warn("Reminders migrate:", e?.message || e);
       }
     }
-    await tx.done;
-  } catch (err) {
-    console.warn(`[offlineDb] clearPendingFlag(${table}) failed:`, err);
-  }
-}
 
-// ─── Cache bookkeeping ────────────────────────────────────────────────
+    const cutoff = Date.now() - REMINDER_CUTOFF_MS;
+    const final = hydrated.filter(r => !r.done || r.time > cutoff);
+    setRemindersRaw(final);
+    persist(final);
+  };
 
-async function writeMeta(key, value) {
-  const idb = await getOfflineDb();
-  if (!idb) return;
-  try {
-    await idb.put("_cache_meta", { key, value, updated_at: Date.now() });
-  } catch (err) {
-    console.warn(`[offlineDb] writeMeta(${key}) failed:`, err);
-  }
-}
+  // ── Initial load: localStorage (fast paint) → Supabase (source of truth)
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      // 1) Fast paint from localStorage so the user sees something immediately
+      try {
+        const saved = localStorage.getItem(`trade-pa-reminders-${userId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const cutoff = Date.now() - REMINDER_CUTOFF_MS;
+          const valid = parsed.filter(r => !r.done || r.time > cutoff);
+          if (!cancelled && valid.length > 0) setRemindersRaw(valid);
+        }
+      } catch (e) {
+        console.warn("Reminders fast-paint:", e?.message || e);
+      }
+      // 2) Always reconcile with Supabase (with one-shot migration)
+      if (!cancelled) await hydrateFromSupabase(userId, true);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
-export async function readMeta(key) {
-  const idb = await getOfflineDb();
-  if (!idb) return null;
-  try {
-    const row = await idb.get("_cache_meta", key);
-    return row?.value ?? null;
-  } catch {
-    return null;
-  }
-}
+  // ── Re-hydrate on tab visibility regained (cross-device update pickup) ──
+  useEffect(() => {
+    if (!userId) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        hydrateFromSupabase(userId, false);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
-export async function clearAllCache() {
-  const idb = await getOfflineDb();
-  if (!idb) return;
-  const tx = idb.transaction(
-    [...CACHED_TABLES, "pending_writes", "_cache_meta"],
-    "readwrite"
-  );
-  await Promise.all([
-    ...CACHED_TABLES.map((t) => tx.objectStore(t).clear()),
-    tx.objectStore("pending_writes").clear(),
-    tx.objectStore("_cache_meta").clear(),
-  ]);
-  await tx.done;
-}
+  // ── Mutations: write to Supabase, then update local state ──────────────
+  // All four mutations apply optimistic local updates so the UI feels snappy
+  // even on flaky connections; the Supabase write happens in parallel and a
+  // failure logs a warning but doesn't roll back local state. The next mount
+  // hydrate will reconcile any divergence.
 
-export async function getCacheStats() {
-  const idb = await getOfflineDb();
-  if (!idb) return null;
+  const add = async (reminder) => {
+    // Optimistic local update first (instant UI feedback)
+    setRemindersRaw(prev => {
+      const next = [reminder, ...prev];
+      persist(next);
+      return next;
+    });
+    if (!userId) return;
+    try {
+      const { data, error } = await db.from("reminders").insert({
+        user_id: userId,
+        text: reminder.text,
+        fire_at: new Date(reminder.time).toISOString(),
+        done: !!reminder.done,
+        fired: !!reminder.fired,
+      }).select().single();
+      if (error) { console.warn("Reminder add:", error.message); return; }
+      // Replace the temp local id with the real db-backed one so future
+      // dismiss/remove operations target the right row.
+      const upgraded = rowToReminder(data);
+      setRemindersRaw(prev => {
+        const next = prev.map(r => r.id === reminder.id ? upgraded : r);
+        persist(next);
+        return next;
+      });
+    } catch (e) {
+      console.warn("Reminder add:", e?.message || e);
+    }
+  };
 
-  const perTable = {};
-  for (const t of CACHED_TABLES) {
-    const rows = await idb.count(t);
-    const lastCached = await readMeta(`${t}:last_cached`);
-    perTable[t] = { rows, lastCached };
-  }
-  const allPw = await idb.getAll("pending_writes");
-  const pending = allPw.filter((e) => e.status === "pending").length;
-  const failed = allPw.filter((e) => e.status === "failed").length;
+  const dismiss = async (id) => {
+    setRemindersRaw(prev => {
+      const next = prev.map(r => r.id === id ? { ...r, done: true } : r);
+      persist(next);
+      return next;
+    });
+    if (!userId || isLocalOnlyId(id)) return; // never reached Supabase
+    try {
+      const dbId = stripPrefix(id);
+      const { error } = await db.from("reminders")
+        .update({ done: true }).eq("id", dbId).eq("user_id", userId);
+      if (error) console.warn("Reminder dismiss:", error.message);
+    } catch (e) {
+      console.warn("Reminder dismiss:", e?.message || e);
+    }
+  };
 
-  return { perTable, pending, failed };
-}
+  const markFired = async (id) => {
+    setRemindersRaw(prev => {
+      const next = prev.map(r => r.id === id ? { ...r, fired: true } : r);
+      persist(next);
+      return next;
+    });
+    if (!userId || isLocalOnlyId(id)) return;
+    try {
+      const dbId = stripPrefix(id);
+      const { error } = await db.from("reminders")
+        .update({ fired: true }).eq("id", dbId).eq("user_id", userId);
+      if (error) console.warn("Reminder markFired:", error.message);
+    } catch (e) {
+      console.warn("Reminder markFired:", e?.message || e);
+    }
+  };
 
-// ─── Pending writes queue helpers ─────────────────────────────────────
+  const remove = async (id) => {
+    setRemindersRaw(prev => {
+      const next = prev.filter(r => r.id !== id);
+      persist(next);
+      return next;
+    });
+    if (!userId || isLocalOnlyId(id)) return;
+    try {
+      const dbId = stripPrefix(id);
+      const { error } = await db.from("reminders")
+        .delete().eq("id", dbId).eq("user_id", userId);
+      if (error) console.warn("Reminder remove:", error.message);
+    } catch (e) {
+      console.warn("Reminder remove:", e?.message || e);
+    }
+  };
 
-export async function addPendingWrite(entry) {
-  const idb = await getOfflineDb();
-  if (!idb) throw new Error("[offlineDb] IndexedDB unavailable");
-  const id = await idb.add("pending_writes", {
-    ...entry,
-    status: entry.status || "pending",
-    attempts: entry.attempts || 0,
-    created_at: entry.created_at || new Date().toISOString(),
-  });
-  return id;
-}
-
-export async function listPendingWrites(statusFilter = "pending") {
-  const idb = await getOfflineDb();
-  if (!idb) return [];
-  try {
-    const all = await idb.getAll("pending_writes");
-    const filtered = statusFilter == null
-      ? all
-      : all.filter((e) => e.status === statusFilter);
-    filtered.sort((a, b) => a.created_at.localeCompare(b.created_at));
-    return filtered;
-  } catch (err) {
-    console.warn("[offlineDb] listPendingWrites failed:", err);
-    return [];
-  }
-}
-
-export async function countPendingWrites() {
-  const idb = await getOfflineDb();
-  if (!idb) return 0;
-  try {
-    return await idb.countFromIndex("pending_writes", "status", "pending");
-  } catch {
-    return 0;
-  }
-}
-
-export async function updatePendingWrite(id, updates) {
-  const idb = await getOfflineDb();
-  if (!idb) return;
-  try {
-    const existing = await idb.get("pending_writes", id);
-    if (!existing) return;
-    await idb.put("pending_writes", { ...existing, ...updates });
-  } catch (err) {
-    console.warn(`[offlineDb] updatePendingWrite(${id}) failed:`, err);
-  }
-}
-
-export async function deletePendingWrite(id) {
-  const idb = await getOfflineDb();
-  if (!idb) return;
-  try {
-    await idb.delete("pending_writes", id);
-  } catch (err) {
-    console.warn(`[offlineDb] deletePendingWrite(${id}) failed:`, err);
-  }
-}
-
-export async function putPendingWrite(id, entry) {
-  const idb = await getOfflineDb();
-  if (!idb) return;
-  try {
-    await idb.put("pending_writes", { ...entry, id });
-  } catch (err) {
-    console.warn(`[offlineDb] putPendingWrite(${id}) failed:`, err);
-  }
+  return { reminders, add, dismiss, markFired, remove };
 }
