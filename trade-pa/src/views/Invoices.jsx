@@ -208,6 +208,41 @@ async function sendDocumentEmail(doc, brand, customers, userId, setSending, cust
   if (!toEmail) {
     toEmail = prompt(`Enter email address for ${doc.customer}:`);
     if (!toEmail) return false;
+
+    // Persist the typed-in email so the user doesn't have to retype next
+    // time. Belt-and-braces:
+    //   (a) update customers.email if there's a matching customer row —
+    //       primary source, future sends to this customer auto-fill
+    //   (b) update invoices.email for this doc — so re-sending this same
+    //       invoice doesn't re-prompt
+    //   (c) mirror onto the in-memory objects so within-session sends
+    //       see the email immediately without a refresh
+    //   (d) trigger window._tradePaRefresh so other open views (customer
+    //       detail, etc.) pick up the change
+    // Failures don't block the send — we already have the email in toEmail.
+    // (28 Apr 2026)
+    try {
+      if (customerRecord?.id && userId) {
+        await db.from("customers")
+          .update({ email: toEmail })
+          .eq("id", customerRecord.id)
+          .eq("user_id", userId);
+        customerRecord.email = toEmail;
+      }
+      if (doc?.id && userId) {
+        await db.from("invoices")
+          .update({ email: toEmail })
+          .eq("id", doc.id)
+          .eq("user_id", userId);
+        doc.email = toEmail;
+        doc.customerEmail = toEmail;
+      }
+      if (typeof window !== "undefined" && typeof window._tradePaRefresh === "function") {
+        try { window._tradePaRefresh(); } catch (_) {}
+      }
+    } catch (e) {
+      console.warn("Persist customer email after prompt:", e?.message || e);
+    }
   }
 
   // Ensure a portal token exists synchronously before we build the email body.
