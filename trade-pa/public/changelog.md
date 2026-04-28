@@ -2,6 +2,14 @@
 
 ---
 
+## 2026-04-28
+
+### More tidying in the engine room 🧹
+
+Continuing the under-the-hood cleanup that started yesterday. Pulled the theme system (light/dark mode, the colour palette, the styling rules), the voice mic and reminders machinery, and a stack of small UI building blocks (the back-button page header, the floating mic button, the bottom tab bar on mobile, the call screens, and a few others) out of the giant main file and into their own dedicated, named files. Nothing changes about how Trade PA looks or works — same dark mode, same outdoor-readable colours, same mic, same reminders, same call screens, same everything. Just easier to find and safer to change going forward, which means future fixes and features ship a bit faster and with fewer surprises. If anything looks even slightly off — colours, theme toggle, mic button, reminders, the bottom tabs on mobile, an incoming call screen — let us know.
+
+---
+
 ## 2026-04-27 (later)
 
 ### Trade PA's brain just got a lot more focused 🧠
