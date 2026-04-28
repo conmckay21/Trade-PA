@@ -1,5 +1,10 @@
 # What's new
 
+🛠️ Internal restructure (Phase 7 — sub-batch B)
+Nothing changes about how Trade PA looks or works. We've moved 6 more screens — Materials, Inbox, Enquiries, RAMS, Subcontractors and Reports — into their own dedicated files behind the scenes. App.jsx is now under 20,000 lines (down from 32,000 a few days ago). Same screens, same buttons, same data.
+
+---
+
 2026-04-28
 🛠️ Internal restructure (Phase 7 — sub-batch A)
 Nothing changes about how Trade PA looks or works. We've moved 10 smaller screens — Schedule, Mileage, Stock, Documents, Reviews, Expenses, CIS, Purchase Orders, Recently Deleted and Dashboard — into their own dedicated files behind the scenes. Same screens, same buttons, same data. This makes the rest of the refactor safer and the app easier to maintain going forward.
