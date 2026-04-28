@@ -1,5 +1,11 @@
 # What's new
 
+## 2026-04-28
+
+### 🛠️ Internal restructure (Phase 7 prelude)
+
+Nothing changes about how Trade PA looks or works. We're tidying the codebase behind the scenes so future updates ship faster and with fewer surprises. This is the warm-up step ahead of the bigger view-extraction phase coming next.
+
 ---
 
 ## 2026-04-28 (and finally)
