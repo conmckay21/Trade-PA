@@ -2,6 +2,14 @@
 
 ---
 
+## 2026-04-28 (later still)
+
+### Round three of the engine-room tidy 🧹
+
+Pulled the in-app notifications feed (the bell icon's drop-down list) and the reminders screen ("remind me to chase Dave at 3pm") out of the giant main file into their own dedicated files. Three small date-and-time helpers that only the reminders screen used moved across with it — they're tucked away inside the reminders file now rather than floating around the main file. Also tidied up where today's earlier work landed: the landing page and login screen (this morning's job) moved into their own dedicated `auth/` folder rather than sitting alongside small UI pieces. Same as before — nothing changes about how Trade PA looks or works. Same notifications bell, same reminders screen, same voice-controlled reminder parsing, same "remind me in 1 minute" test, same browser push permission prompt. If anything looks even slightly off — the notifications drop-down, the reminders tab, voice-recorded reminders, the reminder push notifications, or the landing/login pages — let us know.
+
+---
+
 ## 2026-04-28 (later)
 
 ### More cleanup in the engine room — landing page and login 🧹
