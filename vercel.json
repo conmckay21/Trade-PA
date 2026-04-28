@@ -19,6 +19,16 @@
     { "path": "/api/daily-automation", "schedule": "0 8 * * *" },
     { "path": "/api/cron/check-ai-spend", "schedule": "15 9 * * *" }
   ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        { "type": "host", "value": "www.tradespa.co.uk" }
+      ],
+      "destination": "https://tradespa.co.uk/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/api/auth/gmail/connect", "destination": "/api/email" },
     { "source": "/api/auth/gmail/callback", "destination": "/api/email" },
