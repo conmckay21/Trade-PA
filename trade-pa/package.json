@@ -15,7 +15,9 @@
     "@sentry/react": "^8.0.0",
     "idb": "^8.0.0",
     "stripe": "^14.0.0",
-    "@twilio/voice-sdk": "^2.10.0"
+    "@twilio/voice-sdk": "^2.10.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
