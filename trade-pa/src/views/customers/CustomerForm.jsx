@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { C } from "../../theme/colors.js";
 import { authHeaders } from "../../lib/auth.js";
+import FieldMic from "../../components/FieldMic.jsx";
 
 export function CustomerForm({ form, set, onSave, onCancel }) {
   // Per-field mic state: { [fieldKey]: "idle" | "listening" | "populated" }
