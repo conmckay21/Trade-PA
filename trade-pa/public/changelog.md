@@ -1,5 +1,17 @@
 # What's new
 
+## 2026-04-29
+
+### App polish 📱
+- The "Install Trade PA" banner no longer pops up if you're already using the app — one less thing to dismiss
+- Tapping a PDF invoice or quote now opens it inside Trade PA instead of bouncing you out to Chrome — quick close button to get back to what you were doing
+
+### Materials 🧱
+- PDF receipts and supplier invoices now open properly on Android — was showing a blank screen before for some receipts, fixed
+- Cleaned up the invoice preview — removed two duplicate buttons that were already at the top of the screen
+
+---
+
 ## 2026-04-28
 
 ### Invoices & quotes ✉️

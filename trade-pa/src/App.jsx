@@ -16,6 +16,7 @@ import { drainQueue } from "./lib/writeQueue.js";
 import { TIER_CONFIG, normalizeTier, getTierConfig } from "./lib/plan.js";
 import { trackEvent } from "./lib/tracking.js";
 import { authHeaders, setOwnerCookie } from "./lib/auth.js";
+import { isWeb } from "./lib/platform.js";
 import { fmtCurrency, fmtAmount, vatLabel, relTime } from "./lib/format.js";
 import { localDate, localMonth, localYear, weekBounds, groupByRecency } from "./lib/time.js";
 import {
@@ -4949,7 +4950,7 @@ function AppInner() {
       )}
 
       {/* PWA Install Banner */}
-      {showPwaBanner && !isStandalone && (
+      {showPwaBanner && !isStandalone && isWeb() && (
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 500, padding: "12px 16px", paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))", background: "#1a1a1a", borderTop: "1px solid #2a2a2a", display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 36, height: 36, background: "#f59e0b", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, color: "#000", flexShrink: 0 }}>TP</div>
           <div style={{ flex: 1, minWidth: 0 }}>

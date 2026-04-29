@@ -222,10 +222,6 @@ export function buildInvoiceHTML(brand, inv) {
 </style>
 </head>
 <body>
-<div class="back-bar">
-  <a onclick="try{window.parent.postMessage('close-pdf','*')}catch(e){}; try{if(window.opener||window.history.length<=1){window.close();}else{window.history.back();}}catch(e){}">← Back to Trade PA</a>
-  <a onclick="window.print()" style="color:#aaa;">🖨 Print / Save PDF</a>
-</div>
 <div class="page" style="color:#1a1a1a;">
   <div class="header">
     <div class="header-left">
@@ -359,11 +355,6 @@ export function buildInvoiceHTML(brand, inv) {
     ${brand.email ? `<span>${brand.email}</span>` : "<span></span>"}
   </div>
 
-  <!-- Back to app button — hidden when printing -->
-  <div class="no-print" style="text-align:center;padding:20px;margin-top:10px;">
-    <button onclick="try{window.parent.postMessage('close-pdf','*')}catch(e){}; try{if(window.opener||window.history.length<=1){window.close();}else{window.history.back();}}catch(e){}" style="padding:10px 24px;background:#f59e0b;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-right:10px;">← Back to Trade PA</button>
-    <button onclick="window.print()" style="padding:10px 24px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">🖨 Print / Save PDF</button>
-  </div>
 </div>
 </body>
 </html>`;;

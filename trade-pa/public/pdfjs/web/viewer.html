@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<title>PDF Preview</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #525659; min-height: 100vh; }
+  #container { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px; }
+  canvas { max-width: 100%; height: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.5); background: #fff; }
+  #status { color: #fff; font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 24px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="status">Loading PDF…</div>
+<div id="container"></div>
+<script type="module">
+  import * as pdfjsLib from '../build/pdf.min.mjs';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '../build/pdf.worker.min.mjs';
+
+  const status = document.getElementById('status');
+  const container = document.getElementById('container');
+
+  try {
+    const fileParam = new URLSearchParams(location.search).get('file');
+    if (!fileParam) throw new Error('No file specified');
+
+    const pdf = await pdfjsLib.getDocument(fileParam).promise;
+    status.remove();
+
+    const dpr = window.devicePixelRatio || 1;
+    const viewportWidth = Math.min(window.innerWidth - 16, 1200);
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const baseViewport = page.getViewport({ scale: 1 });
+      const scale = viewportWidth / baseViewport.width;
+      const viewport = page.getViewport({ scale: scale * dpr });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      canvas.style.width = (viewport.width / dpr) + 'px';
+      canvas.style.height = (viewport.height / dpr) + 'px';
+      container.appendChild(canvas);
+
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    }
+  } catch (err) {
+    status.textContent = 'Could not load PDF: ' + (err.message || err);
+  }
+</script>
+</body>
+</html>

@@ -11,7 +11,7 @@ import { fmtCurrency } from "../lib/format.js";
 import { localDate, weekBounds, groupByRecency } from "../lib/time.js";
 import { DEFAULT_SUPPLIERS } from "../lib/constants.js";
 import { authHeaders } from "../lib/auth.js";
-import { fileToContentBlock } from "../lib/files.js";
+import { fileToContentBlock, openPdfPreview } from "../lib/files.js";
 import { uploadReceiptToStorage } from "../lib/receipts.js";
 import { getReceiptViewUrl } from "../lib/receipts.js";
 import { statusColor, statusLabel } from "../lib/status.js";
@@ -36,8 +36,15 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, ma
       return;
     }
 
-    // PDF? Use an iframe; otherwise an img element.
+    // PDFs go through the shared openPdfPreview helper — Capacitor
+    // Android needs PDF.js fallback, everything else just iframes the URL.
+    // Image receipts use the existing imperative overlay (works fine
+    // everywhere because <img> renders identically on every platform).
     const isPdf = url.toLowerCase().includes(".pdf") || url.startsWith("data:application/pdf");
+    if (isPdf) {
+      openPdfPreview(url);
+      return;
+    }
     const overlay = document.createElement("div");
     overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
     const closeBtn = document.createElement("button");
@@ -45,17 +52,10 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, ma
     closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
     closeBtn.onclick = () => document.body.removeChild(overlay);
     overlay.appendChild(closeBtn);
-    if (isPdf) {
-      const frame = document.createElement("iframe");
-      frame.src = url;
-      frame.style.cssText = "width:100%;max-width:900px;height:80vh;border:none;background:#fff;border-radius:8px";
-      overlay.appendChild(frame);
-    } else {
-      const imgEl = document.createElement("img");
-      imgEl.src = url;
-      imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
-      overlay.appendChild(imgEl);
-    }
+    const imgEl = document.createElement("img");
+    imgEl.src = url;
+    imgEl.style.cssText = "max-width:100%;border-radius:8px;background:#fff";
+    overlay.appendChild(imgEl);
     document.body.appendChild(overlay);
   };
 

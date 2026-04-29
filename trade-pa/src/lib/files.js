@@ -2,6 +2,7 @@
 // Pure utility functions for FileReader → Claude content block, opening
 // HTML in print-friendly preview, and base64 → Uint8Array for VAPID push.
 // No dependencies.
+import { isNative } from "./platform.js";
 
 // ─── File → Claude vision content block (shared helper) ────────────────────
 // Used by every receipt/invoice scan flow (supplier receipts, subcontractor
@@ -40,8 +41,20 @@ export async function fileToContentBlock(file) {
 //      dispatch trade-pa-show-pdf event, App-level PDFOverlay renders an
 //      in-app fullscreen iframe with a clear ✕ Close button.
 export function openHtmlPreview(html) {
-  const isIOSPWA = window.navigator.standalone === true;
-  if (!isIOSPWA) {
+  // Three "non-browser-tab" runtimes that cannot use window.open safely:
+  //   - Capacitor wrapper (iOS / Android native build) — window.open punts
+  //     the URL to the system browser, stranding the user in Chrome with a
+  //     "Back to Trade PA" link that doesn't come back. (28 Apr 2026)
+  //   - iOS standalone PWA (added to home screen via Safari Share sheet) —
+  //     window.open is silently blocked.
+  //   - Android / desktop standalone PWA — same trap pattern as iOS.
+  // For all three, dispatch the event and let App's PDFOverlay render an
+  // in-app fullscreen iframe with a working ✕ Close button.
+  const native = typeof isNative === "function" ? isNative() : false;
+  const iOSPWA = window.navigator.standalone === true;
+  const standalonePWA = window.matchMedia
+    && window.matchMedia("(display-mode: standalone)").matches;
+  if (!native && !iOSPWA && !standalonePWA) {
     try {
       const win = window.open("", "_blank");
       if (win) {
@@ -60,4 +73,62 @@ export function urlBase64ToUint8Array(base64String) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+
+// Shared helper: open a PDF URL in a runtime-appropriate viewer.
+//
+// The problem this solves: Android Chromium WebView (used by Capacitor on
+// Android) refuses to render PDFs inside <iframe> for security/size reasons
+// — no PDFium ships with WebView. Same iframe works fine on iOS Safari /
+// WKWebView, desktop browsers, and Android Chrome the browser. So a naive
+// "<iframe src={pdfUrl}>" goes blank on Android native specifically.
+//
+// Strategy:
+//   - Capacitor (Android or iOS) → fetch the URL into a Blob, mint a blob:
+//     URL, then load our LOCAL pdf.js viewer at /pdfjs/web/viewer.html with
+//     ?file=<blob-url>. The viewer is same-origin with the app, so blob
+//     URLs are accessible. Works for data URLs, Supabase signed URLs, any
+//     source — and we don't depend on Mozilla's GitHub Pages CDN, which
+//     502s on long URLs and is a SPOF.
+//   - Web (browser, iOS PWA, desktop) → simple iframe with the URL.
+//     iOS Safari/WKWebView render PDFs natively; desktop browsers do too.
+//
+// Routes through openHtmlPreview so we inherit overlay-vs-popup detection.
+// (29 Apr 2026)
+export async function openPdfPreview(url) {
+  const native = typeof isNative === "function" ? isNative() : false;
+
+  if (native) {
+    try {
+      // Fetch the URL into a Blob, regardless of whether it's a data URL,
+      // a Supabase signed URL, or anything else. fetch() handles all three.
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Load our local viewer with the blob URL as ?file=. The viewer is
+      // a static asset in public/pdfjs/web/viewer.html — same origin as
+      // the Capacitor app, so blob URLs are readable.
+      const viewer = "/pdfjs/web/viewer.html?file="
+        + encodeURIComponent(blobUrl);
+      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>PDF Preview</title>
+<style>html,body,iframe{margin:0;padding:0;width:100%;height:100%;border:0;background:#525659;}</style>
+</head><body><iframe src="${viewer}" allow="fullscreen"></iframe></body></html>`;
+      openHtmlPreview(html);
+      return;
+    } catch (err) {
+      // Fallback to plain iframe if fetch/blob path fails for any reason.
+      // Better to try the iframe and let the user see a blank than crash.
+      console.error("openPdfPreview: blob path failed, falling back", err);
+    }
+  }
+
+  // Web / fallback path: simple iframe with the URL.
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>PDF Preview</title>
+<style>html,body,iframe{margin:0;padding:0;width:100%;height:100%;border:0;background:#525659;}</style>
+</head><body><iframe src="${url}"></iframe></body></html>`;
+  openHtmlPreview(html);
 }
