@@ -1,5 +1,16 @@
 # What's new
 
+## 2026-04-30
+
+### Android polish 🤖
+- Home screen now sits properly on Android — no more empty gap above the bottom tab bar
+- Tested on real Android devices to confirm everything renders smoothly
+
+### Behind the scenes 🛡️
+- Added a safety net so your business profile (trading name, bank details, VAT, etc.) can never be accidentally wiped — your data stays your data, full stop
+
+---
+
 ## 2026-04-29
 
 ### App polish 📱

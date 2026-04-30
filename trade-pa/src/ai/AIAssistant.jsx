@@ -27,7 +27,7 @@ import { useWhisper } from "../hooks/useWhisper.js";
 import { HAZARD_LIBRARY, METHOD_LIBRARY } from "../views/RAMS.jsx";
 import { executeEmailAction, updateEmailAIContext, logEmailFeedback } from "../views/Inbox.jsx";
 
-export function AIAssistant({ brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, sendPush, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 100, hf_hours: 1 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {}, pendingInboxCount = 0 }) {
+export function AIAssistant({ isVisible = true, brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, sendPush, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 100, hf_hours: 1 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {}, pendingInboxCount = 0 }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -6113,8 +6113,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   };
   const vt = voiceTokens[voiceState];
 
+  // Render-only gate: when AIAssistant is not the active view AND no overlay,
+  // return an empty placeholder. Component stays mounted (all hooks, refs, voice
+  // state, useEffects continue running), but the heavy subtree leaves the DOM —
+  // which means Android WebView has no paint buffer to leak through into other
+  // views. State is preserved across tab switches; visuals are not. (29 Apr 2026)
+  if (!isVisible && !overlayContext) {
+    return <div style={{ display: "none" }} />;
+  }
+
   // Phase 5a: height token — 100% inside overlay sheet, full-page calc otherwise
-  const _pageHeight = overlayContext ? "100%" : "calc(100dvh - 200px)";
+  const _pageHeight = "100%";
   const _pageMinHeight = overlayContext ? 0 : 400;
 
   // Inner content — shared between page mode and overlay mode
