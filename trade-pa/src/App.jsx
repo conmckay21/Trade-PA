@@ -5852,6 +5852,23 @@ function AppInner() {
                   </div>
                 ))}
               </div>
+              {/* Link to the longer Help Centre article — for users who want
+                  more context on what each shortcut does and when to use it. */}
+              <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "center" }}>
+                <button
+                  onClick={() => { setShowShortcutsHelp(false); setHelpSlug("keyboard-shortcuts"); setHelpOpen(true); }}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: C.amber,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    fontFamily: "'DM Sans', sans-serif",
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                  }}
+                >View full guide in Help Centre →</button>
+              </div>
             </div>
           </div>
         );

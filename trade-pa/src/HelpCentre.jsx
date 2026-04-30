@@ -598,6 +598,25 @@ const ARTICLES = [
       "Accounts holds all your money stuff: Invoices, Quotes, Payments, Expenses, CIS, Reports.",
     ],
   },
+  {
+    slug: "keyboard-shortcuts",
+    title: "Keyboard shortcuts (iPad & desktop)",
+    category: "getting-started",
+    summary: "Use a keyboard with iPad or work on desktop? Speed things up with shortcuts.",
+    steps: [
+      "Press Cmd+/ at any time to pop up the full cheat sheet.",
+      "Cmd+1 to Cmd+7 jump straight to a section: 1=Home, 2=Enquiries, 3=Jobs, 4=Schedule, 5=Reminders, 6=Invoices, 7=Customers.",
+      "Cmd+K jumps to Home and focuses the AI input — start typing immediately.",
+      "Cmd+, opens Settings (the standard Mac convention).",
+      "Press Esc to close any modal or overlay.",
+      "On Windows or Android keyboards, use Ctrl instead of Cmd — same shortcuts.",
+    ],
+    tips: [
+      "Shortcuts only fire when you're not typing in a field, so Cmd+1 won't accidentally jump views while you're writing an invoice description.",
+      "If a shortcut doesn't work, your browser may be intercepting it (some Cmd combos are reserved by iPadOS Safari). Most should be fine.",
+      "These work the same in PWA, native app, and desktop browser.",
+    ],
+  },
 
   // ─── Customers & jobs ───────────────────────────────────────────────────
   {
