@@ -14,6 +14,12 @@
 - Type-your-email confirmation step so you can't trigger it by accident
 - Native app users see a "sign up at tradespa.co.uk" hint on the login screen instead of the in-app signup form (App Store rules)
 
+### iPad gets its own layout 📱➡️
+- Trade PA now detects when you're on an iPad and gives you a proper tablet layout — sidebar nav on the left, plenty of breathing room on the right
+- Sidebar shows live counts on Jobs (active) and Invoices (overdue) so you can see what needs your attention at a glance
+- Bigger tap targets throughout for fingers, gloves, or working off a clipboard
+- Works in both portrait and landscape, rotates with you
+
 ---
 
 ## 2026-04-29

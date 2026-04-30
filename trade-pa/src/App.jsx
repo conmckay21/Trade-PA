@@ -16,7 +16,7 @@ import { drainQueue } from "./lib/writeQueue.js";
 import { TIER_CONFIG, normalizeTier, getTierConfig } from "./lib/plan.js";
 import { trackEvent } from "./lib/tracking.js";
 import { authHeaders, setOwnerCookie } from "./lib/auth.js";
-import { isWeb } from "./lib/platform.js";
+import { isWeb, useIsTablet } from "./lib/platform.js";
 import { fmtCurrency, fmtAmount, vatLabel, relTime } from "./lib/format.js";
 import { localDate, localMonth, localYear, weekBounds, groupByRecency } from "./lib/time.js";
 import {
@@ -3578,6 +3578,12 @@ function AppInner() {
   const [showPwaBanner, setShowPwaBanner] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  // Tablet detection — viewport-based, reactive to rotation. Catches
+  // iPad/Android tablets in any context (browser, PWA, native Capacitor).
+  // Takes precedence over isDesktopBrowser when both could be true (e.g.
+  // iPad in browser at 1024px — tablet layout wins).
+  const isTablet = useIsTablet();
+
   // Desktop browser detection — true when running in a regular browser tab
   // (not installed as PWA) AND the viewport is wide enough for the rail layout.
   // Drives the desktop layout: left rail navigation, wider content area.
@@ -5465,8 +5471,128 @@ function AppInner() {
         {/* Top tab bar (category pills + sub-tabs) — KILLED on mobile.
             Desktop browser still uses its side-nav below (unchanged). */}
       </header>
-      <div style={isDesktopBrowser ? { display: "flex", alignItems: "flex-start", width: "100%" } : {}}>
-        {isDesktopBrowser && (
+      <div style={(isTablet || isDesktopBrowser) ? { display: "flex", alignItems: "flex-start", width: "100%" } : {}}>
+        {isTablet && (() => {
+          const TABLET_ICONS = {
+            "AI Assistant": "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z",
+            "Enquiries": "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z",
+            "Jobs": "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 3h6v4H9V3z",
+            "Materials": "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+            "Stock": "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z",
+            "RAMS": "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
+            "Documents": "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M16 13H8M16 17H8M10 9H8",
+            "Schedule": "M3 5a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V5zM16 2v4M8 2v4M3 10h18",
+            "Reminders": "M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0",
+            "Invoices": "M2 6a2 2 0 012-2h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM12 8v8M8 12h8",
+            "Quotes": "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
+            "Expenses": "M12 1v22M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6",
+            "Mileage": "M12 22s-8-4.5-8-11.8A8 8 0 0112 2a8 8 0 018 8.2c0 7.3-8 11.8-8 11.8zM12 7v5l3 2",
+            "Payments": "M2 6a2 2 0 012-2h16a2 2 0 012 2v4H2V6zM2 14h20v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z",
+            "CIS": "M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2zM9 7h6M9 11h6M9 15h4",
+            "Reports": "M18 20V10M12 20V4M6 20v-6",
+            "Customers": "M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M8.5 3a4 4 0 110 8 4 4 0 010-8zM20 8v6M23 11h-6",
+            "Workers": "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 3a4 4 0 110 8 4 4 0 010-8z",
+            "Subcontractors": "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 3a4 4 0 110 8 4 4 0 010-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
+            "Reviews": "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
+            "Inbox": "M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+            "Settings": "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z",
+          };
+          const now = new Date();
+          const activeJobsCount = (jobs || []).filter(j => !j.deleted_at && j.status !== "completed" && j.status !== "cancelled").length;
+          const overdueInvoicesCount = (invoices || []).filter(i => !i.deleted_at && i.status !== "paid" && i.status !== "void" && i.due_date && new Date(i.due_date) < now).length;
+          const initial = (user?.email?.[0] || brand?.name?.[0] || "T").toUpperCase();
+          return (
+            <nav style={{
+              width: 260, flexShrink: 0,
+              padding: "12px 10px",
+              borderRight: `1px solid ${C.border}`,
+              position: "sticky",
+              top: "calc(48px + env(safe-area-inset-top, 0px))",
+              height: "calc(100vh - 48px - env(safe-area-inset-top, 0px))",
+              boxSizing: "border-box",
+              display: "flex", flexDirection: "column",
+              background: C.surface,
+            }}>
+              <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+                {NAV_GROUPS.map(g => {
+                  const allowed = g.views.filter(v => {
+                    if (userRole !== "owner" && v === "Settings") return false;
+                    const myMember = members.find(m => m.user_id === user?.id);
+                    const perms = myMember?.permissions;
+                    return !perms || perms[v] !== false;
+                  });
+                  if (!allowed.length) return null;
+                  return (
+                    <div key={g.id} style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", padding: "6px 14px", fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>{g.label}</div>
+                      {allowed.map(v => {
+                        const active = view === v;
+                        const label = v === "AI Assistant" ? "Home" : v;
+                        let badge = null;
+                        if (v === "Jobs" && activeJobsCount > 0) badge = activeJobsCount;
+                        else if (v === "Invoices" && overdueInvoicesCount > 0) badge = overdueInvoicesCount;
+                        return (
+                          <button
+                            key={v}
+                            onClick={() => { setActiveCategory(g.id); setView(v); }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 12,
+                              width: "100%", padding: "10px 14px", marginBottom: 2,
+                              minHeight: 44,
+                              border: "none", borderRadius: 10,
+                              background: active ? C.amber : "transparent",
+                              color: active ? "#000" : C.text,
+                              fontSize: 14, fontWeight: active ? 700 : 500,
+                              fontFamily: "'DM Mono',monospace",
+                              cursor: "pointer", textAlign: "left",
+                              transition: "background 0.12s",
+                            }}
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? "#000" : C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d={TABLET_ICONS[v] || "M4 6h16M4 12h16M4 18h16"}/></svg>
+                            <span style={{ flex: 1 }}>{label}</span>
+                            {badge && (
+                              <span style={{
+                                background: active ? "rgba(0,0,0,0.18)" : (v === "Invoices" ? "#ef444422" : "#f59e0b22"),
+                                color: active ? "#000" : (v === "Invoices" ? C.red : "#b8740a"),
+                                padding: "2px 8px",
+                                borderRadius: 4,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                fontFamily: "'DM Mono',monospace",
+                                flexShrink: 0,
+                              }}>{badge}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => setView("Settings")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  borderTop: `1px solid ${C.border}`,
+                  padding: "10px 14px",
+                  background: "transparent", border: "none",
+                  cursor: "pointer", textAlign: "left",
+                  fontFamily: "'DM Mono',monospace",
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.amber, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#000", flexShrink: 0 }}>
+                  {initial}
+                </div>
+                <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                  <div style={{ fontSize: 12, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brand?.name || "Trade PA"}</div>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>Settings ›</div>
+                </div>
+              </button>
+            </nav>
+          );
+        })()}
+        {!isTablet && isDesktopBrowser && (
           <nav style={{ width: 220, flexShrink: 0, padding: "16px 8px", borderRight: `1px solid ${C.border}`, position: "sticky", top: "calc(48px + env(safe-area-inset-top, 0px))", maxHeight: "calc(100vh - 48px)", overflowY: "auto", boxSizing: "border-box" }}>
             {NAV_GROUPS.map(g => {
               const allowed = g.views.filter(v => {
@@ -5534,7 +5660,7 @@ function AppInner() {
             })}
           </nav>
         )}
-      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" || view === "Notifications" ? 16 : 24, paddingBottom: isDesktopBrowser ? undefined : "60px", ...(isDesktopBrowser ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
+      <main style={{ ...S.main, paddingTop: view === "AI Assistant" || view === "Reminders" || view === "Notifications" ? 16 : 24, paddingBottom: (isTablet || isDesktopBrowser) ? undefined : "60px", ...((isTablet || isDesktopBrowser) ? { flex: 1, maxWidth: "none", padding: "24px 32px", boxSizing: "border-box" } : {}) }}>
         <div style={isDesktopBrowser ? { maxWidth: 720, margin: "0 auto", width: "100%" } : { display: "contents" }}>
         {(() => {
           // Guard — redirect member to Dashboard if they're on a tab they can't access
