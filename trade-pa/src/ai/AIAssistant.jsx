@@ -6520,12 +6520,14 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         );
       })()}
 
-      {/* ── HOME SCREEN (tablet — minimal, no cards or quick actions) ───── */}
+      {/* ── HOME SCREEN (tablet — mic-first hero) ──────────────────────── */}
       {isHome && isTablet && (() => {
         const hh = new Date().getHours();
         const greeting = hh >= 5 && hh < 12 ? "Good morning."
                        : hh >= 12 && hh < 18 ? "Good afternoon."
                        : "Good evening.";
+        const isRecording = recording || transcribing;
+        const wakePhrase = (assistantWakeWords && assistantWakeWords[0]) || "Hey Trade PA";
         return (
           <div style={{
             flex: 1,
@@ -6533,26 +6535,63 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             flexDirection: "column",
             justifyContent: "center",
             alignItems: "center",
-            padding: "64px 40px 80px",
+            padding: "40px 40px 24px",
             textAlign: "center",
             minHeight: 360,
+            gap: 28,
           }}>
             <h1 style={{
-              fontSize: 32,
+              fontSize: 26,
               fontWeight: 500,
               color: C.text,
               margin: 0,
               fontFamily: "'DM Sans', sans-serif",
               letterSpacing: "-0.01em",
             }}>{greeting}</h1>
-            <p style={{
-              fontSize: 15,
-              color: C.muted,
-              marginTop: 14,
-              maxWidth: 380,
-              lineHeight: 1.6,
-              fontFamily: "'DM Sans', sans-serif",
-            }}>Tap the mic to speak, type below, or pick a section from the menu.</p>
+
+            <button
+              onClick={toggle}
+              aria-label={isRecording ? "Stop recording" : "Start recording"}
+              style={{
+                width: 116,
+                height: 116,
+                borderRadius: "50%",
+                background: isRecording ? "#ef4444" : C.amber,
+                border: "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                boxShadow: isRecording
+                  ? "0 0 0 14px rgba(239, 68, 68, 0.18)"
+                  : "0 0 0 14px rgba(245, 158, 11, 0.14)",
+                transition: "background 0.18s, box-shadow 0.18s",
+                animation: isRecording ? "bellPulse 1.2s ease-in-out infinite" : "none",
+                padding: 0,
+                touchAction: "manipulation",
+              }}
+            >
+              <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+              </svg>
+            </button>
+
+            <div>
+              <div style={{
+                fontSize: 15,
+                fontWeight: 500,
+                color: C.text,
+                fontFamily: "'DM Sans', sans-serif",
+              }}>{isRecording ? "Listening…" : "Tap to speak"}</div>
+              <div style={{
+                fontSize: 12,
+                color: C.muted,
+                marginTop: 6,
+                fontFamily: "'DM Sans', sans-serif",
+              }}>or say &ldquo;{wakePhrase}&rdquo; to start hands-free</div>
+            </div>
           </div>
         );
       })()}
