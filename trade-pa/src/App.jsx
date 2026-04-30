@@ -4074,6 +4074,16 @@ function AppInner() {
     brandSaveCount.current++;
     if (brandSaveCount.current <= 1) return;
 
+    // SAFETY GUARD (added 30 Apr 2026): refuse to save brand if it has no real
+    // business data populated. Prevents fresh-device init or state races from
+    // overwriting real Supabase data with empty defaults — root cause of the
+    // brand_data wipe at 06:51 UTC on 30 Apr.
+    const hasRealData = !!(brand.email || brand.phone || brand.address || brand.vatNumber || brand.utrNumber || brand.bankName);
+    if (!hasRealData) {
+      console.warn("[brand-save] Refusing to save: no real business data present (likely fresh-device init or state race).");
+      return;
+    }
+
     // Always save to localStorage immediately (includes logos)
     try {
       localStorage.setItem(`trade-pa-brand-${user.id}`, JSON.stringify(brand));
@@ -5389,7 +5399,7 @@ function AppInner() {
         {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} companyId={companyId} setContextHint={setContextHint} />}
         {view === "Expenses" && <ExpensesTab user={user} setContextHint={setContextHint} />}
         {view === "CIS" && <CISStatementsTab user={user} setContextHint={setContextHint} />}
-        <div style={{ display: (view === "AI Assistant" || aiOverlay) ? "block" : "none" }}><AIAssistant brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} sendPush={sendPush} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} assistantVoice={assistantVoice} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} pendingInboxCount={pendingInboxCount} /></div>
+        <div><AIAssistant isVisible={view === "AI Assistant" || !!aiOverlay} brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} sendPush={sendPush} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} assistantVoice={assistantVoice} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} pendingInboxCount={pendingInboxCount} /></div>
         {view === "Reminders" && <Reminders reminders={reminders} onAdd={add} onDismiss={dismiss} onRemove={remove} dueNow={dueNow} onClearDue={() => setDueNow([])} />}
         {view === "Notifications" && (
           <Notifications
