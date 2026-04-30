@@ -6534,9 +6534,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            padding: "40px 40px 0",
+            padding: "32px 40px 32px",
             textAlign: "center",
-            minHeight: 360,
+            minHeight: "calc(100vh - 240px)",
           }}>
             {/* Greeting */}
             <h1 style={{
