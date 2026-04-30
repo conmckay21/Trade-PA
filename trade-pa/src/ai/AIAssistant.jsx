@@ -6599,6 +6599,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       {/* ── CHAT VIEW (also rendered on tablet-home so input/mic is visible) ── */}
       {(!isHome || isTablet) && (
         <>
+          {/* Chat header strip — Home button + support badge + TTS toggle.
+              Hidden on tablet-home (no chat yet, so these controls aren't needed). */}
+          {!isHome && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={() => { setMessages([]); setSupportMode(false); }} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, fontSize: 11, color: C.muted, cursor: "pointer" }}>🏠 Home</button>
             {supportMode && (
@@ -6608,6 +6611,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               {ttsEnabled ? "🔊" : "🔇"}
             </button>
           </div>
+          )}
 
           {lastAction && (
             <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
