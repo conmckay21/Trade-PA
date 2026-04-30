@@ -27,7 +27,7 @@ import { useWhisper } from "../hooks/useWhisper.js";
 import { HAZARD_LIBRARY, METHOD_LIBRARY } from "../views/RAMS.jsx";
 import { executeEmailAction, updateEmailAIContext, logEmailFeedback } from "../views/Inbox.jsx";
 
-export function AIAssistant({ isVisible = true, brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, sendPush, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 100, hf_hours: 1 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {}, pendingInboxCount = 0 }) {
+export function AIAssistant({ isVisible = true, isTablet = false, brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, sendPush, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 100, hf_hours: 1 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {}, pendingInboxCount = 0 }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
   const pendingWidgetRef = React.useRef(null);
@@ -6203,8 +6203,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         );
       })()}
 
-      {/* ── HOME SCREEN ─────────────────────────────────────────────────── */}
-      {isHome && (() => {
+      {/* ── HOME SCREEN (mobile + desktop) ──────────────────────────────── */}
+      {isHome && !isTablet && (() => {
         // Compute Dashboard-style stats from AIAssistant's props
         const today = new Date(); today.setHours(0,0,0,0);
         const isSameDayHome = (a, b) => a && b && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
@@ -6517,6 +6517,43 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             }
           `}</style>
         </div>
+        );
+      })()}
+
+      {/* ── HOME SCREEN (tablet — minimal, no cards or quick actions) ───── */}
+      {isHome && isTablet && (() => {
+        const hh = new Date().getHours();
+        const greeting = hh >= 5 && hh < 12 ? "Good morning."
+                       : hh >= 12 && hh < 18 ? "Good afternoon."
+                       : "Good evening.";
+        return (
+          <div style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "64px 40px 80px",
+            textAlign: "center",
+            minHeight: 360,
+          }}>
+            <h1 style={{
+              fontSize: 32,
+              fontWeight: 500,
+              color: C.text,
+              margin: 0,
+              fontFamily: "'DM Sans', sans-serif",
+              letterSpacing: "-0.01em",
+            }}>{greeting}</h1>
+            <p style={{
+              fontSize: 15,
+              color: C.muted,
+              marginTop: 14,
+              maxWidth: 380,
+              lineHeight: 1.6,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>Tap the mic to speak, type below, or pick a section from the menu.</p>
+          </div>
         );
       })()}
 
