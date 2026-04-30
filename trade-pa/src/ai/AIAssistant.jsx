@@ -46,6 +46,19 @@ export function AIAssistant({ isVisible = true, isTablet = false, brand, setBran
     "Create a new job card",
   ];
   const [input, setInput] = useState("");
+  const inputRef = useRef(null); // for Cmd+K keyboard shortcut focus
+
+  // Listen for global Cmd+K shortcut from App.jsx — focus this textarea so
+  // the user can start typing immediately without having to tap.
+  useEffect(() => {
+    const onFocusRequest = () => {
+      // Tiny delay so any view transition (Cmd+K from another view first
+      // navigates Home, then dispatches this event) settles before focus.
+      setTimeout(() => { inputRef.current?.focus(); }, 50);
+    };
+    window.addEventListener("tp:focus-ai-input", onFocusRequest);
+    return () => window.removeEventListener("tp:focus-ai-input", onFocusRequest);
+  }, []);
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState(null);
   const [ttsEnabled, setTtsEnabled] = useState(true);
@@ -7684,6 +7697,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       {/* ── INPUT BAR — in flow, pinned by flex at bottom ────────────────── */}
       <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0, paddingTop: 6 }}>
         <textarea
+          ref={inputRef}
           style={{ ...S.input, flex: 1, minHeight: 46, maxHeight: 120, resize: "none", fontSize: 14, padding: "11px 14px" }}
           placeholder={isHome ? "Ask Trade PA anything..." : "Type here, or tap 🎙 to speak..."}
           value={input}

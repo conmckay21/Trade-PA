@@ -3599,6 +3599,74 @@ function AppInner() {
     return () => window.removeEventListener('resize', update);
   }, []);
 
+  // ── Keyboard shortcuts (iPad-with-keyboard + desktop browser) ─────────
+  // Cmd/Ctrl + N — jump to view N (1=Home, 2=Enquiries, 3=Jobs, 4=Schedule,
+  //                5=Reminders, 6=Invoices, 7=Customers)
+  // Cmd/Ctrl + ,  — jump to Settings (Mac convention)
+  // Cmd/Ctrl + K  — focus AI input (jump to talk/type)
+  // Cmd/Ctrl + /  — toggle keyboard shortcuts cheat sheet
+  //
+  // Only fires when not inside an input/textarea/contenteditable, so typing
+  // in a field never accidentally triggers nav. Respects sensible defaults
+  // (Cmd+1 normally switches browser tab; we only override on iPad and
+  // when an interactive element doesn't already need the key).
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  useEffect(() => {
+    const isEditableTarget = (el) => {
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (el.isContentEditable) return true;
+      return false;
+    };
+    const VIEW_FOR_KEY = {
+      "1": "AI Assistant",
+      "2": "Enquiries",
+      "3": "Jobs",
+      "4": "Schedule",
+      "5": "Reminders",
+      "6": "Invoices",
+      "7": "Customers",
+    };
+    const onKeyDown = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      // Ignore if user is typing somewhere
+      if (isEditableTarget(e.target)) return;
+
+      // Cmd/Ctrl + 1..7 — view jumps
+      if (VIEW_FOR_KEY[e.key]) {
+        e.preventDefault();
+        setView(VIEW_FOR_KEY[e.key]);
+        return;
+      }
+      // Cmd/Ctrl + , — Settings (Mac convention)
+      if (e.key === ",") {
+        e.preventDefault();
+        setView("Settings");
+        return;
+      }
+      // Cmd/Ctrl + K — focus AI input. AIAssistant listens for this event.
+      if (e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        setView("AI Assistant");
+        // Defer until after the view switch + AIAssistant becomes visible
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("tp:focus-ai-input"));
+        }, 50);
+        return;
+      }
+      // Cmd/Ctrl + / — toggle the cheat sheet overlay
+      if (e.key === "/" || e.key === "?") {
+        e.preventDefault();
+        setShowShortcutsHelp(s => !s);
+        return;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   // Pre-warm the offline cache shortly after login — fetches every
   // cached table in the background so the user has everything available
   // if they go offline immediately. 2s delay lets the app's own initial
@@ -5726,6 +5794,68 @@ function AppInner() {
       </main>
       </div>
       {(onboardingStep === 99 || onboardingStep === 0) && !isTablet ? <BottomTabBar view={view} setView={setView} isDesktopBrowser={isDesktopBrowser} /> : null}
+
+      {/* ── Keyboard shortcuts cheat sheet (Cmd/Ctrl + / toggles) ──────── */}
+      {showShortcutsHelp && (() => {
+        const isMac = typeof navigator !== "undefined" && /Mac|iPad|iPhone|iPod/.test(navigator.platform || navigator.userAgent);
+        const mod = isMac ? "⌘" : "Ctrl";
+        const shortcuts = [
+          { keys: [mod, "1"], label: "Go to Home" },
+          { keys: [mod, "2"], label: "Go to Enquiries" },
+          { keys: [mod, "3"], label: "Go to Jobs" },
+          { keys: [mod, "4"], label: "Go to Schedule" },
+          { keys: [mod, "5"], label: "Go to Reminders" },
+          { keys: [mod, "6"], label: "Go to Invoices" },
+          { keys: [mod, "7"], label: "Go to Customers" },
+          { keys: [mod, ","], label: "Go to Settings" },
+          { keys: [mod, "K"], label: "Focus the AI input" },
+          { keys: [mod, "/"], label: "Show / hide this cheat sheet" },
+          { keys: ["Esc"], label: "Close any open dialog" },
+        ];
+        return (
+          <div
+            onClick={() => setShowShortcutsHelp(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, width: "100%", maxWidth: 460, maxHeight: "85vh", overflowY: "auto" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: "'DM Sans', sans-serif" }}>Keyboard shortcuts</div>
+                <button
+                  onClick={() => setShowShortcutsHelp(false)}
+                  aria-label="Close"
+                  style={{ background: "transparent", border: "none", color: C.muted, fontSize: 18, cursor: "pointer", padding: 4, lineHeight: 1 }}
+                >×</button>
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, fontFamily: "'DM Sans', sans-serif" }}>Works on iPad with a keyboard, and in any browser.</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {shortcuts.map((s, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", padding: "8px 4px", borderTop: i === 0 ? "none" : `1px solid ${C.border}` }}>
+                    <span style={{ flex: 1, fontSize: 13, color: C.text, fontFamily: "'DM Sans', sans-serif" }}>{s.label}</span>
+                    <span style={{ display: "flex", gap: 4 }}>
+                      {s.keys.map((k, j) => (
+                        <kbd key={j} style={{
+                          background: C.surfaceHigh,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 5,
+                          padding: "2px 8px",
+                          fontSize: 11,
+                          fontFamily: "'DM Mono', monospace",
+                          color: C.text,
+                          minWidth: 22,
+                          textAlign: "center",
+                        }}>{k}</kbd>
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {(onboardingStep >= 99 || onboardingStep === 0) && <FloatingMicButton
         visible={view !== "AI Assistant" && !aiOverlay}
         handsFree={aiHandsFree}
