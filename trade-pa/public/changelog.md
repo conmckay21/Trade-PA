@@ -19,6 +19,7 @@
 - Sidebar shows live counts on Jobs (active) and Invoices (overdue) so you can see what needs your attention at a glance
 - Bigger tap targets throughout for fingers, gloves, or working off a clipboard
 - Works in both portrait and landscape, rotates with you
+- Home screen redesigned for iPad: big centered mic with hands-free hint, type-or-talk input bar, no clutter
 
 ---
 
