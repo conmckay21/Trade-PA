@@ -9,6 +9,11 @@
 ### Behind the scenes 🛡️
 - Added a safety net so your business profile (trading name, bank details, VAT, etc.) can never be accidentally wiped — your data stays your data, full stop
 
+### Account 👤
+- New "Delete account" option in Settings — fully removes your account and all data if you ever need to walk away
+- Type-your-email confirmation step so you can't trigger it by accident
+- Native app users see a "sign up at tradespa.co.uk" hint on the login screen instead of the in-app signup form (App Store rules)
+
 ---
 
 ## 2026-04-29

@@ -848,6 +848,55 @@ function CertificationsCard({ brand, setBrand }) {
 // pre-launch product but defensive cap regardless.
 // (RecentlyDeleted moved to ./views/RecentlyDeleted.jsx — P7-7A)
 function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit, openAssistantSetup, openFeedback, assistantName, assistantWakeWords, userCommandsCount, usageData, usageCaps }) {
+  // ── Account deletion state (Apple Guideline 5.1.1(v) — required) ────────
+  // Hard delete with type-to-confirm: user must type their email exactly to
+  // unlock the destructive button. Server enforces the same check as a
+  // belt-and-braces guard. Calls /api/delete-account which cascades through
+  // every user_id-scoped table, cancels Stripe subscription, deletes auth row.
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.trim().toLowerCase() !== (user?.email || "").toLowerCase()) {
+      setDeleteError("The email you typed doesn't match your account email.");
+      return;
+    }
+    setDeletingAccount(true);
+    setDeleteError("");
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setDeleteError("Could not verify your session. Please sign out and back in, then try again.");
+        setDeletingAccount(false);
+        return;
+      }
+      const res = await fetch("/api/delete-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ confirmEmail: deleteConfirmText.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setDeleteError(json.error || "Account deletion failed. Please try again or contact support.");
+        setDeletingAccount(false);
+        return;
+      }
+      // Success — sign out locally and reload. The auth row is gone server-side
+      // so the existing session token is now invalid; reload kicks the user
+      // back to the AuthScreen.
+      try { await db.auth.signOut(); } catch {}
+      window.location.reload();
+    } catch (err) {
+      setDeleteError("Network error: " + (err.message || "unknown") + ". Please try again.");
+      setDeletingAccount(false);
+    }
+  };
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
@@ -3278,6 +3327,123 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 fontWeight: 700,
               }}>{toast.sub}</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Account section: delete account (Apple 5.1.1(v) compliance) ─── */}
+      <div style={{ ...S.card, marginTop: 16, border: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>Account</div>
+        <div style={{ fontSize: 13, color: C.text, marginBottom: 6, fontWeight: 600 }}>Delete account</div>
+        <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginBottom: 14 }}>
+          Permanently delete your Trade PA account and all your data — jobs, invoices, customers, materials, settings, AI conversation history. Any active subscription will be cancelled. This cannot be undone.
+        </div>
+        <button
+          onClick={() => { setDeleteModalOpen(true); setDeleteConfirmText(""); setDeleteError(""); }}
+          style={{
+            background: "transparent",
+            border: `1px solid ${C.red}`,
+            color: C.red,
+            padding: "10px 16px",
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 700,
+            fontFamily: "'DM Mono', monospace",
+            letterSpacing: "0.04em",
+            cursor: "pointer",
+          }}
+        >Delete account</button>
+      </div>
+
+      {/* Confirmation modal — must type email exactly to enable the button */}
+      {deleteModalOpen && (
+        <div
+          onClick={() => { if (!deletingAccount) setDeleteModalOpen(false); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, maxWidth: 440, width: "100%" }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.red, marginBottom: 8 }}>Delete account permanently?</div>
+            <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>
+              This will permanently remove your account and all associated data. This action cannot be undone.
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, marginBottom: 14 }}>
+              The following will be deleted forever:
+              <ul style={{ margin: "8px 0 0 0", paddingLeft: 18 }}>
+                <li>All jobs, invoices, quotes, and customers</li>
+                <li>Materials, expenses, mileage, CIS records</li>
+                <li>RAMS, certificates, documents, photos</li>
+                <li>AI Assistant conversation history and memory</li>
+                <li>Your business profile and settings</li>
+              </ul>
+            </div>
+            <div style={{ fontSize: 12, color: C.text, marginBottom: 6 }}>
+              To confirm, type your email address: <span style={{ fontFamily: "'DM Mono', monospace", color: C.amber }}>{user?.email}</span>
+            </div>
+            <input
+              type="email"
+              value={deleteConfirmText}
+              onChange={(e) => { setDeleteConfirmText(e.target.value); setDeleteError(""); }}
+              placeholder="your.email@example.com"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              disabled={deletingAccount}
+              style={{
+                width: "100%", boxSizing: "border-box",
+                background: C.surfaceHigh,
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                padding: "10px 14px",
+                color: C.text,
+                fontSize: 13,
+                fontFamily: "'DM Mono', monospace",
+                outline: "none",
+                marginBottom: 12,
+              }}
+            />
+            {deleteError && (
+              <div style={{ background: "#ef444422", border: "1px solid #ef444444", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: C.red, marginBottom: 12, lineHeight: 1.5 }}>
+                {deleteError}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => { if (!deletingAccount) setDeleteModalOpen(false); }}
+                disabled={deletingAccount}
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${C.border}`,
+                  color: C.text,
+                  padding: "10px 16px",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  fontFamily: "'DM Mono', monospace",
+                  cursor: deletingAccount ? "not-allowed" : "pointer",
+                  opacity: deletingAccount ? 0.5 : 1,
+                }}
+              >Cancel</button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deletingAccount || deleteConfirmText.trim().toLowerCase() !== (user?.email || "").toLowerCase()}
+                style={{
+                  background: C.red,
+                  border: "none",
+                  color: "#fff",
+                  padding: "10px 16px",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  fontFamily: "'DM Mono', monospace",
+                  cursor: (deletingAccount || deleteConfirmText.trim().toLowerCase() !== (user?.email || "").toLowerCase()) ? "not-allowed" : "pointer",
+                  opacity: (deletingAccount || deleteConfirmText.trim().toLowerCase() !== (user?.email || "").toLowerCase()) ? 0.5 : 1,
+                }}
+              >{deletingAccount ? "Deleting…" : "Delete forever"}</button>
+            </div>
           </div>
         </div>
       )}

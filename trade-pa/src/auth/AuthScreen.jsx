@@ -1,8 +1,12 @@
 import React, { useState } from "react";
 import { db } from "../lib/db.js";
+import { isNative } from "../lib/platform.js";
 
 export function AuthScreen({ onAuth, initialMode = "login", onBack }) {
-  const [mode, setMode] = useState(initialMode); // login | signup | reset
+  // Native app must never show signup (Apple Guideline 3.1.3(b) — no IAP /
+  // no in-app purchases, web-only signup pattern). Force login mode on native
+  // regardless of what initialMode says.
+  const [mode, setMode] = useState(isNative() ? "login" : initialMode); // login | signup | reset
   const [form, setForm] = useState({ email: "", password: "", name: "", confirm: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -95,12 +99,16 @@ export function AuthScreen({ onAuth, initialMode = "login", onBack }) {
             <div style={authStyles.divider}><div style={authStyles.dividerLine} /><div style={authStyles.dividerText}>or</div><div style={authStyles.dividerLine} /></div>
             <div style={{ textAlign: "center", fontSize: 12, color: "#6b7280" }}>
               New to Trade PA?{" "}
-              <button style={{ ...authStyles.ghost, color: "#f59e0b" }} onClick={() => { setMode("signup"); setError(""); }}>Create an account</button>
+              {isNative() ? (
+                <span style={{ fontSize: 11, color: "#6b7280" }}>Need an account? Sign up at tradespa.co.uk</span>
+              ) : (
+                <button style={{ ...authStyles.ghost, color: "#f59e0b" }} onClick={() => { setMode("signup"); setError(""); }}>Create an account</button>
+              )}
             </div>
           </>
         )}
 
-        {mode === "signup" && (
+        {mode === "signup" && !isNative() && (
           <>
             <div style={authStyles.title}>Create your account</div>
             <div style={authStyles.sub}>Get Trade PA set up for your business in 30 seconds</div>
