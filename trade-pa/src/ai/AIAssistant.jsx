@@ -6557,8 +6557,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         );
       })()}
 
-      {/* ── CHAT VIEW ───────────────────────────────────────────────────── */}
-      {!isHome && (
+      {/* ── CHAT VIEW (also rendered on tablet-home so input/mic is visible) ── */}
+      {(!isHome || isTablet) && (
         <>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={() => { setMessages([]); setSupportMode(false); }} style={{ padding: "5px 12px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 20, fontSize: 11, color: C.muted, cursor: "pointer" }}>🏠 Home</button>
