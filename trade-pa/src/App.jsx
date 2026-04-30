@@ -5485,7 +5485,7 @@ function AppInner() {
             "Reminders": "M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0",
             "Invoices": "M2 6a2 2 0 012-2h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM12 8v8M8 12h8",
             "Quotes": "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
-            "Expenses": "M12 1v22M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6",
+            "Expenses": "M18 7c0-5.333-8-5.333-8 0M10 7v14M6 21h12M6 13h10",
             "Mileage": "M12 22s-8-4.5-8-11.8A8 8 0 0112 2a8 8 0 018 8.2c0 7.3-8 11.8-8 11.8zM12 7v5l3 2",
             "Payments": "M2 6a2 2 0 012-2h16a2 2 0 012 2v4H2V6zM2 14h20v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z",
             "CIS": "M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2zM9 7h6M9 11h6M9 15h4",
@@ -5497,9 +5497,19 @@ function AppInner() {
             "Inbox": "M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
             "Settings": "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z",
           };
-          const now = new Date();
-          const activeJobsCount = (jobs || []).filter(j => !j.deleted_at && j.status !== "completed" && j.status !== "cancelled").length;
-          const overdueInvoicesCount = (invoices || []).filter(i => !i.deleted_at && i.status !== "paid" && i.status !== "void" && i.due_date && new Date(i.due_date) < now).length;
+          // Sidebar badge counts. Only computed for views where App.jsx state
+          // matches the underlying view's data source — anything else risks
+          // showing a number that disagrees with the view itself.
+          //
+          // Jobs badge: SKIPPED. Jobs UI loads from the `job_cards` table but
+          // App.jsx state's `jobs` is the older `jobs` table (now used for
+          // schedule/diary). Adding job_cards loading to App.jsx would be a
+          // separate refactor — for now, no badge beats a wrong badge.
+          //
+          // Invoices badge: overdue invoices, matching the Invoices view's
+          // own filter logic. Uses in-memory `invoices` state which IS the
+          // right data source.
+          const overdueInvoicesCount = (invoices || []).filter(i => !i.deleted_at && typeof i.status === "string" && i.status.toLowerCase() === "overdue").length;
           const initial = (user?.email?.[0] || brand?.name?.[0] || "T").toUpperCase();
           return (
             <nav style={{
@@ -5529,8 +5539,7 @@ function AppInner() {
                         const active = view === v;
                         const label = v === "AI Assistant" ? "Home" : v;
                         let badge = null;
-                        if (v === "Jobs" && activeJobsCount > 0) badge = activeJobsCount;
-                        else if (v === "Invoices" && overdueInvoicesCount > 0) badge = overdueInvoicesCount;
+                        if (v === "Invoices" && overdueInvoicesCount > 0) badge = overdueInvoicesCount;
                         return (
                           <button
                             key={v}
@@ -5614,7 +5623,7 @@ function AppInner() {
                 "Reminders": "M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0",
                 "Invoices": "M2 6a2 2 0 012-2h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM12 8v8M8 12h8",
                 "Quotes": "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
-                "Expenses": "M12 1v22M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6",
+                "Expenses": "M18 7c0-5.333-8-5.333-8 0M10 7v14M6 21h12M6 13h10",
                 "Mileage": "M12 22s-8-4.5-8-11.8A8 8 0 0112 2a8 8 0 018 8.2c0 7.3-8 11.8-8 11.8zM12 7v5l3 2",
                 "Payments": "M2 6a2 2 0 012-2h16a2 2 0 012 2v4H2V6zM2 14h20v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z",
                 "CIS": "M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2zM9 7h6M9 11h6M9 15h4",
