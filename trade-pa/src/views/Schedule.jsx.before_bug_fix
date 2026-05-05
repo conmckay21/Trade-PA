@@ -11,7 +11,6 @@ import { fmtAmount } from "../lib/format.js";
 import { isSameDay } from "../lib/date-helpers.js";
 import { statusColor, statusLabel } from "../lib/status.js";
 import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
-import { db } from "../lib/db.js";
 
 function getWeekStart(date) {
   const d = new Date(date);
@@ -28,29 +27,7 @@ function formatDayLabel(date) {
 
 // (isSameDay moved to ./lib/date-helpers.js — P7 prelude)
 
-export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
-  // Job cards available for the "Link to existing job" dropdown
-  const [jobCards, setJobCards] = useState([]);
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    db.from("job_cards")
-      .select("id, customer, scope_of_work, start_date, status")
-      .eq("user_id", user.id)
-      .is("deleted_at", null)
-      .order("start_date", { ascending: false })
-      .limit(100)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error("[Schedule] job_cards fetch failed:", error);
-          return;
-        }
-        setJobCards(data || []);
-      });
-    return () => { cancelled = true; };
-  }, [user?.id]);
-
+export function Schedule({ jobs, setJobs, customers, setContextHint }) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDayIdx, setSelectedDayIdx] = useState(null); // null = auto-select today
   const [showAddJob, setShowAddJob] = useState(false);
@@ -94,76 +71,17 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
 
   const openAdd = (day) => {
     setAddJobDate(day);
-    setForm({ customer: "", address: "", type: "", time: "09:00", value: "", status: "confirmed", notes: "", linkedJobCardId: "" });
+    setForm({ customer: "", address: "", type: "", time: "09:00", value: "", status: "confirmed", notes: "" });
     setShowAddJob(true);
   };
 
-  const saveJob = async () => {
+  const saveJob = () => {
     if (!form.customer || !form.type) return;
-    if (!user?.id) {
-      console.error("[Schedule] saveJob: no user");
-      alert("Couldn't save: not signed in");
-      return;
-    }
     const dateObj = new Date(addJobDate);
     const [h, m] = form.time.split(":");
-    dateObj.setHours(parseInt(h), parseInt(m), 0, 0);
-
-    // Linked to existing job_card → update its start_at; the trigger syncs jobs row
-    if (form.linkedJobCardId) {
-      const { error } = await db
-        .from("job_cards")
-        .update({ start_at: dateObj.toISOString(), status: form.status })
-        .eq("id", form.linkedJobCardId)
-        .eq("user_id", user.id);
-      if (error) {
-        console.error("[Schedule] saveJob (linked) failed:", error);
-        alert("Couldn't save: " + (error.message || "unknown error"));
-        return;
-      }
-      setJobs(prev => {
-        const others = prev.filter(j => j.id !== form.linkedJobCardId);
-        return [...others, {
-          id: form.linkedJobCardId,
-          customer: form.customer,
-          address: form.address,
-          type: form.type,
-          date: `${formatDayLabel(addJobDate)} ${form.time}`,
-          dateObj: dateObj.toISOString(),
-          status: form.status,
-          value: parseInt(form.value) || 0,
-          notes: form.notes,
-          source_type: "job_card",
-          source_ref: form.linkedJobCardId,
-        }];
-      });
-      setShowAddJob(false);
-      return;
-    }
-
-    // Otherwise create a manual jobs row
-    const newId = `manual-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const { error } = await db.from("jobs").insert({
-      id: newId,
-      user_id: user.id,
-      customer: form.customer,
-      address: form.address,
-      type: form.type,
-      date: `${formatDayLabel(addJobDate)} ${form.time}`,
-      date_obj: dateObj.toISOString(),
-      status: form.status,
-      value: parseInt(form.value) || 0,
-      notes: form.notes,
-      source_type: "manual",
-      source_ref: null,
-    });
-    if (error) {
-      console.error("[Schedule] saveJob (manual) failed:", error);
-      alert("Couldn't save: " + (error.message || "unknown error"));
-      return;
-    }
-    setJobs(prev => [...prev, {
-      id: newId,
+    dateObj.setHours(parseInt(h), parseInt(m));
+    const newJob = {
+      id: Date.now(),
       customer: form.customer,
       address: form.address,
       type: form.type,
@@ -172,88 +90,12 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
       status: form.status,
       value: parseInt(form.value) || 0,
       notes: form.notes,
-      source_type: "manual",
-      source_ref: null,
-    }]);
+    };
+    setJobs(prev => [...prev, newJob]);
     setShowAddJob(false);
   };
 
-  const saveEdit = async () => {
-    if (!form.customer || !form.type || !editingJob) return;
-    if (!user?.id) {
-      console.error("[Schedule] saveEdit: no user");
-      alert("Couldn't save: not signed in");
-      return;
-    }
-
-    // Apply the new time to the existing date
-    const existing = editingJob.dateObj && !isNaN(new Date(editingJob.dateObj))
-      ? new Date(editingJob.dateObj)
-      : new Date();
-    const [h, m] = (form.time || "09:00").split(":");
-    const newDateObj = new Date(existing);
-    newDateObj.setHours(parseInt(h), parseInt(m), 0, 0);
-    const newDateLabel = `${formatDayLabel(newDateObj)} ${form.time || "09:00"}`;
-
-    const sourceType = editingJob.source_type || "manual";
-    const sourceRef = editingJob.source_ref;
-
-    if (sourceType === "job_card") {
-      // job-card-derived → write to job_cards; trigger syncs jobs
-      const { error } = await db
-        .from("job_cards")
-        .update({
-          start_at: newDateObj.toISOString(),
-          customer: form.customer,
-          scope_of_work: form.type,
-          status: form.status,
-        })
-        .eq("id", editingJob.id)
-        .eq("user_id", user.id);
-      if (error) {
-        console.error("[Schedule] saveEdit (job_card) failed:", error);
-        alert("Couldn't save: " + (error.message || "unknown error"));
-        return;
-      }
-    } else if (sourceType === "enquiry" && sourceRef) {
-      // enquiry-derived → write to enquiries; trigger syncs jobs
-      const { error } = await db
-        .from("enquiries")
-        .update({
-          scheduled_visit_at: newDateObj.toISOString(),
-          name: form.customer,
-        })
-        .eq("id", parseInt(sourceRef, 10))
-        .eq("user_id", user.id);
-      if (error) {
-        console.error("[Schedule] saveEdit (enquiry) failed:", error);
-        alert("Couldn't save: " + (error.message || "unknown error"));
-        return;
-      }
-    } else {
-      // Manual entry → update jobs row directly
-      const { error } = await db
-        .from("jobs")
-        .update({
-          customer: form.customer,
-          address: form.address,
-          type: form.type,
-          status: form.status,
-          value: parseInt(form.value) || 0,
-          notes: form.notes,
-          date_obj: newDateObj.toISOString(),
-          date: newDateLabel,
-        })
-        .eq("id", editingJob.id)
-        .eq("user_id", user.id);
-      if (error) {
-        console.error("[Schedule] saveEdit (manual) failed:", error);
-        alert("Couldn't save: " + (error.message || "unknown error"));
-        return;
-      }
-    }
-
-    // Optimistic React state update
+  const saveEdit = () => {
     setJobs(prev => prev.map(j => j.id === editingJob.id ? {
       ...j,
       customer: form.customer,
@@ -262,8 +104,6 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
       status: form.status,
       value: parseInt(form.value) || 0,
       notes: form.notes,
-      dateObj: newDateObj.toISOString(),
-      date: newDateLabel,
     } : j));
     setEditingJob(null);
     setSelectedJob(null);
@@ -434,7 +274,7 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
             <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}`, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button style={S.btn("primary")} onClick={() => {
                 setEditingJob(selectedJob);
-                setForm({ customer: selectedJob.customer, address: selectedJob.address || "", type: selectedJob.type, time: selectedJob.dateObj ? new Date(selectedJob.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "09:00", value: selectedJob.value || "", status: selectedJob.status, notes: selectedJob.notes || "", linkedJobCardId: selectedJob.source_type === "job_card" ? (selectedJob.source_ref || selectedJob.id || "") : "" });
+                setForm({ customer: selectedJob.customer, address: selectedJob.address || "", type: selectedJob.type, time: selectedJob.dateObj ? new Date(selectedJob.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }).replace(":", ":") : "09:00", value: selectedJob.value || "", status: selectedJob.status, notes: selectedJob.notes || "" });
               }}>Edit</button>
               {selectedJob.status !== "confirmed" && (
                 <button style={S.btn("green")} onClick={() => { setJobs(prev => prev.map(j => j.id === selectedJob.id ? { ...j, status: "confirmed" } : j)); setSelectedJob(null); }}>Confirm</button>
@@ -471,10 +311,6 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
                   <input style={S.input} placeholder={p} value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} />
                 </div>
               ))}
-              <div>
-                <label style={S.label}>Time</label>
-                <input type="time" style={S.input} value={form.time || "09:00"} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
-              </div>
               <div>
                 <label style={S.label}>Notes</label>
                 <textarea style={{ ...S.input, resize: "vertical", minHeight: 80 }} placeholder="Any notes about this job..." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
@@ -528,21 +364,6 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
               <div>
                 <label style={S.label}>Notes</label>
                 <textarea style={{ ...S.input, resize: "vertical", minHeight: 72 }} placeholder="Any notes about this job..." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-              </div>
-              <div>
-                <label style={S.label}>Link to existing job (optional)</label>
-                <select
-                  style={S.input}
-                  value={form.linkedJobCardId || ""}
-                  onChange={e => setForm(f => ({ ...f, linkedJobCardId: e.target.value }))}
-                >
-                  <option value="">— Manual appointment (no link) —</option>
-                  {jobCards.map(jc => (
-                    <option key={jc.id} value={jc.id}>
-                      {(jc.customer || "(no customer)") + " — " + ((jc.scope_of_work || "").slice(0, 50) || "(no description)")}
-                    </option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label style={S.label}>Status</label>
