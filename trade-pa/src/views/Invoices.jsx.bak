@@ -688,13 +688,7 @@ export function Payments({ brand, invoices, setInvoices, customers, user, sendPu
                     <div style={{ fontSize: 10, color: C.muted }}>{inv.id} · {inv.due}</div>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
-                  {inv.status === "overdue" && (inv.chaseCount || 0) > 0 ? (
-                    <div style={{ ...S.badge((inv.chaseCount || 0) >= 3 ? C.red : (inv.chaseCount || 0) === 2 ? "#f97316" : C.amber), marginRight: 8, flexShrink: 0, fontFamily: "'DM Mono', monospace", fontSize: 10, whiteSpace: "nowrap" }}>
-                      {(inv.chaseCount || 0) >= 3 ? "⚠ Final" : (inv.chaseCount || 0) === 2 ? "⏰ Firm" : "· Gentle"} {inv.chaseCount || 0}/3
-                    </div>
-                  ) : (
-                    <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
-                  )}
+                  <div style={{ ...S.badge(statusColor[inv.status] || C.muted), marginRight: 8, flexShrink: 0 }}>{statusLabel[inv.status] || inv.status}</div>
                   <button onClick={e => { e.stopPropagation(); updateStatus(inv.id, "paid"); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px", color: C.green, flexShrink: 0 }}>✓ Paid</button>
                   <div style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>→</div>
                 </div>
