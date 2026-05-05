@@ -870,7 +870,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
       <div style={{ padding: 48, textAlign: "center", fontFamily: "'DM Mono',monospace" }}>
         <div style={{ fontSize: 36, marginBottom: 16 }}>✉</div>
         <div style={{ fontSize: 17, fontWeight: 700, color: IC.text, marginBottom: 8 }}>Connect your inbox</div>
-        <div style={{ fontSize: 13, color: IC.muted, maxWidth: 380, margin: "0 auto 28px", lineHeight: 1.6 }}>Link your email and Trade PA will automatically review incoming emails every hour — suggesting jobs, enquiries, material orders and more for your approval.</div>
+        <div style={{ fontSize: 13, color: IC.muted, maxWidth: 380, margin: "0 auto 28px", lineHeight: 1.6 }}>Link your email and Claude will automatically review incoming emails every hour — suggesting jobs, enquiries, material orders and more for your approval.</div>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", marginBottom: 12 }}>
           <button style={{ ...IS.btn("default"), padding: "10px 20px", fontSize: 13 }} onClick={() => { window.location.href = `/api/auth/gmail/connect?userId=${user.id}`; }}>
             <span style={{ color: "#ef4444", fontWeight: 700 }}>G</span> Connect Gmail
@@ -969,7 +969,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
         return (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 11, color: IC.muted }}>Trade PA reviews your inbox every hour and suggests actions for your approval.</div>
+            <div style={{ fontSize: 11, color: IC.muted }}>Claude reviews your inbox every hour and suggests actions for your approval.</div>
             <button style={IS.btn("amber")} onClick={runEmailCheck} disabled={checking}>
               {checking ? "⏳ Checking..." : "↻ Check Now"}
             </button>
@@ -998,7 +998,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
             <div style={{ ...IS.card, textAlign: "center", padding: 40 }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>✓</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: IC.text, marginBottom: 6 }}>All caught up</div>
-              <div style={{ fontSize: 12, color: IC.muted, lineHeight: 1.6 }}>No pending actions. Trade PA will check your inbox again on the next hour and suggest actions for any new emails.</div>
+              <div style={{ fontSize: 12, color: IC.muted, lineHeight: 1.6 }}>No pending actions. Claude will check your inbox again on the next hour and suggest actions for any new emails.</div>
             </div>
           ) : visibleActions.length === 0 ? (
             <div style={{ ...IS.card, textAlign: "center", padding: 24, color: IC.muted, fontSize: 12 }}>
