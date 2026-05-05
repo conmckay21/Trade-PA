@@ -1,5 +1,30 @@
 # What's new
 
+## 2026-05-06
+
+### Schedule properly persists now 🗓️
+The Schedule tab finally saves changes for real — until today, edits and new appointments only lived in your browser memory and disappeared on refresh. Now everything writes straight to your account. ✅
+
+### Time editing works on existing jobs ⏰
+Tap any booked job, hit Edit, change the time, save — it sticks. Previously the Edit screen had no time field at all (the Add screen did, the Edit screen didn't — bit embarrassing).
+
+### Link a new appointment to an existing job 🔗
+When you add a job from the Schedule, there's a new "Link to existing job" dropdown. Pick a job from your list and the appointment becomes that job's scheduled visit instead of a standalone diary note. Leave it blank for one-off appointments.
+
+### Smarter source-aware editing 🧠
+If you edit a calendar entry that came from a Job Card or an enquiry, Trade PA now updates the source record (so your job's start time stays in sync everywhere), instead of just patching the calendar copy.
+
+### Settings subtitle now plan-agnostic ⚙️
+The Settings → Plan & billing subtitle no longer claims "Pro · unlimited" regardless of what you're actually on. Now reads "Manage subscription, billing and add-ons".
+
+### Inbox copy: Trade PA, not Claude 💬
+Three user-facing strings in the Inbox were still calling the assistant "Claude". They now say "Trade PA", as they should.
+
+### Behind the scenes
+Calendar/schedule data is now unified — `jobs` is the single source of truth for what shows in your diary, with database triggers keeping it in sync with Job Cards and enquiries. Foundation work for everything from week-view drag-and-drop to richer .ics exports.
+
+---
+
 ## 2026-04-30
 
 ### Android polish 🤖
