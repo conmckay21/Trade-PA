@@ -53,20 +53,20 @@ export function ReportsTab({ invoices, jobs, materials, customers, enquiries, br
   const overdueInvoices = allInvoices.filter(i => i.status === "overdue");
   const outstandingInvoices = allInvoices.filter(i => ["sent", "overdue", "due"].includes(i.status));
 
-  const totalRevenue = paidInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
-  const totalOutstanding = outstandingInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
+  const totalRevenue = paidInvoices.reduce((s, i) => s + parseFloat(i.gross_amount || i.grossAmount || i.amount || 0), 0);
+  const totalOutstanding = outstandingInvoices.reduce((s, i) => s + parseFloat(i.gross_amount || i.grossAmount || i.amount || 0), 0);
 
-  const vatInvoices = paidInvoices.filter(i => i.vatEnabled && !i.vatZeroRated);
+  const vatInvoices = paidInvoices.filter(i => (i.vat_enabled || i.vatEnabled) && !(i.vat_zero_rated || i.vatZeroRated));
   const outputVat = vatInvoices.reduce((s, i) => {
-    const gross = parseFloat(i.grossAmount || i.amount || 0);
+    const gross = parseFloat(i.gross_amount || i.grossAmount || i.amount || 0);
     const rate = parseFloat(i.vatRate || 20) / 100;
     return s + gross - gross / (1 + rate);
   }, 0);
 
   const periodMaterials = (materials || []).filter(m => inRange(m.receiptDate || m.created_at));
-  const totalMaterialCost = periodMaterials.reduce((s, m) => s + parseFloat(m.unitPrice || 0) * parseFloat(m.qty || 1), 0);
+  const totalMaterialCost = periodMaterials.reduce((s, m) => s + parseFloat(m.unit_price || m.unitPrice || 0) * parseFloat(m.qty || 1), 0);
   const inputVat = periodMaterials.filter(m => m.vatEnabled).reduce((s, m) => {
-    const net = parseFloat(m.unitPrice || 0) * parseFloat(m.qty || 1);
+    const net = parseFloat(m.unit_price || m.unitPrice || 0) * parseFloat(m.qty || 1);
     const rate = parseFloat(m.vatRate || 20) / 100;
     return s + net * rate;
   }, 0);
@@ -75,23 +75,23 @@ export function ReportsTab({ invoices, jobs, materials, customers, enquiries, br
   const grossProfit = totalRevenue - totalMaterialCost;
   const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
-  const periodJobs = (jobs || []).filter(j => inRange(j.dateObj || j.date));
+  const periodJobs = (jobs || []).filter(j => inRange(j.date_obj || j.dateObj || j.date));
   const completedJobs = periodJobs.filter(j => j.status === "completed");
 
   // CIS
   const cisInvoices = paidInvoices.filter(i => i.cisEnabled);
-  const cisGross = cisInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
-  const cisDeductions = cisInvoices.reduce((s, i) => s + parseFloat(i.cisDeduction || 0), 0);
+  const cisGross = cisInvoices.reduce((s, i) => s + parseFloat(i.gross_amount || i.grossAmount || i.amount || 0), 0);
+  const cisDeductions = cisInvoices.reduce((s, i) => s + parseFloat(i.cis_deduction || i.cisDeduction || 0), 0);
   const cisNet = cisGross - cisDeductions;
 
   // Job profitability
   const jobProfitData = (jobs || [])
-    .filter(j => j.status === "completed" && inRange(j.dateObj || j.date))
+    .filter(j => j.status === "completed" && inRange(j.date_obj || j.dateObj || j.date))
     .map(j => {
       const jobInvoices = allInvoices.filter(i => i.customer?.toLowerCase() === j.customer?.toLowerCase() && i.status === "paid");
-      const revenue = jobInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
+      const revenue = jobInvoices.reduce((s, i) => s + parseFloat(i.gross_amount || i.grossAmount || i.amount || 0), 0);
       const jobMaterials = (materials || []).filter(m => m.job?.toLowerCase() === j.customer?.toLowerCase() || m.job === j.title);
-      const costs = jobMaterials.reduce((s, m) => s + parseFloat(m.unitPrice || 0) * parseFloat(m.qty || 1), 0);
+      const costs = jobMaterials.reduce((s, m) => s + parseFloat(m.unit_price || m.unitPrice || 0) * parseFloat(m.qty || 1), 0);
       const profit = revenue - costs;
       return { name: j.customer || j.title || "Unknown", type: j.type || "Job", revenue, costs, profit, margin: revenue > 0 ? (profit / revenue) * 100 : 0 };
     })
@@ -103,9 +103,9 @@ export function ReportsTab({ invoices, jobs, materials, customers, enquiries, br
     const custInvoices = allInvoices.filter(i => i.customer?.toLowerCase() === c.name?.toLowerCase());
     const paid = custInvoices.filter(i => i.status === "paid" && inRange(i.paidDate || i.created_at));
     const outstanding = custInvoices.filter(i => ["sent", "overdue", "due"].includes(i.status));
-    const totalSpend = paid.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
-    const lastJob = (jobs || []).filter(j => j.customer?.toLowerCase() === c.name?.toLowerCase()).sort((a, b) => new Date(b.dateObj || b.date) - new Date(a.dateObj || a.date))[0];
-    return { name: c.name, totalSpend, invoiceCount: paid.length, outstanding: outstanding.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0), lastJobDate: lastJob?.dateObj || lastJob?.date };
+    const totalSpend = paid.reduce((s, i) => s + parseFloat(i.gross_amount || i.grossAmount || i.amount || 0), 0);
+    const lastJob = (jobs || []).filter(j => j.customer?.toLowerCase() === c.name?.toLowerCase()).sort((a, b) => new Date(b.date_obj || b.dateObj || b.date) - new Date(a.date_obj || a.dateObj || a.date))[0];
+    return { name: c.name, totalSpend, invoiceCount: paid.length, outstanding: outstanding.reduce((s, i) => s + parseFloat(i.gross_amount || i.grossAmount || i.amount || 0), 0), lastJobDate: lastJob?.date_obj || lastJob?.dateObj || lastJob?.date };
   }).filter(c => c.totalSpend > 0 || c.outstanding > 0).sort((a, b) => b.totalSpend - a.totalSpend);
 
   // Materials by supplier
@@ -113,7 +113,7 @@ export function ReportsTab({ invoices, jobs, materials, customers, enquiries, br
   periodMaterials.forEach(m => {
     const s = m.supplier || "Unknown";
     if (!supplierData[s]) supplierData[s] = { name: s, total: 0, items: 0 };
-    supplierData[s].total += parseFloat(m.unitPrice || 0) * parseFloat(m.qty || 1);
+    supplierData[s].total += parseFloat(m.unit_price || m.unitPrice || 0) * parseFloat(m.qty || 1);
     supplierData[s].items++;
   });
   const supplierList = Object.values(supplierData).sort((a, b) => b.total - a.total);
@@ -276,7 +276,7 @@ ${generateReportHTML()}
       <table>
         ${tableHead(["Invoice", "Customer", "Net", "VAT", "Gross"])}
         <tbody>${vatInvoices.map(i => {
-          const gross = parseFloat(i.grossAmount || i.amount || 0);
+          const gross = parseFloat(i.gross_amount || i.grossAmount || i.amount || 0);
           const rate = parseFloat(i.vatRate || 20) / 100;
           const vat = gross - gross / (1 + rate);
           return tableRow([i.id, i.customer, fmtH(gross - vat), fmtH(vat), fmtH(gross)]);
@@ -286,7 +286,7 @@ ${generateReportHTML()}
     if (activeReport === "outstanding") return `
       <table>
         ${tableHead(["Invoice", "Customer", "Amount", "Days Outstanding"])}
-        <tbody>${agedDebtors.map(i => tableRow([i.id, i.customer, fmtH(parseFloat(i.grossAmount || i.amount || 0)), `${i.daysOld} days`])).join("")}</tbody>
+        <tbody>${agedDebtors.map(i => tableRow([i.id, i.customer, fmtH(parseFloat(i.gross_amount || i.grossAmount || i.amount || 0)), `${i.daysOld} days`])).join("")}</tbody>
       </table>`;
 
     if (activeReport === "jobprofit") return `
@@ -313,7 +313,7 @@ ${generateReportHTML()}
       <div class="section-title">All Items</div>
       <table>
         ${tableHead(["Item", "Supplier", "Qty", "Unit Price", "Total"])}
-        <tbody>${periodMaterials.map(m => tableRow([m.item, m.supplier || "—", m.qty, fmtH(m.unitPrice), fmtH((m.unitPrice||0)*(m.qty||1))])).join("")}</tbody>
+        <tbody>${periodMaterials.map(m => tableRow([m.item, m.supplier || "—", m.qty, fmtH(m.unit_price || m.unitPrice), fmtH((m.unit_price || m.unitPrice||0)*(m.qty||1))])).join("")}</tbody>
       </table>`;
 
     if (activeReport === "cis") return `
@@ -325,14 +325,14 @@ ${generateReportHTML()}
       </div>
       <table>
         ${tableHead(["Invoice", "Contractor", "Gross", "Deduction", "Net Paid"])}
-        <tbody>${cisInvoices.map(i => tableRow([i.id, i.customer, fmtH(parseFloat(i.grossAmount||i.amount||0)), fmtH(parseFloat(i.cisDeduction||0)), fmtH(parseFloat(i.cisNetPayable||0))])).join("")}</tbody>
+        <tbody>${cisInvoices.map(i => tableRow([i.id, i.customer, fmtH(parseFloat(i.gross_amount || i.grossAmount||i.amount||0)), fmtH(parseFloat(i.cis_deduction || i.cisDeduction||0)), fmtH(parseFloat(i.cis_net_payable || i.cisNetPayable||0))])).join("")}</tbody>
       </table>
       <div class="note">Use these figures on your self-assessment tax return. CIS deductions can be offset against your tax bill.</div>`;
 
     if (activeReport === "jobs") return `
       <table>
         ${tableHead(["Job", "Customer", "Type", "Date", "Status"])}
-        <tbody>${periodJobs.map(j => tableRow([j.title||j.type||"Job", j.customer, j.type||"—", j.date ? new Date(j.dateObj||j.date).toLocaleDateString("en-GB") : "TBC", j.status])).join("")}</tbody>
+        <tbody>${periodJobs.map(j => tableRow([j.title||j.type||"Job", j.customer, j.type||"—", j.date ? new Date(j.date_obj || j.dateObj||j.date).toLocaleDateString("en-GB") : "TBC", j.status])).join("")}</tbody>
       </table>`;
 
     if (activeReport === "quoteconv") {
@@ -343,14 +343,14 @@ ${generateReportHTML()}
       const rate = allQuotes.length > 0 ? ((accepted.length / allQuotes.length) * 100).toFixed(1) : "0.0";
       return `
         <div class="stat-grid">
-          ${statBox("Total Quotes", allQuotes.length, fmtH(allQuotes.reduce((s,q)=>s+parseFloat(q.grossAmount||q.amount||0),0)))}
-          ${statBox("Converted", accepted.length, fmtH(accepted.reduce((s,q)=>s+parseFloat(q.grossAmount||q.amount||0),0)))}
-          ${statBox("Declined", declined.length, fmtH(declined.reduce((s,q)=>s+parseFloat(q.grossAmount||q.amount||0),0)))}
+          ${statBox("Total Quotes", allQuotes.length, fmtH(allQuotes.reduce((s,q)=>s+parseFloat(q.gross_amount || q.grossAmount||q.amount||0),0)))}
+          ${statBox("Converted", accepted.length, fmtH(accepted.reduce((s,q)=>s+parseFloat(q.gross_amount || q.grossAmount||q.amount||0),0)))}
+          ${statBox("Declined", declined.length, fmtH(declined.reduce((s,q)=>s+parseFloat(q.gross_amount || q.grossAmount||q.amount||0),0)))}
           ${statBox("Conversion Rate", rate + "%", `${pending.length} pending`)}
         </div>
         <table>
           ${tableHead(["Quote", "Customer", "Value", "Sent", "Outcome"])}
-          <tbody>${allQuotes.sort((a,b)=>new Date(b.created_at||b.date)-new Date(a.created_at||a.date)).map(q => tableRow([q.id, q.customer, fmtH(parseFloat(q.grossAmount||q.amount||0)), q.date ? new Date(q.created_at||q.date).toLocaleDateString("en-GB") : "—", q.status==="accepted" ? "Converted" : q.status==="declined" ? "Declined" : "Pending"])).join("")}</tbody>
+          <tbody>${allQuotes.sort((a,b)=>new Date(b.created_at||b.date)-new Date(a.created_at||a.date)).map(q => tableRow([q.id, q.customer, fmtH(parseFloat(q.gross_amount || q.grossAmount||q.amount||0)), q.date ? new Date(q.created_at||q.date).toLocaleDateString("en-GB") : "—", q.status==="accepted" ? "Converted" : q.status==="declined" ? "Declined" : "Pending"])).join("")}</tbody>
         </table>`;
     }
 
@@ -427,7 +427,7 @@ ${generateReportHTML()}
       csv += "\n";
       csv += row(["Paid Invoices"]);
       csv += row(["Invoice", "Customer", "Date", "Amount"]);
-      paidInvoices.forEach(i => csv += row([i.id, i.customer, i.paidDate || i.created_at || i.date, num(i.grossAmount || i.amount)]));
+      paidInvoices.forEach(i => csv += row([i.id, i.customer, i.paidDate || i.created_at || i.date, num(i.gross_amount || i.grossAmount || i.amount)]));
     } else if (activeReport === "vat") {
       csv += row(["VAT Summary"]);
       csv += row(["Description", "Net", "VAT"]);
@@ -438,7 +438,7 @@ ${generateReportHTML()}
       csv += row(["VAT Invoices"]);
       csv += row(["Invoice", "Customer", "Net", "VAT", "Gross", "Date"]);
       vatInvoices.forEach(i => {
-        const gross = parseFloat(i.grossAmount || i.amount || 0);
+        const gross = parseFloat(i.gross_amount || i.grossAmount || i.amount || 0);
         const rate = parseFloat(i.vatRate || 20) / 100;
         const vat = gross - gross / (1 + rate);
         csv += row([i.id, i.customer, num(gross - vat), num(vat), num(gross), i.paidDate || i.created_at || i.date]);
@@ -448,7 +448,7 @@ ${generateReportHTML()}
       csv += row(["Bucket", "Invoice", "Customer", "Amount", "Days Old", "Created"]);
       [["0-30 days", 0, 30], ["31-60 days", 31, 60], ["61-90 days", 61, 90], ["90+ days", 91, 9999]].forEach(([label, min, max]) => {
         const bucket = agedDebtors.filter(i => i.daysOld >= min && i.daysOld <= max);
-        bucket.forEach(i => csv += row([label, i.id, i.customer, num(i.grossAmount || i.amount), i.daysOld, i.created_at || i.date]));
+        bucket.forEach(i => csv += row([label, i.id, i.customer, num(i.gross_amount || i.grossAmount || i.amount), i.daysOld, i.created_at || i.date]));
       });
     } else if (activeReport === "jobprofit") {
       csv += row(["Job Profitability"]);
@@ -466,8 +466,8 @@ ${generateReportHTML()}
       csv += row(["All Material Lines"]);
       csv += row(["Item", "Supplier", "Qty", "Unit Price", "Total", "Job", "Date"]);
       periodMaterials.forEach(m => {
-        const total = parseFloat(m.unitPrice || 0) * parseFloat(m.qty || 1);
-        csv += row([m.item, m.supplier || "", m.qty || 1, num(m.unitPrice), num(total), m.job || "", m.receiptDate || m.created_at || ""]);
+        const total = parseFloat(m.unit_price || m.unitPrice || 0) * parseFloat(m.qty || 1);
+        csv += row([m.item, m.supplier || "", m.qty || 1, num(m.unit_price || m.unitPrice), num(total), m.job || "", m.receiptDate || m.created_at || ""]);
       });
     } else if (activeReport === "cis") {
       csv += row(["CIS Summary"]);
@@ -479,8 +479,8 @@ ${generateReportHTML()}
       csv += row(["CIS Invoices"]);
       csv += row(["Invoice", "Customer", "Gross", "Deduction", "Net", "Date"]);
       cisInvoices.forEach(i => {
-        const gross = parseFloat(i.grossAmount || i.amount || 0);
-        const ded = parseFloat(i.cisDeduction || 0);
+        const gross = parseFloat(i.gross_amount || i.grossAmount || i.amount || 0);
+        const ded = parseFloat(i.cis_deduction || i.cisDeduction || 0);
         csv += row([i.id, i.customer, num(gross), num(ded), num(gross - ded), i.paidDate || i.created_at || i.date]);
       });
     } else if (activeReport === "jobs") {
@@ -490,7 +490,7 @@ ${generateReportHTML()}
       csv += "\n";
       csv += row(["Jobs"]);
       csv += row(["Customer", "Type", "Status", "Value", "Date"]);
-      periodJobs.forEach(j => csv += row([j.customer, j.type || j.title || "", j.status || "", num(j.value), j.dateObj || j.date || ""]));
+      periodJobs.forEach(j => csv += row([j.customer, j.type || j.title || "", j.status || "", num(j.value), j.date_obj || j.dateObj || j.date || ""]));
     } else if (activeReport === "quoteconv") {
       csv += row(["Quote Conversion"]);
       // The screen has its own logic for these; mirror it lightly.
@@ -598,7 +598,7 @@ ${generateReportHTML()}
             <TableRow cells={["Gross Profit", fmt(grossProfit)]} bold highlight />
             <TableRow cells={["Gross Margin", fmtPct(grossMargin)]} />
             <TableRow cells={["Outstanding (not yet paid)", fmt(totalOutstanding)]} />
-            <TableRow cells={["Overdue invoices", fmt(overdueInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0))]} />
+            <TableRow cells={["Overdue invoices", fmt(overdueInvoices.reduce((s, i) => s + parseFloat(i.gross_amount || i.grossAmount || i.amount || 0), 0))]} />
           </div>
           <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>Revenue by Month</div>
@@ -607,7 +607,7 @@ ${generateReportHTML()}
               paidInvoices.forEach(i => {
                 const d = new Date(i.paidDate || i.created_at || i.date);
                 const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-                byMonth[key] = (byMonth[key] || 0) + parseFloat(i.grossAmount || i.amount || 0);
+                byMonth[key] = (byMonth[key] || 0) + parseFloat(i.gross_amount || i.grossAmount || i.amount || 0);
               });
               return Object.entries(byMonth).sort().map(([month, total]) => (
                 <div key={month} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderBottom: `1px solid ${C.border}` }}>
@@ -642,7 +642,7 @@ ${generateReportHTML()}
             <div style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>VAT Invoices</div>
             <TableHeader cells={["Invoice", "Customer", "Net", "VAT", "Gross"]} />
             {vatInvoices.map(i => {
-              const gross = parseFloat(i.grossAmount || i.amount || 0);
+              const gross = parseFloat(i.gross_amount || i.grossAmount || i.amount || 0);
               const rate = parseFloat(i.vatRate || 20) / 100;
               const vat = gross - gross / (1 + rate);
               const net = gross - vat;
@@ -659,19 +659,19 @@ ${generateReportHTML()}
           <div style={{ fontSize: 14, fontWeight: 700 }}>⏳ Outstanding Invoices</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10 }}>
             <StatBox label="Total Outstanding" value={fmt(totalOutstanding)} sub={`${outstandingInvoices.length} invoices`} color={C.amber} />
-            <StatBox label="Overdue" value={fmt(overdueInvoices.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0))} sub={`${overdueInvoices.length} overdue`} color={C.red} />
+            <StatBox label="Overdue" value={fmt(overdueInvoices.reduce((s, i) => s + parseFloat(i.gross_amount || i.grossAmount || i.amount || 0), 0))} sub={`${overdueInvoices.length} overdue`} color={C.red} />
           </div>
           {[["0–30 days", 0, 30], ["31–60 days", 31, 60], ["61–90 days", 61, 90], ["90+ days", 91, 9999]].map(([label, min, max]) => {
             const bucket = agedDebtors.filter(i => i.daysOld >= min && i.daysOld <= max);
             if (bucket.length === 0) return null;
-            const total = bucket.reduce((s, i) => s + parseFloat(i.grossAmount || i.amount || 0), 0);
+            const total = bucket.reduce((s, i) => s + parseFloat(i.gross_amount || i.grossAmount || i.amount || 0), 0);
             return (
               <div key={label} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${min > 30 ? C.red + "44" : C.border}`, overflow: "hidden" }}>
                 <div style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between" }}>
                   <span>{label}</span><span style={{ color: min > 30 ? C.red : C.amber }}>{fmt(total)}</span>
                 </div>
                 <TableHeader cells={["Invoice", "Customer", "Amount", "Days"]} />
-                {bucket.map(i => <TableRow key={i.id} cells={[i.id, i.customer, fmt(parseFloat(i.grossAmount || i.amount || 0)), `${i.daysOld}d`]} />)}
+                {bucket.map(i => <TableRow key={i.id} cells={[i.id, i.customer, fmt(parseFloat(i.gross_amount || i.grossAmount || i.amount || 0)), `${i.daysOld}d`]} />)}
               </div>
             );
           })}
@@ -739,7 +739,7 @@ ${generateReportHTML()}
             <div style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>All Items</div>
             <TableHeader cells={["Item", "Supplier", "Qty", "Unit", "Total"]} />
             {periodMaterials.map((m, i) => (
-              <TableRow key={i} cells={[m.item, m.supplier || "—", m.qty, fmt(m.unitPrice), fmt((m.unitPrice || 0) * (m.qty || 1))]} />
+              <TableRow key={i} cells={[m.item, m.supplier || "—", m.qty, fmt(m.unit_price || m.unitPrice), fmt((m.unit_price || m.unitPrice || 0) * (m.qty || 1))]} />
             ))}
             {periodMaterials.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No materials in this period</div>}
           </div>
@@ -761,9 +761,9 @@ ${generateReportHTML()}
             {cisInvoices.map(i => (
               <TableRow key={i.id} cells={[
                 i.id, i.customer,
-                fmt(parseFloat(i.grossAmount || i.amount || 0)),
-                fmt(parseFloat(i.cisDeduction || 0)),
-                fmt(parseFloat(i.cisNetPayable || 0))
+                fmt(parseFloat(i.gross_amount || i.grossAmount || i.amount || 0)),
+                fmt(parseFloat(i.cis_deduction || i.cisDeduction || 0)),
+                fmt(parseFloat(i.cis_net_payable || i.cisNetPayable || 0))
               ]} />
             ))}
             {cisInvoices.length === 0 && <div style={{ padding: "16px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>No CIS invoices in this period</div>}
@@ -785,7 +785,7 @@ ${generateReportHTML()}
           </div>
           <div style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <TableHeader cells={["Job", "Customer", "Type", "Date", "Status"]} />
-            {periodJobs.sort((a, b) => new Date(b.dateObj || b.date) - new Date(a.dateObj || a.date)).map((j, i) => {
+            {periodJobs.sort((a, b) => new Date(b.date_obj || b.dateObj || b.date) - new Date(a.date_obj || a.dateObj || a.date)).map((j, i) => {
               const sc = { completed: C.green, confirmed: C.blue, in_progress: C.blue, pending: C.text, cancelled: C.red };
               const label = (j.status || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
               return (
@@ -793,7 +793,7 @@ ${generateReportHTML()}
                 j.title || j.type || "Job",
                 j.customer,
                 j.type || "—",
-                j.date ? new Date(j.dateObj || j.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "TBC",
+                j.date ? new Date(j.date_obj || j.dateObj || j.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "TBC",
                 <span key="s" style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: sc[j.status] || C.muted, padding: "2px 8px", borderRadius: 4, display: "inline-block" }}>{label}</span>
               ]} />
               );
@@ -810,9 +810,9 @@ ${generateReportHTML()}
         const declinedQuotes = allQuotes.filter(q => q.status === "declined");
         const pendingQuotes = allQuotes.filter(q => q.status !== "accepted" && q.status !== "declined");
         const convRate = allQuotes.length > 0 ? (acceptedQuotes.length / allQuotes.length) * 100 : 0;
-        const totalQuoteValue = allQuotes.reduce((s, q) => s + parseFloat(q.grossAmount || q.amount || 0), 0);
-        const wonValue = acceptedQuotes.reduce((s, q) => s + parseFloat(q.grossAmount || q.amount || 0), 0);
-        const lostValue = declinedQuotes.reduce((s, q) => s + parseFloat(q.grossAmount || q.amount || 0), 0);
+        const totalQuoteValue = allQuotes.reduce((s, q) => s + parseFloat(q.gross_amount || q.grossAmount || q.amount || 0), 0);
+        const wonValue = acceptedQuotes.reduce((s, q) => s + parseFloat(q.gross_amount || q.grossAmount || q.amount || 0), 0);
+        const lostValue = declinedQuotes.reduce((s, q) => s + parseFloat(q.gross_amount || q.grossAmount || q.amount || 0), 0);
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ fontSize: 14, fontWeight: 700 }}>🤝 Quote Conversion</div>
@@ -839,7 +839,7 @@ ${generateReportHTML()}
                 <TableRow key={i} cells={[
                   q.id,
                   q.customer,
-                  fmt(parseFloat(q.grossAmount || q.amount || 0)),
+                  fmt(parseFloat(q.gross_amount || q.grossAmount || q.amount || 0)),
                   q.date ? new Date(q.created_at || q.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—",
                   q.status === "accepted" ? "✓ Converted" : q.status === "declined" ? "✗ Declined" : "⏳ Pending"
                 ]} />
@@ -851,7 +851,7 @@ ${generateReportHTML()}
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>Pipeline Summary</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, color: C.muted }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value won</span><span style={{ color: C.green, fontFamily: "'DM Mono',monospace" }}>{fmt(wonValue)}</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value pending</span><span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>{fmt(pendingQuotes.reduce((s, q) => s + parseFloat(q.grossAmount || q.amount || 0), 0))}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value pending</span><span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>{fmt(pendingQuotes.reduce((s, q) => s + parseFloat(q.gross_amount || q.grossAmount || q.amount || 0), 0))}</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value lost</span><span style={{ color: C.red, fontFamily: "'DM Mono',monospace" }}>{fmt(lostValue)}</span></div>
                 </div>
               </div>

@@ -4354,7 +4354,7 @@ function AppInner() {
   const handleLogout = async () => {
     await db.auth.signOut();
     setJobsRaw([]); setInvoicesRaw([]); setEnquiriesRaw([]);
-    setMaterialsRaw([]); setCustomersRaw([]);
+    setMaterialsRaw([]); setCustomersRaw([]); setSubbiePaymentsRaw([]);
     setCompanyId(null); setCompanyName(""); setMembers([]);
     setUser(null); setView("AI Assistant");
   };
@@ -4364,6 +4364,7 @@ function AppInner() {
   const [invoices, setInvoicesRaw] = useState([]);
   const [enquiries, setEnquiriesRaw] = useState([]);
   const [materials, setMaterialsRaw] = useState([]);
+  const [subbiePayments, setSubbiePaymentsRaw] = useState([]);
   const [customers, setCustomersRaw] = useState([]);
   const [customerContacts, setCustomerContactsRaw] = useState([]);
   const [dbLoading, setDbLoading] = useState(false);
@@ -4528,13 +4529,14 @@ function AppInner() {
       const { data: mem } = await db.rpc("get_company_members", { p_company_id: cid });
       if (mem) setMembers(mem);
 
-      const [j, inv, enq, mat, cust, contacts] = await Promise.all([
+      const [j, inv, enq, mat, cust, contacts, subbie] = await Promise.all([
         db.from("jobs").select("*").eq("company_id", cid).order("date_obj", { ascending: true }),
         db.from("invoices").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
         db.from("enquiries").select("*").eq("company_id", cid).order("created_at", { ascending: false }),
         db.from("materials").select("*").eq("company_id", cid).order("created_at", { ascending: true }),
         db.from("customers").select("*").eq("company_id", cid).order("name", { ascending: true }),
         db.from("customer_contacts").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
+        db.from("subcontractor_payments").select("*").eq("user_id", user.id).is("deleted_at", null).order("date", { ascending: false }),
       ]);
       if (j.data) setJobsRaw(j.data.map(r => ({ ...r, dateObj: r.date_obj })));
       if (inv.data) setInvoicesRaw(inv.data.map(r => ({
@@ -4559,6 +4561,7 @@ function AppInner() {
         lastChased: r.last_chased_at || null,
       })));
       if (enq.data) setEnquiriesRaw(enq.data);
+      if (subbie.data) setSubbiePaymentsRaw(subbie.data);
       if (mat.data) setMaterialsRaw(mat.data.map(m => ({
         id: m.id,
         item: m.item || "",
@@ -5782,7 +5785,7 @@ function AppInner() {
         )}
         {view === "Payments" && <Payments brand={brand} invoices={invoices} setInvoices={setInvoices} customers={customers} user={user} sendPush={sendPush} setContextHint={setContextHint} />}
         {view === "Inbox" && <InboxView user={user} brand={brand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} customers={customers} setCustomers={setCustomers} setLastAction={() => {}} setContextHint={setContextHint} sendPush={sendPush} />}
-        {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} brand={brand} user={user} setContextHint={setContextHint} />}
+        {view === "Reports" && <ReportsTab invoices={invoices} jobs={jobs} materials={materials} customers={customers} enquiries={enquiries} subbiePayments={subbiePayments} brand={brand} user={user} setContextHint={setContextHint} />}
         {view === "Mileage" && <MileageTab user={user} setContextHint={setContextHint} />}
         {view === "Subcontractors" && <SubcontractorsTab user={user} brand={brand} setContextHint={setContextHint} />}
         {view === "Workers" && <SubcontractorsTab user={user} brand={brand} setContextHint={setContextHint} mode="workers" />}

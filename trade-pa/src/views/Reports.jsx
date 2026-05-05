@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { C } from "../theme/colors.js";
 import { S } from "../theme/styles.js";
 
-export function ReportsTab({ invoices, jobs, materials, customers, enquiries, brand, user, setContextHint }) {
+export function ReportsTab({ invoices, jobs, materials, customers, enquiries, subbiePayments, brand, user, setContextHint }) {
   const today = new Date();
   const fmtDate = d => d.toISOString().split("T")[0];
 
@@ -72,7 +72,9 @@ export function ReportsTab({ invoices, jobs, materials, customers, enquiries, br
   }, 0);
   const netVat = outputVat - inputVat;
 
-  const grossProfit = totalRevenue - totalMaterialCost;
+  const periodLabour = (subbiePayments || []).filter(p => inRange(p.date));
+  const totalLabourCost = periodLabour.reduce((s, p) => s + (parseFloat(p.gross) || 0), 0);
+  const grossProfit = totalRevenue - totalMaterialCost - totalLabourCost;
   const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
   const periodJobs = (jobs || []).filter(j => inRange(j.date_obj || j.dateObj || j.date));
@@ -588,6 +590,7 @@ ${generateReportHTML()}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10 }}>
             <StatBox label="Total Revenue" value={fmt(totalRevenue)} sub={`${paidInvoices.length} paid invoices`} color={C.green} />
             <StatBox label="Materials Cost" value={fmt(totalMaterialCost)} sub={`${periodMaterials.length} items`} color={C.red} />
+            <StatBox label="Labour (Subcontractors)" value={fmt(totalLabourCost)} sub={`${periodLabour.length} payment${periodLabour.length === 1 ? "" : "s"}`} color={C.red} />
             <StatBox label="Gross Profit" value={fmt(grossProfit)} sub={`${fmtPct(grossMargin)} margin`} color={grossProfit >= 0 ? C.green : C.red} />
             <StatBox label="Outstanding" value={fmt(totalOutstanding)} sub={`${outstandingInvoices.length} invoices`} color={C.amber} />
           </div>
@@ -595,6 +598,7 @@ ${generateReportHTML()}
             <TableHeader cells={["Category", "Amount"]} />
             <TableRow cells={["Revenue (paid invoices)", fmt(totalRevenue)]} />
             <TableRow cells={["Less: Materials & Supplies", `(${fmt(totalMaterialCost)})`]} />
+            <TableRow cells={["Less: Labour (Subcontractors)", `(${fmt(totalLabourCost)})`]} />
             <TableRow cells={["Gross Profit", fmt(grossProfit)]} bold highlight />
             <TableRow cells={["Gross Margin", fmtPct(grossMargin)]} />
             <TableRow cells={["Outstanding (not yet paid)", fmt(totalOutstanding)]} />
