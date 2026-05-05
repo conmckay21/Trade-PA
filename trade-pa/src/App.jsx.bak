@@ -4572,7 +4572,6 @@ function AppInner() {
         receiptFilename: m.receipt_filename || "",
         receiptStoragePath: m.receipt_storage_path || "", // Supabase Storage path (preferred)
         receiptImage: m.receipt_image || "", // legacy base64 column — only one row in prod
-        created_at: m.created_at,
       })));
       if (cust.data) setCustomersRaw(cust.data);
       if (contacts.data) setCustomerContactsRaw(contacts.data.map(c => ({
