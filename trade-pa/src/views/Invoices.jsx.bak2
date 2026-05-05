@@ -1156,13 +1156,7 @@ export function InvoicesView({ brand, invoices, setInvoices, user, customers, cu
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inv.id}{inv.address ? ` · ${inv.address}` : ""}</div>
                     {/* Metadata row */}
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                      {inv.status === "overdue" && (inv.chaseCount || 0) > 0 ? (
-                        <span style={{ ...S.badge((inv.chaseCount || 0) >= 3 ? C.red : (inv.chaseCount || 0) === 2 ? "#f97316" : C.amber), fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
-                          {(inv.chaseCount || 0) >= 3 ? "⚠ Final" : (inv.chaseCount || 0) === 2 ? "⏰ Firm" : "· Gentle"} {inv.chaseCount || 0}/3
-                        </span>
-                      ) : (
-                        <span style={{ ...S.badge(pill.color), fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.04em" }}>{pill.label}</span>
-                      )}
+                      <span style={{ ...S.badge(pill.color), fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.04em" }}>{pill.label}</span>
                       {inv.due && <span style={{ fontSize: 11, color: overdue ? C.red : C.muted, fontFamily: "'DM Mono', monospace" }}>{inv.due}</span>}
                       {(inv.created_at || inv.date) && (
                         <span style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>· {relTime(inv.created_at || inv.date)}</span>
