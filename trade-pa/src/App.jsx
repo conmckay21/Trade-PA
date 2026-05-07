@@ -185,6 +185,14 @@ function CallTrackingSettings({ user }) {
   const [showPortInfo, setShowPortInfo] = useState(false);
   const [micStatus, setMicStatus] = useState(null); // granted | denied | prompt | unknown
 
+  // ─── iOS native flag ─────────────────────────────────────────────────────
+  // Path A (App Store Guideline 3.1.3(b)): on iOS, phone subscription UI is
+  // read-only — show active number + usage, no pickers or plan changes. All
+  // subscribe/activate/change-plan flows route to tradespa.co.uk.
+  const isIOSNative = typeof window !== "undefined"
+    && window.Capacitor?.isNativePlatform?.()
+    && window.Capacitor?.getPlatform?.() === "ios";
+
   // Phone plan tiers (display only — pricing authoritative server-side)
   const PHONE_TIERS = [
     { key: "phone_100",       mins: "100 mins",   price: "£20",  desc: "Occasional use" },
@@ -339,11 +347,40 @@ function CallTrackingSettings({ user }) {
             <div style={{ width: "100%", height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
               <div style={{ width: `${pct * 100}%`, height: "100%", background: pct >= 1 ? C.red : pct >= 0.8 ? C.amber : C.green, transition: "width 0.3s" }} />
             </div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Resets with your monthly billing.</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Resets monthly.</div>
           </div>
         )}
 
-        {/* ── Change plan (in-app) ─────────────────────────────────────── */}
+        {/* ── Change plan (in-app on web/Android · web link on iOS) ─────── */}
+        {isIOSNative ? (
+          <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Need more minutes?</div>
+                <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>Manage your phone settings on tradespa.co.uk.</div>
+              </div>
+              <a
+                href="https://www.tradespa.co.uk"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: "6px 12px",
+                  border: `1px solid ${C.amber}`,
+                  background: "transparent",
+                  color: C.amber,
+                  fontSize: 10,
+                  fontFamily: "'DM Mono', monospace",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  fontWeight: 700,
+                  borderRadius: 4,
+                  textDecoration: "none",
+                  flexShrink: 0,
+                }}
+              >Open web →</a>
+            </div>
+          </div>
+        ) : (
         <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <div style={{ minWidth: 0 }}>
@@ -385,6 +422,7 @@ function CallTrackingSettings({ user }) {
             </div>
           )}
         </div>
+        )}
         <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
           <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>How calls work</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -416,7 +454,9 @@ function CallTrackingSettings({ user }) {
         )}
 
         {/* ── Plan change modal (picker + confirm, single modal, two states) ── */}
-        {changePlan && (
+        {/* Hidden on iOS (App Store Guideline 3.1.3(b)) — defensive, since the */}
+        {/* "Change" button that opens it is also hidden on iOS. */}
+        {changePlan && !isIOSNative && (
           <div
             onClick={() => !changeBusy && setChangePlan(null)}
             style={{
@@ -593,6 +633,58 @@ function CallTrackingSettings({ user }) {
     );
   }
 
+  // ─── Inactive state (no twilio_number yet) ─────────────────────────────
+  // On iOS native, we cannot present the in-app subscribe flow (3.1.3(b)).
+  // Show a neutral activation card pointing to tradespa.co.uk.
+  if (isIOSNative) {
+    return (
+      <div>
+        <div style={{ background: `${C.amber}12`, border: `1px solid ${C.amber}30`, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, marginBottom: 8 }}>📞 Business Phone, Built In</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[
+              "Get a dedicated business number",
+              "Calls ring inside the Trade PA app — no second SIM",
+              "Every call recorded, transcribed & AI-classified",
+              "Missed calls fall back to your real mobile",
+              "Full call history logged against customers & jobs",
+            ].map(f => (
+              <div key={f} style={{ fontSize: 12, color: C.text, display: "flex", gap: 8 }}>
+                <span style={{ color: C.green, flexShrink: 0 }}>✓</span>
+                <span>{f}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 16, textAlign: "center" }}>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.7, marginBottom: 14 }}>
+            To activate a business phone number, manage your account on tradespa.co.uk on the web.
+          </div>
+          <a
+            href="https://www.tradespa.co.uk"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-block",
+              padding: "10px 18px",
+              background: C.amber,
+              color: "#000",
+              fontWeight: 700,
+              fontSize: 13,
+              borderRadius: 8,
+              textDecoration: "none",
+              fontFamily: "'DM Mono', monospace",
+              letterSpacing: "0.05em",
+            }}
+          >Visit tradespa.co.uk →</a>
+        </div>
+        <div style={{ marginTop: 14, padding: "10px 14px", background: C.surfaceHigh, borderRadius: 8 }}>
+          <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>Already have a business number? You can port it across so customers keep calling the same number. Email <span style={{ color: C.amber }}>hello@tradespa.co.uk</span> to get started.</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div style={{ background: `${C.amber}12`, border: `1px solid ${C.amber}30`, borderRadius: 10, padding: 14, marginBottom: 16 }}>
@@ -682,7 +774,7 @@ function TeamInvite({ companyId, planTier, currentMemberCount }) {
     const tierCfg = getTierConfig(planTier);
     const maxUsers = tierCfg.userLimit;
     if (currentMemberCount >= maxUsers) {
-      setError(`Your ${tierCfg.label} plan allows up to ${maxUsers} user${maxUsers === 1 ? "" : "s"}. Upgrade your plan to add more team members.`);
+      setError(`Your account allows up to ${maxUsers} user${maxUsers === 1 ? "" : "s"}. To add more, manage your account on tradespa.co.uk.`);
       return;
     }
 
@@ -904,6 +996,15 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
   const [reportText, setReportText] = useState(null);
   const [reportError, setReportError] = useState(null);
 
+  // ─── iOS native flag ─────────────────────────────────────────────────────
+  // Used throughout Settings to gate App Store Guideline 3.1.3(b) content:
+  // any reference to subscriptions, pricing, billing, plan upgrades, or
+  // in-app purchase must NOT render on iOS native builds. Web and Android
+  // continue to show the full UI.
+  const isIOSNative = typeof window !== "undefined"
+    && window.Capacitor?.isNativePlatform?.()
+    && window.Capacitor?.getPlatform?.() === "ios";
+
   // ─── Add-on purchase (Plan & billing subview) ────────────────────────────
   const [addonConfirm, setAddonConfirm] = useState(null); // addon_type key being confirmed
   const [addonBusy, setAddonBusy] = useState(false);
@@ -989,10 +1090,10 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
     }
     if (params.has('stripe_connect')) {
       const status = params.get('stripe_connect');
-      if (status === 'success') alert("✓ Stripe connected — you can now accept card payments through your customer portal links.");
-      else if (status === 'pending') alert("Stripe onboarding isn't fully complete yet. You can tap Connect Stripe again in Settings to finish — your progress is saved.");
-      else if (status === 'cancelled') alert("Stripe connection cancelled. You can try again anytime from Settings → Integrations.");
-      else if (status === 'error') alert(`Stripe connection failed: ${params.get('reason') || 'unknown error'}`);
+      if (status === 'success') alert("✓ Card payments connected — you can now accept card payments through your customer portal links.");
+      else if (status === 'pending') alert("Card payments setup isn't fully complete yet. You can tap Connect again in Settings to finish — your progress is saved.");
+      else if (status === 'cancelled') alert("Card payments setup cancelled. You can try again anytime from Settings → Integrations.");
+      else if (status === 'error') alert(`Card payments setup failed: ${params.get('reason') || 'unknown error'}`);
       window.history.replaceState({}, '', window.location.pathname);
     }
     // Always check DB for actual connection status
@@ -1191,7 +1292,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       id: "integrations",
       group: "WORKFLOW",
       name: "Integrations",
-      sub: "Xero · QuickBooks · Stripe · more",
+      sub: "Xero · QuickBooks · Card payments · more",
       icon: (
         <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -1203,15 +1304,15 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
     {
       id: "plan",
       group: "ACCOUNT",
-      name: "Plan & billing",
-      sub: "Manage subscription, billing and add-ons",
+      name: isIOSNative ? "Account" : "Plan & billing",
+      sub: isIOSNative ? "View usage and manage on web" : "Manage subscription, billing and add-ons",
       icon: (
         <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M21 12c0 1.66-4 3-9 3s-9-1.34-9-3m18 0V5c0-1.66-4-3-9-3S3 3.34 3 5v7m18 0v7c0 1.66-4 3-9 3s-9-1.34-9-3v-7" />
         </svg>
       ),
       iconTint: "neutral",
-      status: { text: getTierConfig(planTier).badgeText, color: "amber" },
+      status: isIOSNative ? null : { text: getTierConfig(planTier).badgeText, color: "amber" },
     },
     {
       id: "help",
@@ -1682,8 +1783,10 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       {subview === "plan" && (<>
       {/* Plan hero — big, clear at-a-glance status. Reads all presentation
           details from TIER_CONFIG so a tier added/renamed upstream flows
-          through without editing this block. */}
+          through without editing this block. Hidden on iOS native (App Store
+          Guideline 3.1.3(b) — no in-app references to plan name/price). */}
       {(() => {
+        if (isIOSNative) return null;
         const tierCfg = getTierConfig(planTier);
         // Map the tier's colorKey to the actual colour token for this theme.
         const tierColour = tierCfg.colorKey === "blue" ? C.blue
@@ -1739,8 +1842,10 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         );
       })()}
 
-      {/* Upgrade CTA row — only shown for plans below Business. */}
-      {planTier !== "business" && (
+      {/* Upgrade CTA row — only shown for plans below Business. Hidden on
+          iOS native (App Store Guideline 3.1.3(b) — no upgrade prompts or
+          plan-name/price references in-app). */}
+      {planTier !== "business" && !isIOSNative && (
         <a
           href="mailto:hello@tradespa.co.uk?subject=Trade%20PA%20upgrade%20request"
           style={{
@@ -1830,11 +1935,11 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>
-                Manage subscription
+                {isIOSNative ? "Account access" : "Manage subscription"}
               </div>
               <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>
                 {isIOSNative
-                  ? "Update payment, invoices, cancellation on the web"
+                  ? "Manage your account on tradespa.co.uk"
                   : "Update payment, download invoices, cancel or switch plan"}
               </div>
             </div>
@@ -1960,7 +2065,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             <div style={S.card}>
               <div style={S.sectionTitle}>Running low?</div>
               <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-                Manage your plan on the web at{" "}
+                Manage your account on the web at{" "}
                 <a href="https://www.tradespa.co.uk" target="_blank" rel="noopener noreferrer" style={{ color: C.amber, textDecoration: "none", fontWeight: 600 }}>
                   tradespa.co.uk
                 </a>.
@@ -2428,7 +2533,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             </div>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
               {brand.defaultPaymentMethod === "bacs" && "Invoice shows bank details only. Good for customers who prefer traditional bank transfer."}
-              {brand.defaultPaymentMethod === "card" && "Invoice shows a Stripe payment link only. Fastest way to get paid."}
+              {brand.defaultPaymentMethod === "card" && "Invoice shows a card payment link only. Fastest way to get paid."}
               {brand.defaultPaymentMethod === "both" && "Invoice shows both options. Customer chooses. Recommended for mixed customer base."}
             </div>
           </div>
@@ -2564,19 +2669,20 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
         {/* ── Card Payments (Stripe Connect Standard) ──────────────────────
             Lets the tradesperson take card payments through their customer
-            portal links. Money goes direct to their own Stripe account —
-            Trade PA takes no cut. */}
+            portal links. Money goes direct to their own provider account —
+            Trade PA takes no cut. User-facing copy avoids the "Stripe" brand
+            name to reduce App Store reviewer ambiguity. */}
         <div style={{ marginTop: 22, paddingTop: 18, borderTop: `1px solid ${C.border}` }}>
           <div style={S.sectionTitle}>Card Payments</div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
-            Connect Stripe to let your customers pay quotes and invoices by card directly from the portal link. Money goes to your Stripe account — we don't take a cut.
+            Connect a card payment provider to let your customers pay quotes and invoices by card directly from the portal link. Money goes to your own account — we don't take a cut.
           </div>
           <div style={{ padding: "14px 16px", background: C.surfaceHigh, borderRadius: 8, display: "flex", alignItems: "center", gap: 16 }}>
             <div style={{ width: 40, height: 40, borderRadius: 8, background: "#635BFF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <span style={{ color: "#fff", fontWeight: 900, fontSize: 14 }}>S</span>
+              <span style={{ color: "#fff", fontWeight: 900, fontSize: 14 }}>£</span>
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>Stripe</div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Card Payments</div>
               <div style={{ fontSize: 11, color: C.muted }}>
                 {brand?.stripeAccountId
                   ? `Connected${brand.stripeConnectedAt ? ` since ${new Date(brand.stripeConnectedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""}`
@@ -2588,7 +2694,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 <div style={S.badge(C.green)}>✓ Connected</div>
                 <button
                   onClick={() => {
-                    if (!confirm("Disconnect Stripe? Card payments will stop working on your customer portal links. Your Stripe account stays intact — this only unlinks it from Trade PA. You can reconnect anytime.")) return;
+                    if (!confirm("Disconnect card payments? Card payments will stop working on your customer portal links. Your provider account stays intact — this only unlinks it from Trade PA. You can reconnect anytime.")) return;
                     // Clear the Stripe link from brand_data. The setBrand updater
                     // triggers the normal background sync to user_settings, so
                     // no direct DB call needed here.
@@ -2601,7 +2707,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               <a
                 href={`/api/stripe/connect-onboard?userId=${user?.id}`}
                 style={{ ...S.btn("primary"), textDecoration: "none", background: "#635BFF", fontSize: 12 }}
-              >Connect Stripe</a>
+              >Connect →</a>
             )}
           </div>
         </div>
@@ -2895,19 +3001,21 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
         )}
 
-        {/* ── Calendar Subscription (live iCal feed) ─────────────────────────
+        {/* ── Calendar Sync (live iCal feed) ─────────────────────────────────
             One-time setup — generates a private URL the user adds to Google
             or Apple Calendar as a "subscribed calendar". Their calendar then
             auto-refreshes every few hours, so jobs booked in Trade PA appear
-            on their phone calendar without manual export. */}
+            on their phone calendar without manual export. Section name was
+            "Calendar Subscription" — renamed to avoid App Store reviewer
+            confusion with paid-subscription terminology. */}
         <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
-          <div style={S.sectionTitle}>Calendar Subscription</div>
+          <div style={S.sectionTitle}>Calendar Sync</div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
             Sync your Trade PA schedule to Google Calendar, Apple Calendar or any iCal-compatible app. Jobs you book in Trade PA appear automatically — no manual export each time.
           </div>
           {brand.calendarToken ? (
             <>
-              <label style={S.label}>Your private subscription URL</label>
+              <label style={S.label}>Your private feed URL</label>
               <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
                 <input
                   readOnly
@@ -2924,15 +3032,15 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 >Copy</button>
               </div>
               <div style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 14px", fontSize: 11, color: C.textDim, lineHeight: 1.7, marginBottom: 10 }}>
-                <div style={{ fontWeight: 600, color: C.text, marginBottom: 6 }}>How to subscribe</div>
+                <div style={{ fontWeight: 600, color: C.text, marginBottom: 6 }}>How to add it</div>
                 <div><strong>Google Calendar:</strong> Settings → Add calendar → From URL → paste the link.</div>
                 <div><strong>Apple (iPhone):</strong> Settings app → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste the link.</div>
                 <div><strong>Apple (Mac):</strong> Calendar app → File → New Calendar Subscription → paste the link.</div>
-                <div style={{ marginTop: 8, color: C.muted }}>Calendars typically refresh every few hours — for instant updates, set the refresh interval to "every hour" in your calendar app's subscription settings.</div>
+                <div style={{ marginTop: 8, color: C.muted }}>Calendars typically refresh every few hours — for instant updates, set the refresh interval to "every hour" in your calendar app's settings.</div>
               </div>
               <button
                 onClick={() => {
-                  if (!confirm("Generate a new URL? The old one will stop working — you'll need to update any calendars subscribed to it.")) return;
+                  if (!confirm("Generate a new URL? The old one will stop working — you'll need to update any calendars synced to it.")) return;
                   const t = Array.from(crypto.getRandomValues(new Uint8Array(24)))
                     .map(b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
                   setBrand(b => ({ ...b, calendarToken: t }));
@@ -2949,7 +3057,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 setBrand(b => ({ ...b, calendarToken: t }));
               }}
               style={S.btn("primary")}
-            >Generate Subscription URL</button>
+            >Generate Feed URL</button>
           )}
         </div>
       </div>
@@ -4933,26 +5041,42 @@ function AppInner() {
   // Accounts that bypass the subscription check (owner/test accounts)
   const isExempt = isExemptAccount(user?.email);
 
-  // Subscription paywall — blocks access if payment has lapsed
+  // Subscription paywall — blocks access if payment has lapsed.
+  // On iOS native, App Store Guideline 3.1.3(b) forbids any in-app reference
+  // to subscriptions, payments, or "subscribe" CTAs — so we render a neutral
+  // "Account Inactive" screen pointing to tradespa.co.uk for management.
   if (!isExempt && (subscriptionStatus === "past_due" || subscriptionStatus === "cancelled" || subscriptionStatus === "none")) {
+    const isIOSNative = typeof window !== "undefined"
+      && window.Capacitor?.isNativePlatform?.()
+      && window.Capacitor?.getPlatform?.() === "ios";
     return (
       <div style={{ minHeight: "100vh", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Mono',monospace" }}>
         <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Syne:wght@700;800&display=swap');`}</style>
         <div style={{ maxWidth: 420, width: "100%", textAlign: "center" }}>
           <div style={{ width: 56, height: 56, background: "#f59e0b", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "#000", margin: "0 auto 24px", letterSpacing: "-0.02em" }}>TP</div>
           <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 28, fontWeight: 800, color: "#f0f0f0", marginBottom: 12 }}>
-            {subscriptionStatus === "past_due" ? "Payment Required" : subscriptionStatus === "none" ? "No Active Subscription" : "Subscription Ended"}
+            {isIOSNative
+              ? "Account Inactive"
+              : (subscriptionStatus === "past_due" ? "Payment Required" : subscriptionStatus === "none" ? "No Active Subscription" : "Subscription Ended")}
           </div>
           <div style={{ fontSize: 14, color: "#888", lineHeight: 1.7, marginBottom: 32 }}>
-            {subscriptionStatus === "past_due"
-              ? "Your last payment didn't go through. Please update your payment details to restore access."
-              : subscriptionStatus === "none"
-              ? "You don't have an active subscription. Subscribe to get full access to Trade PA."
-              : "Your subscription has ended. Resubscribe to continue using Trade PA."}
+            {isIOSNative
+              ? "Your account is currently inactive. To restore access, manage your account at tradespa.co.uk on the web."
+              : (subscriptionStatus === "past_due"
+                ? "Your last payment didn't go through. Please update your payment details to restore access."
+                : subscriptionStatus === "none"
+                ? "You don't have an active subscription. Subscribe to get full access to Trade PA."
+                : "Your subscription has ended. Resubscribe to continue using Trade PA.")}
           </div>
-          <a href="https://www.tradespa.co.uk/signup.html" style={{ display: "block", background: "#f59e0b", color: "#000", padding: "16px 32px", borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: "none", marginBottom: 12 }}>
-            {subscriptionStatus === "past_due" ? "Update Payment Details →" : "Subscribe Now →"}
-          </a>
+          {isIOSNative ? (
+            <a href="https://www.tradespa.co.uk" target="_blank" rel="noopener noreferrer" style={{ display: "block", background: "#f59e0b", color: "#000", padding: "16px 32px", borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: "none", marginBottom: 12 }}>
+              Visit tradespa.co.uk →
+            </a>
+          ) : (
+            <a href="https://www.tradespa.co.uk/signup.html" style={{ display: "block", background: "#f59e0b", color: "#000", padding: "16px 32px", borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: "none", marginBottom: 12 }}>
+              {subscriptionStatus === "past_due" ? "Update Payment Details →" : "Subscribe Now →"}
+            </a>
+          )}
           <button onClick={async () => { await db.auth.signOut(); setUser(null); }} style={{ background: "transparent", border: "none", color: "#555", fontSize: 13, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
             Sign out
           </button>
