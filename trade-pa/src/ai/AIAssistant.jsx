@@ -21,6 +21,7 @@ import { SUB_INVOICE_SCAN_PROMPT } from "../lib/scan-prompts.js";
 import { portalCtaBlock } from "../lib/portal-extras.js";
 import { syncInvoiceToAccounting } from "../lib/accounting.js";
 import { tmReadWorkers, tmReadSubs } from "../lib/team-members.js";
+import { isIOS } from "../lib/platform.js";
 import { C } from "../theme/colors.js";
 import { S } from "../theme/styles.js";
 import { useWhisper } from "../hooks/useWhisper.js";
@@ -514,7 +515,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       if (caps.hf_hours !== Infinity) {
         const secUsed = usageDataRef.current?.handsfree_seconds_used || 0;
         if (secUsed >= caps.hf_hours * 3600) {
-          speak("You've used your " + caps.hf_hours + " hour hands-free allowance this month. Upgrade your plan for more, or tap the mic to keep using voice.");
+          speak(isIOS()
+            ? "You've used your " + caps.hf_hours + " hour hands-free allowance this month. To extend, manage your account on tradespa.co.uk. Or tap the mic to keep using voice."
+            : "You've used your " + caps.hf_hours + " hour hands-free allowance this month. Upgrade your plan for more, or tap the mic to keep using voice.");
           return;
         }
       }
@@ -5945,7 +5948,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         // Nudge at 80% of cap
         const caps = usageCapsRef.current || {};
         if (caps.convos !== Infinity && newCount === Math.floor(caps.convos * 0.8)) {
-          const nudge = `By the way, you've used ${newCount} of your ${caps.convos} monthly conversations. Plenty left — just keeping you posted.`;
+          const nudge = `By the way, you've used ${newCount} of your ${caps.convos} conversations this month. Plenty left — just keeping you posted.`;
           // Append as a system note after a small delay so it doesn't clash with the current reply
           setTimeout(() => {
             setMessages(prev => [...prev, { role: "assistant", content: nudge }]);
@@ -6189,7 +6192,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         return (
           <div
             onClick={() => setView && setView("Settings")}
-            title="Tap to manage plan & billing"
+            title={isIOS() ? "Tap to view usage" : "Tap to manage plan & billing"}
             style={{
               display: "flex",
               justifyContent: "space-between",
@@ -7729,20 +7732,22 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
       {/* ── Limit-reached modal (sub-item 3) ──────────────────────────── */}
       {limitModal && (() => {
-        const isIOSNative = typeof window !== "undefined"
-          && window.Capacitor?.isNativePlatform?.()
-          && window.Capacitor?.getPlatform?.() === "ios";
+        const isIOSNative = isIOS();
 
         // Title / subtitle per reason
         const COPY = {
           limit_reached: {
-            title: "You've hit your monthly limit",
-            subtitle: `You've used all ${usageCaps?.convos ?? 500} AI conversations for this billing period. Your allowance resets on your next billing date.`,
+            title: isIOSNative ? "You've hit your usage limit" : "You've hit your monthly limit",
+            subtitle: isIOSNative
+              ? `You've used all ${usageCaps?.convos ?? 500} AI conversations this month. Your allowance resets next month.`
+              : `You've used all ${usageCaps?.convos ?? 500} AI conversations for this billing period. Your allowance resets on your next billing date.`,
             showAddons: true,
           },
           no_subscription: {
-            title: "No active subscription",
-            subtitle: "Your subscription isn't active. Reactivate from Settings → Plan & billing to continue.",
+            title: isIOSNative ? "Account access paused" : "No active subscription",
+            subtitle: isIOSNative
+              ? "Your account isn't active. To restore access, manage your account at tradespa.co.uk."
+              : "Your subscription isn't active. Reactivate from Settings → Plan & billing to continue.",
             showAddons: false,
           },
           account_locked: {
@@ -7902,7 +7907,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                     opacity: limitBusy ? 0.6 : 1,
                     marginBottom: 8,
                   }}
-                >{isIOSNative ? "Manage plan →" : "Upgrade plan →"}</button>
+                >{isIOSNative ? "Open account →" : "Upgrade plan →"}</button>
               )}
               <button
                 onClick={() => setLimitModal(null)}
