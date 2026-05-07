@@ -10,18 +10,16 @@
 // Idempotency:
 //   When app/mobile later joins the conference, that triggers another
 //   participant-join event. We use a module-level Set keyed by ConferenceSid
-//   to ensure we only dial once per conference. In Vercel serverless,
-//   warm function instances reuse module state for ~15min — within the
-//   seconds-window of a single call lifecycle, this works reliably.
+//   to ensure we only dial once per conference.
 //
-// Why not query Twilio for participants count? Twilio's participant-join
-// event fires BEFORE the participant is queryable via REST API — there's
-// a race condition where participants.list() returns 0 even though a
-// participant just joined. Module-level state avoids the race entirely.
+// REGION (added 7 May 2026):
+//   The Twilio Node.js client defaults to US1 when no region is specified.
+//   Our Devices register to IE1 (per token.js: region: "ie1"). Cross-region
+//   call delivery to Voice SDK Clients fails silently with instant no-answer.
+//   We MUST specify region: 'ie1' so the call is created in the same region
+//   as where the Device is registered.
 //
 // Vercel gotcha: must NOT call res.send() before async work completes.
-// Vercel tears the function down once response finalises, killing
-// in-flight client.calls.create() calls.
 
 import twilio from 'twilio';
 
@@ -62,7 +60,6 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
   dialedConferences.add(conferenceSid);
-  // Auto-cleanup after 5 min so the Set doesn't grow unbounded
   setTimeout(() => dialedConferences.delete(conferenceSid), 5 * 60 * 1000);
 
   // Validate env
@@ -125,7 +122,14 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
 
-  const client = twilio(accountSid, authToken);
+  // CRITICAL: region must match where the Device is registered.
+  // Without { region: 'ie1' }, calls.create() routes via US1 and the call
+  // never reaches IE1-registered Devices — instant silent no-answer.
+  const client = twilio(accountSid, authToken, {
+    region: 'ie1',
+    edge: 'dublin',
+  });
+
   const identity = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
 
   const joinConferenceTwiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -138,7 +142,7 @@ export default async function handler(req, res) {
   // 1. Dial the app client. 20s timeout — if no answer, mobile fallback.
   let appDialedOk = false;
   console.log(
-    `[conf-status] >>> DIALING client:${identity} from=${userTwilioNumber}`
+    `[conf-status] >>> DIALING client:${identity} from=${userTwilioNumber} (region=ie1)`
   );
   try {
     const appCall = await client.calls.create({
