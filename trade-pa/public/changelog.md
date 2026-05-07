@@ -2,6 +2,16 @@
 
 ## 2026-05-07
 
+🔔 **Push notifications now work properly in the Android app** — When you install Trade PA from the Play Store, you'll get real device notifications for incoming calls, reminders, new emails, and AI actions in your inbox. Previously this only worked when you used Trade PA in your phone's browser. Nothing to do — it just works once you install.
+
+📞 **Outbound calls from the in-app phone are fixed** — Calls placed from the Customers screen now connect properly. There was a small wiring bug in the call routing that made outbound calls fail with a generic error.
+
+🛠️ **Behind the scenes** — Hybrid push backend so a single send works for both browser users and installed-app users. Database migration to track each device subscription type.
+
+---
+
+## 2026-05-07
+
 ### App Store ready 📱
 
 Behind-the-scenes work to get Trade PA's iPhone and Android apps cleared for the App Store and Play Store. On the web, you'll notice almost nothing different — a couple of labels in Settings have been tidied up:
