@@ -123,6 +123,8 @@ import { PeopleHub } from "./views/hubs/PeopleHub.jsx";
 // Verbatim move — no behavioural changes. AIAssistant body (~7,850 lines)
 // now lives in ./ai/AIAssistant.jsx as a named export.
 import { AIAssistant } from "./ai/AIAssistant.jsx";
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
 
 // Error boundary to catch Settings crashes and show the actual error
 class ErrorBoundary extends Component {
@@ -4153,20 +4155,79 @@ function AppInner() {
     return () => window.removeEventListener('beforeinstallprompt', promptHandler);
   }, []);
 
-  // Register service worker and push notifications
+  // Register push notifications — hybrid Web Push (browser/PWA) + FCM (native via Capacitor)
+  /* FCM-PATCH-V1 */
   useEffect(() => {
     if (!user?.id) return;
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
-    const registerPush = async () => {
+    const handleNotifClick = (notifType) => {
+      if (notifType === "ai_action") setView("Inbox");
+      else if (notifType === "enquiry") setView("Enquiries");
+      else if (notifType === "invoice_paid") setView("Payments");
+      else if (notifType === "call") setView("Customers");
+    };
+
+    const registerNative = async () => {
+      try {
+        const perm = await PushNotifications.checkPermissions();
+        let granted = perm.receive;
+        if (granted === "prompt" || granted === "prompt-with-rationale") {
+          const requested = await PushNotifications.requestPermissions();
+          granted = requested.receive;
+        }
+        if (granted !== "granted") {
+          console.log("Native push permission not granted");
+          return;
+        }
+
+        // Listener: FCM token issued (or rotated)
+        await PushNotifications.addListener("registration", async (token) => {
+          try {
+            await fetch("/api/push/subscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId: user.id,
+                type: "fcm",
+                fcmToken: token.value,
+              }),
+            });
+            console.log("FCM token registered");
+          } catch (err) {
+            console.log("FCM token registration POST failed:", err.message);
+          }
+        });
+
+        await PushNotifications.addListener("registrationError", (err) => {
+          console.log("Native push registration error:", JSON.stringify(err));
+        });
+
+        // Tap on notification (app cold-start or backgrounded)
+        await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+          const data = action?.notification?.data || {};
+          handleNotifClick(data.type);
+        });
+
+        // Notification arrived while app is foreground
+        await PushNotifications.addListener("pushNotificationReceived", (_notification) => {
+          // No-op for now; OS doesn't show banner when app is foreground.
+          // Could trigger an in-app toast here if needed.
+        });
+
+        await PushNotifications.register();
+      } catch (err) {
+        console.log("Native push setup failed:", err.message);
+      }
+    };
+
+    const registerWeb = async () => {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
       try {
         const reg = await navigator.serviceWorker.register("/sw.js");
         await navigator.serviceWorker.ready;
 
-        // Check existing permission
         if (Notification.permission === "denied") return;
 
-        // Subscribe to push
         const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
         if (!vapidPublicKey) return;
 
@@ -4176,28 +4237,38 @@ function AppInner() {
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
         });
 
-        // Save subscription to server
         await fetch("/api/push/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: user.id, subscription: sub.toJSON() }),
+          body: JSON.stringify({
+            userId: user.id,
+            type: "web",
+            subscription: sub.toJSON(),
+          }),
         });
 
-        // Listen for notification clicks from service worker
-        navigator.serviceWorker.addEventListener("message", e => {
+        navigator.serviceWorker.addEventListener("message", (e) => {
           if (e.data?.type === "NOTIFICATION_CLICK") {
-            if (e.data.notifType === "ai_action") setView("Inbox");
-            else if (e.data.notifType === "enquiry") setView("Enquiries");
-            else if (e.data.notifType === "invoice_paid") setView("Payments");
-            else if (e.data.notifType === "call") setView("Customers");
+            handleNotifClick(e.data.notifType);
           }
         });
       } catch (err) {
-        console.log("Push registration:", err.message);
+        console.log("Web push registration:", err.message);
       }
     };
 
-    registerPush();
+    if (Capacitor.isNativePlatform()) {
+      registerNative();
+    } else {
+      registerWeb();
+    }
+
+    return () => {
+      // Clean up native listeners on unmount / user change
+      if (Capacitor.isNativePlatform()) {
+        PushNotifications.removeAllListeners().catch(() => {});
+      }
+    };
   }, [user?.id]);
 
   // Twilio Voice SDK — register device if user has call tracking active
