@@ -1,5 +1,20 @@
 # What's new
 
+## 2026-05-07
+
+### App Store ready 📱
+
+Behind-the-scenes work to get Trade PA's iPhone and Android apps cleared for the App Store and Play Store. On the web, you'll notice almost nothing different — a couple of labels in Settings have been tidied up:
+
+- **"Calendar Subscription"** is now **"Calendar Sync"** — same feature, cleaner name.
+- **Card payments** integration now reads **"Card Payments"** throughout the app (it was a mix of "Stripe" and "Card Payments" before). Connection still works exactly the same way.
+
+For users on the upcoming iPhone and Android apps, **account management lives at tradespa.co.uk** on the web — the apps focus on the day-job stuff (jobs, invoices, calls, voice) and leave plan changes, billing, and add-ons to the website. This keeps the apps clean and within the platform rules.
+
+If you're on a phone now (using the web version), nothing changes — you can still manage everything in the Settings → Plan & billing area as before.
+
+---
+
 ## 2026-05-06
 
 ### Schedule properly persists now 🗓️
