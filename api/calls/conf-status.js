@@ -5,21 +5,21 @@
 //   - Caller rings Twilio number → /api/calls/incoming returns TwiML that
 //     puts caller into a named conference, with this URL as status callback.
 //   - When caller joins (participant-join) → we dial the app client into
-//     the conference. If app dial fails → mobile fallback.
+//     the conference. If app dial returns no-answer/busy/failed within
+//     20 seconds → app-status.js fires the mobile fallback dial.
 //
 // Idempotency:
 //   When app/mobile later joins the conference, that triggers another
 //   participant-join event. We use a module-level Set keyed by ConferenceSid
 //   to ensure we only dial once per conference.
 //
-// REGION (added 7 May 2026):
-//   The Twilio Node.js client defaults to US1 when no region is specified.
-//   Our Devices register to IE1 (per token.js: region: "ie1"). Cross-region
-//   call delivery to Voice SDK Clients fails silently with instant no-answer.
-//   We MUST specify region: 'ie1' so the call is created in the same region
-//   as where the Device is registered.
-//
-// Vercel gotcha: must NOT call res.send() before async work completes.
+// KNOWN LIMITATION (7 May 2026):
+//   In-app PWA inbound ringing currently fails — Twilio Voice JS SDK
+//   silently auto-rejects incoming calls with "no-answer" within 1 second,
+//   before invoking device.on("incoming") in JavaScript. Root cause not
+//   yet identified. The mobile fallback dial activates after the 20s app
+//   timeout, so customers DO reach the user — just on their mobile rather
+//   than in-app. Tracking for later resolution.
 
 import twilio from 'twilio';
 
@@ -38,21 +38,19 @@ export default async function handler(req, res) {
   const event = req.body?.StatusCallbackEvent;
   const conferenceSid = req.body?.ConferenceSid;
   const callSid = req.body?.CallSid;
-  const sequenceNumber = req.body?.SequenceNumber;
 
   console.log(
-    `[conf-status] >>> event=${event} confSid=${conferenceSid} callSid=${callSid} seq=${sequenceNumber} userId=${userId}`
+    `[conf-status] >>> event=${event} confSid=${conferenceSid} callSid=${callSid} userId=${userId}`
   );
 
   // Only act on participant-join events
   if (event !== 'participant-join') {
-    console.log(`[conf-status] not a join event, skip`);
     return res.status(200).send('OK');
   }
 
-  // Idempotency: skip if we've already dialed for this conference
+  // Idempotency
   if (!conferenceSid) {
-    console.error('[conf-status] missing ConferenceSid, cannot dedupe');
+    console.error('[conf-status] missing ConferenceSid');
     return res.status(200).send('OK');
   }
   if (dialedConferences.has(conferenceSid)) {
@@ -83,8 +81,6 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
 
-  console.log(`[conf-status] env ok, looking up call_tracking for ${userId}`);
-
   // Look up THIS user's Twilio number
   let userTwilioNumber = null;
   let userForwardTo = forwardTo || null;
@@ -105,7 +101,6 @@ export default async function handler(req, res) {
       return res.status(200).send('OK');
     }
     if (row.active === false) {
-      console.log(`[conf-status] call_tracking inactive for ${userId}`);
       return res.status(200).send('OK');
     }
     userTwilioNumber = row.twilio_number;
@@ -114,21 +109,13 @@ export default async function handler(req, res) {
       console.error(`[conf-status] !!! no twilio_number for ${userId}`);
       return res.status(200).send('OK');
     }
-    console.log(
-      `[conf-status] found number=${userTwilioNumber} forwardTo=${userForwardTo}`
-    );
   } catch (err) {
     console.error('[conf-status] !!! FETCH FAILED:', err.message);
     return res.status(200).send('OK');
   }
 
-  // CRITICAL: region must match where the Device is registered.
-  // Without { region: 'ie1' }, calls.create() routes via US1 and the call
-  // never reaches IE1-registered Devices — instant silent no-answer.
-  const client = twilio(accountSid, authToken, {
-    region: 'ie1',
-    edge: 'dublin',
-  });
+  // Default region (US1) — matches where TwiML App and phone numbers live
+  const client = twilio(accountSid, authToken);
 
   const identity = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
 
@@ -139,11 +126,8 @@ export default async function handler(req, res) {
   </Dial>
 </Response>`;
 
-  // 1. Dial the app client. 20s timeout — if no answer, mobile fallback.
+  // Dial the app client. 20s timeout — if no answer, app-status.js fires mobile fallback.
   let appDialedOk = false;
-  console.log(
-    `[conf-status] >>> DIALING client:${identity} from=${userTwilioNumber} (region=ie1)`
-  );
   try {
     const appCall = await client.calls.create({
       to: `client:${identity}`,
@@ -165,16 +149,12 @@ export default async function handler(req, res) {
     console.log(`[conf-status] <<< DIAL APP OK sid=${appCall.sid}`);
   } catch (err) {
     console.error(
-      `[conf-status] !!! DIAL APP ERROR: ${err.message} code=${err.code || 'none'} status=${err.status || 'none'}`
+      `[conf-status] !!! DIAL APP ERROR: ${err.message} code=${err.code || 'none'}`
     );
-    if (err.moreInfo) console.error(`[conf-status] more info: ${err.moreInfo}`);
   }
 
-  // 2. If app dial failed AND mobile is set, dial mobile immediately
+  // If app dial creation itself failed AND mobile is set, dial mobile immediately
   if (!appDialedOk && userForwardTo) {
-    console.log(
-      `[conf-status] >>> DIALING mobile=${userForwardTo} from=${userTwilioNumber}`
-    );
     try {
       const mobileCall = await client.calls.create({
         to: userForwardTo,
