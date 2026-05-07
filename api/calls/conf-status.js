@@ -1,13 +1,20 @@
 // api/calls/conf-status.js
-// Conference status webhook — fires on participant join/leave events.
-// When the caller joins (1st participant) → look up the user's own Twilio
-// number from call_tracking, then dial app client into the conference.
-// On failure → dial mobile (forward_to) into the conference as fallback.
+// Conference status webhook — fires on conference + participant events.
 //
-// IMPORTANT: do NOT call res.send() before the Twilio API work completes.
-// Vercel serverless tears the function down once the response finalises,
-// which kills the in-flight `client.calls.create()` call. Twilio waits up
-// to 15s for our response, so it's safe to do the work first.
+// Architecture:
+//   - Caller rings Twilio number → /api/calls/incoming returns TwiML that
+//     puts caller into a conference, with this URL as the status callback.
+//   - When caller joins (participant-join, count=1) → we dial the app
+//     client into the conference. If that fails → mobile fallback.
+//
+// Two correctness gotchas this file fixes:
+//   1. Twilio does NOT send ParticipantCount in participant-* events
+//      (only in conference-* events). We check the count via Twilio's
+//      REST API instead — authoritative, also gives us idempotency.
+//   2. On Vercel serverless, calling res.send() finalises the request and
+//      the runtime tears the function down — any in-flight async work
+//      (like client.calls.create()) gets killed mid-flight. So we do all
+//      the work first, then respond.
 
 import twilio from 'twilio';
 
@@ -18,19 +25,19 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 export default async function handler(req, res) {
   const { userId, callerNumber, customerName, confName, forwardTo } = req.query;
   const event = req.body?.StatusCallbackEvent;
-  const participantCount = parseInt(req.body?.ParticipantCount || '0', 10);
+  const conferenceSid = req.body?.ConferenceSid;
+  const callSid = req.body?.CallSid;
 
   console.log(
-    `[conf-status] event=${event} participants=${participantCount} conf=${confName} userId=${userId}`
+    `[conf-status] event=${event} conf=${confName} confSid=${conferenceSid} callSid=${callSid} userId=${userId}`
   );
 
-  // Only act when the caller first joins (participant count goes to 1).
-  // All other events (leave, conference-start/end) we just ack.
-  if (event !== 'participant-join' || participantCount !== 1) {
+  // Exit early for any non-join event — we only act when someone joins
+  if (event !== 'participant-join') {
     return res.status(200).send('OK');
   }
 
-  // Validate Twilio account credentials
+  // Validate env
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const appUrl = process.env.APP_URL;
@@ -43,15 +50,50 @@ export default async function handler(req, res) {
   if (!SUPABASE_KEY) missing.push('SUPABASE_SERVICE_KEY');
   if (missing.length) {
     console.error(`[conf-status] Missing env vars: ${missing.join(', ')}`);
-    return res.status(200).send('OK'); // ack so Twilio doesn't retry forever
-  }
-
-  if (!userId) {
-    console.error('[conf-status] No userId in query — cannot look up Twilio number');
     return res.status(200).send('OK');
   }
 
-  // Look up THIS user's Twilio number (multi-tenant — every user has their own)
+  if (!userId) {
+    console.error('[conf-status] No userId in query');
+    return res.status(200).send('OK');
+  }
+
+  if (!conferenceSid) {
+    console.error('[conf-status] No ConferenceSid in body');
+    return res.status(200).send('OK');
+  }
+
+  const client = twilio(accountSid, authToken);
+
+  // Idempotency check: how many participants are currently in the conference?
+  // - 1 participant (the caller alone) → first join → we should dial the app/mobile in
+  // - 2+ participants → app/mobile already joined a previous trigger → skip
+  let participantCount = 0;
+  try {
+    const participants = await client
+      .conferences(conferenceSid)
+      .participants.list({ limit: 5 });
+    participantCount = participants.length;
+    console.log(
+      `[conf-status] Conference ${conferenceSid} currently has ${participantCount} participants`
+    );
+  } catch (err) {
+    console.error(
+      '[conf-status] Failed to list participants:',
+      err.message,
+      err.code || ''
+    );
+    return res.status(200).send('OK');
+  }
+
+  if (participantCount !== 1) {
+    console.log(
+      `[conf-status] Skipping dial — count=${participantCount} (expected 1 for caller-alone state)`
+    );
+    return res.status(200).send('OK');
+  }
+
+  // Look up THIS user's Twilio number from call_tracking (multi-tenant)
   let userTwilioNumber = null;
   let userForwardTo = forwardTo || null;
   try {
@@ -71,14 +113,14 @@ export default async function handler(req, res) {
       return res.status(200).send('OK');
     }
     if (row.active === false) {
-      console.log(`[conf-status] call_tracking inactive for userId=${userId} — skipping dial`);
+      console.log(`[conf-status] call_tracking inactive for userId=${userId}`);
       return res.status(200).send('OK');
     }
     userTwilioNumber = row.twilio_number;
     if (!userForwardTo) userForwardTo = row.forward_to;
 
     if (!userTwilioNumber) {
-      console.error(`[conf-status] call_tracking row has no twilio_number for userId=${userId}`);
+      console.error(`[conf-status] No twilio_number for userId=${userId}`);
       return res.status(200).send('OK');
     }
   } catch (err) {
@@ -86,10 +128,8 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
 
-  const client = twilio(accountSid, authToken);
   const identity = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
 
-  // TwiML to put a leg into the same conference room
   const joinConferenceTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial>
@@ -97,7 +137,7 @@ export default async function handler(req, res) {
   </Dial>
 </Response>`;
 
-  // 1. Dial the app client into the conference. 20s timeout — if no answer, mobile fallback.
+  // 1. Dial the app client. 20s timeout — if no answer, app-status triggers mobile fallback.
   let appDialedOk = false;
   try {
     const appCall = await client.calls.create({
@@ -118,17 +158,17 @@ export default async function handler(req, res) {
     });
     appDialedOk = true;
     console.log(
-      `[conf-status] Dialled app client ${identity} from ${userTwilioNumber} → conf ${confName} (SID: ${appCall.sid})`
+      `[conf-status] DIAL app client=${identity} from=${userTwilioNumber} conf=${confName} sid=${appCall.sid}`
     );
   } catch (err) {
     console.error(
-      `[conf-status] Failed to dial app client ${identity}:`,
+      `[conf-status] DIAL APP FAILED client=${identity}:`,
       err.message,
       err.code || ''
     );
   }
 
-  // 2. If app dial failed and we have a mobile, dial that immediately as fallback
+  // 2. If app dial failed and mobile is set, dial mobile immediately as fallback
   if (!appDialedOk && userForwardTo) {
     try {
       const mobileCall = await client.calls.create({
@@ -138,17 +178,17 @@ export default async function handler(req, res) {
         timeout: 30,
       });
       console.log(
-        `[conf-status] Fallback: dialled mobile ${userForwardTo} from ${userTwilioNumber} → conf ${confName} (SID: ${mobileCall.sid})`
+        `[conf-status] DIAL mobile=${userForwardTo} from=${userTwilioNumber} conf=${confName} sid=${mobileCall.sid}`
       );
     } catch (mobileErr) {
       console.error(
-        `[conf-status] Mobile fallback to ${userForwardTo} also failed:`,
+        `[conf-status] DIAL MOBILE FAILED to=${userForwardTo}:`,
         mobileErr.message,
         mobileErr.code || ''
       );
     }
   }
 
-  // Now respond to Twilio. Safe to send because all async work is done.
+  // All async work done — safe to respond now
   return res.status(200).send('OK');
 }
