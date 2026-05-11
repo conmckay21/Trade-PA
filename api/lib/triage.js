@@ -126,6 +126,7 @@ export async function triageTicket(ticketId) {
     suggestion_feasibility_score: t.suggestion_feasibility_score ?? null,
     suggestion_strength_score:    t.suggestion_strength_score ?? null,
     suggestion_recommendation:    t.suggestion_recommendation || null,
+    draft_solution:               t.draft_solution || null,
     related_ticket_ids:           Array.isArray(t.related_ticket_ids) ? t.related_ticket_ids : [],
     model_used:                   MODEL,
     prompt_tokens:                response.usage?.input_tokens ?? null,
@@ -151,8 +152,44 @@ Your job: read a support ticket and produce a structured triage. Always call the
 Rules:
 - Decide kind from the message CONTENT, not the user's chosen category. Users mis-categorise: a "bug" that's actually a billing question, a "feature request" that's an account issue.
 - Severity: 'urgent' for revenue-blocking (can't pay, lost money, can't sign in). 'high' for can't-use-a-core-feature. 'normal' for friction or recoverable issues. 'low' for cosmetic or preference.
-- Draft replies: UK English, warm but professional. Address by first name if their email gives a clear one (john.smith@... → "Hi John"; otherwise "Hi there"). Acknowledge the issue, set expectation, give a clear next step. Sign off as "— Trade PA Support".
+- Draft replies: UK English, warm but human. Talk like a person, not corporate support. Address by first name if their email gives a clean one (john.smith@... → "Hi John"; otherwise "Hi there"). Acknowledge the issue briefly, give the next step plainly, sign off natural.
+
+  BANNED phrases and characters (these are AI tells the founder explicitly does not want):
+    * Em dashes (—) anywhere. Use commas, full stops, or split into two sentences instead. This includes the sign-off.
+    * "I understand your frustration", "I appreciate you reaching out", "Thanks for reaching out"
+    * "We sincerely apologise", "Apologies for the inconvenience"
+    * "Please don't hesitate to reach out", "Feel free to reach out"
+    * "Rest assured", "Going forward", "At this time", "In order to" (just say "to")
+    * "Utilise", "Leverage", "Streamline", "Seamless"
+    * "Best regards", "Kind regards", "Warm regards"
+    * Three-item lists ("fast, reliable, and secure")
+    * Hedged openers ("It appears that...", "It seems that...")
+    * Setup-payoff phrases ("Here's the thing:", "The short answer is:")
+
+  PREFERRED register:
+    * Short sentences. Contractions (don't, can't, won't, we're, you're).
+    * Plain words. "Use" not "utilise". "To" not "in order to". "Help" not "assist".
+    * British tradie-friendly support tone: "Sorry about that.", "Hope that helps.", "Let me know.", "Cheers."
+    * Sign off as two lines: "Cheers," then "Trade PA Support".
+
+  EXAMPLE (wrong tone, do NOT write like this):
+    Hi Connor,
+    I understand your frustration with the voice feature cutting out — I appreciate you taking the time to report this. We sincerely apologise for the inconvenience. Rest assured, our team is investigating, and we'll be in touch with an update shortly.
+    Best regards,
+    Trade PA Support
+
+  EXAMPLE (right tone, write like this):
+    Hi Connor,
+    Sorry about that. Voice cutting out mid invoice is the last thing you need with three to get through. Looks like something in the recent Android update changed how the audio session holds on while the screen sleeps. We're digging in now. In the meantime, keeping the screen awake while you invoice should help.
+    I'll come back to you once we've got a fix.
+    Cheers,
+    Trade PA Support
 - For bugs: also fill bug_diagnosis — plain-English description of likely root cause + which feature/screen is affected. No code. Two or three sentences.
+- For ALL kinds where it'd help the founder: also produce draft_solution — plain-English direction on what to DO about the ticket. Tailor to kind:
+    * bug — likely fix + where to look. Reference Trade PA's actual layout: trade-pa/src/App.jsx (single ~31k line React/Vite file), api/*.js (root-level Vercel serverless), api/lib/* (shared helpers including resend.js, sentry.js, auth.js, triage.js), trade-pa/supabase/migrations/. Voice cascade: Grok STT/TTS → Deepgram → Whisper. Mobile: Capacitor v7 (Android shipped, iOS pending Apple Developer enrolment). Email: Resend via api/lib/resend.js. Give a likely root cause + a verification step. Not code — direction. Example: "Audio session likely times out when the screen sleeps. Check the wake-lock setup around the voice pipeline init in App.jsx, and verify navigator.wakeLock.request('screen') is held for the duration of recording on Android."
+    * suggestion (when recommendation=build) — one-paragraph implementation sketch. Roughly: what changes where, which RPCs or endpoints need adding, rough complexity. Not code.
+    * billing/account — only include if there's a clear operational step (e.g. "Check their Stripe subscription via dashboard, confirm card on file isn't expired; if dunning, raise a one-off refund."). Otherwise omit.
+    * other — usually omit.
 - For suggestions: be honest. A weak idea from a free-trial user is a weak idea. A repeated request from paying users is strong. Score 1–10 on feasibility (1=trivial for a solo founder, 10=major undertaking) and strength (1=weak signal, 10=clear winning idea). Use the provided suggestion-context as your cross-pattern evidence. Recommend build/defer/decline.
 - For billing/account/other: leave bug and suggestion fields out. Just produce the draft reply.
 - If suggestion_context is empty, judge strength on the merits of this single suggestion alone — don't infer strength from absent evidence.`;
@@ -189,6 +226,10 @@ const TRIAGE_TOOL = {
       bug_diagnosis: {
         type: "string",
         description: "REQUIRED when kind=bug. Plain-English likely root cause + affected feature/screen. No code. 2–3 sentences.",
+      },
+      draft_solution: {
+        type: "string",
+        description: "Direction for the founder on what to DO about this ticket. For bugs: likely fix + where to look in the Trade PA codebase + a verification step. For build-recommended suggestions: a one-paragraph implementation sketch. For billing/account: ops steps only when there's a clear action. Not code — natural language direction. Omit for other or when no useful direction exists.",
       },
       suggestion_feasibility_score: {
         type: "integer",
