@@ -483,3 +483,98 @@ Open app:      ${APP_URL}
     text,
   });
 }
+
+// =============================================================================
+// PATCH FOR api/lib/resend.js
+// =============================================================================
+// Append this block at the END of your existing api/lib/resend.js — just
+// before the file ends. Everything below the final closing brace of
+// sendReminder() in your current file. These two functions reuse the
+// existing in-file helpers (sendEmail, layout, button, escapeHtml, truncate,
+// SUPPORT_EMAIL, FROM_HELLO, COMPANY_LEGAL) so no new helpers needed.
+//
+// Used by:
+//   - api/support/submit.js          → sendSupportTicketNotification
+//   - api/admin/send-support-reply.js → sendSupportReply
+// =============================================================================
+
+
+// ---- Template: New support ticket notification (to support@) ---------------
+// Fired from /api/support/submit.js after a user submits the in-app Contact
+// Support form. Goes to support@tradespa.co.uk (alias forwarding to connor@).
+// The body excerpt is truncated for the email; full thread lives in admin.
+
+export async function sendSupportTicketNotification({ ticketId, userEmail, subject, category, body }) {
+  const adminUrl  = `https://admin.tradespa.co.uk/#/support/${ticketId}`;
+  const preview   = truncate(String(body || "").trim(), 800);
+  const safeSubj  = String(subject || "(no subject)").trim();
+  const subjectLine = `[${category}] ${safeSubj}`;
+  const preheader = truncate(preview, 100);
+
+  const content = `
+<h1 style="margin:0 0 4px;font-size:22px;font-weight:600;color:#1d1d1f;">New support ticket</h1>
+<p style="margin:0 0 16px;font-size:13px;color:#86868b;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escapeHtml(category)} · from ${escapeHtml(userEmail)}</p>
+<div style="padding:16px 20px;background:#f5f5f7;border-radius:12px;margin:0 0 20px;">
+  <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#1d1d1f;">${escapeHtml(safeSubj)}</p>
+  <p style="margin:0;font-size:14px;color:#1d1d1f;line-height:1.55;white-space:pre-wrap;">${escapeHtml(preview)}</p>
+</div>
+${button(adminUrl, "Open in admin →")}
+`;
+
+  const text =
+`New support ticket · ${category}
+${safeSubj}
+
+From: ${userEmail}
+
+${preview}
+
+Open in admin: ${adminUrl}`;
+
+  return sendEmail({
+    from: FROM_HELLO,
+    to: SUPPORT_EMAIL,
+    replyTo: userEmail && userEmail !== "unknown" ? userEmail : undefined,
+    subject: subjectLine,
+    html: layout({ title: subjectLine, preheader, content }),
+    text,
+  });
+}
+
+
+// ---- Template: Admin reply back to the user --------------------------------
+// Fired from /api/admin/send-support-reply.js when an admin replies in the
+// inbox. Sent FROM support@tradespa.co.uk so the user's reply lands back in
+// the support alias inbox (which forwards to connor@). Email body is plain
+// — no marketing, no buttons — feels like a personal reply.
+
+export async function sendSupportReply({ to, ticketId, originalSubject, body }) {
+  const replySubject = `Re: ${String(originalSubject || "your support ticket").trim()}`;
+  const preheader    = truncate(body, 100);
+
+  const content = `
+<div style="font-size:15px;line-height:1.6;color:#1d1d1f;white-space:pre-wrap;padding:8px 0 16px;">${escapeHtml(body)}</div>
+<p style="margin:24px 0 0;color:#86868b;font-size:13px;line-height:1.5;">
+  Just reply to this email to continue the conversation. We'll get back to you as soon as we can.
+</p>
+<p style="margin:8px 0 0;color:#86868b;font-size:11px;">Ticket ${escapeHtml(String(ticketId).slice(0, 8))}</p>
+`;
+
+  const text =
+`${body}
+
+—
+Just reply to this email to continue the conversation.
+
+Ticket ${String(ticketId).slice(0, 8)}
+Trade PA Support`;
+
+  return sendEmail({
+    from: `Trade PA Support <${SUPPORT_EMAIL}>`,
+    to,
+    replyTo: SUPPORT_EMAIL,
+    subject: replySubject,
+    html: layout({ title: replySubject, preheader, content }),
+    text,
+  });
+}
