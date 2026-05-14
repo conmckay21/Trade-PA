@@ -20,22 +20,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>Trade PA needs camera access to scan receipts and capture site photos.</string>
-	<key>NSContactsUsageDescription</key>
-	<string>Trade PA can import contacts to quickly add customers to your records. Permission is optional.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Trade PA uses your location to auto-fill job site addresses. Permission is optional.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Trade PA needs microphone access to hear voice commands and record business calls.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Trade PA needs permission to save photos (such as signed invoices and call recordings) to your photo library.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Trade PA needs photo library access to attach images to jobs and customer records.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
@@ -51,13 +37,15 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
