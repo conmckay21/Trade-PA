@@ -19,6 +19,19 @@
 import { withSentry } from "../lib/sentry.js";
 
 async function handler(req, res) {
+  // CORS headers — required for the native Capacitor iOS/Android apps which
+  // make cross-origin requests from capacitor://localhost or https://localhost.
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept");
+  res.setHeader("Access-Control-Max-Age", "86400");
+
+  // Handle CORS preflight. Native apps send OPTIONS first before any JSON POST;
+  // this must respond 204 before the browser will issue the real request.
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
   const { userId, subscription, fcmToken, action } = req.body || {};
