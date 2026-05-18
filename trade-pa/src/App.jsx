@@ -4148,7 +4148,10 @@ function AppInner() {
     const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
     setIsIos(ios);
     setIsStandalone(standalone);
-    if (!standalone) setTimeout(() => setShowPwaBanner(true), 4000);
+    // Skip PWA install banner on mobile browsers — native apps are in the stores.
+    // Keep showing on desktop where the PWA is still the better-than-nothing option.
+    const isMobileBrowser = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!standalone && !isMobileBrowser) setTimeout(() => setShowPwaBanner(true), 4000);
     // Android — capture install prompt event
     const promptHandler = (e) => { e.preventDefault(); setPwaPrompt(e); };
     window.addEventListener('beforeinstallprompt', promptHandler);
