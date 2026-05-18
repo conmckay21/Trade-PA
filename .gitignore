@@ -54,3 +54,6 @@ trade-pa/ios/DerivedData/
 .idea/
 *.swp
 *.swo
+
+# === Android signing config (contains passwords) ===
+trade-pa/android/keystore.properties
