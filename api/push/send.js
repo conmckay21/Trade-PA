@@ -6,6 +6,7 @@
 import webpush from "web-push";
 import { withSentry } from "../lib/sentry.js";
 import { sendFcm } from "../lib/fcm.js";
+import { sendApns } from "../lib/apns.js";
 
 webpush.setVapidDetails(
   "mailto:hello@tradespa.co.uk",
@@ -47,6 +48,7 @@ async function handler(req, res) {
 
     let webSent = 0;
     let fcmSent = 0;
+    let apnsSent = 0;
     const stale = []; // { type, endpoint?, fcmToken? }
     const errors = [];
 
@@ -80,6 +82,16 @@ async function handler(req, res) {
             errors.push(`fcm: ${result.error}`);
             console.error("FCM push error:", result.error, result.code || "");
           }
+        } else if (subType === "apns") {
+          const result = await sendApns(sub.fcm_token, payload);
+          if (result.success) {
+            apnsSent++;
+          } else if (result.stale) {
+            stale.push({ type: "apns", fcmToken: sub.fcm_token });
+          } else {
+            errors.push(`apns: ${result.error}`);
+            console.error("APNs push error:", result.error, result.code || "");
+          }
         }
       })
     );
@@ -91,9 +103,10 @@ async function handler(req, res) {
 
     return res.json({
       success: true,
-      sent: webSent + fcmSent,
+      sent: webSent + fcmSent + apnsSent,
       web: webSent,
       fcm: fcmSent,
+      apns: apnsSent,
       stale: stale.length,
       errors: errors.length ? errors : undefined,
     });

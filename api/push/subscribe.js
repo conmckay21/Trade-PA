@@ -45,8 +45,17 @@ async function handler(req, res) {
   if (type === "fcm" && !fcmToken) {
     return res.status(400).json({ error: "fcmToken required for fcm type" });
   }
-  if (type !== "web" && type !== "fcm") {
-    return res.status(400).json({ error: "type must be 'web' or 'fcm'" });
+  if (type !== "web" && type !== "fcm" && type !== "apns") {
+    return res.status(400).json({ error: "type must be 'web', 'fcm', or 'apns'" });
+  }
+
+  // Auto-detect raw APNs tokens — the iOS Capacitor app reports them as
+  // type='fcm' because @capacitor/push-notifications doesn't know about FCM
+  // vs APNs. Raw APNs device tokens are exactly 64 hex characters; FCM tokens
+  // are much longer base64 strings with colons and underscores.
+  let effectiveType = type;
+  if (type === "fcm" && fcmToken && /^[a-f0-9]{64}$/i.test(fcmToken)) {
+    effectiveType = "apns";
   }
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -67,7 +76,7 @@ async function handler(req, res) {
         );
       } else {
         await fetch(
-          `${supabaseUrl}/rest/v1/push_subscriptions?user_id=eq.${userId}&type=eq.fcm&fcm_token=eq.${encodeURIComponent(fcmToken)}`,
+          `${supabaseUrl}/rest/v1/push_subscriptions?user_id=eq.${userId}&type=eq.${effectiveType}&fcm_token=eq.${encodeURIComponent(fcmToken)}`,
           { method: "DELETE", headers }
         );
       }
@@ -91,7 +100,7 @@ async function handler(req, res) {
     } else {
       body = {
         user_id: userId,
-        type: "fcm",
+        type: effectiveType,
         endpoint: null,
         p256dh: null,
         auth: null,
@@ -116,7 +125,7 @@ async function handler(req, res) {
       return res.status(500).json({ error: "Failed to save subscription" });
     }
 
-    return res.json({ success: true, type });
+    return res.json({ success: true, type: effectiveType });
   } catch (err) {
     console.error("Push subscribe error:", err.message);
     return res.status(500).json({ error: err.message });
