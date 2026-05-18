@@ -19,6 +19,9 @@ When you have a job marked as annual (boiler service, gas safety check, electric
 📋 **Reminders for expiring documents**
 Your compliance documents (Gas Safe, NICEIC, insurance, RAMS) and your team members' documents (CSCS, ECS, DBS) now get the same treatment — 30 days heads-up plus a 7-day urgent nudge before they expire. Reminders only appear in your list when they're actually due, so the Reminders view stays focused on this week's work.
 
+💸 **Quote follow-up reminders**
+When you send a quote and the customer hasn't responded after 3 days, Trade PA drops a gentle reminder in your list to chase them. If they still haven't replied at 7 days, you get a firmer nudge. Each reminder shows the customer name, days elapsed, and quote value — chasing forgotten quotes is one of the highest-leverage things a tradie can do.
+
 
 ## 2026-05-07
 

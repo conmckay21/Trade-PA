@@ -207,6 +207,81 @@ async function handler(req, res) {
     result.worker_docs = { error: e.message };
   }
 
+  // 4. Quote follow-ups (chase unanswered quotes at day 3 and day 7)
+  try {
+    const today = todayUK();
+    const stats = { scanned: 0, fired: 0, errors: [] };
+
+    const cutoffMs = Date.now() - 3 * 24 * 60 * 60 * 1000;
+    const { data: quotes, error } = await supabase
+      .from('invoices')
+      .select(
+        'id, user_id, customer, amount, created_at, status, portal_responded_at, last_followup_at, last_followup_days'
+      )
+      .eq('is_quote', true)
+      .is('deleted_at', null)
+      .is('portal_responded_at', null)
+      .eq('status', 'sent')
+      .lte('created_at', new Date(cutoffMs).toISOString());
+
+    if (error) throw error;
+    stats.scanned = quotes?.length || 0;
+
+    for (const quote of quotes || []) {
+      const created = new Date(quote.created_at);
+      const ukToday = new Date(today + 'T00:00:00Z');
+      const daysSince = Math.floor((ukToday - created) / (1000 * 60 * 60 * 24));
+
+      let threshold = null;
+      let reminderText = null;
+      const amt =
+        quote.amount != null
+          ? `£${Number(quote.amount).toLocaleString('en-GB', { maximumFractionDigits: 2 })}`
+          : '';
+      const cust = quote.customer || 'customer';
+
+      if (daysSince >= 7 && quote.last_followup_days !== 7) {
+        threshold = 7;
+        reminderText = `URGENT: Chase ${cust} — quote sent ${daysSince} days ago, still no response${amt ? ' (' + amt + ')' : ''}`;
+      } else if (
+        daysSince >= 3 &&
+        (quote.last_followup_days === null || quote.last_followup_days < 3)
+      ) {
+        threshold = 3;
+        reminderText = `Follow up with ${cust} — quote sent ${daysSince} days ago, no response yet${amt ? ' (' + amt + ')' : ''}`;
+      }
+
+      if (threshold) {
+        const { error: insErr } = await supabase.from('reminders').insert({
+          user_id: quote.user_id,
+          text: reminderText,
+          fire_at: new Date().toISOString(),
+          related_type: 'quote',
+          related_id: String(quote.id),
+          done: false,
+          fired: false,
+        });
+
+        if (insErr) {
+          stats.errors.push('invoices ' + quote.id + ': ' + insErr.message);
+          continue;
+        }
+
+        await supabase
+          .from('invoices')
+          .update({ last_followup_at: today, last_followup_days: threshold })
+          .eq('id', quote.id);
+
+        stats.fired++;
+      }
+    }
+
+    result.quote_followups = stats;
+  } catch (e) {
+    captureNonFatal(e, { tag: 'check-upcoming-dates:quote_followups' });
+    result.quote_followups = { error: e.message };
+  }
+
   return res.status(200).json(result);
 }
 
