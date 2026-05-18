@@ -1,0 +1,56 @@
+# === macOS ===
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# === Node / Vite / build artefacts ===
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# === Env files (NEVER commit credentials) ===
+.env
+.env.local
+.env.*.local
+
+# === Keystores & signing keys (private — local only) ===
+*.p8
+*.jks
+*.keystore
+keystore/
+
+# === Backups (current versions are in git history) ===
+*.bak
+*.bak.*
+
+# === One-off patch and recon scripts ===
+patch_*.py
+recon.sh
+recon_*.txt
+audit_output.txt
+appstore_audit.py
+render_ios_screenshots.py
+
+# === Temporary outputs ===
+iOS_Screenshots/
+
+# === Android build artefacts ===
+trade-pa/android/app/build/
+trade-pa/android/.gradle/
+trade-pa/android/local.properties
+
+# === iOS build artefacts ===
+trade-pa/ios/App/Pods/
+trade-pa/ios/App/build/
+trade-pa/ios/DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# === Editor / IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
