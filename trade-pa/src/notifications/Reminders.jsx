@@ -3,6 +3,7 @@ import { useWhisper } from "../hooks/useWhisper.js";
 import { authHeaders } from "../lib/auth.js";
 import { C } from "../theme/colors.js";
 import { S } from "../theme/styles.js";
+import DraftEmailFromReminder from "../components/DraftEmailFromReminder.jsx";
 
 // ─── Private helpers (used only by Reminders) ────────────────────────────
 function formatCountdown(ms) {
@@ -28,7 +29,7 @@ function formatDate(ts) {
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
-export function Reminders({ reminders, onAdd, onDismiss, onRemove, dueNow, onClearDue }) {
+export function Reminders({ reminders, onAdd, onDismiss, onRemove, dueNow, onClearDue, user, brand, db }) {
   const [input, setInput] = useState("");
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState("");
@@ -236,6 +237,7 @@ Rules:
                     {isPast ? "Overdue" : formatCountdown(ms)}
                   </span>
                 </div>
+                <DraftEmailFromReminder reminder={r} user={user} brand={brand} db={db} />
               </div>
               <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                 <button onClick={() => onDismiss(r.id)} style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 10px" }}>Done ✓</button>
