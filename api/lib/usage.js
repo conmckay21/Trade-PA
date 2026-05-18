@@ -83,7 +83,85 @@ export async function recordUsage(userId, metric, amount = 1) {
     console.error('[usage] recordUsage failed:', error.message, { userId, metric, amount });
     return null;
   }
+  // Best-effort threshold warning. Never throws — usage tracking must not
+  // break the request even if the warning machinery fails.
+  try {
+    await checkAndSendThresholdWarning(userId, metric);
+  } catch (err) {
+    console.warn('[usage] threshold check failed:', err.message);
+  }
   return data;
+}
+
+/**
+ * Fires a push notification when the user crosses 80% of their monthly cap
+ * for the given metric. Uses the conversations_warning_sent /
+ * handsfree_warning_sent flags on usage_tracking for idempotency — only one
+ * warning per metric per month, naturally resets next month.
+ *
+ * Supported metrics: 'conversations', 'handsfree_seconds'.
+ * No-op for any other metric.
+ */
+async function checkAndSendThresholdWarning(userId, metric) {
+  const flagField = metric === 'conversations'
+    ? 'conversations_warning_sent'
+    : metric === 'handsfree_seconds'
+    ? 'handsfree_warning_sent'
+    : null;
+  if (!flagField) return;
+
+  // Check the warning-sent flag first — cheap query
+  const month = new Date().toISOString().slice(0, 7);  // YYYY-MM
+  const { data: usage } = await supabaseAdmin
+    .from('usage_tracking')
+    .select(flagField)
+    .eq('user_id', userId)
+    .eq('month', month)
+    .maybeSingle();
+  if (!usage || usage[flagField]) return;  // either no row, or already warned
+
+  // Use the existing checkAllowance helper — handles plan lookup, trial users,
+  // addons, all the edge cases consistently with the rest of the file.
+  const allow = await checkAllowance(userId, metric);
+  if (!allow || allow.unlimited || !allow.limit || allow.limit <= 0) return;
+  const used = allow.used || 0;
+  const limit = allow.limit;
+  const pct = (used / limit) * 100;
+  if (pct < 80) return;
+
+  // Format human-readable values
+  const friendly = metric === 'conversations' ? 'AI conversations' : 'Hands-free voice';
+  const displayUsed = metric === 'handsfree_seconds'
+    ? `${Math.round(used / 60)} min`
+    : `${used}`;
+  const displayLimit = metric === 'handsfree_seconds'
+    ? `${Math.round(limit / 60)} min`
+    : `${limit}`;
+
+  // Fire push (best-effort)
+  try {
+    await fetch(`${process.env.APP_URL}/api/push/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        title: '⚡ Usage limit approaching',
+        body: `${friendly}: ${displayUsed} of ${displayLimit} used this month (${Math.round(pct)}%).`,
+        url: '/',
+        type: 'usage_warning',
+        tag: `usage-${metric}`,
+      }),
+    });
+  } catch (err) {
+    console.warn('[usage] threshold push send failed:', err.message);
+  }
+
+  // Set the flag — won't re-send for the rest of the month
+  await supabaseAdmin
+    .from('usage_tracking')
+    .update({ [flagField]: true })
+    .eq('user_id', userId)
+    .eq('month', month);
 }
 
 // ---------------------------------------------------------------------------

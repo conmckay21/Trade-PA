@@ -169,6 +169,25 @@ async function handler(req, res) {
         continue;
       }
 
+      // Fire push notification alongside the email. Best-effort — push failure
+      // doesn't block marking fired since the email is the primary channel.
+      try {
+        await fetch(`${process.env.APP_URL}/api/push/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: reminder.user_id,
+            title: "🔔 Reminder",
+            body: reminder.text,
+            url: "/",
+            type: "reminder",
+            tag: `reminder-${reminder.id}`,
+          }),
+        });
+      } catch (err) {
+        console.warn(`[process-reminders] push send failed for ${reminder.id}: ${err.message}`);
+      }
+
       // Mark fired=true (prevents re-send on next cron tick)
       const { error: upErr } = await supabase
         .from("reminders")

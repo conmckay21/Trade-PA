@@ -183,7 +183,34 @@ export function useReminders(userId) {
         done: !!reminder.done,
         fired: !!reminder.fired,
       }).select().single();
-      if (error) { console.warn("Reminder add:", error.message); return; }
+      if (error) {
+        // Handle the unique-active-reminder constraint (added 2026-05-18).
+        // If a duplicate exists (double-tap, voice retry, writeQueue replay),
+        // fetch the existing one and replace the optimistic local entry with it.
+        if (error.code === '23505') {
+          const { data: existing } = await db.from("reminders")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("text", reminder.text)
+            .eq("fire_at", new Date(reminder.time).toISOString())
+            .is("deleted_at", null)
+            .maybeSingle();
+          if (existing) {
+            const upgraded = rowToReminder(existing);
+            setRemindersRaw(prev => {
+              const next = prev
+                .filter(r => r.id !== reminder.id)   // remove optimistic temp
+                .filter(r => r.id !== upgraded.id);  // dedupe if already present
+              next.unshift(upgraded);
+              persist(next);
+              return next;
+            });
+            return;
+          }
+        }
+        console.warn("Reminder add:", error.message);
+        return;
+      }
       // Replace the temp local id with the real db-backed one so future
       // dismiss/remove operations target the right row.
       const upgraded = rowToReminder(data);
