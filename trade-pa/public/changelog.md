@@ -13,6 +13,12 @@ Reminders now tell you "Due in 5 min", "Due now", or "Due 3 min ago" so you know
 If you accidentally set the same reminder twice (double-tap, voice retry, anything else), the app now catches it and keeps just one.
 
 # What's new
+🔁 **Reminders for annual services**
+When you have a job marked as annual (boiler service, gas safety check, electrical cert), Trade PA now tracks the next service date. You'll get a heads-up 30 days before it's due and an urgent nudge at 7 days if you haven't actioned it yet. The reminder includes the customer name and date so you can pick up the phone or send a message straight away.
+
+📋 **Reminders for expiring documents**
+Your compliance documents (Gas Safe, NICEIC, insurance, RAMS) and your team members' documents (CSCS, ECS, DBS) now get the same treatment — 30 days heads-up plus a 7-day urgent nudge before they expire. Reminders only appear in your list when they're actually due, so the Reminders view stays focused on this week's work.
+
 
 ## 2026-05-07
 
