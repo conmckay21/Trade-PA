@@ -172,12 +172,20 @@ async function handler(req, res) {
       // Fire push notification alongside the email. Best-effort — push failure
       // doesn't block marking fired since the email is the primary channel.
       try {
+        const dueAt = new Date(reminder.fire_at).getTime();
+        const minsUntilDue = Math.round((dueAt - Date.now()) / 60000);
+        let timePhrase;
+        if (minsUntilDue >= 2) timePhrase = `Due in ${minsUntilDue} min`;
+        else if (minsUntilDue >= 0) timePhrase = "Due now";
+        else if (minsUntilDue >= -2) timePhrase = "Just due";
+        else timePhrase = `Due ${Math.abs(minsUntilDue)} min ago`;
+
         await fetch(`${process.env.APP_URL}/api/push/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId: reminder.user_id,
-            title: "🔔 Reminder",
+            title: `🔔 ${timePhrase}`,
             body: reminder.text,
             url: "/",
             type: "reminder",

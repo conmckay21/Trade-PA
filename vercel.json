@@ -39,7 +39,7 @@
     },
     {
       "path": "/api/cron/process-reminders",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/daily-automation",

@@ -1,3 +1,17 @@
+## 2026-05-18
+
+🔔 **Push notifications now landing on your phone**
+Reminders, missed call alerts, invoice paid notifications and quote accepted notifications now show up properly on your home screen and lock screen. Previously they were sending but not always getting through. Sorted on iOS, with the Android update following.
+
+⚡ **80% allowance warnings**
+A heads-up notification when you hit 80% of your monthly AI conversations or hands-free voice minutes — one push per month per limit, so you know to top up before you run out.
+
+🕐 **Smarter reminder timing**
+Reminders now tell you "Due in 5 min", "Due now", or "Due 3 min ago" so you know if it's a heads-up or an alert. Reminder checks now run every 2 minutes (was every 5).
+
+🛡 **No more duplicate reminders**
+If you accidentally set the same reminder twice (double-tap, voice retry, anything else), the app now catches it and keeps just one.
+
 # What's new
 
 ## 2026-05-07

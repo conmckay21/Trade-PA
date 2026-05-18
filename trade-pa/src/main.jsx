@@ -4,6 +4,30 @@ import * as Sentry from '@sentry/react'
 import App from './App.jsx'
 
 // ============================================================================
+// Capacitor API base URL fix
+// ----------------------------------------------------------------------------
+// In native builds the Capacitor WebView serves from https://localhost/, which
+// means bare /api/* fetches resolve to https://localhost/api/* (no server there).
+// Rewrite them to the production Vercel domain on native platforms only.
+// Web build is unaffected — /api/* there resolves to the same Vercel domain.
+// ============================================================================
+import { Capacitor } from "@capacitor/core";
+
+if (Capacitor.isNativePlatform()) {
+  const API_BASE = "https://www.tradespa.co.uk";
+  const _fetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    if (typeof input === "string" && input.startsWith("/api/")) {
+      return _fetch(API_BASE + input, init);
+    }
+    if (input instanceof Request && input.url.startsWith("https://localhost/api/")) {
+      return _fetch(input.url.replace("https://localhost", API_BASE), init);
+    }
+    return _fetch(input, init);
+  };
+}
+
+// ============================================================================
 // Sentry error monitoring
 // ----------------------------------------------------------------------------
 // Reports runtime errors from production users to Sentry so we can see what's
