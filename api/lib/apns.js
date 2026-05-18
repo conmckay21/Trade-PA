@@ -49,8 +49,21 @@ function normalizeKey(raw) {
   return key;
 }
 
+function getPrivateKey() {
+  // Prefer the base64-encoded form — single-line values survive every env
+  // UI without mangled newlines. Fall back to raw PEM for legacy setups.
+  if (process.env.APNS_AUTH_KEY_B64) {
+    try {
+      return Buffer.from(process.env.APNS_AUTH_KEY_B64.trim(), "base64").toString("utf8");
+    } catch (err) {
+      throw new Error("APNS_AUTH_KEY_B64 could not be base64-decoded");
+    }
+  }
+  return normalizeKey(process.env.APNS_AUTH_KEY);
+}
+
 function buildJwt() {
-  const privateKey = normalizeKey(process.env.APNS_AUTH_KEY);
+  const privateKey = getPrivateKey();
   const keyId = process.env.APNS_KEY_ID;
   const teamId = process.env.APNS_TEAM_ID;
   if (!privateKey || !keyId || !teamId) {
