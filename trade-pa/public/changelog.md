@@ -22,6 +22,9 @@ Your compliance documents (Gas Safe, NICEIC, insurance, RAMS) and your team memb
 💸 **Quote follow-up reminders**
 When you send a quote and the customer hasn't responded after 3 days, Trade PA drops a gentle reminder in your list to chase them. If they still haven't replied at 7 days, you get a firmer nudge. Each reminder shows the customer name, days elapsed, and quote value — chasing forgotten quotes is one of the highest-leverage things a tradie can do.
 
+✉️ **One-tap email drafting from annual-service reminders**
+When a reminder for an annual service appears in your list, tap the "Draft email to customer" button to open a pre-filled email — customer name, service type, and due date already templated. Edit if you want, hit Send, done. Uses the same email pipe as your invoices and quotes.
+
 
 ## 2026-05-07
 
