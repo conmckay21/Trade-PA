@@ -30,12 +30,35 @@ function b64url(input) {
   return Buffer.from(input).toString("base64url");
 }
 
+function normalizeKey(raw) {
+  if (!raw) return raw;
+  let key = raw;
+  // Some env UIs convert real newlines to literal "\n" — undo it
+  if (key.includes("\\n")) key = key.replace(/\\n/g, "\n");
+  // Normalise CRLF/CR → LF
+  key = key.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // Strip surrounding quotes if the UI added them
+  if ((key.startsWith('"') && key.endsWith('"')) ||
+      (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1);
+  }
+  // Trim leading/trailing whitespace (but preserve internal newlines)
+  key = key.replace(/^\s+/, "").replace(/\s+$/, "");
+  // Ensure trailing newline — OpenSSL is fussy about this
+  if (!key.endsWith("\n")) key += "\n";
+  return key;
+}
+
 function buildJwt() {
-  const privateKey = process.env.APNS_AUTH_KEY;
+  const privateKey = normalizeKey(process.env.APNS_AUTH_KEY);
   const keyId = process.env.APNS_KEY_ID;
   const teamId = process.env.APNS_TEAM_ID;
   if (!privateKey || !keyId || !teamId) {
     throw new Error("APNs env vars missing: APNS_AUTH_KEY, APNS_KEY_ID, APNS_TEAM_ID required");
+  }
+  // Sanity check the PEM structure — fail fast with a useful message if mangled
+  if (!privateKey.includes("BEGIN PRIVATE KEY") || !privateKey.includes("END PRIVATE KEY")) {
+    throw new Error("APNS_AUTH_KEY missing BEGIN/END PRIVATE KEY markers — check env var formatting on Vercel");
   }
 
   const header = b64url(JSON.stringify({ alg: "ES256", kid: keyId, typ: "JWT" }));
