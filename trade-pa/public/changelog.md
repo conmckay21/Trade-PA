@@ -2,6 +2,9 @@
 
 🔧 **Fixed: customer portal links in email CTAs**
 The "View & Accept" and "View & Pay Online" buttons in customer emails now work properly when sent from the iOS or Android app. Previously, links sent from mobile pointed to an internal app address that didn't resolve outside the app — affecting any quote or invoice email sent from your phone since the 1.0.2 launch. Web app was unaffected. iOS 1.0.3 and Android v6 will follow with the fix baked in.
+🎁 **Free trial — no card required**
+Signing up is now properly frictionless. Enter your name, email, business and trade — that's it. You get 30 days of Trade PA for free with no card on file. Add a card before your trial ends to keep going, or just walk away. No surprise charges, no hassle.
+
 
 ## 2026-05-18
 

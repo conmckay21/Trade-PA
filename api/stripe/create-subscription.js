@@ -1,6 +1,8 @@
 // api/stripe/create-subscription.js
-// Creates a Stripe customer + SetupIntent for 30-day trial signup.
-// Subscription is created with trial_period_days=30, no immediate charge.
+// Creates a Stripe customer + subscription for a 30-day free trial.
+// No payment method required at signup; user adds a card in-app before
+// the trial ends to convert. If trial ends without a card attached, the
+// subscription is cancelled cleanly via trial_settings.end_behavior.
 
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
@@ -112,23 +114,20 @@ async function handler(req, res) {
       },
     });
 
-    // Create subscription with 30-day trial
+    // Create subscription with 30-day trial — no payment method required.
+    // Subscription enters 'trialing' immediately; at trial end, if no
+    // payment method is attached, trial_settings.end_behavior cancels
+    // the subscription cleanly. User is prompted in-app to add a card
+    // before trial expires to keep their account active.
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: priceId }],
       trial_period_days: 30,
-      payment_behavior: "default_incomplete",
-      payment_settings: {
-        save_default_payment_method: "on_subscription",
-        payment_method_types: ["card"],
-      },
-      // Trial settings — if payment method fails at trial end, mark sub as cancelled
       trial_settings: {
         end_behavior: {
           missing_payment_method: "cancel",
         },
       },
-      expand: ["pending_setup_intent"],
       metadata: {
         type: "main",
         supabase_user_id: userId,
@@ -136,11 +135,6 @@ async function handler(req, res) {
         plan_key: resolvedPlanKey,
       },
     });
-
-    const setupIntent = subscription.pending_setup_intent;
-    if (!setupIntent?.client_secret) {
-      throw new Error("No SetupIntent returned from Stripe.");
-    }
 
     // Insert subscription row — webhook will keep it in sync from here
     const { error: insertErr } = await supabaseAdmin
@@ -169,7 +163,6 @@ async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      client_secret: setupIntent.client_secret,
       subscription_id: subscription.id,
       customer_id: customer.id,
       trial_ends_at: subscription.trial_end
