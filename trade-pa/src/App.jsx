@@ -2628,6 +2628,12 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           ) : (
             <a
               href={`/api/auth/xero/connect?userId=${user?.id}`}
+              onClick={(e) => {
+                if (window.Capacitor?.isNativePlatform?.()) {
+                  e.preventDefault();
+                  window.open(`https://www.tradespa.co.uk/api/auth/xero/connect?userId=${encodeURIComponent(user?.id || "")}`, "_system");
+                }
+              }}
               style={{ ...S.btn("primary"), textDecoration: "none", background: "#13B5EA", fontSize: 12 }}
             >Connect Xero</a>
           )}
@@ -2664,6 +2670,12 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           ) : (
             <a
               href={`/api/auth/quickbooks/connect?userId=${user?.id}`}
+              onClick={(e) => {
+                if (window.Capacitor?.isNativePlatform?.()) {
+                  e.preventDefault();
+                  window.open(`https://www.tradespa.co.uk/api/auth/quickbooks/connect?userId=${encodeURIComponent(user?.id || "")}`, "_system");
+                }
+              }}
               style={{ ...S.btn("primary"), textDecoration: "none", background: "#2CA01C", fontSize: 12 }}
             >Connect QuickBooks</a>
           )}
@@ -2708,6 +2720,12 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             ) : (
               <a
                 href={`/api/stripe/connect-onboard?userId=${user?.id}`}
+                onClick={(e) => {
+                  if (window.Capacitor?.isNativePlatform?.()) {
+                    e.preventDefault();
+                    window.open(`https://www.tradespa.co.uk/api/stripe/connect-onboard?userId=${encodeURIComponent(user?.id || "")}`, "_system");
+                  }
+                }}
                 style={{ ...S.btn("primary"), textDecoration: "none", background: "#635BFF", fontSize: 12 }}
               >Connect →</a>
             )}
