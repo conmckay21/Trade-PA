@@ -4,9 +4,8 @@
     <meta name="apple-itunes-app" content="app-id=6769395416">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Start your Trade PA free trial — 30 days, no charge until day 31</title>
-  <meta name="description" content="Start your 30-day free trial of Trade PA — the AI-powered voice assistant for UK tradespeople. Card required, no charge until day 31, cancel anytime." />
-  <script src="https://js.stripe.com/v3/"></script>
+  <title>Start your Trade PA free trial — 30 days free, no card required</title>
+  <meta name="description" content="Start your 30-day free trial of Trade PA — the AI-powered voice assistant for UK tradespeople. No card required, cancel anytime." />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -41,10 +40,6 @@
       margin-bottom: 14px; font-family: inherit;
     }
     input:focus, select:focus { outline: none; border-color: var(--amber); }
-    .card-wrap {
-      background: var(--surface-high); border: 1px solid var(--border);
-      border-radius: 8px; padding: 12px; margin-bottom: 14px;
-    }
     button {
       width: 100%; background: var(--amber); color: #000; border: none;
       padding: 14px; border-radius: 8px; font-size: 15px; font-weight: 700;
@@ -68,14 +63,14 @@
   <div class="card">
     <div class="logo">Trade <span class="logo-accent">PA</span></div>
     <h1>Start your free trial</h1>
-    <p class="sub">Free for 30 days — card required, no charge until day 31</p>
+    <p class="sub">Free for 30 days &mdash; no card required</p>
 
     <div class="trial-banner">
-      ✓ 30 days free · ✓ Cancel anytime · ✓ No charge until day 31
+      &#10003; 30 days free &middot; &#10003; No card required &middot; &#10003; Cancel anytime
     </div>
 
     <div class="plan-summary" id="planSummary">
-      Loading plan…
+      Loading plan&hellip;
     </div>
 
     <form id="signupForm">
@@ -101,14 +96,14 @@
 
       <label>Trade</label>
       <select id="tradeType" required>
-        <option value="">Select your trade…</option>
+        <option value="">Select your trade&hellip;</option>
         <option>Electrician</option>
         <option>Plumber</option>
         <option>Heating engineer / Gas engineer</option>
         <option>Builder</option>
         <option>Carpenter / Joiner</option>
         <option>Roofer</option>
-        <option>Painter & Decorator</option>
+        <option>Painter &amp; Decorator</option>
         <option>Plasterer</option>
         <option>Tiler</option>
         <option>Flooring specialist</option>
@@ -117,16 +112,11 @@
         <option>Handyman / Multi-trade</option>
         <option>HVAC engineer</option>
         <option>Locksmith</option>
-        <option>Window & door fitter</option>
+        <option>Window &amp; door fitter</option>
         <option>Other</option>
       </select>
 
-      <label>Card details</label>
-      <div class="card-wrap">
-        <div id="stripeCard"></div>
-      </div>
-
-      <button type="submit" id="submitBtn">Start 30-day free trial →</button>
+      <button type="submit" id="submitBtn">Start 30-day free trial &rarr;</button>
 
       <div class="error" id="errorMsg"></div>
 
@@ -134,7 +124,8 @@
         By starting your trial you agree to our
         <a href="/terms.html">Terms</a> and
         <a href="/privacy-policy.html">Privacy Policy</a>.
-        Free for 30 days — card required, no charge until day 31.
+        Free for 30 days &mdash; no card required.
+        Add a card before your trial ends to keep going.
         Cancel anytime from your account.
       </p>
     </form>
@@ -143,48 +134,34 @@
   <script>
     const SUPABASE_URL = "https://xgygnthsjihrrqwscjbf.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhneWdudGhzamlocnJxd3NjamJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3MzM2ODUsImV4cCI6MjA5MDMwOTY4NX0.wMGCMgoaFtBihgsnGVbNs1FnS-BEezF94lp4jxY03FQ";
-    const STRIPE_PUBLIC_KEY = "pk_live_51THMNyDV8Bu1hOo8iM7RtZtzQe1wgBHkU9Hx6EUHTkeGSnMdb4TurtebwEvXRYJpg8yT8OF5VL3kAmCBgAlQUvL600iEn2iPnY";
 
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const stripe = Stripe(STRIPE_PUBLIC_KEY);
-    const elements = stripe.elements();
-
-    const card = elements.create("card", {
-      style: {
-        base: {
-          color: "#f5f5f5", fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
-          fontSize: "14px",
-          "::placeholder": { color: "#555" },
-        },
-        invalid: { color: "#ef4444" },
-      },
-    });
-    card.mount("#stripeCard");
 
     const params = new URLSearchParams(window.location.search);
     const planKey = params.get("plan") || "solo_monthly";
 
     const PLAN_LABELS = {
-      solo_monthly:     { name: "Solo",     price: "£39/mo",  interval: "monthly" },
-      pro_solo_monthly: { name: "Pro Solo", price: "£59/mo",  interval: "monthly" },
-      team_monthly:     { name: "Team",     price: "£89/mo",  interval: "monthly" },
-      business_monthly: { name: "Business", price: "£129/mo", interval: "monthly" },
+      solo_monthly:     { name: "Solo",     price: "\u00a339/mo",  interval: "monthly" },
+      pro_solo_monthly: { name: "Pro Solo", price: "\u00a359/mo",  interval: "monthly" },
+      team_monthly:     { name: "Team",     price: "\u00a389/mo",  interval: "monthly" },
+      business_monthly: { name: "Business", price: "\u00a3129/mo", interval: "monthly" },
     };
 
     const planLabel = PLAN_LABELS[planKey] || PLAN_LABELS.solo_monthly;
-    document.getElementById("planSummary").innerHTML = `
-      You're starting a <strong>${planLabel.name}</strong> trial (${planLabel.price} ${planLabel.interval}).
-      You won't be charged until your free trial ends on
-      <strong>${new Date(Date.now() + 30 * 86400 * 1000).toLocaleDateString("en-GB", {
-        day: "numeric", month: "long", year: "numeric"
-      })}</strong>.
-    `;
+    const trialEnd = new Date(Date.now() + 30 * 86400 * 1000).toLocaleDateString("en-GB", {
+      day: "numeric", month: "long", year: "numeric"
+    });
+    document.getElementById("planSummary").innerHTML =
+      "You're starting a <strong>" + planLabel.name + "</strong> trial (" +
+      planLabel.price + " " + planLabel.interval + " after the trial). " +
+      "Your free trial runs until <strong>" + trialEnd + "</strong>. " +
+      "Add a card before then to keep going \u2014 no charge during your trial.";
 
     document.getElementById("signupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const btn = document.getElementById("submitBtn");
       const errMsg = document.getElementById("errorMsg");
-      btn.disabled = true; btn.textContent = "Setting up your trial…"; errMsg.textContent = "";
+      btn.disabled = true; btn.textContent = "Setting up your trial\u2026"; errMsg.textContent = "";
 
       const firstName = document.getElementById("firstName").value.trim();
       const lastName = document.getElementById("lastName").value.trim();
@@ -200,18 +177,17 @@
           options: { data: { first_name: firstName, last_name: lastName, business_name: businessName, trade_type: tradeType } },
         });
         if (authErr) throw new Error(authErr.message);
-        if (!authData?.user) throw new Error("Signup failed — please try again.");
+        if (!authData?.user) throw new Error("Signup failed \u2014 please try again.");
 
-        const userId = authData.user.id;
         const session = authData.session;
         if (!session?.access_token) throw new Error("Could not get auth session.");
 
-        // 2. Create SetupIntent via backend
+        // 2. Create trial subscription (no card; user adds one before trial ends)
         const subRes = await fetch("/api/stripe/create-subscription", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${session.access_token}`,
+            "Authorization": "Bearer " + session.access_token,
           },
           body: JSON.stringify({
             plan_key: planKey,
@@ -225,28 +201,13 @@
         const subData = await subRes.json();
         if (!subRes.ok || subData.error) throw new Error(subData.message || subData.error || "Subscription setup failed.");
 
-        // 3. Confirm card setup (SetupIntent for trial — not charged yet)
-        const { error: confirmErr } = await stripe.confirmCardSetup(
-          subData.client_secret,
-          {
-            payment_method: {
-              card,
-              billing_details: {
-                name: `${firstName} ${lastName}`,
-                email,
-              },
-            },
-          }
-        );
-        if (confirmErr) throw new Error(confirmErr.message);
-
-        // 4. All good — redirect to app
+        // 3. All good \u2014 redirect to app
         window.location.href = "/?welcome=trial";
 
       } catch (err) {
         errMsg.textContent = err.message;
         btn.disabled = false;
-        btn.textContent = "Start 30-day free trial →";
+        btn.textContent = "Start 30-day free trial \u2192";
       }
     });
   </script>
