@@ -1,4 +1,4 @@
-import { withSentry } from "../lib/sentry.js";
+import { withSentry, captureNonFatal } from "../lib/sentry.js";
 
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -12,7 +12,30 @@ async function handler(req, res) {
     catch { throw new Error(`Xero error (${r.status}): ${text.slice(0, 300)}`); }
   }
 
+  // Defensive parse: line_items may arrive as a jsonb-stored JSON string,
+  // a double-encoded JSON string, or an already-parsed array.
+  function parseLineItems(raw) {
+    if (Array.isArray(raw)) return raw;
+    if (raw == null) return [];
+    let v = raw;
+    for (let i = 0; i < 2 && typeof v === 'string'; i++) {
+      try { v = JSON.parse(v); } catch { return []; }
+    }
+    return Array.isArray(v) ? v : [];
+  }
+
   try {
+    // ── Validate critical invoice fields up-front ────────────────────────────
+    const customerName = String(invoice.customer || '').trim();
+    if (!customerName) {
+      throw new Error('Invoice has no customer name — set a customer before syncing to Xero');
+    }
+    const grossAmount = parseFloat(invoice.grossAmount || invoice.amount) || 0;
+    if (grossAmount <= 0 && !invoice.cisEnabled) {
+      throw new Error(`Invoice ${invoice.id || ''} has no amount — cannot sync £0 invoice to Xero`);
+    }
+
+    // ── Look up Xero connection ──────────────────────────────────────────────
     const connRes = await fetch(
       `${process.env.VITE_SUPABASE_URL}/rest/v1/accounting_connections?user_id=eq.${userId}&provider=eq.xero&select=*`,
       { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
@@ -47,18 +70,15 @@ async function handler(req, res) {
       });
     }
 
-    // ── VAT / Tax setup ────────────────────────────────────────────────────────
+    // ── VAT / Tax setup ──────────────────────────────────────────────────────
     // Always use EXCLUSIVE — send net amount, Xero adds VAT on top
     // Trade PA stores grossAmount (VAT-inclusive), so we extract net ourselves
-
     const vatEnabled = !!invoice.vatEnabled;
     const vatZeroRated = !!invoice.vatZeroRated;
     const vatType = invoice.vatType || 'income';
     const vatRate = Number(invoice.vatRate || 20);
-    const grossAmount = parseFloat(invoice.grossAmount || invoice.amount) || 0;
     const isDRC = vatType.includes('drc');
 
-    // Net amount — extract from gross if VAT-inclusive
     const netAmount = (vatEnabled && !vatZeroRated && !isDRC)
       ? parseFloat((grossAmount / (1 + vatRate / 100)).toFixed(2))
       : grossAmount;
@@ -69,22 +89,19 @@ async function handler(req, res) {
       taxType = 'ZERORATEDOUTPUT';
     } else if (vatEnabled) {
       if (isDRC) {
-        taxType = 'RROUTPUT';      // Domestic Reverse Charge
+        taxType = 'RROUTPUT';      // Domestic Reverse Charge (output)
       } else if (vatRate === 20) {
         taxType = 'OUTPUT2';       // Standard rate 20%
       } else if (vatRate === 5) {
-        taxType = 'RRINPUT';       // Reduced rate 5%
+        taxType = 'OUTPUT';        // 5% reduced rate (output, NOT RRINPUT which is for purchases)
       } else {
         taxType = 'OUTPUT2';
       }
     }
 
-
-    // Xero LineAmountTypes — correct casing required
-    // Always Exclusive — send net amount, Xero adds VAT on top to reach customer gross
     const lineAmountTypes = 'Exclusive';
 
-    // ── Build line items ───────────────────────────────────────────────────────
+    // ── Build line items ─────────────────────────────────────────────────────
     let lineItems = [];
 
     if (invoice.cisEnabled) {
@@ -107,24 +124,27 @@ async function handler(req, res) {
           TaxType: taxType,
         });
       }
-    } else if (invoice.lineItems && invoice.lineItems.length > 0) {
-      // Multi-line invoice — extract net from each line amount if VAT-inclusive
-      lineItems = invoice.lineItems.map(l => {
-        const lineGross = parseFloat(l.amount || l.unitPrice || l.total || 0);
-        const lineNet = (vatEnabled && !vatZeroRated && !isDRC)
-          ? parseFloat((lineGross / (1 + vatRate / 100)).toFixed(2))
-          : lineGross;
-        return {
-          Description: l.description || l.desc || 'Services',
-          Quantity: parseFloat(l.qty || l.quantity || 1),
-          UnitAmount: lineNet,
-          AccountCode: '200',
-          TaxType: taxType,
-        };
-      }).filter(l => l.UnitAmount > 0);
+    } else {
+      // Multi-line invoice — robust parse handles string/array/double-encoded data
+      const parsed = parseLineItems(invoice.lineItems);
+      if (parsed.length > 0) {
+        lineItems = parsed.map(l => {
+          const lineGross = parseFloat(l.amount || l.unitPrice || l.total || 0);
+          const lineNet = (vatEnabled && !vatZeroRated && !isDRC)
+            ? parseFloat((lineGross / (1 + vatRate / 100)).toFixed(2))
+            : lineGross;
+          return {
+            Description: String(l.description || l.desc || 'Services').trim() || 'Services',
+            Quantity: parseFloat(l.qty || l.quantity || 1) || 1,
+            UnitAmount: lineNet,
+            AccountCode: '200',
+            TaxType: taxType,
+          };
+        }).filter(l => Number.isFinite(l.UnitAmount) && l.UnitAmount > 0);
+      }
     }
 
-    // Fallback — single line using net amount
+    // Fallback — single line using net amount derived from gross
     if (lineItems.length === 0) {
       lineItems.push({
         Description: invoice.description || 'Services rendered',
@@ -137,7 +157,7 @@ async function handler(req, res) {
 
     const xeroInvoice = {
       Type: 'ACCREC',
-      Contact: { Name: invoice.customer },
+      Contact: { Name: customerName },
       LineItems: lineItems,
       Date: new Date().toISOString().split('T')[0],
       DueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -170,7 +190,18 @@ async function handler(req, res) {
       throw new Error(validationMsg);
     }
   } catch (err) {
-    console.error('Xero create invoice error:', err.message);
+    console.error('Xero create invoice error:', err.message, '— invoice:', invoice?.id);
+    // Send full context to Sentry so we never lose the actual error message again
+    try {
+      if (typeof captureNonFatal === 'function') {
+        captureNonFatal(err, {
+          route: 'xero/create-invoice',
+          userId,
+          invoiceId: invoice?.id,
+          customer: invoice?.customer,
+        });
+      }
+    } catch (_) { /* never let logging break the response */ }
     res.status(500).json({ error: err.message });
   }
 }
