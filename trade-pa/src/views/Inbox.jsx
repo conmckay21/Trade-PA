@@ -856,8 +856,8 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
           <div style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", marginBottom: 8 }}>⚠ Email connection failed</div>
           <div style={{ fontSize: 12, color: "#fca5a5", marginBottom: 16, lineHeight: 1.6, wordBreak: "break-all" }}>{urlError}</div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button style={IS.btn("amber")} onClick={() => { window.location.href = `/api/auth/gmail/connect?userId=${user.id}`; }}>Try Gmail instead</button>
-            <button style={IS.btn("default")} onClick={() => { window.location.href = `/api/auth/outlook/connect?userId=${user.id}`; }}>Retry Outlook</button>
+            <button style={IS.btn("amber")} onClick={() => { const __url = `https://www.tradespa.co.uk/api/auth/gmail/connect?userId=${user.id}`; if (window.Capacitor?.isNativePlatform?.()) { window.open(__url, '_system'); } else { window.location.href = __url; } }}>Try Gmail instead</button>
+            <button style={IS.btn("default")} onClick={() => { const __url = `https://www.tradespa.co.uk/api/auth/outlook/connect?userId=${user.id}`; if (window.Capacitor?.isNativePlatform?.()) { window.open(__url, '_system'); } else { window.location.href = __url; } }}>Retry Outlook</button>
             <button style={IS.btn("ghost")} onClick={() => setUrlError(null)}>Dismiss</button>
           </div>
         </div>
@@ -872,10 +872,10 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
         <div style={{ fontSize: 17, fontWeight: 700, color: IC.text, marginBottom: 8 }}>Connect your inbox</div>
         <div style={{ fontSize: 13, color: IC.muted, maxWidth: 380, margin: "0 auto 28px", lineHeight: 1.6 }}>Link your email and Trade PA will automatically review incoming emails every hour — suggesting jobs, enquiries, material orders and more for your approval.</div>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", marginBottom: 12 }}>
-          <button style={{ ...IS.btn("default"), padding: "10px 20px", fontSize: 13 }} onClick={() => { window.location.href = `/api/auth/gmail/connect?userId=${user.id}`; }}>
+          <button style={{ ...IS.btn("default"), padding: "10px 20px", fontSize: 13 }} onClick={() => { const __url = `https://www.tradespa.co.uk/api/auth/gmail/connect?userId=${user.id}`; if (window.Capacitor?.isNativePlatform?.()) { window.open(__url, '_system'); } else { window.location.href = __url; } }}>
             <span style={{ color: "#ef4444", fontWeight: 700 }}>G</span> Connect Gmail
           </button>
-          <button style={{ ...IS.btn("default"), padding: "10px 20px", fontSize: 13 }} onClick={() => { window.location.href = `/api/auth/outlook/connect?userId=${user.id}`; }}>
+          <button style={{ ...IS.btn("default"), padding: "10px 20px", fontSize: 13 }} onClick={() => { const __url = `https://www.tradespa.co.uk/api/auth/outlook/connect?userId=${user.id}`; if (window.Capacitor?.isNativePlatform?.()) { window.open(__url, '_system'); } else { window.location.href = __url; } }}>
             <span style={{ color: "#3b82f6", fontWeight: 700 }}>✉</span> Connect Outlook
           </button>
         </div>

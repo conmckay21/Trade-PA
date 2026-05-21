@@ -1,3 +1,7 @@
+## 2026-05-21
+
+- 📧 **Connect Gmail or Outlook** — works properly in the iOS and Android app now. Tapping Connect used to quietly reload the app instead of opening the sign-in screen. Same root cause as the Xero, QuickBooks, and Card Payments fix from yesterday.
+
 ## 2026-05-20
 
 🔧 **Fixed: customer portal links in email CTAs**
