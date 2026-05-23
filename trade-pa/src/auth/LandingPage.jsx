@@ -398,7 +398,7 @@ export function LandingPage({ onAuth }) {
                     <img src="/img/app-store-badge.svg" alt="Download on the App Store" style={{ height: 44, display: "block", width: "auto" }} />
                   </a>
                   <a href="https://play.google.com/store/apps/details?id=uk.co.tradespa.app" target="_blank" rel="noopener noreferrer" aria-label="Get Trade PA on Google Play" style={{ display: "inline-block" }}>
-                    <img src="/img/google-play-badge.png" alt="Get it on Google Play" style={{ height: 44, display: "block", width: "auto" }} />
+                    <img src="/img/google-play-badge.png" alt="Get it on Google Play" style={{ height: 52, display: "block", width: "auto" }} />
                   </a>
                 </div>
               </div>
