@@ -1,5 +1,6 @@
 ## 2026-05-21
 
+- 📱 **Trade PA is now on Google Play** — download for Android alongside iOS at https://play.google.com/store/apps/details?id=uk.co.tradespa.app
 - 📧 **Connect Gmail or Outlook** — works properly in the iOS and Android app now. Tapping Connect used to quietly reload the app instead of opening the sign-in screen. Same root cause as the Xero, QuickBooks, and Card Payments fix from yesterday.
 
 ## 2026-05-20

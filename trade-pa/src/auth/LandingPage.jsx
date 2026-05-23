@@ -392,10 +392,15 @@ export function LandingPage({ onAuth }) {
                 <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#6b7280", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>Now on iOS &mdash; Android landing soon</p>
-                <a href="https://apps.apple.com/gb/app/trade-pa/id6769395416" target="_blank" rel="noopener noreferrer" aria-label="Download Trade PA on the App Store" style={{ display: "inline-block" }}>
-                  <img src="/img/app-store-badge.svg" alt="Download on the App Store" style={{ height: 44, display: "block", width: "auto" }} />
-                </a>
+                <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#6b7280", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>Now on iOS &amp; Android</p>
+                <div style={{ display: "inline-flex", gap: 12, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
+                  <a href="https://apps.apple.com/gb/app/trade-pa/id6769395416" target="_blank" rel="noopener noreferrer" aria-label="Download Trade PA on the App Store" style={{ display: "inline-block" }}>
+                    <img src="/img/app-store-badge.svg" alt="Download on the App Store" style={{ height: 44, display: "block", width: "auto" }} />
+                  </a>
+                  <a href="https://play.google.com/store/apps/details?id=uk.co.tradespa.app" target="_blank" rel="noopener noreferrer" aria-label="Get Trade PA on Google Play" style={{ display: "inline-block" }}>
+                    <img src="/img/google-play-badge.png" alt="Get it on Google Play" style={{ height: 44, display: "block", width: "auto" }} />
+                  </a>
+                </div>
               </div>
               <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
               <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail &amp; Outlook · Built for UK Trades</p>
