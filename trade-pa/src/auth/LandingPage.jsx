@@ -397,8 +397,8 @@ export function LandingPage({ onAuth }) {
                   <a href="https://apps.apple.com/gb/app/trade-pa/id6769395416" target="_blank" rel="noopener noreferrer" aria-label="Download Trade PA on the App Store" style={{ display: "inline-block" }}>
                     <img src="/img/app-store-badge.svg" alt="Download on the App Store" style={{ height: 44, display: "block", width: "auto" }} />
                   </a>
-                  <a href="https://play.google.com/store/apps/details?id=uk.co.tradespa.app" target="_blank" rel="noopener noreferrer" aria-label="Get Trade PA on Google Play" style={{ display: "inline-block" }}>
-                    <img src="/img/google-play-badge.png" alt="Get it on Google Play" style={{ height: 52, display: "block", width: "auto" }} />
+                  <a href="https://play.google.com/store/apps/details?id=uk.co.tradespa.app" target="_blank" rel="noopener noreferrer" aria-label="Get Trade PA on Google Play" style={{ display: "inline-block", height: 44, overflow: "hidden" }}>
+                    <img src="/img/google-play-badge.png" alt="Get it on Google Play" style={{ height: 66, display: "block", width: "auto", marginTop: -11 }} />
                   </a>
                 </div>
               </div>

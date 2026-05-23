@@ -57,9 +57,21 @@
       margin-bottom: 16px; font-size: 12px; color: var(--muted); line-height: 1.6;
     }
     .plan-summary strong { color: var(--text); }
+    .back-link {
+      position: fixed; top: 18px; left: 20px; z-index: 10;
+      color: var(--muted); font-size: 12px; font-weight: 600;
+      text-decoration: none; letter-spacing: 0.04em;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 12px; border-radius: 8px;
+      background: rgba(20,20,20,0.85); backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .back-link:hover { color: var(--amber); border-color: var(--amber); }
   </style>
 </head>
 <body>
+  <a href="/" class="back-link" aria-label="Back to Trade PA home">&larr; Back to Trade PA</a>
   <div class="card">
     <div class="logo">Trade <span class="logo-accent">PA</span></div>
     <h1>Start your free trial</h1>
