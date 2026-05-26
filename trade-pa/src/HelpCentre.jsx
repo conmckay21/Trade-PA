@@ -1708,4 +1708,71 @@ const ARTICLES = [
     ],
     related: ["free-trial", "cancel-trial", "subscription-plans"],
   },
+  // ─── Suppliers (shipped May 2026) ───────────────────────────────────────
+  {
+    slug: "suppliers",
+    title: "Suppliers — your trade contacts",
+    category: "getting-work-done",
+    summary: "Keep CEF, Wickes, Plumb Center, your local trade counter — all in one place. Your PA can email them on your behalf.",
+    steps: [
+      "Open Jobs from the bottom tabs. Tap Suppliers in the section header.",
+      "Tap + Add to add a new supplier — name, phone, email, address, notes.",
+      "Tap any supplier to see the contact details, edit, or call.",
+      "From here you can also tap the email icon to send a material order or price request through your PA (see the next article).",
+    ],
+    tips: [
+      "Add your local trade counter, not just the big chains — handy for emergency runs.",
+      "Notes field is good for trade account numbers, account managers, opening hours.",
+      "Suppliers are also pickable from inside the Materials tab on a job card.",
+    ],
+    related: ["ai-supplier-orders", "add-materials", "raise-po"],
+  },
+  {
+    slug: "ai-supplier-orders",
+    title: "Get your PA to email a supplier for you",
+    category: "voice-ai",
+    summary: "Ask your PA to send a material order or price request to any supplier and it does it — no copy-paste, no typing the email yourself.",
+    steps: [
+      "Make sure the supplier is in your Suppliers list with a valid email address.",
+      "Open your PA and ask plainly — \"Order 4 sheets of 18mm ply and 5kg of 65mm screws from Wickes for the Patel job\".",
+      "Or for pricing: \"Ask CEF for a price on 100m of 2.5mm twin and earth\".",
+      "PA confirms the supplier, the items and the job reference, then sends a professional email from your business email address.",
+      "A copy is logged so you can find every sent order in your sent items.",
+    ],
+    voicePrompts: [
+      "Order 50 metres of 2.5mm cable and 8 single sockets from CEF for the Patel job",
+      "Ask Wickes for a price on 4 sheets of 18mm ply and a tub of grab adhesive",
+      "Email Plumb Center, can they confirm stock on a Vaillant ecoTEC 32",
+    ],
+    tips: [
+      "If you skip the supplier name, PA will ask which one. Be specific to save a step.",
+      "Always include a job reference if you can — keeps the supplier's side organised when they reply.",
+      "Price requests don't commit you to anything — useful for quoting before you've started the job.",
+    ],
+    related: ["suppliers", "raise-po", "ai-assistant"],
+  },
+  {
+    slug: "update-quote",
+    title: "Change a quote without rewriting it",
+    category: "getting-paid",
+    summary: "Need to bump a price, change validity, or mark a quote as accepted? Just tell your PA — no delete-and-redo.",
+    steps: [
+      "Open your PA and reference the quote by number or customer name.",
+      "Say what's changing — \"change quote 42 status to accepted\", or \"update the Patel quote, push validity to end of June\", or \"change the labour rate on quote 18 to £55\".",
+      "PA confirms the change and updates the quote in place.",
+      "Open the Quotes tab to verify if you want a visual confirmation.",
+    ],
+    voicePrompts: [
+      "Mark quote 42 as accepted",
+      "Update quote 18 — extend validity to 30 June",
+      "Change the status of the Khan quote to declined",
+      "Bump the second-fix labour line on quote 27 from £45 to £55",
+    ],
+    tips: [
+      "Available status values: draft, sent, accepted, declined, expired.",
+      "Once a quote is accepted, you can ask PA to \"convert quote 42 to an invoice\" to roll it through.",
+      "Updating doesn't email the customer — if you've already sent the original, you'll want to send the updated version manually or ask PA to resend.",
+    ],
+    related: ["quotes-to-invoices", "send-invoice"],
+  },
 ];

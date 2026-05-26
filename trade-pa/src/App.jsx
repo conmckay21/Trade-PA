@@ -5247,6 +5247,40 @@ function AppInner() {
 
       {/* ── ONBOARDING OVERLAYS ──────────────────────────────────────── */}
 
+      {/* Step 7: Graduation — shown after nav tour completes */}
+      {onboardingStep === 7 && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
+          <div style={{ maxWidth: 360, width: "100%", textAlign: "center" }}>
+            <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#10b98122", border: "2px solid #10b981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: "#f0f0f0", marginBottom: 8, letterSpacing: "-0.01em" }}>You're ready to roll</div>
+            <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7, marginBottom: 28 }}>You know where everything lives. Tap the ? in the top-right any time you need a hand. Here's where most people start:</div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, textAlign: "left", marginBottom: 24 }}>
+              {[
+                { icon: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2", path2: "M9 7a4 4 0 100 8 4 4 0 000-8z", label: "Add your first customer", sub: "Go to People — Customers — Add", action: () => { advanceOnboarding(99); setView("Customers"); } },
+                { icon: "M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z", path2: "M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8", label: "Ask your PA to do something", sub: "Tap the mic and say what you need", action: () => { advanceOnboarding(99); setView("AI Assistant"); } },
+                { icon: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z", label: "Browse the Help Centre", sub: "65+ how-to articles, searchable", action: () => { advanceOnboarding(99); } },
+              ].map((opt, i) => (
+                <button key={i} onClick={opt.action} style={{ display: "flex", alignItems: "center", gap: 12, background: "#1a1a1a", border: "1px solid #333", borderRadius: 12, padding: "12px 14px", cursor: "pointer", textAlign: "left", fontFamily: "'DM Sans',sans-serif" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "#f59e0b22", border: "1px solid #f59e0b44", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={opt.icon}/>{opt.path2 && <path d={opt.path2}/>}</svg>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#f0f0f0", marginBottom: 2 }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: "#888" }}>{opt.sub}</div>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+                </button>
+              ))}
+            </div>
+
+            <button onClick={() => advanceOnboarding(99)} style={{ background: "transparent", border: "none", color: "#666", fontSize: 12, cursor: "pointer", padding: "8px 16px" }}>Skip — I'll find my own way</button>
+          </div>
+        </div>
+      )}
+
       {/* Step 4: Install prompt — skip on desktop */}
       {onboardingStep === 4 && isDesktopBrowser && (() => { advanceOnboarding(5); return null; })()}
       {onboardingStep === 4 && !isDesktopBrowser && (
@@ -5313,26 +5347,27 @@ function AppInner() {
       {/* Step 6: Navigation tour overlay — device-aware */}
       {onboardingStep === 6 && (() => {
         const MOBILE_TOUR = [
-          { label: "This is home", desc: "Your PA lives here. Tap the mic to get started.", tabIndex: 0 },
-          { label: "Your jobs", desc: "Job cards, materials, labour, photos, certs, and daywork.", tabIndex: 1 },
-          { label: "Your diary", desc: "Your schedule. Book jobs by voice or tap to add.", tabIndex: 2 },
-          { label: "Accounts", desc: "Invoices, quotes, expenses, mileage, CIS — all your money stuff.", tabIndex: 3 },
-          { label: "People", desc: "Customers, subcontractors, and your team.", tabIndex: 4 },
-          { label: "Settings", desc: "Tap your avatar to open Settings. Bank details, logo, trade registrations.", tabIndex: -1 },
-          { label: "Speak from anywhere", desc: "This mic button follows you to every screen. Tap it — hands-free, no touching your phone.", tabIndex: -2 },
+          { label: "Home base", desc: "Your PA lives here. Tap the mic any time and tell it what you need — create a job, send an invoice, log mileage, almost anything.", tabIndex: 0 },
+          { label: "Jobs", desc: "Every job lives here as a card with its own materials, labour, photos, RAMS and certificates. Suppliers, Stock and Documents also tuck inside this section — tap Jobs to see the lot.", tabIndex: 1 },
+          { label: "Diary", desc: "Your week and month at a glance. Tap any day to see what's on. Drag jobs around to reschedule.", tabIndex: 2 },
+          { label: "Accounts", desc: "All the money — invoices, quotes, payments, CIS statements, expenses, mileage and reports. Inbox is in here too: connect Gmail or Outlook and your PA reads customer emails and suggests what to do.", tabIndex: 3 },
+          { label: "People", desc: "Customers, subcontractors and your team. Add a CIS subbie here and the app handles deductions for you.", tabIndex: 4 },
+          { label: "Settings", desc: "Tap your avatar (top-right) to open Settings — your business brand on invoices, your PA's voice and persona, Xero / QuickBooks / Stripe, and your plan.", tabIndex: -1 },
+          { label: "Reminders, help, feedback", desc: "Three buttons in the top-right of every screen: the bell sets and shows reminders, the ? opens searchable help, and the speech bubble sends us feedback, bugs or ideas — we read every one.", tabIndex: -3 },
+          { label: "Your PA is always here", desc: "This mic button follows you everywhere. Tap to talk once, or hold for hands-free mode where it keeps listening — useful when you're driving or your hands are full on site.", tabIndex: -2 },
         ];
         const DESKTOP_TOUR = [
-          { label: "Home", desc: "Your PA lives here. Type commands or use the mic.", group: "home", itemIndex: 0 },
-          { label: "Jobs", desc: "Enquiries, job cards, materials, stock, RAMS, and documents.", group: "work", itemIndex: -1 },
-          { label: "Diary", desc: "Your schedule and reminders. Book jobs by voice or click to add.", group: "diary", itemIndex: -1 },
-          { label: "Accounts", desc: "Invoices, quotes, expenses, mileage, payments, CIS, and reports.", group: "money", itemIndex: -1 },
-          { label: "People", desc: "Customers, subcontractors, and your team.", group: "people", itemIndex: -1 },
-          { label: "Settings", desc: "Click your avatar in the top right. Bank details, logo, trade registrations.", group: "admin", itemIndex: -1 },
+          { label: "Home base", desc: "Your PA lives here. Type a command or use the mic — create jobs, send invoices, log mileage, almost anything.", group: "home", itemIndex: 0 },
+          { label: "Work", desc: "Everything related to the actual work — Enquiries, Jobs, Materials, Suppliers, Stock, RAMS and Documents. The new Suppliers tab is your trade contacts: your PA can email material orders or price requests on your behalf.", group: "work", itemIndex: -1 },
+          { label: "Diary", desc: "Your schedule and reminders. Click a day to see what's on, or drag jobs around to reschedule.", group: "diary", itemIndex: -1 },
+          { label: "Accounts (money)", desc: "Invoices, Quotes, Payments, Expenses, Mileage, CIS statements and Reports — every part of the money side.", group: "money", itemIndex: -1 },
+          { label: "People", desc: "Customers, Subcontractors and your team. CIS subbies get auto-deductions handled.", group: "people", itemIndex: -1 },
+          { label: "Admin & header tools", desc: "Inbox (connect Gmail or Outlook), document storage and CIS sit under Admin. Top-right of every screen has your avatar (Settings), the bell (reminders), the ? (searchable help) and the speech bubble (feedback, bugs, ideas).", group: "admin", itemIndex: -1 },
         ];
         const TOUR = isDesktopBrowser ? DESKTOP_TOUR : MOBILE_TOUR;
         const current = TOUR[navTourStep];
         if (!current) return null;
-        const advance = () => { if (navTourStep < TOUR.length - 1) setNavTourStep(s => s + 1); else completeOnboarding(); };
+        const advance = () => { if (navTourStep < TOUR.length - 1) setNavTourStep(s => s + 1); else advanceOnboarding(7); };
         const dotRow = (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", gap: 5 }}>
@@ -5387,7 +5422,7 @@ function AppInner() {
           <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#000c", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
             onClick={advance}>
             {/* Tooltip */}
-            <div style={{ position: "absolute", bottom: current.tabIndex === -2 ? 90 : current.tabIndex === -1 ? "auto" : 66, top: current.tabIndex === -1 ? 56 : "auto", left: 16, right: 16, display: "flex", justifyContent: current.tabIndex === -1 ? "flex-end" : current.tabIndex === -2 ? "flex-end" : "center" }} onClick={e => e.stopPropagation()}>
+            <div style={{ position: "absolute", bottom: current.tabIndex === -2 ? 90 : (current.tabIndex === -1 || current.tabIndex === -3) ? "auto" : 66, top: (current.tabIndex === -1 || current.tabIndex === -3) ? 56 : "auto", left: 16, right: 16, display: "flex", justifyContent: (current.tabIndex === -1 || current.tabIndex === -3) ? "flex-end" : current.tabIndex === -2 ? "flex-end" : "center" }} onClick={e => e.stopPropagation()}>
               {tooltip}
             </div>
             {/* Highlighted nav bar */}
@@ -5411,6 +5446,16 @@ function AppInner() {
             {current.tabIndex === -1 && (
               <div style={{ position: "absolute", top: 10, right: 14, padding: 4, borderRadius: "50%", boxShadow: "0 0 0 3px #f59e0b66", background: "#f59e0b11" }}>
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#000" }}>{brand.ownerName?.[0] || "U"}</div>
+              </div>
+            )}
+            {/* Header tools highlight (bell, help, feedback) */}
+            {current.tabIndex === -3 && (
+              <div style={{ position: "absolute", top: 10, right: 56, display: "flex", gap: 6, padding: 4, borderRadius: 10, boxShadow: "0 0 0 3px #f59e0b66", background: "#f59e0b11" }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: "#1a1a1a", border: "1px solid #f59e0b66", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                </div>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: "#1a1a1a", border: "1px solid #f59e0b66", display: "flex", alignItems: "center", justifyContent: "center", color: "#f59e0b", fontWeight: 700, fontSize: 13 }}>?</div>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: "#1a1a1a", border: "1px solid #f59e0b66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>💬</div>
               </div>
             )}
             {/* Mic highlight */}
