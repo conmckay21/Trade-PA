@@ -9,7 +9,6 @@ import { C } from "../theme/colors.js";
 import { S } from "../theme/styles.js";
 import { fmtCurrency } from "../lib/format.js";
 import { localDate, weekBounds, groupByRecency } from "../lib/time.js";
-import { DEFAULT_SUPPLIERS } from "../lib/constants.js";
 import { authHeaders } from "../lib/auth.js";
 import { fileToContentBlock, openPdfPreview } from "../lib/files.js";
 import { uploadReceiptToStorage } from "../lib/receipts.js";
@@ -115,7 +114,6 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, ma
 
 export function Materials({ materials, setMaterials, user, companyId, setContextHint, setView }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [showSuppliers, setShowSuppliers] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
@@ -125,8 +123,6 @@ export function Materials({ materials, setMaterials, user, companyId, setContext
   const [scanError, setScanError] = useState("");
   const fileRef = useRef();
   const uploadRef = useRef();
-  const suppliers = DEFAULT_SUPPLIERS;
-  const [editingSupplier, setEditingSupplier] = useState(null);
   const [assigningMaterialIdx, setAssigningMaterialIdx] = useState(null);
 
   const handleAssignMaterialToJob = (jobId, jobTitle) => {
@@ -137,7 +133,6 @@ export function Materials({ materials, setMaterials, user, companyId, setContext
     ));
     setAssigningMaterialIdx(null);
   };
-  const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "", notes: "" });
   const [filterJob, setFilterJob] = useState("all");
 
   useEffect(() => {
@@ -387,18 +382,6 @@ Return only JSON, no other text.` },
     setShowAdd(false);
   };
 
-  const saveSupplier = () => {
-    if (!supplierForm.name) return;
-    if (editingSupplier !== null) {
-      setSuppliers(prev => prev.map((s, i) => i === editingSupplier ? supplierForm : s));
-    } else {
-      setSuppliers(prev => [...prev, supplierForm]);
-    }
-    setEditingSupplier(null);
-    setSupplierForm({ name: "", phone: "", email: "", notes: "" });
-  };
-
-  const deleteSupplier = (i) => setSuppliers(prev => prev.filter((_, j) => j !== i));
   const dial = (phone) => { if (phone) window.location.href = `tel:${phone.replace(/\s/g, "")}`; };
   const cycleStatus = async (i) => {
     const target = (materials || [])[i];
@@ -889,29 +872,6 @@ Return only JSON, no other text.` },
         </div>
       )}
 
-      <div style={S.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
-          <div style={S.sectionTitle}>Supplier Quick Dial</div>
-          <button style={{ ...S.btn("ghost"), fontSize: 11 }} onClick={() => setShowSuppliers(true)}>+ Add Supplier</button>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-          {suppliers.map((sup, i) => (
-            <div key={i} style={{ padding: "12px 14px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{sup.name}</div>
-              {sup.notes && <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>{sup.notes}</div>}
-              {sup.phone ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>📞 {sup.phone}</button>
-                  {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 12px", textDecoration: "none", textAlign: "center" }}>✉ Email</a>}
-                </div>
-              ) : (
-                <button onClick={() => { setEditingSupplier(i); setSupplierForm(sup); setShowSuppliers(true); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", width: "100%" }}>Add number</button>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }} onClick={() => { setShowAdd(false); setRows([emptyRow()]); }}>
           <div style={{ ...S.card, maxWidth: 700, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }} onClick={e => e.stopPropagation()}>
@@ -990,60 +950,6 @@ Return only JSON, no other text.` },
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {showSuppliers && (
-        <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 300, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>
-          <div style={{ ...S.card, maxWidth: 520, width: "100%", marginBottom: 16, borderRadius: 14, overflow: "hidden" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Manage Suppliers</div>
-              <button aria-label="Close" onClick={() => { setShowSuppliers(false); setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-              {suppliers.map((sup, i) => (
-                <div key={i} style={{ ...S.card, padding: "12px 14px", background: editingSupplier === i ? C.amber + "11" : C.surfaceHigh, borderColor: editingSupplier === i ? C.amber + "66" : C.border }}>
-                  {editingSupplier === i ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[{ k: "name", l: "Name", p: "City Plumbing" }, { k: "phone", l: "Phone", p: "01483 123456" }, { k: "email", l: "Email", p: "orders@cityplumbing.co.uk" }, { k: "notes", l: "Notes", p: "Main plumbing supplies" }].map(({ k, l, p }) => (
-                        <div key={k}><label style={S.label}>{l}</label><input style={S.input} placeholder={p} value={supplierForm[k] || ""} onChange={e => setSupplierForm(f => ({ ...f, [k]: e.target.value }))} /></div>
-                      ))}
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button style={S.btn("primary", !supplierForm.name)} disabled={!supplierForm.name} onClick={saveSupplier}>Save</button>
-                        <button style={S.btn("ghost")} onClick={() => { setEditingSupplier(null); setSupplierForm({ name: "", phone: "", notes: "" }); }}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{sup.name}</div>
-                        <div style={{ fontSize: 11, color: sup.phone ? C.amber : C.muted }}>{sup.phone || "No phone number"}</div>
-                        {sup.email && <div style={{ fontSize: 11, color: C.blue }}>{sup.email}</div>}
-                        {sup.notes && <div style={{ fontSize: 11, color: C.muted }}>{sup.notes}</div>}
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        {sup.phone && <button onClick={() => dial(sup.phone)} style={{ ...S.btn("primary"), fontSize: 11, padding: "5px 12px" }}>📞 Call</button>}
-                        {sup.email && <a href={`mailto:${sup.email}`} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px", textDecoration: "none" }}>✉</a>}
-                      </div>
-                      <button onClick={() => { setEditingSupplier(i); setSupplierForm(sup); }} style={{ ...S.btn("ghost"), fontSize: 11, padding: "5px 10px" }}>Edit</button>
-                      <button onClick={() => deleteSupplier(i)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            {editingSupplier === null && (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 12 }}>Add New Supplier</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {[{ k: "name", l: "Name", p: "National Plumbing Supplies" }, { k: "phone", l: "Phone", p: "01234 567890" }, { k: "email", l: "Email", p: "orders@supplier.co.uk" }, { k: "notes", l: "Notes", p: "Good for copper fittings" }].map(({ k, l, p }) => (
-                    <div key={k}><label style={S.label}>{l}</label><input style={S.input} placeholder={p} value={supplierForm[k] || ""} onChange={e => setSupplierForm(f => ({ ...f, [k]: e.target.value }))} /></div>
-                  ))}
-                  <button style={S.btn("primary", !supplierForm.name)} disabled={!supplierForm.name} onClick={saveSupplier}>Add Supplier →</button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
