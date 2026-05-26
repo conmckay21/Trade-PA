@@ -113,7 +113,7 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, ma
   );
 }
 
-export function Materials({ materials, setMaterials, user, companyId, setContextHint }) {
+export function Materials({ materials, setMaterials, user, companyId, setContextHint, setView }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showSuppliers, setShowSuppliers] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
@@ -552,7 +552,7 @@ Return only JSON, no other text.` },
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>Materials & Orders</div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button style={S.btn("ghost")} onClick={() => setShowSuppliers(true)}>Suppliers</button>
+            <button style={S.btn("ghost")} onClick={() => setView && setView("Suppliers")}>Suppliers →</button>
             <button style={{ ...S.btn("ghost"), color: "#13B5EA", borderColor: "#13B5EA44" }} onClick={syncToXero} disabled={syncing}>{syncing ? "Syncing..." : "↑ Xero"}</button>
             <button style={{ ...S.btn("ghost"), color: "#2CA01C", borderColor: "#2CA01C44" }} onClick={async () => {
               try {

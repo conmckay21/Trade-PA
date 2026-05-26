@@ -119,6 +119,7 @@ import { JobsHub } from "./views/hubs/JobsHub.jsx";
 import { DiaryHub } from "./views/hubs/DiaryHub.jsx";
 import { AccountsHub } from "./views/hubs/AccountsHub.jsx";
 import { PeopleHub } from "./views/hubs/PeopleHub.jsx";
+import { Suppliers } from "./views/Suppliers.jsx";
 // ─── P10: AIAssistant extracted from App.jsx (28 Apr 2026) ─────────────────
 // Verbatim move — no behavioural changes. AIAssistant body (~7,850 lines)
 // now lives in ./ai/AIAssistant.jsx as a named export.
@@ -754,7 +755,7 @@ function CallTrackingSettings({ user }) {
 }
 
 function TeamInvite({ companyId, planTier, currentMemberCount }) {
-  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Workers", "Subcontractors", "Documents", "Reviews", "Stock", "RAMS"];
+  const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Suppliers", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Workers", "Subcontractors", "Documents", "Reviews", "Stock", "RAMS"];
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [sending, setSending] = useState(false);
@@ -5766,6 +5767,7 @@ function AppInner() {
             "Enquiries": "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z",
             "Jobs": "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 3h6v4H9V3z",
             "Materials": "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+            "Suppliers": "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z",
             "Stock": "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z",
             "RAMS": "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
             "Documents": "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M16 13H8M16 17H8M10 9H8",
@@ -5904,6 +5906,7 @@ function AppInner() {
                 "Enquiries": "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z",
                 "Jobs": "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 3h6v4H9V3z",
                 "Materials": "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+                "Suppliers": "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z",
                 "Stock": "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z",
                 "RAMS": "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
                 "Documents": "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M16 13H8M16 17H8M10 9H8",
@@ -5983,9 +5986,10 @@ function AppInner() {
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} setContextHint={setContextHint} />}
         {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} setContextHint={setContextHint} />}
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} customerContacts={customerContacts} setCustomerContacts={setCustomerContacts} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} setContextHint={setContextHint} companyId={companyId} />}
+        {view === "Suppliers" && <Suppliers user={user} setView={setView} makeCall={makeCall} hasTwilio={!!twilioDevice} setContextHint={setContextHint} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}
         {view === "Quotes" && <QuotesView brand={brand} invoices={invoices} setInvoices={setInvoices} setView={setView} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}
-        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} companyId={companyId} setContextHint={setContextHint} />}
+        {view === "Materials" && <Materials materials={materials} setMaterials={setMaterials} jobs={jobs} user={user} companyId={companyId} setContextHint={setContextHint} setView={setView} />}
         {view === "Expenses" && <ExpensesTab user={user} setContextHint={setContextHint} />}
         {view === "CIS" && <CISStatementsTab user={user} setContextHint={setContextHint} />}
         <div style={{ height: "100%", transform: "translateZ(0)" }}><AIAssistant isTablet={isTablet} isVisible={view === "AI Assistant" || !!aiOverlay} brand={brand} setBrand={setBrand} jobs={jobs} setJobs={setJobs} invoices={invoices} setInvoices={setInvoices} enquiries={enquiries} setEnquiries={setEnquiries} materials={materials} setMaterials={setMaterials} setMaterialsRaw={setMaterialsRaw} companyId={companyId} customers={customers} setCustomers={setCustomers} onAddReminder={add} setView={setView} user={user} onShowPdf={(inv) => downloadInvoicePDF(brand, inv)} onScanReceipt={handleScanReceipt} sendPush={sendPush} assistantName={assistantName} assistantWakeWords={assistantWakeWords} assistantPersona={assistantPersona} assistantSignoff={assistantSignoff} assistantVoice={assistantVoice} userCommands={userCommands} usageData={usageData} setUsageData={setUsageData} usageCaps={usageCaps} currentMonth={currentMonth} voiceHandle={voiceHandle} onHandsFreeChange={setAiHandsFree} overlayContext={view === "AI Assistant" ? null : aiOverlay?.context || null} onCloseOverlay={() => setAiOverlay(null)} onboardingStep={onboardingStep} advanceOnboarding={advanceOnboarding} pendingInboxCount={pendingInboxCount} /></div>

@@ -1,3 +1,9 @@
+## 2026-05-26
+
+📇 New Suppliers tab — save phone numbers, emails and notes for every merchant you use. CEF, Screwfix, Toolstation, your local builder's merchant — all in one place, never look up a number again.
+
+✉ Send material orders by email — once your supplier has an email saved, tap "Email materials to order" on their card and Trade PA sends them the list of materials marked "to order" using your connected Gmail or Outlook. No copying and pasting, no opening your email app.
+
 ## 2026-05-21
 
 - 📱 **Trade PA is now on Google Play** — download for Android alongside iOS at https://play.google.com/store/apps/details?id=uk.co.tradespa.app

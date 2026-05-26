@@ -116,6 +116,10 @@
       "destination": "/api/email"
     },
     {
+      "source": "/api/email/send-material-order",
+      "destination": "/api/email.js"
+    },
+    {
       "source": "/api/push/subscribe",
       "destination": "/api/push/subscribe"
     },
