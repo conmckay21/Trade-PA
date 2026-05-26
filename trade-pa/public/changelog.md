@@ -1,6 +1,6 @@
 ## 2026-05-26
 
-📚 **Help guides now live on the web.** New public help page at tradespa.co.uk/help.html — seven topic sections covering everything from your first invoice to CIS deductions, RAMS generation and voice commands. Searchable in Google so prospects can find answers before they sign up, plus deep-linkable so we can point customers at specific guides.
+📦 **Bring your gear across from another app.** New **Import from another app** option on the welcome screen lets you bulk-import from a CSV — customers, jobs, and invoices/quotes. Pick what you're importing, drop the file, we auto-detect the columns and let you tweak the matches if anything's off. Duplicate detection on customer names and job titles so you don't end up with two of everything. Switchers from Tradify, Powered Now, Service M8 — export your data to CSV and pull it across here. Imported invoices and quotes get clearly marked IDs (`INV-IMP-…` / `QTE-IMP-…`) so they're distinct from invoices you raise here.
 
 ## 2026-05-26
 

@@ -4,6 +4,7 @@ import { db } from "./lib/db.js";
 import { Device } from "@twilio/voice-sdk";
 import HelpCentre from "./HelpCentre.jsx";
 import AssistantSetup from "./AssistantSetup.jsx";
+import CsvImport from "./components/CsvImport.jsx";
 import FieldMic from "./components/FieldMic.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
 import OfflineSettings from "./components/OfflineSettings.jsx";
@@ -4008,6 +4009,7 @@ function AppInner() {
   };
   const [navTourStep, setNavTourStep] = useState(0);
   const [step2Dismissed, setStep2Dismissed] = useState(false);
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
 
   // Map the current `view` to the most relevant HelpCentre article slug.
   // Used by the avatar-menu Help item so opening Help from a screen lands
@@ -5282,6 +5284,7 @@ function AppInner() {
             <div style={{ display: "flex", flexDirection: "column", gap: 10, textAlign: "left", marginBottom: 24 }}>
               {[
                 { icon: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2", path2: "M9 7a4 4 0 100 8 4 4 0 000-8z", label: "Add your first customer", sub: "Go to People — Customers — Add", action: () => { advanceOnboarding(99); setView("Customers"); } },
+                { icon: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4", path2: "M17 8l-5-5-5 5M12 3v12", label: "Import from another app", sub: "Customers, jobs, invoices from a CSV", action: () => { advanceOnboarding(99); setView("Customers"); setCsvImportOpen(true); } },
                 { icon: "M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z", path2: "M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8", label: "Ask your PA to do something", sub: "Tap the mic and say what you need", action: () => { advanceOnboarding(99); setView("AI Assistant"); } },
                 { icon: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z", label: "Browse the Help Centre", sub: "65+ how-to articles, searchable", action: () => { advanceOnboarding(99); } },
               ].map((opt, i) => (
@@ -6273,6 +6276,12 @@ function AppInner() {
             .order("created_at", { ascending: true })
             .then(({ data }) => { if (data) setUserCommands(data); });
         }}
+      />
+      <CsvImport
+        open={csvImportOpen}
+        onClose={() => setCsvImportOpen(false)}
+        db={db}
+        user={user}
       />
     </div>
   );
