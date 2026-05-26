@@ -159,7 +159,7 @@ export function MileageTab({ user, setContextHint }) {
         <div key={t.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 4, height: 40, borderRadius: 2, background: C.muted, flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.from_location || "Trip"}{t.to_location ? ` → ${t.to_location}` : ""}</div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{t.from_location || "Trip"}{t.to_location ? ` → ${t.to_location}` : ""}</div>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{new Date(t.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{(t.purpose || t.job_ref) ? ` · ${t.purpose || t.job_ref}` : ""}</div>
           </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>

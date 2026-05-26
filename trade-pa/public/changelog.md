@@ -1,5 +1,7 @@
 ## 2026-05-26
 
+📐 Made list-row titles bigger and bolder across Materials, Mileage, Expenses and Stock — matching how Customers and Jobs already looked. Names are easier to spot at a glance now.
+
 ✨ Bold text everywhere now renders crisp and clear — fixed the last places where the old font was hanging around (material rows, job summaries, stock entries, status badges).
 
 🧹 Cleaned up the bottom of the Materials tab — the old Supplier Quick Dial card was redundant now that Suppliers has its own home under the Jobs tab. Same suppliers, just one place to find them.

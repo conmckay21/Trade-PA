@@ -121,7 +121,7 @@ export function CISStatementsTab({ user, setContextHint }) {
         {!loading && statements.length === 0 && (
           <div style={{ textAlign: "center", padding: "32px 16px" }}>
             <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No CIS statements yet</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No CIS statements yet</div>
             <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>When a contractor sends you a CIS statement, log it here so the deductions count toward your tax bill. Or ask Trade PA: "log a CIS statement from Bilfinger for March".</div>
           </div>
         )}
@@ -130,7 +130,7 @@ export function CISStatementsTab({ user, setContextHint }) {
           <div key={s.id} style={S.row}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{s.contractor_name}</div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{s.contractor_name}</div>
                 {s.attachment_data && (
                   <div
                     title="CIS statement PDF attached"

@@ -310,7 +310,7 @@ export function DocumentsTab({ user, customers, setContextHint }) {
             <div style={{ fontSize: 28, flexShrink: 0 }}>{item.icon}</div>
             <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => openItem(item)}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</div>
                 {item.source !== "files" && (
                   <span style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em", border: `1px solid ${C.border}`, padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>
                     {SOURCES[item.source].label}

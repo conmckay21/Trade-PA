@@ -148,7 +148,7 @@ export function ExpensesTab({ user, setContextHint }) {
         {!loading && expenses.length === 0 && (
           <div style={{ textAlign: "center", padding: "32px 16px" }}>
             <div style={{ fontSize: 28, marginBottom: 10 }}>🧾</div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No expenses logged yet</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No expenses logged yet</div>
             <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Tap <strong style={{ color: C.amber }}>+ Log Expense</strong> above, scan a receipt, or just tell Trade PA: "log £42 for diesel today".</div>
           </div>
         )}
@@ -157,7 +157,7 @@ export function ExpensesTab({ user, setContextHint }) {
           <div key={e.id} style={S.row}>
             <div style={{ fontSize: 18, flexShrink: 0 }}>{EXP_TYPES.find(t => t.value === e.exp_type)?.label?.split(" ")[0] || "📋"}</div>
             <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{EXP_TYPES.find(t => t.value === e.exp_type)?.label?.split(" ").slice(1).join(" ") || e.exp_type}</div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{EXP_TYPES.find(t => t.value === e.exp_type)?.label?.split(" ").slice(1).join(" ") || e.exp_type}</div>
               <div style={{ fontSize: 11, color: C.muted }}>
                 {new Date(e.exp_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                 {e.description ? ` · ${e.description}` : ""}

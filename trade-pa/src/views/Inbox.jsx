@@ -892,7 +892,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: IC.green, flexShrink: 0 }} />
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: IC.text }}>{connection.email}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: IC.text }}>{connection.email}</div>
             <div style={{ fontSize: 11, color: IC.muted }}>{connection.provider} · AI checks every hour · {connection.last_checked ? `Last checked ${formatTime(connection.last_checked)}` : "Not checked yet"}</div>
           </div>
         </div>
@@ -1009,7 +1009,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
                 <div style={{ fontSize: 22, flexShrink: 0 }}>{actionIcon(action.action_type)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: IC.text, marginBottom: 4 }}>{action.action_description}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: IC.text, marginBottom: 4 }}>{action.action_description}</div>
                   <div style={{ fontSize: 11, color: IC.muted, marginBottom: 2 }}>From: {action.email_from}</div>
                   <div style={{ fontSize: 11, color: IC.muted, marginBottom: 6 }}>Re: {action.email_subject}</div>
                   <div style={{ fontSize: 11, color: IC.muted, background: IC.bg3, padding: "6px 10px", borderRadius: 10, fontStyle: "italic", lineHeight: 1.5 }}>"{action.email_snippet?.slice(0, 120)}..."</div>
@@ -1089,7 +1089,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
                     <div key={msg.id} style={{ background: IC.bg3, borderRadius: 10, padding: 16, marginBottom: 12, border: `1px solid ${IC.border}` }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: IC.text }}>{fromName(msg.from)}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: IC.text }}>{fromName(msg.from)}</div>
                           <div style={{ fontSize: 11, color: IC.muted }}>to {msg.to}</div>
                         </div>
                         <div style={{ fontSize: 11, color: IC.muted, flexShrink: 0, marginLeft: 8 }}>{formatTime(msg.date)}</div>

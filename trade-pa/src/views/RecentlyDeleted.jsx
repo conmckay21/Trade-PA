@@ -184,7 +184,7 @@ export function RecentlyDeleted({ user }) {
                   <div style={{ fontSize: 10, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 1 }}>
                     {cfg.label}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {cfg.title(item)}
                   </div>
                   <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>

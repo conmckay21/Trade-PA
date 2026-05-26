@@ -874,7 +874,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                       <div key={t.id} style={{ ...S.row, marginBottom: 8 }}>
                         <div style={{ fontSize: 18, flexShrink: 0 }}>{icon}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{label}{t.worker ? ` · ${t.worker}` : ""}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700 }}>{label}{t.worker ? ` · ${t.worker}` : ""}</div>
                           <div style={{ fontSize: 11, color: C.muted }}>{t.description}{t.description && " · "}{t.log_date}</div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -1069,7 +1069,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                       <div key={d.id} style={{ background: C.surfaceHigh, borderRadius: 10, padding: 14, marginBottom: 10 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                           <div>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>📐 {d.filename}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700 }}>📐 {d.filename}</div>
                             <div style={{ fontSize: 11, color: C.muted }}>{new Date(d.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>
                           </div>
                           <div style={{ display: "flex", gap: 8 }}>
@@ -1184,7 +1184,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                         <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                           <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>{icon}</div>
                           <div style={{ flex: 1, fontSize: 12 }}>{label}</div>
-                          <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 600, color }}>
+                          <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700, color }}>
                             {negative ? "−" : "+"}{profitFmt(value)}
                           </div>
                         </div>

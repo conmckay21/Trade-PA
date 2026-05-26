@@ -446,7 +446,7 @@ export function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }
       {mode !== "workers" && subScanResult && !scanning && (
         <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.green }}>✓ Invoice scanned — payment form pre-filled</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>✓ Invoice scanned — payment form pre-filled</div>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{subScanResult.subcontractor_name || "Unknown"} · {subScanResult.invoice_number || "No invoice number"} · £{(subScanResult.gross_total || 0).toFixed(2)}</div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
@@ -496,7 +496,7 @@ export function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }
                 <div key={w.id} style={{ background: C.surfaceHigh, borderRadius: 8, padding: "10px 12px", border: `1px solid ${C.border}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{w.name}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>{w.name}</div>
                       <div style={{ fontSize: 11, color: C.muted }}>
                         {w.role && `${w.role} · `}
                         <span style={{ color: w.type === "employed" ? C.green : C.amber }}>{w.type === "employed" ? "Employed" : "Subcontractor"}</span>
@@ -625,7 +625,7 @@ export function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }
               <div key={p.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}`, borderLeft: p.paid ? `3px solid ${C.green}` : `3px solid ${C.red}`, paddingLeft: 10, marginLeft: -10 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
                       {sub?.name || "Unknown"}
                       <span style={S.badge(p.paid ? C.green : C.red)}>{p.paid ? "PAID" : "DUE"}</span>
                     </div>
@@ -663,7 +663,7 @@ export function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }
       {subs.length === 0 && !loading && (
         <div style={{ textAlign: "center", padding: "32px 16px" }}>
           <div style={{ fontSize: 28, marginBottom: 10 }}>👷</div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No subcontractors yet</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No subcontractors yet</div>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Tap <strong style={{ color: C.amber }}>+ Add Worker / Sub</strong> above to add a subbie with their UTR + CIS rate. Then scan their invoices and log payments — Trade PA handles the CIS deductions.</div>
         </div>
       )}

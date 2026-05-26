@@ -168,7 +168,7 @@ export function ReviewsTab({ user, brand, customers, setContextHint }) {
               return (
                 <div key={j.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}` }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{j.customer}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{j.customer}</div>
                     <div style={{ fontSize: 11, color: C.muted }}>
                       {j.type || "Job"}{j.completion_date ? ` · Completed ${new Date(j.completion_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
                     </div>
@@ -196,7 +196,7 @@ export function ReviewsTab({ user, brand, customers, setContextHint }) {
           ) : filteredRequests.map(r => (
             <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.border}` }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{r.customer}</div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{r.customer}</div>
                 <div style={{ fontSize: 11, color: C.muted }}>
                   {r.email} · Sent {new Date(r.sent_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                   {r.platforms && ` · ${r.platforms.split(",").join(", ")}`}
@@ -211,7 +211,7 @@ export function ReviewsTab({ user, brand, customers, setContextHint }) {
       {completedJobs.length === 0 && !loading && (
         <div style={{ textAlign: "center", padding: "32px 16px" }}>
           <div style={{ fontSize: 28, marginBottom: 10 }}>⭐</div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No completed jobs yet</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No completed jobs yet</div>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Once you mark a job as completed, it'll appear here. From here you can send the customer a quick review request (Google, Trustpilot, etc.) — or just say "send a review request to Harrison".</div>
         </div>
       )}
@@ -233,7 +233,7 @@ export function ReviewsTab({ user, brand, customers, setContextHint }) {
                   onClick={() => setSelectedPlatforms(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id])}
                   style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: `2px solid ${selectedPlatforms.includes(p.id) ? p.color : C.border}`, background: selectedPlatforms.includes(p.id) ? p.color + "11" : C.surfaceHigh, cursor: "pointer" }}>
                   <div style={{ fontSize: 20, width: 28, textAlign: "center" }}>{p.icon}</div>
-                  <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{p.label}</div>
+                  <div style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{p.label}</div>
                   <div style={{ width: 20, height: 20, borderRadius: 4, background: selectedPlatforms.includes(p.id) ? p.color : C.surface, border: `2px solid ${selectedPlatforms.includes(p.id) ? p.color : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#000" }}>
                     {selectedPlatforms.includes(p.id) ? "✓" : ""}
                   </div>

@@ -63,7 +63,7 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, ma
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", cursor: "pointer" }} onClick={() => setExpanded(e => !e)}>
         <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: statusColor[m.status] || C.muted, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{m.item}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>{m.item}</div>
           <div style={{ fontSize: 11, color: C.muted, display: "flex", flexWrap: "wrap", gap: "2px 8px" }}>
             {m.qty > 1 && <span>×{m.qty}</span>}
             {m.supplier && <span>🏪 {m.supplier}</span>}

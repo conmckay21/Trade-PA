@@ -169,7 +169,7 @@ export function StockTab({ user, setContextHint }) {
       {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : items.length === 0 ? (
         <div style={{ textAlign: "center", padding: "32px 16px" }}>
           <div style={{ fontSize: 28, marginBottom: 10 }}>📦</div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No stock items yet</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No stock items yet</div>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Tap <strong style={{ color: C.amber }}>+ Add Item</strong> above to track what you carry in the van. Set a reorder level and Trade PA will flag low stock. Or say: "add 5 boxes of 22mm copper to stock".</div>
         </div>
       ) : filtered.length === 0 ? (
@@ -181,7 +181,7 @@ export function StockTab({ user, setContextHint }) {
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px" }}>
               <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: isLow ? C.red : C.green, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{item.name}</div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{item.name}</div>
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
                   {item.sku && `SKU: ${item.sku} · `}
                   {item.location && `📍 ${item.location} · `}

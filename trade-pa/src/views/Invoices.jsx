@@ -684,7 +684,7 @@ export function Payments({ brand, invoices, setInvoices, customers, user, sendPu
                 <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
                   <div style={{ width: 4, height: 44, borderRadius: 2, background: inv.status === "overdue" ? C.red : C.amber, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{inv.customer}</div>
                     <div style={{ fontSize: 10, color: C.muted }}>{inv.id} · {inv.due}</div>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
@@ -710,7 +710,7 @@ export function Payments({ brand, invoices, setInvoices, customers, user, sendPu
                 <div key={inv.id} onClick={() => setSelected(inv)} style={{ ...S.row, cursor: "pointer" }}>
                   <div style={{ width: 4, height: 44, borderRadius: 2, background: C.green, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.customer}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{inv.customer}</div>
                     <div style={{ fontSize: 10, color: C.muted }}>{inv.id}</div>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
@@ -760,7 +760,7 @@ export function Payments({ brand, invoices, setInvoices, customers, user, sendPu
                 <div key={q.id} onClick={() => setSelected(q)} style={{ ...S.row, cursor: "pointer" }}>
                   <div style={{ width: 4, height: 44, borderRadius: 2, background: q.status === "accepted" ? C.green : q.status === "declined" ? C.red : C.blue, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{q.customer}</div>
                     <div style={{ fontSize: 10, color: C.muted }}>{q.address || q.id} · {q.due}</div>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>{fmtAmount(q.amount)}</div>
@@ -1601,7 +1601,7 @@ export function QuotesView({ brand, invoices, setInvoices, setView, customers, c
             <div key={q.id} onClick={() => setSelected(q)} style={{ ...S.row, cursor: "pointer" }}>
               <div style={{ width: 4, height: 44, borderRadius: 2, background: pill.bg, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{q.customer}</div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{q.customer}</div>
                 <div style={{ fontSize: 10, color: C.muted }}>{q.address || q.id} · {subLine}</div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, marginRight: 8, flexShrink: 0 }}>{fmtAmount(q.amount)}</div>
