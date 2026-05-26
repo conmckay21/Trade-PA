@@ -160,7 +160,7 @@ export function ReportsTab({ invoices, jobs, materials, customers, enquiries, su
   const StatBox = ({ label, value, sub, color }) => (
     <div style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
       <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: color || C.text, fontFamily: "'DM Mono',monospace" }}>{value}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: color || C.text, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{sub}</div>}
     </div>
   );
@@ -168,7 +168,7 @@ export function ReportsTab({ invoices, jobs, materials, customers, enquiries, su
   const TableRow = ({ cells, bold, highlight }) => (
     <div style={{ display: "grid", gridTemplateColumns: cells.map(() => "1fr").join(" "), gap: 8, padding: "10px 12px", borderBottom: `1px solid ${C.border}`, background: highlight ? C.amber + "0a" : "transparent" }}>
       {cells.map((cell, i) => (
-        <div key={i} style={{ fontSize: 12, color: bold ? C.text : i === 0 ? C.text : C.muted, fontWeight: bold ? 700 : 400, textAlign: i > 0 ? "right" : "left", fontFamily: i > 0 ? "'DM Mono',monospace" : "inherit" }}>{cell}</div>
+        <div key={i} style={{ fontSize: 12, color: bold ? C.text : i === 0 ? C.text : C.muted, fontWeight: bold ? 700 : 400, textAlign: i > 0 ? "right" : "left", fontFamily: i > 0 ? "'Plus Jakarta Sans', sans-serif" : "inherit" }}>{cell}</div>
       ))}
     </div>
   );
@@ -559,7 +559,7 @@ ${generateReportHTML()}
           { label: "Activity", ids: ["customers", "materials", "jobs"] },
         ].map(group => (
           <div key={group.label}>
-            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, fontFamily: "'DM Mono',monospace", marginBottom: 5 }}>{group.label}</div>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 5 }}>{group.label}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {group.ids.map(id => {
                 const r = reports.find(x => x.id === id);
@@ -619,7 +619,7 @@ ${generateReportHTML()}
                   <div style={{ flex: 1, background: C.border, borderRadius: 4, height: 8, overflow: "hidden" }}>
                     <div style={{ width: `${Math.min((total / Math.max(...Object.values(byMonth))) * 100, 100)}%`, height: "100%", background: C.green, borderRadius: 4 }} />
                   </div>
-                  <div style={{ fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.green, width: 80, textAlign: "right" }}>{fmt(total)}</div>
+                  <div style={{ fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", color: C.green, width: 80, textAlign: "right" }}>{fmt(total)}</div>
                 </div>
               ));
             })()}
@@ -854,9 +854,9 @@ ${generateReportHTML()}
               <div style={{ background: C.surface, borderRadius: 10, padding: 14, border: `1px solid ${C.border}`, fontSize: 12 }}>
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>Pipeline Summary</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, color: C.muted }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value won</span><span style={{ color: C.green, fontFamily: "'DM Mono',monospace" }}>{fmt(wonValue)}</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value pending</span><span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>{fmt(pendingQuotes.reduce((s, q) => s + parseFloat(q.gross_amount || q.grossAmount || q.amount || 0), 0))}</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value lost</span><span style={{ color: C.red, fontFamily: "'DM Mono',monospace" }}>{fmt(lostValue)}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value won</span><span style={{ color: C.green, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{fmt(wonValue)}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value pending</span><span style={{ color: C.amber, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{fmt(pendingQuotes.reduce((s, q) => s + parseFloat(q.gross_amount || q.grossAmount || q.amount || 0), 0))}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Value lost</span><span style={{ color: C.red, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{fmt(lostValue)}</span></div>
                 </div>
               </div>
             )}

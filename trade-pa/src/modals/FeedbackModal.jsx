@@ -125,7 +125,7 @@ export function FeedbackModal({ open, onClose, user, brand, currentView }) {
                       border: `2px solid ${active ? C.amber : C.border}`,
                       background: active ? "rgba(245,158,11,0.12)" : C.surfaceHigh,
                       color: active ? C.amber : C.text,
-                      cursor: "pointer", fontFamily: "'DM Mono',monospace",
+                      cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
                       fontWeight: active ? 700 : 500, fontSize: 12,
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                       transition: "all 0.15s",

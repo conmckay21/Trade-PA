@@ -57,7 +57,7 @@ export function DetailPage({ title, subtitle, onBack, rightHeader, maxWidth, her
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           {subtitle && (
-            <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: 10, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {subtitle}
             </div>
           )}

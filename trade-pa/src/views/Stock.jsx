@@ -139,7 +139,7 @@ export function StockTab({ user, setContextHint }) {
         {[["Items", items.length, C.text], ["Stock Value", "£" + totalValue.toFixed(2), C.green], ["Low Stock", lowStock.length, lowStock.length > 0 ? C.red : C.muted]].map(([l,v,col],i) => (
           <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: col, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{v}</div>
           </div>
         ))}
       </div>
@@ -191,7 +191,7 @@ export function StockTab({ user, setContextHint }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 <button onClick={() => adjust(item.id, -1)} style={{ width: 28, height: 28, borderRadius: 10, background: C.surfaceHigh, border: `1px solid ${C.border}`, color: C.text, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
                 <div style={{ textAlign: "center", minWidth: 50 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: isLow ? C.red : C.text }}>{item.quantity}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", color: isLow ? C.red : C.text }}>{item.quantity}</div>
                   <div style={{ fontSize: 10, color: C.muted }}>{item.unit}</div>
                 </div>
                 <button onClick={() => adjust(item.id, 1)} style={{ width: 28, height: 28, borderRadius: 10, background: C.surfaceHigh, border: `1px solid ${C.border}`, color: C.text, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>

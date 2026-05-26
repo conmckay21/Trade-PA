@@ -42,7 +42,7 @@ function DetailContactRow({ kind, value, onTap, href, onAdd }) {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontFamily: "'DM Mono', monospace",
+          fontFamily: "'Plus Jakarta Sans', sans-serif",
           fontSize: 9,
           color: C.muted,
           letterSpacing: "0.08em",
@@ -282,7 +282,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
           <div style={{
-            fontFamily: "'DM Mono', monospace",
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
             fontSize: 10,
             textTransform: "uppercase",
             letterSpacing: "0.14em",
@@ -300,7 +300,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
             All customers
           </div>
           <div style={{
-            fontFamily: "'DM Mono', monospace",
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
             fontSize: 11,
             color: C.textDim,
             marginTop: 2,
@@ -382,7 +382,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
           textAlign: "center",
         }}>
           <div style={{
-            fontFamily: "'DM Mono', monospace",
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
             fontSize: 11,
             textTransform: "uppercase",
             letterSpacing: "0.12em",
@@ -447,7 +447,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                   display: "grid",
                   placeItems: "center",
                   color: C.amber,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontWeight: 700,
                   fontSize: 13,
                   letterSpacing: "0.02em",
@@ -476,7 +476,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{c.name}</span>
                     {isCo && (
                       <span style={{
-                        fontFamily: "'DM Mono', monospace",
+                        fontFamily: "'Plus Jakarta Sans', sans-serif",
                         fontSize: 9,
                         textTransform: "uppercase",
                         letterSpacing: "0.08em",
@@ -522,7 +522,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                     <div style={{
                       fontSize: 11,
                       color: C.textDim,
-                      fontFamily: "'DM Mono', monospace",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
                     }}>
                       {cJobs.length} job{cJobs.length !== 1 ? "s" : ""}
                     </div>
@@ -532,7 +532,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                       fontSize: 13,
                       fontWeight: 700,
                       color: C.amber,
-                      fontFamily: "'DM Mono', monospace",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
                       letterSpacing: "-0.02em",
                     }}>
                       £{totalSpend.toLocaleString()}
@@ -626,7 +626,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                 </svg>
               </button>
               <div style={{
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontSize: 11,
                 color: C.muted,
                 letterSpacing: "0.14em",
@@ -661,7 +661,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                 display: "grid",
                 placeItems: "center",
                 color: C.amber,
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontWeight: 700,
                 fontSize: 17,
                 flexShrink: 0,
@@ -684,7 +684,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                   <span>{selected.name}</span>
                   {isCo && (
                     <span style={{
-                      fontFamily: "'DM Mono', monospace",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
                       fontSize: 9,
                       textTransform: "uppercase",
                       letterSpacing: "0.1em",
@@ -714,7 +714,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
             }}>
               {hasOutstanding && (
                 <div style={{
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   color: C.red,
                   letterSpacing: "0.12em",
@@ -737,7 +737,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                 ].map((stat, i) => (
                   <div key={i} style={{ display: "flex", flexDirection: "column" }}>
                     <div style={{
-                      fontFamily: "'DM Mono', monospace",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
                       fontSize: 9,
                       color: C.muted,
                       letterSpacing: "0.06em",
@@ -745,7 +745,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                       marginBottom: 3,
                     }}>{stat.label}</div>
                     <div style={{
-                      fontFamily: "'DM Mono', monospace",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
                       fontSize: stat.fontSize || 14,
                       fontWeight: 700,
                       color: stat.color,
@@ -763,7 +763,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
               {/* CONTACTS section */}
               <div>
                 <div style={{
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   color: C.muted,
                   letterSpacing: "0.14em",
@@ -836,7 +836,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                             background: `linear-gradient(135deg, ${C.amber}33, ${C.amber}1a)`,
                             border: `1px solid ${C.amber}4d`,
                             color: C.amber,
-                            fontFamily: "'DM Mono', monospace",
+                            fontFamily: "'Plus Jakarta Sans', sans-serif",
                             fontWeight: 700,
                             fontSize: 12,
                             display: "grid", placeItems: "center",
@@ -862,7 +862,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{ct.name}</span>
                               {ct.isPrimary && (
                                 <span style={{
-                                  fontFamily: "'DM Mono', monospace",
+                                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                                   fontSize: 8.5,
                                   textTransform: "uppercase",
                                   letterSpacing: "0.08em",
@@ -875,7 +875,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                               )}
                               {ct.isBilling && (
                                 <span style={{
-                                  fontFamily: "'DM Mono', monospace",
+                                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                                   fontSize: 8.5,
                                   textTransform: "uppercase",
                                   letterSpacing: "0.08em",
@@ -983,7 +983,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{
-                              fontFamily: "'DM Mono', monospace",
+                              fontFamily: "'Plus Jakarta Sans', sans-serif",
                               fontSize: 9,
                               color: C.muted,
                               letterSpacing: "0.08em",
@@ -1002,7 +1002,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
               {outstandingInvs.length > 0 && (
                 <div>
                   <div style={{
-                    fontFamily: "'DM Mono', monospace",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
                     fontSize: 10,
                     color: C.red,
                     letterSpacing: "0.14em",
@@ -1028,7 +1028,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                           <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, letterSpacing: "-0.01em" }}>
                             {i.id}
                           </span>
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: C.red, letterSpacing: "-0.02em" }}>
+                          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, color: C.red, letterSpacing: "-0.02em" }}>
                             {fmtAmount(i.amount)}
                           </span>
                         </div>
@@ -1045,7 +1045,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
               {paidInvs.length > 0 && (
                 <div>
                   <div style={{
-                    fontFamily: "'DM Mono', monospace",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
                     fontSize: 10,
                     color: C.muted,
                     letterSpacing: "0.14em",
@@ -1071,7 +1071,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                           <span style={{ fontSize: 13.5, fontWeight: 700, color: C.textDim, letterSpacing: "-0.01em" }}>
                             {i.id}
                           </span>
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: C.textDim, letterSpacing: "-0.02em" }}>
+                          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, color: C.textDim, letterSpacing: "-0.02em" }}>
                             {fmtAmount(i.amount)}
                           </span>
                         </div>
@@ -1088,7 +1088,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
               {openJobs.length > 0 && (
                 <div>
                   <div style={{
-                    fontFamily: "'DM Mono', monospace",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
                     fontSize: 10,
                     color: C.amber,
                     letterSpacing: "0.14em",
@@ -1115,14 +1115,14 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                             {j.type}
                           </span>
                           {j.value > 0 && (
-                            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: C.amber, letterSpacing: "-0.02em" }}>
+                            <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, color: C.amber, letterSpacing: "-0.02em" }}>
                               {fmtAmount(j.value)}
                             </span>
                           )}
                         </div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                           {j.status && <span style={S.badge(statusColor[j.status] || C.muted)}>{statusLabel[j.status] || j.status}</span>}
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10.5, color: C.textDim }}>
+                          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10.5, color: C.textDim }}>
                             {j.dateObj ? new Date(j.dateObj).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : j.date}
                           </span>
                         </div>
@@ -1136,7 +1136,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
               {doneJobs.length > 0 && (
                 <div>
                   <div style={{
-                    fontFamily: "'DM Mono', monospace",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
                     fontSize: 10,
                     color: C.muted,
                     letterSpacing: "0.14em",
@@ -1163,12 +1163,12 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                             {j.type}
                           </span>
                           {j.value > 0 && (
-                            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: C.textDim, letterSpacing: "-0.02em" }}>
+                            <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, color: C.textDim, letterSpacing: "-0.02em" }}>
                               {fmtAmount(j.value)}
                             </span>
                           )}
                         </div>
-                        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10.5, color: C.muted }}>
+                        <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10.5, color: C.muted }}>
                           {j.dateObj ? new Date(j.dateObj).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : j.date}
                         </div>
                       </div>
@@ -1181,7 +1181,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
               {callLogs.length > 0 && (
                 <div>
                   <div style={{
-                    fontFamily: "'DM Mono', monospace",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
                     fontSize: 10,
                     color: C.muted,
                     letterSpacing: "0.14em",
@@ -1207,7 +1207,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                               <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>
                                 {new Date(log.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                               </div>
-                              <div style={{ fontSize: 10.5, color: C.textDim, fontFamily: "'DM Mono', monospace" }}>
+                              <div style={{ fontSize: 10.5, color: C.textDim, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                                 {log.direction === "outbound" ? "Outbound · " : "Inbound · "}{Math.floor((log.duration_seconds || 0) / 60)}m {(log.duration_seconds || 0) % 60}s
                               </div>
                             </div>
@@ -1236,7 +1236,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
               {/* NOTES */}
               <div>
                 <div style={{
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   color: C.muted,
                   letterSpacing: "0.14em",
@@ -1408,7 +1408,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
             }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
                 <div style={{
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   textTransform: "uppercase",
                   letterSpacing: "0.14em",
@@ -1472,7 +1472,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
             }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
                 <div style={{
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   textTransform: "uppercase",
                   letterSpacing: "0.14em",
@@ -1524,7 +1524,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                   marginBottom: 2,
                 }}>Dictate the whole customer</div>
                 <div style={{
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",
@@ -1551,7 +1551,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
               alignItems: "center",
               gap: 10,
               padding: "16px 20px 4px",
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 9,
               color: C.muted,
               letterSpacing: "0.16em",
@@ -1605,7 +1605,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                     lineHeight: 1.2,
                   }}>This is a company</div>
                   <div style={{
-                    fontFamily: "'DM Mono', monospace",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
                     fontSize: 10,
                     color: C.textDim,
                     marginTop: 3,

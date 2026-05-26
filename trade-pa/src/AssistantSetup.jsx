@@ -33,7 +33,7 @@ const T = {
   border: "var(--c-border)", amber: "#f59e0b", amberDim: "#92400e",
   green: "#10b981", red: "#ef4444", blue: "#3b82f6",
   muted: "var(--c-muted)", text: "var(--c-text)", textDim: "var(--c-textDim)",
-  font: "'DM Mono','Courier New',monospace",
+  font: "'Plus Jakarta Sans', sans-serif",
 };
 
 // Grok TTS voices — the 5 voices xAI's /v1/tts endpoint accepts as voice_id.

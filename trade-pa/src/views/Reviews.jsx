@@ -152,7 +152,7 @@ export function ReviewsTab({ user, brand, customers, setContextHint }) {
         {[["Requests Sent", sentCount, C.green], ["Awaiting Request", pendingJobs.length, C.amber]].map(([l,v,col],i) => (
           <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: col, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{v}</div>
           </div>
         ))}
       </div>

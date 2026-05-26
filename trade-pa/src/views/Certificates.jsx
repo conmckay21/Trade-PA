@@ -174,7 +174,7 @@ export function SignaturePad({ onSave, onCancel, title = "Customer Signature" })
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 16, fontFamily: "'DM Mono',monospace" }}>
+    <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <div style={{ background: "#fff", borderRadius: 12, padding: 20, maxWidth: 380, width: "100%" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{title}</div>
@@ -192,8 +192,8 @@ export function SignaturePad({ onSave, onCancel, title = "Customer Signature" })
         </div>
         <div style={{ borderTop: "1px dashed #ccc", marginTop: 0, marginBottom: 12, marginLeft: 16, marginRight: 16 }} />
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={clear} style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid #e5e5e5", background: "#fff", color: "#666", cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace" }}>Clear</button>
-          <button onClick={save} disabled={!hasSig} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: hasSig ? "#10b981" : "#e5e5e5", color: hasSig ? "#fff" : "#999", cursor: hasSig ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+          <button onClick={clear} style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid #e5e5e5", background: "#fff", color: "#666", cursor: "pointer", fontSize: 11, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Clear</button>
+          <button onClick={save} disabled={!hasSig} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: hasSig ? "#10b981" : "#e5e5e5", color: hasSig ? "#fff" : "#999", cursor: hasSig ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             ✓ Confirm Signature
           </button>
         </div>
@@ -747,7 +747,7 @@ export function CertificatesTab({ job, brand, customers, user, connection }) {
                 <div style={{ background: C.surfaceHigh, borderRadius: "0 0 8px 8px", overflow: "hidden" }}>
                   {cat.certs.map((c, i) => (
                     <button key={c.id} onClick={() => setShowForm(c.id)}
-                      style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "transparent", border: "none", borderTop: i > 0 ? `1px solid ${C.border}` : "none", cursor: "pointer", fontFamily: "'DM Mono',monospace", fontSize: 12, color: C.text }}>
+                      style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "transparent", border: "none", borderTop: i > 0 ? `1px solid ${C.border}` : "none", cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: C.text }}>
                       <span>{c.label}</span>
                       <span style={{ color: C.amber, fontWeight: 700, fontSize: 11 }}>Create →</span>
                     </button>
@@ -767,7 +767,7 @@ export function CertificatesTab({ job, brand, customers, user, connection }) {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{cert.cert_label}</div>
                       {cert.cert_data?.certNumber && (
-                        <div style={{ fontSize: 11, fontFamily: "'DM Mono',monospace", color: C.amber, marginTop: 2 }}>{cert.cert_data.certNumber}</div>
+                        <div style={{ fontSize: 11, fontFamily: "'Plus Jakarta Sans', sans-serif", color: C.amber, marginTop: 2 }}>{cert.cert_data.certNumber}</div>
                       )}
                     </div>
                     <div style={{ fontSize: 10, color: C.muted }}>{new Date(cert.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>

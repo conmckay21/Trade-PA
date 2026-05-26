@@ -421,7 +421,7 @@ export function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }
         })().map(([l, v, col, sub], i) => (
           <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: col, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{v}</div>
             <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{sub}</div>
           </div>
         ))}
@@ -560,8 +560,8 @@ export function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 12, color: C.muted }}>Gross paid: <span style={{ color: C.text, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>£{subTotal(sub.id).toFixed(2)}</span></div>
-                    <div style={{ fontSize: 12, color: C.muted }}>CIS deducted: <span style={{ color: C.amber, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>£{subDeductions(sub.id).toFixed(2)}</span></div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Gross paid: <span style={{ color: C.text, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{subTotal(sub.id).toFixed(2)}</span></div>
+                    <div style={{ fontSize: 12, color: C.muted }}>CIS deducted: <span style={{ color: C.amber, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{subDeductions(sub.id).toFixed(2)}</span></div>
                   </div>
                 </div>
                 {/* Statement buttons by month */}
@@ -639,9 +639,9 @@ export function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }
                     )}
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontSize: 12, color: C.muted }}>Gross: <span style={{ color: C.text, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.gross||0).toFixed(2)}</span></div>
-                    <div style={{ fontSize: 12, color: C.muted }}>CIS: <span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>-£{parseFloat(p.deduction||0).toFixed(2)}</span></div>
-                    <div style={{ fontSize: 12, color: C.muted }}>Net: <span style={{ color: C.green, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(p.net||0).toFixed(2)}</span></div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Gross: <span style={{ color: C.text, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{parseFloat(p.gross||0).toFixed(2)}</span></div>
+                    <div style={{ fontSize: 12, color: C.muted }}>CIS: <span style={{ color: C.amber, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>-£{parseFloat(p.deduction||0).toFixed(2)}</span></div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Net: <span style={{ color: C.green, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{parseFloat(p.net||0).toFixed(2)}</span></div>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
@@ -807,25 +807,25 @@ export function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }
                       <>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
                           <span style={{ color: C.muted }}>Labour (CIS applies)</span>
-                          <span style={{ fontFamily: "'DM Mono',monospace" }}>£{calcLabour.toFixed(2)}</span>
+                          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{calcLabour.toFixed(2)}</span>
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6, paddingBottom: 6, borderBottom: `1px solid ${C.amber}22` }}>
                           <span style={{ color: C.muted }}>Materials (no CIS)</span>
-                          <span style={{ fontFamily: "'DM Mono',monospace" }}>£{calcMats.toFixed(2)}</span>
+                          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{calcMats.toFixed(2)}</span>
                         </div>
                       </>
                     )}
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
                       <span style={{ color: C.muted }}>Gross total</span>
-                      <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 600 }}>£{calcGross.toFixed(2)}</span>
+                      <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 600 }}>£{calcGross.toFixed(2)}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginTop: 4 }}>
                       <span style={{ color: C.muted }}>CIS {sub.cis_rate || 20}%{calcMats > 0 ? " (on labour only)" : ""}</span>
-                      <span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>-£{ded.toFixed(2)}</span>
+                      <span style={{ color: C.amber, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>-£{ded.toFixed(2)}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.amber}33` }}>
                       <span>Net to pay</span>
-                      <span style={{ color: C.green, fontFamily: "'DM Mono',monospace" }}>£{net.toFixed(2)}</span>
+                      <span style={{ color: C.green, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{net.toFixed(2)}</span>
                     </div>
                     {payForm.payment_type === "day_rate" && payForm.days && <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{payForm.days} days × £{payForm.rate}/day</div>}
                     {payForm.payment_type === "hourly" && payForm.hours && <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{payForm.hours} hrs × £{payForm.rate}/hr</div>}

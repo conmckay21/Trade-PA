@@ -68,7 +68,7 @@ export function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanRec
       }}
     >
       <div style={{
-        fontFamily: "'DM Mono', monospace",
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
         fontSize: 9,
         color: C.muted,
         letterSpacing: "0.14em",
@@ -414,7 +414,7 @@ export function Dashboard({ setView, jobs, invoices, enquiries, brand, onScanRec
             onClick={() => setView("Settings")}
             style={{
               ...S.btn("primary"),
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 11,
               letterSpacing: "0.06em",
             }}

@@ -67,7 +67,7 @@ export function CompanyForm({ form, set, draftContacts, setDraftContacts, onSave
   };
   const labelStyle = {
     display: "block",
-    fontFamily: "'DM Mono', monospace",
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
     fontSize: 10,
     color: C.muted,
     letterSpacing: "0.1em",
@@ -81,7 +81,7 @@ export function CompanyForm({ form, set, draftContacts, setDraftContacts, onSave
       type="button"
       onClick={onClick}
       style={{
-        fontFamily: "'DM Mono', monospace",
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
         fontSize: 9,
         textTransform: "uppercase",
         letterSpacing: "0.08em",
@@ -134,7 +134,7 @@ export function CompanyForm({ form, set, draftContacts, setDraftContacts, onSave
             type="button"
             onClick={addContact}
             style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 10,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
@@ -167,7 +167,7 @@ export function CompanyForm({ form, set, draftContacts, setDraftContacts, onSave
                 marginBottom: 10,
               }}>
                 <div style={{
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   color: C.textDim,
                   letterSpacing: "0.08em",
@@ -187,7 +187,7 @@ export function CompanyForm({ form, set, draftContacts, setDraftContacts, onSave
                       color: C.red,
                       cursor: "pointer",
                       fontSize: 11,
-                      fontFamily: "'DM Mono', monospace",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
                       letterSpacing: "0.04em",
                       textTransform: "uppercase",
                       fontWeight: 600,
@@ -239,7 +239,7 @@ export function CompanyForm({ form, set, draftContacts, setDraftContacts, onSave
 
         <div style={{
           marginTop: 8,
-          fontFamily: "'DM Mono', monospace",
+          fontFamily: "'Plus Jakarta Sans', sans-serif",
           fontSize: 10,
           color: C.muted,
           letterSpacing: "0.04em",

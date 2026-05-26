@@ -49,7 +49,7 @@ const T = {
   muted: "var(--c-muted)",
   text: "var(--c-text)",
   textDim: "var(--c-textDim)",
-  font: "'DM Mono','Courier New',monospace",
+  font: "'Plus Jakarta Sans', sans-serif",
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────

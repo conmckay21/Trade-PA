@@ -135,8 +135,8 @@ class ErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <div style={{ padding: 24, background: "#1a1a1a", borderRadius: 12, border: "1px solid #ef4444" }}>
-          <div style={{ color: "#ef4444", fontWeight: 700, marginBottom: 8, fontFamily: "'DM Mono',monospace", fontSize: 13 }}>Settings crashed — error details:</div>
-          <div style={{ color: "#fca5a5", fontSize: 12, fontFamily: "'DM Mono',monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{this.state.error?.message || String(this.state.error)}</div>
+          <div style={{ color: "#ef4444", fontWeight: 700, marginBottom: 8, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13 }}>Settings crashed — error details:</div>
+          <div style={{ color: "#fca5a5", fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{this.state.error?.message || String(this.state.error)}</div>
           <button onClick={() => this.setState({ error: null })} style={{ marginTop: 12, background: "#f59e0b", color: "#000", border: "none", borderRadius: 10, padding: "8px 16px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>Try again</button>
         </div>
       );
@@ -338,14 +338,14 @@ function CallTrackingSettings({ user }) {
         </div>
         <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
           <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Your business number</div>
-          <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: C.amber, marginBottom: 4 }}>{callTracking.twilio_number}</div>
+          <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", color: C.amber, marginBottom: 4 }}>{callTracking.twilio_number}</div>
           <div style={{ fontSize: 11, color: C.muted }}>Give this number to customers — all calls ring inside the Trade PA app</div>
         </div>
         {minsQuota && (
           <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
               <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>This month</div>
-              <div style={{ fontSize: 12, color: C.text, fontFamily: "'DM Mono',monospace" }}>{minsUsed} / {minsQuota} mins</div>
+              <div style={{ fontSize: 12, color: C.text, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{minsUsed} / {minsQuota} mins</div>
             </div>
             <div style={{ width: "100%", height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
               <div style={{ width: `${pct * 100}%`, height: "100%", background: pct >= 1 ? C.red : pct >= 0.8 ? C.amber : C.green, transition: "width 0.3s" }} />
@@ -372,7 +372,7 @@ function CallTrackingSettings({ user }) {
                   background: "transparent",
                   color: C.amber,
                   fontSize: 10,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                   fontWeight: 700,
@@ -399,7 +399,7 @@ function CallTrackingSettings({ user }) {
                 background: "transparent",
                 color: C.amber,
                 fontSize: 10,
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
                 fontWeight: 700,
@@ -490,7 +490,7 @@ function CallTrackingSettings({ user }) {
                 <>
                   <div style={{
                     fontSize: 10, color: C.textDim, letterSpacing: "0.1em",
-                    textTransform: "uppercase", fontFamily: "'DM Mono', monospace", marginBottom: 10,
+                    textTransform: "uppercase", fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 10,
                   }}>Change phone plan</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>Pick your new plan</div>
                   <div style={{ fontSize: 12, color: C.textDim, marginBottom: 16, lineHeight: 1.5 }}>
@@ -519,18 +519,18 @@ function CallTrackingSettings({ user }) {
                         >
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{tier.mins}</div>
-                            <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono',monospace", marginTop: 2 }}>{tier.price} · {tier.desc}</div>
+                            <div style={{ fontSize: 11, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif", marginTop: 2 }}>{tier.price} · {tier.desc}</div>
                           </div>
                           {isCurrent ? (
                             <span style={{
-                              fontSize: 9, fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em",
+                              fontSize: 9, fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.1em",
                               textTransform: "uppercase", color: C.green, fontWeight: 700,
                               background: `${C.green}1a`, border: `1px solid ${C.green}40`,
                               padding: "3px 8px", borderRadius: 4, flexShrink: 0,
                             }}>CURRENT</span>
                           ) : (
                             <span style={{
-                              fontSize: 10, fontFamily: "'DM Mono', monospace", letterSpacing: "0.08em",
+                              fontSize: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.08em",
                               textTransform: "uppercase", color: C.amber, fontWeight: 700, flexShrink: 0,
                             }}>Switch →</span>
                           )}
@@ -548,7 +548,7 @@ function CallTrackingSettings({ user }) {
                       color: C.text,
                       fontSize: 11, fontWeight: 600,
                       borderRadius: 6,
-                      fontFamily: "'DM Mono', monospace",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       cursor: "pointer",
@@ -563,14 +563,14 @@ function CallTrackingSettings({ user }) {
                   <>
                     <div style={{
                       fontSize: 10, color: C.textDim, letterSpacing: "0.1em",
-                      textTransform: "uppercase", fontFamily: "'DM Mono', monospace", marginBottom: 10,
+                      textTransform: "uppercase", fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 10,
                     }}>Confirm switch</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>
                       {currentTier?.mins || "current"} → {targetTier.mins}
                     </div>
                     <div style={{ fontSize: 13, color: C.textDim, margin: "6px 0 16px", lineHeight: 1.55 }}>
                       New price:{" "}
-                      <span style={{ color: C.amber, fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>
+                      <span style={{ color: C.amber, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700 }}>
                         {targetTier.price}/mo
                       </span>.
                     </div>
@@ -581,7 +581,7 @@ function CallTrackingSettings({ user }) {
                       marginBottom: 18,
                     }}>
                       <div style={{
-                        fontSize: 10, color: C.textDim, fontFamily: "'DM Mono', monospace",
+                        fontSize: 10, color: C.textDim, fontFamily: "'Plus Jakarta Sans', sans-serif",
                         letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4,
                       }}>What happens</div>
                       <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
@@ -600,7 +600,7 @@ function CallTrackingSettings({ user }) {
                           color: C.text,
                           fontSize: 11, fontWeight: 600,
                           borderRadius: 6,
-                          fontFamily: "'DM Mono', monospace",
+                          fontFamily: "'Plus Jakarta Sans', sans-serif",
                           letterSpacing: "0.08em",
                           textTransform: "uppercase",
                           cursor: changeBusy ? "not-allowed" : "pointer",
@@ -618,7 +618,7 @@ function CallTrackingSettings({ user }) {
                           color: "#412402",
                           fontSize: 11, fontWeight: 700,
                           borderRadius: 6,
-                          fontFamily: "'DM Mono', monospace",
+                          fontFamily: "'Plus Jakarta Sans', sans-serif",
                           letterSpacing: "0.08em",
                           textTransform: "uppercase",
                           cursor: changeBusy ? "not-allowed" : "pointer",
@@ -676,7 +676,7 @@ function CallTrackingSettings({ user }) {
               fontSize: 13,
               borderRadius: 8,
               textDecoration: "none",
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               letterSpacing: "0.05em",
             }}
           >Visit tradespa.co.uk →</a>
@@ -727,13 +727,13 @@ function CallTrackingSettings({ user }) {
                 transition: "all 0.15s",
               }}
             >
-              {tier.popular && <div style={{ position: "absolute", top: -7, right: 8, background: C.amber, color: "#000", fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 100, fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>POPULAR</div>}
+              {tier.popular && <div style={{ position: "absolute", top: -7, right: 8, background: C.amber, color: "#000", fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 100, fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.04em" }}>POPULAR</div>}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, fontFamily: "'DM Mono',monospace" }}>{tier.mins}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: isSelected ? C.amber : C.text, fontFamily: "'DM Mono',monospace" }}>{tier.price}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{tier.mins}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: isSelected ? C.amber : C.text, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{tier.price}</div>
               </div>
               <div style={{ fontSize: 10, color: C.muted }}>{tier.desc}</div>
-              <div style={{ fontSize: 9, color: C.muted, marginTop: 2, fontFamily: "'DM Mono',monospace" }}>/month</div>
+              <div style={{ fontSize: 9, color: C.muted, marginTop: 2, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>/month</div>
             </div>
           );
         })}
@@ -858,7 +858,7 @@ function TeamInvite({ companyId, planTier, currentMemberCount }) {
                       onClick={() => togglePerm(section)}
                       style={{
                         padding: "5px 12px", borderRadius: 12, fontSize: 11,
-                        fontFamily: "'DM Mono',monospace", fontWeight: 600, cursor: "pointer",
+                        fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 600, cursor: "pointer",
                         border: `1px solid ${allowed ? C.green + "66" : C.border}`,
                         background: allowed ? C.green + "18" : C.surface,
                         color: allowed ? C.green : C.muted,
@@ -1407,7 +1407,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           {/* Page header */}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <div style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 10,
               textTransform: "uppercase",
               letterSpacing: "0.14em",
@@ -1486,7 +1486,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             groups.map(group => (
               <div key={group.name} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <div style={{
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   color: C.muted,
                   letterSpacing: "0.14em",
@@ -1557,7 +1557,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                         }}>
                           {cat.status && (
                             <span style={{
-                              fontFamily: "'DM Mono', monospace",
+                              fontFamily: "'Plus Jakarta Sans', sans-serif",
                               fontSize: 10,
                               fontWeight: 700,
                               letterSpacing: "0.06em",
@@ -1587,7 +1587,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             gap: 12,
           }}>
             <div style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 10,
               color: C.muted,
               letterSpacing: "0.06em",
@@ -1606,7 +1606,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 background: "transparent",
                 border: "none",
                 color: C.red,
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontSize: 11,
                 fontWeight: 700,
                 letterSpacing: "0.06em",
@@ -1649,7 +1649,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               </svg>
             </button>
             <div style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 10,
               color: C.muted,
               letterSpacing: "0.14em",
@@ -1809,7 +1809,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 10,
               color: C.muted,
               letterSpacing: "0.12em",
@@ -1829,7 +1829,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             </div>
           </div>
           <span style={{
-            fontFamily: "'DM Mono', monospace",
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
             fontSize: 11,
             fontWeight: 700,
             letterSpacing: "0.1em",
@@ -1952,7 +1952,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   color: C.amber,
                   letterSpacing: "0.08em",
@@ -1968,7 +1968,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               <button
                 onClick={openPortal}
                 style={{
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   color: C.amber,
                   letterSpacing: "0.08em",
@@ -2014,7 +2014,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           });
           const unlimitedPill = (
             <span style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 10,
               fontWeight: 700,
               letterSpacing: "0.1em",
@@ -2030,7 +2030,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, marginBottom: unlimited ? 14 : 0 }}>
                 <span style={{ color: C.text, fontWeight: 600 }}>{label}</span>
                 {unlimited ? unlimitedPill : (
-                  <span style={{ color: pct >= 0.8 ? C.amber : C.muted, fontFamily: "'DM Mono',monospace" }}>
+                  <span style={{ color: pct >= 0.8 ? C.amber : C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                     {usedText}
                   </span>
                 )}
@@ -2042,7 +2042,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             {renderRow("AI Conversations", `${convUsed} / ${convCap}`, convUnlimited, convPct)}
             {renderRow("Hands-free time",  `${hfUsed} / ${hfCap} min`, hfUnlimited,   hfPct)}
             <div style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 10,
               color: C.muted,
               letterSpacing: "0.1em",
@@ -2118,7 +2118,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.label}</div>
-                    <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono',monospace", marginTop: 2 }}>{item.price}</div>
+                    <div style={{ fontSize: 11, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif", marginTop: 2 }}>{item.price}</div>
                   </div>
                   <button
                     onClick={() => setAddonConfirm(item.key)}
@@ -2129,7 +2129,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                       background: item.highlight ? C.amber : "transparent",
                       color: item.highlight ? "#412402" : C.amber,
                       fontSize: 10,
-                      fontFamily: "'DM Mono', monospace",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       fontWeight: 700,
@@ -2177,7 +2177,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               color: C.textDim,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               marginBottom: 10,
             }}>Confirm add-on</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>
@@ -2185,7 +2185,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             </div>
             <div style={{ fontSize: 13, color: C.textDim, margin: "6px 0 16px", lineHeight: 1.55 }}>
               We'll charge{" "}
-              <span style={{ color: C.amber, fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>
+              <span style={{ color: C.amber, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700 }}>
                 £{(ADDON_DISPLAY[addonConfirm].pricePence / 100).toFixed(2)}
               </span>
               {" "}to your card on file.
@@ -2199,7 +2199,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               <div style={{
                 fontSize: 10,
                 color: C.textDim,
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
                 marginBottom: 4,
@@ -2221,7 +2221,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                   fontSize: 11,
                   fontWeight: 600,
                   borderRadius: 6,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                   cursor: addonBusy ? "not-allowed" : "pointer",
@@ -2240,7 +2240,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                   fontSize: 11,
                   fontWeight: 700,
                   borderRadius: 6,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                   cursor: addonBusy ? "not-allowed" : "pointer",
@@ -2281,7 +2281,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                   background: active ? "rgba(245,158,11,0.12)" : C.surfaceHigh,
                   color: active ? C.amber : C.text,
                   cursor: "pointer",
-                  fontFamily: "'DM Mono',monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontWeight: active ? 700 : 500,
                   fontSize: 12,
                   display: "flex",
@@ -2761,7 +2761,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               return (
                 <button key={k}
                   onClick={() => setBrand(b => ({ ...b, tradeTypes: active ? (b.tradeTypes || []).filter(t => t !== k) : [...(b.tradeTypes || []), k] }))}
-                  style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${active ? C.amber + "88" : C.border}`, background: active ? C.amber + "18" : C.surfaceHigh, color: active ? C.amber : C.muted, fontSize: 12, cursor: "pointer", fontFamily: "'DM Mono',monospace", fontWeight: active ? 700 : 400 }}>
+                  style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${active ? C.amber + "88" : C.border}`, background: active ? C.amber + "18" : C.surfaceHigh, color: active ? C.amber : C.muted, fontSize: 12, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: active ? 700 : 400 }}>
                   {l}
                 </button>
               );
@@ -2939,7 +2939,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         </div>
         <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14 }}>
           <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Next certificate will be:</div>
-          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'DM Mono',monospace", color: C.amber }}>
+          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", color: C.amber }}>
             {(brand.certPrefix || "CERT")}-{String(brand.certNextNumber || 1).padStart(3, "0")}
           </div>
         </div>
@@ -2959,7 +2959,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Wake words</div>
-            <div style={{ fontSize: 12, color: C.text, fontFamily: "'DM Mono',monospace" }}>{(assistantWakeWords || []).slice(0, 2).join(", ")}{(assistantWakeWords || []).length > 2 ? ` +${assistantWakeWords.length - 2}` : ""}</div>
+            <div style={{ fontSize: 12, color: C.text, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{(assistantWakeWords || []).slice(0, 2).join(", ")}{(assistantWakeWords || []).length > 2 ? ` +${assistantWakeWords.length - 2}` : ""}</div>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Custom commands</div>
@@ -3040,7 +3040,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
                 <input
                   readOnly
-                  style={{ ...S.input, fontFamily: "'DM Mono',monospace", fontSize: 11 }}
+                  style={{ ...S.input, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11 }}
                   value={`${typeof window !== "undefined" ? window.location.origin : "https://www.tradespa.co.uk"}/api/calendar/${brand.calendarToken}.ics`}
                   onClick={e => e.target.select()}
                 />
@@ -3143,7 +3143,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                             } catch (e) { console.error("Permission update failed:", e); }
                           }}
                           style={{
-                            padding: "3px 10px", borderRadius: 12, fontSize: 10, fontFamily: "'DM Mono',monospace", fontWeight: 600,
+                            padding: "3px 10px", borderRadius: 12, fontSize: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 600,
                             border: `1px solid ${allowed ? C.green + "66" : C.border}`,
                             background: allowed ? C.green + "18" : C.surfaceHigh,
                             color: allowed ? C.green : C.muted,
@@ -3255,7 +3255,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       >
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>Email us</div>
-          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2, fontFamily: "'DM Mono', monospace" }}>hello@tradespa.co.uk</div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>hello@tradespa.co.uk</div>
         </div>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 5l7 7-7 7" />
@@ -3282,7 +3282,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       >
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>Visit website</div>
-          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2, fontFamily: "'DM Mono', monospace" }}>tradespa.co.uk</div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>tradespa.co.uk</div>
         </div>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M7 17L17 7M17 7H9M17 7V15" />
@@ -3352,7 +3352,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <div style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 10,
               color: reportText.startsWith("No errors") ? C.green : C.amber,
               fontWeight: 700,
@@ -3363,7 +3363,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             <button
               onClick={() => { navigator.clipboard.writeText(reportText); showToast("Copied to clipboard", "READY TO PASTE"); }}
               style={{
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontSize: 10,
                 letterSpacing: "0.08em",
                 fontWeight: 700,
@@ -3383,7 +3383,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           />
           {!reportText.startsWith("No errors") && (
             <div style={{ fontSize: 11, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
-              Paste this into a Claude session with: <span style={{ color: C.amber, fontFamily: "'DM Mono',monospace" }}>"Fix these issues in my Trade PA App.jsx"</span>
+              Paste this into a Claude session with: <span style={{ color: C.amber, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>"Fix these issues in my Trade PA App.jsx"</span>
             </div>
           )}
         </div>
@@ -3395,7 +3395,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         <div style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }} onClick={() => setPreview(false)}>
           <div onClick={e => e.stopPropagation()} style={{ maxHeight: "90vh", overflowY: "auto", borderRadius: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: C.muted, fontFamily: "'DM Mono',monospace" }}>INVOICE PREVIEW</div>
+              <div style={{ fontSize: 12, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>INVOICE PREVIEW</div>
               <button aria-label="Close" onClick={() => setPreview(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
             </div>
             <InvoicePreview brand={brand} />
@@ -3448,7 +3448,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             }}>{toast.text}</div>
             {toast.sub && (
               <div style={{
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontSize: 9,
                 color: C.green,
                 letterSpacing: "0.1em",
@@ -3462,7 +3462,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
 
       {/* ── Account section: delete account (Apple 5.1.1(v) compliance) ─── */}
       <div style={{ ...S.card, marginTop: 16, border: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>Account</div>
+        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Account</div>
         <div style={{ fontSize: 13, color: C.text, marginBottom: 6, fontWeight: 600 }}>Delete account</div>
         <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginBottom: 14 }}>
           Permanently delete your Trade PA account and all your data — jobs, invoices, customers, materials, settings, AI conversation history. Any active subscription will be cancelled. This cannot be undone.
@@ -3477,7 +3477,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             borderRadius: 8,
             fontSize: 12,
             fontWeight: 700,
-            fontFamily: "'DM Mono', monospace",
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
             letterSpacing: "0.04em",
             cursor: "pointer",
           }}
@@ -3509,7 +3509,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               </ul>
             </div>
             <div style={{ fontSize: 12, color: C.text, marginBottom: 6 }}>
-              To confirm, type your email address: <span style={{ fontFamily: "'DM Mono', monospace", color: C.amber }}>{user?.email}</span>
+              To confirm, type your email address: <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", color: C.amber }}>{user?.email}</span>
             </div>
             <input
               type="email"
@@ -3529,7 +3529,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                 padding: "10px 14px",
                 color: C.text,
                 fontSize: 13,
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 outline: "none",
                 marginBottom: 12,
               }}
@@ -3551,7 +3551,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                   borderRadius: 8,
                   fontSize: 12,
                   fontWeight: 700,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   cursor: deletingAccount ? "not-allowed" : "pointer",
                   opacity: deletingAccount ? 0.5 : 1,
                 }}
@@ -3567,7 +3567,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
                   borderRadius: 8,
                   fontSize: 12,
                   fontWeight: 700,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   cursor: (deletingAccount || deleteConfirmText.trim().toLowerCase() !== (user?.email || "").toLowerCase()) ? "not-allowed" : "pointer",
                   opacity: (deletingAccount || deleteConfirmText.trim().toLowerCase() !== (user?.email || "").toLowerCase()) ? 0.5 : 1,
                 }}
@@ -5123,7 +5123,7 @@ function AppInner() {
   };
 
   if (authLoading) return (
-    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13 }}>
+    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Plus Jakarta Sans', sans-serif", color: "#6b7280", fontSize: 13 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&display=swap');`}</style>
       Loading Trade PA...
     </div>
@@ -5143,7 +5143,7 @@ function AppInner() {
       && window.Capacitor?.isNativePlatform?.()
       && window.Capacitor?.getPlatform?.() === "ios";
     return (
-      <div style={{ minHeight: "100vh", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Mono',monospace" }}>
+      <div style={{ minHeight: "100vh", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Syne:wght@700;800&display=swap');`}</style>
         <div style={{ maxWidth: 420, width: "100%", textAlign: "center" }}>
           <div style={{ width: 56, height: 56, background: "#f59e0b", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "#000", margin: "0 auto 24px", letterSpacing: "-0.02em" }}>TP</div>
@@ -5170,7 +5170,7 @@ function AppInner() {
               {subscriptionStatus === "past_due" ? "Update Payment Details →" : "Subscribe Now →"}
             </a>
           )}
-          <button onClick={async () => { await db.auth.signOut(); setUser(null); }} style={{ background: "transparent", border: "none", color: "#555", fontSize: 13, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+          <button onClick={async () => { await db.auth.signOut(); setUser(null); }} style={{ background: "transparent", border: "none", color: "#555", fontSize: 13, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             Sign out
           </button>
         </div>
@@ -5179,7 +5179,7 @@ function AppInner() {
   }
 
   if (dbLoading) return (
-    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13, gap: 12 }}>
+    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Plus Jakarta Sans', sans-serif", color: "#6b7280", fontSize: 13, gap: 12 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&display=swap');`}</style>
       <div style={{ fontSize: 28 }}>⚡</div>
       <div style={{ color: "#f59e0b", fontWeight: 700 }}>TRADE PA</div>
@@ -5189,7 +5189,7 @@ function AppInner() {
 
   // ── ONBOARDING: Step 0 — detecting if onboarding needed ─────────────
   if (onboardingStep === 0) return (
-    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono',monospace", color: "#6b7280", fontSize: 13, gap: 12 }}>
+    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Plus Jakarta Sans', sans-serif", color: "#6b7280", fontSize: 13, gap: 12 }}>
       <div style={{ width: 48, height: 48, borderRadius: 12, background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: "#000" }}>TP</div>
     </div>
   );
@@ -5198,7 +5198,7 @@ function AppInner() {
   if (onboardingStep === 1) return (
     <div style={{ minHeight: "100dvh", background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans', sans-serif", color: "#f0f0f0" }}>
       <div style={{ maxWidth: 340, width: "100%", textAlign: "center" }}>
-        <div style={{ width: 72, height: 72, borderRadius: 18, background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 900, color: "#000", margin: "0 auto 28px", fontFamily: "'DM Mono',monospace" }}>TP</div>
+        <div style={{ width: 72, height: 72, borderRadius: 18, background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 900, color: "#000", margin: "0 auto 28px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>TP</div>
         <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 8 }}>Welcome to Trade PA</div>
         <div style={{ fontSize: 14, color: "#888", lineHeight: 1.7, marginBottom: 32 }}>Your AI-powered business assistant.<br/>Let's get you set up — takes about 2 minutes.</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, textAlign: "left", marginBottom: 32 }}>
@@ -5272,11 +5272,11 @@ function AppInner() {
       {onboardingStep === 5 && (
         <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
           <div style={{ maxWidth: 340, width: "100%", textAlign: "center" }}>
-            <div style={{ fontSize: 10, color: "#888", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>Last step</div>
+            <div style={{ fontSize: 10, color: "#888", fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>Last step</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: "#f0f0f0", marginBottom: 8 }}>Try your first command</div>
             <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7, marginBottom: 28 }}>{isDesktopBrowser ? "Type this in the chat box..." : "Tap the mic and say..."}</div>
             <div style={{ background: "#f59e0b0a", border: "1px solid #f59e0b33", borderRadius: 14, padding: "18px 22px", marginBottom: 28 }}>
-              <div style={{ fontSize: 16, color: "#f59e0b", fontFamily: "'DM Mono',monospace", lineHeight: 1.6 }}>"Add a customer called John Smith, 07700 900456"</div>
+              <div style={{ fontSize: 16, color: "#f59e0b", fontFamily: "'Plus Jakarta Sans', sans-serif", lineHeight: 1.6 }}>"Add a customer called John Smith, 07700 900456"</div>
             </div>
             <button
               onClick={() => {
@@ -5349,9 +5349,9 @@ function AppInner() {
                   const labels = { home: "Home", work: "Jobs", diary: "Diary", money: "Accounts", people: "People", admin: "Admin" };
                   return (
                     <div key={gId} style={{ marginBottom: 14, opacity: isActive ? 1 : 0.15 }}>
-                      <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 12px 6px", fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>{labels[gId]}</div>
+                      <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 12px 6px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{labels[gId]}</div>
                       {isActive && (
-                        <div style={{ padding: "7px 12px", borderRadius: 10, background: "#f59e0b", color: "#000", fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono',monospace", boxShadow: "0 0 0 2px #f59e0b66" }}>
+                        <div style={{ padding: "7px 12px", borderRadius: 10, background: "#f59e0b", color: "#000", fontSize: 12, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", boxShadow: "0 0 0 2px #f59e0b66" }}>
                           {labels[gId] === "Home" ? "Home" : labels[gId]}
                         </div>
                       )}
@@ -5432,7 +5432,7 @@ function AppInner() {
             }
           </div>
           {pwaPrompt && !isIos && (
-            <button onClick={async () => { pwaPrompt.prompt(); const { outcome } = await pwaPrompt.userChoice; if (outcome === "accepted") setShowPwaBanner(false); }} style={{ background: "#f59e0b", color: "#000", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace", flexShrink: 0 }}>Install →</button>
+            <button onClick={async () => { pwaPrompt.prompt(); const { outcome } = await pwaPrompt.userChoice; if (outcome === "accepted") setShowPwaBanner(false); }} style={{ background: "#f59e0b", color: "#000", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif", flexShrink: 0 }}>Install →</button>
           )}
           <button aria-label="Close" onClick={() => setShowPwaBanner(false)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", flexShrink: 0, padding: "0 4px" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         </div>
@@ -5470,11 +5470,11 @@ function AppInner() {
               color: "#000",
               borderRadius: 8,
               display: "grid", placeItems: "center",
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 12, fontWeight: 900,
             }}>TP</div>
             <div style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 12, fontWeight: 700,
               letterSpacing: "0.14em",
               color: C.text,
@@ -5548,7 +5548,7 @@ function AppInner() {
                   background: alertCount > 0 ? C.red : C.amber,
                   color: alertCount > 0 ? "#fff" : "#000",
                   borderRadius: 9,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10, fontWeight: 700,
                   display: "grid", placeItems: "center",
                   border: `2px solid ${C.surface}`,
@@ -5627,7 +5627,7 @@ function AppInner() {
                     fontSize: 11,
                     color: C.textDim,
                     marginTop: 2,
-                    fontFamily: "'DM Mono', monospace",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>{brand?.email || user?.email || ""}</div>
                 </div>
@@ -5824,7 +5824,7 @@ function AppInner() {
                   if (!allowed.length) return null;
                   return (
                     <div key={g.id} style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", padding: "6px 14px", fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>{g.label}</div>
+                      <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", padding: "6px 14px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{g.label}</div>
                       {allowed.map(v => {
                         const active = view === v;
                         const label = v === "AI Assistant" ? "Home" : v;
@@ -5842,7 +5842,7 @@ function AppInner() {
                               background: active ? C.amber : "transparent",
                               color: active ? "#000" : C.text,
                               fontSize: 14, fontWeight: active ? 700 : 500,
-                              fontFamily: "'DM Mono',monospace",
+                              fontFamily: "'Plus Jakarta Sans', sans-serif",
                               cursor: "pointer", textAlign: "left",
                               transition: "background 0.12s",
                             }}
@@ -5857,7 +5857,7 @@ function AppInner() {
                                 borderRadius: 4,
                                 fontSize: 11,
                                 fontWeight: 700,
-                                fontFamily: "'DM Mono',monospace",
+                                fontFamily: "'Plus Jakarta Sans', sans-serif",
                                 flexShrink: 0,
                               }}>{badge}</span>
                             )}
@@ -5876,7 +5876,7 @@ function AppInner() {
                   padding: "10px 14px",
                   background: "transparent", border: "none",
                   cursor: "pointer", textAlign: "left",
-                  fontFamily: "'DM Mono',monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   flexShrink: 0,
                 }}
               >
@@ -5928,7 +5928,7 @@ function AppInner() {
               };
               return (
                 <div key={g.id} style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 12px 6px", fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>{g.label}</div>
+                  <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", padding: "4px 12px 6px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{g.label}</div>
                   {allowed.map(v => {
                     const active = view === v;
                     const label = v === "AI Assistant" ? "Home" : v;
@@ -5943,7 +5943,7 @@ function AppInner() {
                           background: active ? C.amber : "transparent",
                           color: active ? "#000" : C.text,
                           fontSize: 12, fontWeight: active ? 700 : 500,
-                          fontFamily: "'DM Mono',monospace",
+                          fontFamily: "'Plus Jakarta Sans', sans-serif",
                           cursor: "pointer", textAlign: "left",
                           transition: "background 0.12s",
                         }}
@@ -6066,7 +6066,7 @@ function AppInner() {
                           borderRadius: 5,
                           padding: "2px 8px",
                           fontSize: 11,
-                          fontFamily: "'DM Mono', monospace",
+                          fontFamily: "'Plus Jakarta Sans', sans-serif",
                           color: C.text,
                           minWidth: 22,
                           textAlign: "center",

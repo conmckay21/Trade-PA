@@ -181,7 +181,7 @@ export function RecentlyDeleted({ user }) {
               }}>
                 <div style={{ fontSize: 18, flexShrink: 0 }} aria-hidden>{cfg.icon}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 1 }}>
+                  <div style={{ fontSize: 10, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 1 }}>
                     {cfg.label}
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

@@ -541,7 +541,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                   color: active ? accent : (urgentLive ? C.red : C.muted),
                   fontSize: 12,
                   fontWeight: active ? 700 : 500,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   cursor: muted ? "default" : "pointer",
                   opacity: muted ? 0.4 : 1,
                   whiteSpace: "nowrap",
@@ -562,7 +562,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
             style={{
               background: "none", border: "none",
               color: C.muted, fontSize: 11,
-              fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em",
+              fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.04em",
               cursor: "pointer", padding: "2px 4px",
             }}
           >
@@ -624,7 +624,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
       {!loading && groupedJobs.map(group => (
         <React.Fragment key={group.key}>
           {group.label && (
-            <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: C.muted, letterSpacing: "0.14em", fontWeight: 700, paddingLeft: 2, paddingTop: 4 }}>
+            <div style={{ fontSize: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", color: C.muted, letterSpacing: "0.14em", fontWeight: 700, paddingLeft: 2, paddingTop: 4 }}>
               {group.label} · {group.items.length}
             </div>
           )}
@@ -643,12 +643,12 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{j.customer || "—"}{j.address ? ` · ${j.address}` : ""}</div>
                     {/* Metadata row — pill, derived pills, time, icons */}
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                      <span style={{ ...S.badge(pill.color), fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.04em" }}>{pill.label}</span>
-                      {overdue && <span style={{ ...S.badge(C.red), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>Overdue</span>}
-                      {invoiced && !overdue && <span style={{ ...S.badge(C.purple), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>Invoiced</span>}
-                      {needsInvoice && !invoiced && <span style={{ ...S.badge(C.red), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>Needs invoice</span>}
-                      {j.po_number && <span style={{ ...S.badge(C.blue), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>PO: {j.po_number}</span>}
-                      <span style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>{relTime(j.updated_at || j.created_at)}</span>
+                      <span style={{ ...S.badge(pill.color), fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, letterSpacing: "0.04em" }}>{pill.label}</span>
+                      {overdue && <span style={{ ...S.badge(C.red), fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10 }}>Overdue</span>}
+                      {invoiced && !overdue && <span style={{ ...S.badge(C.purple), fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10 }}>Invoiced</span>}
+                      {needsInvoice && !invoiced && <span style={{ ...S.badge(C.red), fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10 }}>Needs invoice</span>}
+                      {j.po_number && <span style={{ ...S.badge(C.blue), fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10 }}>PO: {j.po_number}</span>}
+                      <span style={{ fontSize: 11, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{relTime(j.updated_at || j.created_at)}</span>
                       {j.annual_service && <span style={{ color: C.green, fontSize: 11 }}>🔄 Annual</span>}
                       {j.customer_signature && <span style={{ color: C.green, fontSize: 11 }}>✓ Signed</span>}
                       {geoJobId === j.id && geoState === "travelling" && <span style={{ color: C.amber, fontSize: 11 }}>🚗 {geoDistance !== null ? (geoDistance < 1000 ? geoDistance + "m" : (geoDistance/1000).toFixed(1) + "km") : "Travelling"}</span>}
@@ -729,7 +729,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
             <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: "auto" }}>
               {[["notes","Notes"],["photos","Photos"],["labour","Labour"],["vo","Variations"],["docs","Documents"],["certs","Certificates"],["daywork","Daywork"],["plans","📐 Plans"],["calls",`📞${jobCallLogs.length > 0 ? ` (${jobCallLogs.length})` : ""}`],["profit","💰 Profit"]].map(([v,l]) => (
                 <button key={v} onClick={() => setTab(v)}
-                  style={{ padding: "8px 12px", border: "none", borderBottom: tab === v ? `2px solid ${C.amber}` : "2px solid transparent", background: "transparent", color: tab === v ? C.amber : C.muted, fontSize: 11, fontWeight: tab === v ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'DM Mono',monospace" }}>
+                  style={{ padding: "8px 12px", border: "none", borderBottom: tab === v ? `2px solid ${C.amber}` : "2px solid transparent", background: "transparent", color: tab === v ? C.amber : C.muted, fontSize: 11, fontWeight: tab === v ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                   {l}
                 </button>
               ))}
@@ -1080,11 +1080,11 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                               bar.style.cssText = `padding:max(12px, env(safe-area-inset-top, 12px)) 16px 12px;background:#1a1a1a;border-bottom:1px solid #333;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px`;
                               const backBtn = document.createElement("button");
                               backBtn.textContent = "← Back";
-                              backBtn.style.cssText = "background:#f59e0b;color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace";
+                              backBtn.style.cssText = "background:#f59e0b;color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans', sans-serif";
                               backBtn.onclick = () => document.body.removeChild(overlay);
                               const title = document.createElement("span");
                               title.textContent = d.filename;
-                              title.style.cssText = "color:#888;font-size:13px;font-family:'DM Mono',monospace";
+                              title.style.cssText = "color:#888;font-size:13px;font-family:'Plus Jakarta Sans', sans-serif";
                               bar.appendChild(backBtn);
                               bar.appendChild(title);
                               overlay.appendChild(bar);
@@ -1162,7 +1162,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <div>
                           <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Gross Profit</div>
-                          <div style={{ fontSize: 28, fontWeight: 700, color: profitColor, fontFamily: "'DM Mono',monospace" }}>
+                          <div style={{ fontSize: 28, fontWeight: 700, color: profitColor, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                             {profitGross < 0 ? "-" : ""}{profitFmt(profitGross)}
                           </div>
                           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{profitMargin.toFixed(1)}% margin</div>
@@ -1184,7 +1184,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                         <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                           <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>{icon}</div>
                           <div style={{ flex: 1, fontSize: 12 }}>{label}</div>
-                          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, fontWeight: 600, color }}>
+                          <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 600, color }}>
                             {negative ? "−" : "+"}{profitFmt(value)}
                           </div>
                         </div>
@@ -1192,7 +1192,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "rgba(60,60,68,0.27)" }}>
                         <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>📊</div>
                         <div style={{ flex: 1, fontSize: 12, fontWeight: 700 }}>Gross Profit</div>
-                        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 14, fontWeight: 700, color: profitColor }}>
+                        <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700, color: profitColor }}>
                           {profitGross < 0 ? "−" : "+"}{profitFmt(profitGross)}
                         </div>
                       </div>
@@ -1205,12 +1205,12 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                         {linkedMaterials.map((m, i) => (
                           <div key={i} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: i < linkedMaterials.length - 1 ? `1px solid ${C.border}` : "none", gap: 8 }}>
                             <div style={{ flex: 1, fontSize: 12 }}>{m.item} ×{m.qty}</div>
-                            <div style={{ fontSize: 12, color: C.red, fontFamily: "'DM Mono',monospace" }}>£{(parseFloat(m.unit_price || 0) * parseFloat(m.qty || 1)).toFixed(2)}</div>
+                            <div style={{ fontSize: 12, color: C.red, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{(parseFloat(m.unit_price || 0) * parseFloat(m.qty || 1)).toFixed(2)}</div>
                           </div>
                         ))}
                         <div style={{ display: "flex", padding: "8px 14px", borderTop: `1px solid ${C.border}` }}>
                           <div style={{ flex: 1, fontSize: 12, fontWeight: 700 }}>Total</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.red, fontFamily: "'DM Mono',monospace" }}>£{profitMatCost.toFixed(2)}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.red, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{profitMatCost.toFixed(2)}</div>
                         </div>
                       </div>
                     )}
@@ -1225,7 +1225,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                               <div style={{ fontSize: 12 }}>{po.po_number} · {po.supplier}</div>
                               <div style={{ fontSize: 11, color: C.muted }}>{po.status}</div>
                             </div>
-                            <div style={{ fontSize: 12, color: C.amber, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(po.total || 0).toFixed(2)}</div>
+                            <div style={{ fontSize: 12, color: C.amber, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{parseFloat(po.total || 0).toFixed(2)}</div>
                           </div>
                         ))}
                       </div>
@@ -1258,7 +1258,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                         <div style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
                           <div style={{ padding: "8px 14px", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <span>💰 Stage Payments</span>
-                            <span style={{ fontFamily: "'DM Mono',monospace", color: paidCount === parsedStages.length ? C.green : C.muted }}>
+                            <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", color: paidCount === parsedStages.length ? C.green : C.muted }}>
                               {paidCount}/{parsedStages.length} paid
                             </span>
                           </div>
@@ -1271,13 +1271,13 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                                 style={{ display: "flex", alignItems: "center", padding: "10px 14px", borderBottom: i < parsedStages.length - 1 ? `1px solid ${C.border}` : "none", gap: 10, cursor: inv ? "pointer" : "default" }}>
                                 <div style={{ flex: 1 }}>
                                   <div style={{ fontSize: 12, fontWeight: 600 }}>{st.label || `Stage ${i + 1}`}</div>
-                                  <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono',monospace", marginTop: 2 }}>
+                                  <div style={{ fontSize: 10, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif", marginTop: 2 }}>
                                     {st.invoice_id || "—"}
                                     {st.type === "pct" && st.value ? ` · ${st.value}%` : ""}
                                   </div>
                                 </div>
                                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, fontWeight: 700, color: C.text }}>
+                                  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, color: C.text }}>
                                     £{parseFloat(st.amount || 0).toFixed(2)}
                                   </div>
                                   <div style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 8, background: pill.bg, color: pill.color, textTransform: "uppercase", letterSpacing: "0.04em" }}>
@@ -1343,9 +1343,9 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
 
                     overlay.innerHTML = `
                       <div style="padding:max(12px, env(safe-area-inset-top, 12px)) 16px 12px;background:#1a1a1a;border-bottom:1px solid #333;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10">
-                        <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))" style="background:${accent};color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace">← Back</button>
-                        <span style="color:#888;font-size:13px;font-family:'DM Mono',monospace">Job Completion Certificate</span>
-                        <button onclick="window.print()" style="background:transparent;color:#888;border:1px solid #333;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:'DM Mono',monospace;margin-left:auto">🖨 Print / Save PDF</button>
+                        <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))" style="background:${accent};color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans', sans-serif">← Back</button>
+                        <span style="color:#888;font-size:13px;font-family:'Plus Jakarta Sans', sans-serif">Job Completion Certificate</span>
+                        <button onclick="window.print()" style="background:transparent;color:#888;border:1px solid #333;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:'Plus Jakarta Sans', sans-serif;margin-left:auto">🖨 Print / Save PDF</button>
                       </div>
                       <div style="flex:1;background:#f5f5f5;padding:24px;display:flex;justify-content:center">
                         <div style="font-family:Arial,sans-serif;max-width:680px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.15)">

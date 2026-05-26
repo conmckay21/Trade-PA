@@ -135,7 +135,7 @@ export function CustomerForm({ form, set, onSave, onCancel }) {
     minHeight: 16,
   };
   const labelStyle = {
-    fontFamily: "'DM Mono', monospace",
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
     fontSize: 10,
     textTransform: "uppercase",
     letterSpacing: "0.14em",
@@ -168,7 +168,7 @@ export function CustomerForm({ form, set, onSave, onCancel }) {
     if (state === "listening") {
       return (
         <span style={{
-          fontFamily: "'DM Mono', monospace",
+          fontFamily: "'Plus Jakarta Sans', sans-serif",
           fontSize: 9,
           textTransform: "uppercase",
           letterSpacing: "0.10em",
@@ -198,7 +198,7 @@ export function CustomerForm({ form, set, onSave, onCancel }) {
     if (state === "populated") {
       return (
         <span style={{
-          fontFamily: "'DM Mono', monospace",
+          fontFamily: "'Plus Jakarta Sans', sans-serif",
           fontSize: 9,
           textTransform: "uppercase",
           letterSpacing: "0.10em",

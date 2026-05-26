@@ -24,7 +24,7 @@ export function PortalLinkPanel({ token, isQuote, stripeReady, colors, styles })
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <input
           readOnly
-          style={{ ...styles.input, fontFamily: "'DM Mono',monospace", fontSize: 11, flex: 1 }}
+          style={{ ...styles.input, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, flex: 1 }}
           value={url}
           onClick={e => e.target.select()}
         />

@@ -152,7 +152,7 @@ export default function UpdateBanner() {
             gap: 12,
             boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
             maxWidth: "calc(100vw - 24px)",
-            fontFamily: "'DM Mono', ui-monospace, monospace",
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
             animation: "tpUpdateBannerSlide 250ms ease-out",
           }}
         >
@@ -192,7 +192,7 @@ export default function UpdateBanner() {
               padding: "7px 12px",
               fontSize: 12,
               fontWeight: 700,
-              fontFamily: "'DM Mono', ui-monospace, monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               cursor: "pointer",
               flexShrink: 0,
             }}

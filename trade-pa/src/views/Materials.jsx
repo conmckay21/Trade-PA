@@ -48,7 +48,7 @@ function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, ma
     overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:16px";
     const closeBtn = document.createElement("button");
     closeBtn.textContent = "← Back to app";
-    closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'DM Mono',monospace;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
+    closeBtn.style.cssText = "position:sticky;top:0;align-self:flex-start;background:#f59e0b;color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:'Plus Jakarta Sans', sans-serif;z-index:10;margin-top:max(16px, env(safe-area-inset-top, 16px))";
     closeBtn.onclick = () => document.body.removeChild(overlay);
     overlay.appendChild(closeBtn);
     const imgEl = document.createElement("img");
@@ -738,7 +738,7 @@ Return only JSON, no other text.` },
                   color: active ? accent : (urgentLive ? C.red : C.muted),
                   fontSize: 12,
                   fontWeight: active ? 700 : 500,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   cursor: muted ? "default" : "pointer",
                   opacity: muted ? 0.4 : 1,
                   whiteSpace: "nowrap",
@@ -761,7 +761,7 @@ Return only JSON, no other text.` },
 
       {/* List header strip — count/cost + sort affordance */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingLeft: 2, paddingRight: 2 }}>
-        <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em" }}>
+        <div style={{ fontSize: 11, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.04em" }}>
           {sortedMaterials.length} material{sortedMaterials.length !== 1 ? "s" : ""}
           {filteredCost > 0 && <> · <span style={{ color: C.text }}>£{filteredCost.toFixed(2)}</span></>}
         </div>
@@ -771,7 +771,7 @@ Return only JSON, no other text.` },
           style={{
             background: "none", border: "none",
             color: C.muted, fontSize: 11,
-            fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em",
+            fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.04em",
             cursor: "pointer", padding: "2px 4px",
           }}
         >
@@ -798,7 +798,7 @@ Return only JSON, no other text.` },
       {groupedMaterials.map(group => (
         <React.Fragment key={group.key}>
           {group.label && (
-            <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: C.muted, letterSpacing: "0.14em", fontWeight: 700, paddingLeft: 2, paddingTop: 4 }}>
+            <div style={{ fontSize: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", color: C.muted, letterSpacing: "0.14em", fontWeight: 700, paddingLeft: 2, paddingTop: 4 }}>
               {group.label} · {group.items.length}
             </div>
           )}

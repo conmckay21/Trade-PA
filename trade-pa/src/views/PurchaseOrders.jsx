@@ -122,7 +122,7 @@ export function PurchaseOrdersTab({ user, brand }) {
         {[["Total POs", orders.length, C.text], ["Awaiting Delivery", orders.filter(o=>o.status==="sent").length, C.amber], ["Received", orders.filter(o=>o.status==="received").length, C.green]].map(([l,v,col],i) => (
           <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: col, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{v}</div>
           </div>
         ))}
       </div>
@@ -141,7 +141,7 @@ export function PurchaseOrdersTab({ user, brand }) {
               <div style={{ fontSize: 11, color: C.muted }}>{new Date(o.created_at).toLocaleDateString("en-GB")}{o.job_ref && ` · ${o.job_ref}`}</div>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>£{parseFloat(o.total||0).toFixed(2)}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{parseFloat(o.total||0).toFixed(2)}</div>
               <div style={{ fontSize: 11, color: C.muted }}>{(o.purchase_order_items||[]).length} items</div>
             </div>
           </div>
@@ -150,7 +150,7 @@ export function PurchaseOrdersTab({ user, brand }) {
               {(o.purchase_order_items || []).map((item, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
                   <span>{item.description} × {item.qty} {item.unit}</span>
-                  <span style={{ fontFamily: "'DM Mono',monospace" }}>£{lineTotal(item).toFixed(2)}</span>
+                  <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{lineTotal(item).toFixed(2)}</span>
                 </div>
               ))}
               {o.notes && <div style={{ fontSize: 11, color: C.muted, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>Note: {o.notes}</div>}
@@ -205,7 +205,7 @@ export function PurchaseOrdersTab({ user, brand }) {
                       <button onClick={() => setForm(f => ({ ...f, items: f.items.filter((_,j) => j!==i) }))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }} disabled={form.items.length===1}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                     </div>
                   ))}
-                  {orderTotal(form.items) > 0 && <div style={{ fontSize: 12, fontWeight: 700, textAlign: "right", color: C.amber, fontFamily: "'DM Mono',monospace" }}>Total: £{orderTotal(form.items).toFixed(2)}</div>}
+                  {orderTotal(form.items) > 0 && <div style={{ fontSize: 12, fontWeight: 700, textAlign: "right", color: C.amber, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Total: £{orderTotal(form.items).toFixed(2)}</div>}
                 </div>
               </div>
               <div><label style={S.label}>Notes</label><textarea style={{ ...S.input, minHeight: 60 }} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special instructions..." /></div>

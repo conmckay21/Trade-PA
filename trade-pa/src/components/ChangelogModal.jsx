@@ -189,7 +189,7 @@ export default function ChangelogModal({ open, onClose }) {
           <div>
             <div
               style={{
-                fontFamily: "'DM Mono', ui-monospace, monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontSize: 11,
                 color: "var(--c-muted)",
                 letterSpacing: "0.08em",
@@ -240,7 +240,7 @@ export default function ChangelogModal({ open, onClose }) {
           {error && (
             <div
               style={{
-                fontFamily: "'DM Mono', ui-monospace, monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontSize: 12,
                 color: "#ef4444",
                 padding: "12px 0",
@@ -252,7 +252,7 @@ export default function ChangelogModal({ open, onClose }) {
           {releases === null && !error && (
             <div
               style={{
-                fontFamily: "'DM Mono', ui-monospace, monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontSize: 12,
                 color: "var(--c-muted)",
                 padding: "12px 0",
@@ -264,7 +264,7 @@ export default function ChangelogModal({ open, onClose }) {
           {releases && releases.length === 0 && !error && (
             <div
               style={{
-                fontFamily: "'DM Mono', ui-monospace, monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontSize: 12,
                 color: "var(--c-muted)",
                 padding: "12px 0",
@@ -278,7 +278,7 @@ export default function ChangelogModal({ open, onClose }) {
               <div key={rel.date} style={{ marginTop: i === 0 ? 6 : 22 }}>
                 <div
                   style={{
-                    fontFamily: "'DM Mono', ui-monospace, monospace",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
                     fontSize: 11,
                     color: "var(--c-textDim)",
                     letterSpacing: "0.06em",

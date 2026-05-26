@@ -53,7 +53,7 @@ export const BORDER_COLOR = {
 
 // Standard fonts (match the @import in App.jsx LandingPage)
 export const FONT = {
-  mono: "'DM Mono', 'Courier New', monospace",
+  mono: "'Plus Jakarta Sans', sans-serif",
   sans: "'DM Sans', 'Helvetica Neue', sans-serif",
 };
 

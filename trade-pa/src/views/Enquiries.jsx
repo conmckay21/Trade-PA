@@ -257,7 +257,7 @@ export function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers,
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {Object.entries(statusLabel).map(([v, l]) => (
                   <button key={v} onClick={() => updateStatus(selected.id, v)}
-                    style={{ padding: "5px 12px", borderRadius: 10, border: `1px solid ${selected.status === v ? statusColor[v] : C.border}`, background: selected.status === v ? statusColor[v] + "22" : "transparent", color: selected.status === v ? statusColor[v] : C.muted, fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600, cursor: "pointer" }}>
+                    style={{ padding: "5px 12px", borderRadius: 10, border: `1px solid ${selected.status === v ? statusColor[v] : C.border}`, background: selected.status === v ? statusColor[v] + "22" : "transparent", color: selected.status === v ? statusColor[v] : C.muted, fontSize: 11, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 600, cursor: "pointer" }}>
                     {l}
                   </button>
                 ))}

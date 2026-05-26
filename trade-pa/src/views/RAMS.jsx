@@ -447,7 +447,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: C.muted, letterSpacing: "0.08em", fontWeight: 700 }}>STEP {step} OF {STEPS.length}</div>
+            <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: C.muted, letterSpacing: "0.08em", fontWeight: 700 }}>STEP {step} OF {STEPS.length}</div>
             <div style={{ fontSize: 16, fontWeight: 700, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{form.title || "New RAMS"}</div>
           </div>
         </div>
@@ -459,7 +459,7 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
               style={{ flex: 1, height: 4, borderRadius: 2, background: i < step ? C.amber : C.border, cursor: i < step ? "pointer" : "default", transition: "background 0.2s" }} />
           ))}
         </div>
-        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: C.muted, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase", marginBottom: 16 }}>{STEPS[step - 1]}</div>
+        <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: C.muted, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase", marginBottom: 16 }}>{STEPS[step - 1]}</div>
 
         {/* Step 1: Project Details */}
         {step === 1 && (

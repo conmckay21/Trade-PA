@@ -16,7 +16,7 @@ export function HubPage({ title, sub, rows }) {
       {/* Page header */}
       <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 4 }}>
         <div style={{
-          fontFamily: "'DM Mono', monospace",
+          fontFamily: "'Plus Jakarta Sans', sans-serif",
           fontSize: 10,
           color: C.amber,
           letterSpacing: "0.14em",

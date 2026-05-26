@@ -328,7 +328,7 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
 
       {/* Week label + Today button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono',monospace" }}>{weekLabel()}</div>
+        <div style={{ fontSize: 11, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{weekLabel()}</div>
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => {
             // One-shot snapshot download. For live sync, see Settings → Notifications → Calendar Subscription.
@@ -346,7 +346,7 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
       </div>
 
       {/* Selected day — header */}
-      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: C.muted, textTransform: "uppercase" }}>
+      <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: C.muted, textTransform: "uppercase" }}>
         {dayLabel(activeDay)} — {activeDay.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
       </div>
 
@@ -374,13 +374,13 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
               </div>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                 {job.dateObj ? new Date(job.dateObj).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}
               </div>
               <div style={S.badge(statusColor[job.status] || C.muted)}>{statusLabel[job.status] || job.status}</div>
             </div>
           </div>
-          {job.value > 0 && <div style={{ fontSize: 11, color: C.green, fontFamily: "'DM Mono',monospace", marginTop: 4 }}>{fmtAmount(job.value)}</div>}
+          {job.value > 0 && <div style={{ fontSize: 11, color: C.green, fontFamily: "'Plus Jakarta Sans', sans-serif", marginTop: 4 }}>{fmtAmount(job.value)}</div>}
         </div>
       ))}
 
@@ -394,7 +394,7 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: C.muted, letterSpacing: "0.06em" }}>{selectedJob.type || "JOB"}</div>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: C.muted, letterSpacing: "0.06em" }}>{selectedJob.type || "JOB"}</div>
                 <div style={{ fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedJob.customer}</div>
               </div>
               <div style={S.badge(statusColor[selectedJob.status] || C.muted)}>{statusLabel[selectedJob.status] || selectedJob.status}</div>
@@ -504,7 +504,7 @@ export function Schedule({ jobs, setJobs, customers, setContextHint, user }) {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
               <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: C.muted, letterSpacing: "0.06em" }}>{addJobDate?.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: C.muted, letterSpacing: "0.06em" }}>{addJobDate?.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>Add Job</div>
               </div>
               <VoiceFillButton form={form} setForm={setForm} fieldDescriptions="customer (full name), address (property address), type (job type e.g. Boiler Service), value (£ amount), notes (any details)" />

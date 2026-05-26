@@ -689,7 +689,7 @@ export function Payments({ brand, invoices, setInvoices, customers, user, sendPu
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: inv.status === "overdue" ? C.red : C.text, marginRight: 8, flexShrink: 0 }}>{fmtAmount(inv.amount)}</div>
                   {inv.status === "overdue" && (inv.chaseCount || 0) > 0 ? (
-                    <div style={{ ...S.badge((inv.chaseCount || 0) >= 3 ? C.red : (inv.chaseCount || 0) === 2 ? "#f97316" : C.amber), marginRight: 8, flexShrink: 0, fontFamily: "'DM Mono', monospace", fontSize: 10, whiteSpace: "nowrap" }}>
+                    <div style={{ ...S.badge((inv.chaseCount || 0) >= 3 ? C.red : (inv.chaseCount || 0) === 2 ? "#f97316" : C.amber), marginRight: 8, flexShrink: 0, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, whiteSpace: "nowrap" }}>
                       {(inv.chaseCount || 0) >= 3 ? "⚠ Final" : (inv.chaseCount || 0) === 2 ? "⏰ Firm" : "· Gentle"} {inv.chaseCount || 0}/3
                     </div>
                   ) : (
@@ -1096,7 +1096,7 @@ export function InvoicesView({ brand, invoices, setInvoices, user, customers, cu
                   color: active ? accent : (urgentLive ? C.red : C.muted),
                   fontSize: 12,
                   fontWeight: active ? 700 : 500,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   cursor: muted ? "default" : "pointer",
                   opacity: muted ? 0.4 : 1,
                   whiteSpace: "nowrap",
@@ -1117,7 +1117,7 @@ export function InvoicesView({ brand, invoices, setInvoices, user, customers, cu
             style={{
               background: "none", border: "none",
               color: C.muted, fontSize: 11,
-              fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em",
+              fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.04em",
               cursor: "pointer", padding: "2px 4px",
             }}
           >
@@ -1138,7 +1138,7 @@ export function InvoicesView({ brand, invoices, setInvoices, user, customers, cu
       {groupedInvoices.map(group => (
         <React.Fragment key={group.key}>
           {group.label && (
-            <div style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: C.muted, letterSpacing: "0.14em", fontWeight: 700, paddingLeft: 2, paddingTop: 4 }}>
+            <div style={{ fontSize: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", color: C.muted, letterSpacing: "0.14em", fontWeight: 700, paddingLeft: 2, paddingTop: 4 }}>
               {group.label} · {group.items.length}
             </div>
           )}
@@ -1157,19 +1157,19 @@ export function InvoicesView({ brand, invoices, setInvoices, user, customers, cu
                     {/* Metadata row */}
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                       {inv.status === "overdue" && (inv.chaseCount || 0) > 0 ? (
-                        <span style={{ ...S.badge((inv.chaseCount || 0) >= 3 ? C.red : (inv.chaseCount || 0) === 2 ? "#f97316" : C.amber), fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
+                        <span style={{ ...S.badge((inv.chaseCount || 0) >= 3 ? C.red : (inv.chaseCount || 0) === 2 ? "#f97316" : C.amber), fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
                           {(inv.chaseCount || 0) >= 3 ? "⚠ Final" : (inv.chaseCount || 0) === 2 ? "⏰ Firm" : "· Gentle"} {inv.chaseCount || 0}/3
                         </span>
                       ) : (
-                        <span style={{ ...S.badge(pill.color), fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.04em" }}>{pill.label}</span>
+                        <span style={{ ...S.badge(pill.color), fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, letterSpacing: "0.04em" }}>{pill.label}</span>
                       )}
-                      {inv.due && <span style={{ fontSize: 11, color: overdue ? C.red : C.muted, fontFamily: "'DM Mono', monospace" }}>{inv.due}</span>}
+                      {inv.due && <span style={{ fontSize: 11, color: overdue ? C.red : C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{inv.due}</span>}
                       {(inv.created_at || inv.date) && (
-                        <span style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>· {relTime(inv.created_at || inv.date)}</span>
+                        <span style={{ fontSize: 11, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>· {relTime(inv.created_at || inv.date)}</span>
                       )}
-                      {(inv.job_ref || inv.jobRef) && <span style={{ ...S.badge(C.blue), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>Job: {inv.job_ref || inv.jobRef}</span>}
-                      {inv.cisEnabled && <span style={{ ...S.badge(C.purple), fontFamily: "'DM Mono', monospace", fontSize: 10 }}>CIS</span>}
-                      {inv.vatEnabled && <span style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>VAT</span>}
+                      {(inv.job_ref || inv.jobRef) && <span style={{ ...S.badge(C.blue), fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10 }}>Job: {inv.job_ref || inv.jobRef}</span>}
+                      {inv.cisEnabled && <span style={{ ...S.badge(C.purple), fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10 }}>CIS</span>}
+                      {inv.vatEnabled && <span style={{ fontSize: 11, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>VAT</span>}
                     </div>
                   </div>
                   <div style={{ flexShrink: 0, textAlign: "right" }}>

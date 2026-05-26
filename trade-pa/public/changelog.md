@@ -1,5 +1,7 @@
 ## 2026-05-26
 
+✨ Bold text everywhere now renders crisp and clear — fixed the last places where the old font was hanging around (material rows, job summaries, stock entries, status badges).
+
 🧹 Cleaned up the bottom of the Materials tab — the old Supplier Quick Dial card was redundant now that Suppliers has its own home under the Jobs tab. Same suppliers, just one place to find them.
 
 📇 New Suppliers tab — save phone numbers, emails and notes for every merchant you use. CEF, Screwfix, Toolstation, your local builder's merchant — all in one place, never look up a number again.

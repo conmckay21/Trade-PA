@@ -34,7 +34,7 @@ export function Notifications({ notifications, onMarkRead, onMarkAllRead, onDism
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 4px" }}>
-        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: C.muted, letterSpacing: "0.1em", fontWeight: 700 }}>
+        <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: C.muted, letterSpacing: "0.1em", fontWeight: 700 }}>
           RECENT · {notifications.length}
         </div>
         {hasUnread && (
@@ -44,7 +44,7 @@ export function Notifications({ notifications, onMarkRead, onMarkAllRead, onDism
               background: "transparent",
               border: "none",
               color: C.amber,
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               fontSize: 11,
               fontWeight: 700,
               letterSpacing: "0.06em",
@@ -114,7 +114,7 @@ export function Notifications({ notifications, onMarkRead, onMarkAllRead, onDism
               marginTop: 4,
             }}>
               <div style={{
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontSize: 10,
                 color: C.muted,
                 letterSpacing: "0.05em",

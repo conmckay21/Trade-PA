@@ -841,17 +841,17 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
 
   const IS = {
     card: { background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 12, padding: 16, marginBottom: 12 },
-    btn: (v) => ({ padding: "7px 14px", borderRadius: 10, fontSize: 11, fontWeight: 600, cursor: "pointer", border: v === "ghost" ? `1px solid ${IC.border}` : "none", fontFamily: "'DM Mono',monospace", background: v === "approve" ? IC.green : v === "amber" ? IC.amber : v === "red" ? "#7f1d1d" : v === "ghost" ? "transparent" : IC.bg3, color: v === "approve" ? "#fff" : v === "amber" ? "#000" : v === "red" ? IC.red : IC.text }),
-    tab: (a) => ({ padding: "6px 14px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 11, fontWeight: a ? 700 : 400, fontFamily: "'DM Mono',monospace", background: a ? IC.amber : "transparent", color: a ? "#000" : IC.muted }),
-    input: { width: "100%", padding: "7px 10px", borderRadius: 10, border: `1px solid ${IC.border}`, background: IC.bg3, color: IC.text, fontSize: 12, marginBottom: 8, boxSizing: "border-box", fontFamily: "'DM Mono',monospace" },
+    btn: (v) => ({ padding: "7px 14px", borderRadius: 10, fontSize: 11, fontWeight: 600, cursor: "pointer", border: v === "ghost" ? `1px solid ${IC.border}` : "none", fontFamily: "'Plus Jakarta Sans', sans-serif", background: v === "approve" ? IC.green : v === "amber" ? IC.amber : v === "red" ? "#7f1d1d" : v === "ghost" ? "transparent" : IC.bg3, color: v === "approve" ? "#fff" : v === "amber" ? "#000" : v === "red" ? IC.red : IC.text }),
+    tab: (a) => ({ padding: "6px 14px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 11, fontWeight: a ? 700 : 400, fontFamily: "'Plus Jakarta Sans', sans-serif", background: a ? IC.amber : "transparent", color: a ? "#000" : IC.muted }),
+    input: { width: "100%", padding: "7px 10px", borderRadius: 10, border: `1px solid ${IC.border}`, background: IC.bg3, color: IC.text, fontSize: 12, marginBottom: 8, boxSizing: "border-box", fontFamily: "'Plus Jakarta Sans', sans-serif" },
   };
 
-  if (loading) return <div style={{ padding: 40, textAlign: "center", color: IC.muted, fontFamily: "'DM Mono',monospace" }}>Loading...</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: IC.muted, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Loading...</div>;
 
   // Show error from OAuth callback
   if (urlError) {
     return (
-      <div style={{ fontFamily: "'DM Mono',monospace", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ background: "#7f1d1d", border: "1px solid #ef4444", borderRadius: 10, padding: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", marginBottom: 8 }}>⚠ Email connection failed</div>
           <div style={{ fontSize: 12, color: "#fca5a5", marginBottom: 16, lineHeight: 1.6, wordBreak: "break-all" }}>{urlError}</div>
@@ -867,7 +867,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
 
   if (!connection) {
     return (
-      <div style={{ padding: 48, textAlign: "center", fontFamily: "'DM Mono',monospace" }}>
+      <div style={{ padding: 48, textAlign: "center", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <div style={{ fontSize: 36, marginBottom: 16 }}>✉</div>
         <div style={{ fontSize: 17, fontWeight: 700, color: IC.text, marginBottom: 8 }}>Connect your inbox</div>
         <div style={{ fontSize: 13, color: IC.muted, maxWidth: 380, margin: "0 auto 28px", lineHeight: 1.6 }}>Link your email and Trade PA will automatically review incoming emails every hour — suggesting jobs, enquiries, material orders and more for your approval.</div>
@@ -885,7 +885,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
   }
 
   return (
-    <div style={{ fontFamily: "'DM Mono',monospace", display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", display: "flex", flexDirection: "column", gap: 12 }}>
 
       {/* Status bar */}
       <div style={{ ...IS.card, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 0 }}>
@@ -963,7 +963,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
           color: active ? "#000" : IC.muted,
           border: `1px solid ${active ? (tint || IC.text) : IC.border}`,
           cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-          fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em",
+          fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.04em",
         });
 
         return (
@@ -1131,7 +1131,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
                       <label style={{ fontSize: 11, color: IC.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Message</label>
                       <button
                         onClick={() => { abortSpeech(); recording ? stopRecording() : startRecording(true); }}
-                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, background: recording ? IC.red : IC.amber, color: recording ? "#fff" : "#000" }}>
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, border: "none", cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, fontWeight: 700, background: recording ? IC.red : IC.amber, color: recording ? "#fff" : "#000" }}>
                         {transcribing ? "⏳ Transcribing..." : recording ? "⏹ Stop" : "🎙 Dictate"}
                       </button>
                     </div>
@@ -1180,7 +1180,7 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
       {/* ── Dismiss reason modal ── */}
       {feedbackAction && (
         <div style={{ position: "fixed", inset: 0, background: "#000d", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 24 }}>
-          <div style={{ background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 12, padding: 24, maxWidth: 340, width: "100%", fontFamily: "'DM Mono',monospace" }}>
+          <div style={{ background: IC.bg2, border: `1px solid ${IC.border}`, borderRadius: 12, padding: 24, maxWidth: 340, width: "100%", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: IC.text, marginBottom: 6 }}>Why dismiss this?</div>
             <div style={{ fontSize: 12, color: IC.muted, marginBottom: 20, lineHeight: 1.5 }}>
               Your feedback helps the AI improve — it won't make this mistake again.
@@ -1188,12 +1188,12 @@ export function InboxView({ user, brand, jobs, setJobs, invoices, setInvoices, e
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {DISMISS_REASONS.map(r => (
                 <button key={r.id} onClick={() => confirmReject(feedbackAction, r.id)}
-                  style={{ padding: "10px 14px", borderRadius: 8, border: `1px solid ${IC.border}`, background: IC.bg3, color: IC.text, cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", textAlign: "left", fontWeight: 500 }}>
+                  style={{ padding: "10px 14px", borderRadius: 8, border: `1px solid ${IC.border}`, background: IC.bg3, color: IC.text, cursor: "pointer", fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", textAlign: "left", fontWeight: 500 }}>
                   {r.label}
                 </button>
               ))}
             </div>
-            <button onClick={() => setFeedbackAction(null)} style={{ marginTop: 12, width: "100%", padding: "8px", borderRadius: 8, border: "none", background: "transparent", color: IC.muted, cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace" }}>
+            <button onClick={() => setFeedbackAction(null)} style={{ marginTop: 12, width: "100%", padding: "8px", borderRadius: 8, border: "none", background: "transparent", color: IC.muted, cursor: "pointer", fontSize: 11, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               Cancel
             </button>
           </div>

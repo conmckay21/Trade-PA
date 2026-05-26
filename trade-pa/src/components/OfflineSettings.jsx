@@ -117,7 +117,7 @@ export default function OfflineSettings({ open, onClose }) {
         justifyContent: "center",
         padding: "48px 16px 16px",
         overflowY: "auto",
-        fontFamily: "'DM Mono', ui-monospace, monospace",
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
       }}
     >
       <div

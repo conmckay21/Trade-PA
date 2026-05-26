@@ -130,7 +130,7 @@ function VoiceHeroCard() {
       overflow: "hidden",
       boxShadow: "0 40px 100px -40px rgba(0,0,0,0.9), 0 0 0 1px rgba(245,158,11,0.08)",
       position: "relative",
-      fontFamily: "'DM Mono',monospace",
+      fontFamily: "'Plus Jakarta Sans', sans-serif",
       maxWidth: 520,
       margin: "0 auto",
     }}>
@@ -237,7 +237,7 @@ function InboxDemoCard() {
   }, [scenarioIdx]);
 
   return (
-    <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: 20, boxShadow: "0 32px 80px rgba(0,0,0,0.5)", fontFamily: "'DM Mono',monospace" }}>
+    <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: 20, boxShadow: "0 32px 80px rgba(0,0,0,0.5)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 14, borderBottom: "1px solid #1e1e1e", marginBottom: 12 }}>
         <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444" }} />
         <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#f59e0b" }} />
@@ -300,16 +300,16 @@ export function LandingPage({ onAuth }) {
   const LP = {
     wrap: { minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0", fontFamily: "'DM Sans','Helvetica Neue',sans-serif", overflowX: "hidden" },
     nav: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 28px", paddingTop: "max(20px, env(safe-area-inset-top, 20px))", borderBottom: "1px solid #1a1a1a", position: "sticky", top: 0, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(8px)", zIndex: 100 },
-    logo: { display: "flex", alignItems: "center", gap: 10, fontFamily: "'DM Mono',monospace", fontSize: 14, color: "#f59e0b", letterSpacing: "0.06em" },
+    logo: { display: "flex", alignItems: "center", gap: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "#f59e0b", letterSpacing: "0.06em" },
     logoIcon: { width: 30, height: 30, background: "#f59e0b", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: "#000" },
     hero: { textAlign: "center", padding: "80px 24px 60px", position: "relative" },
-    h1: { fontSize: "clamp(36px, 7vw, 72px)", fontWeight: 800, lineHeight: 1.05, letterSpacing: "-0.03em", marginBottom: 24, fontFamily: "'DM Mono',monospace" },
+    h1: { fontSize: "clamp(36px, 7vw, 72px)", fontWeight: 800, lineHeight: 1.05, letterSpacing: "-0.03em", marginBottom: 24, fontFamily: "'Plus Jakarta Sans', sans-serif" },
     sub: { fontSize: "clamp(15px, 2.5vw, 19px)", color: "#888", maxWidth: 540, margin: "0 auto 40px", lineHeight: 1.7 },
-    btnPrimary: { display: "inline-flex", alignItems: "center", gap: 8, background: "#f59e0b", color: "#000", padding: "14px 32px", borderRadius: 10, fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace", letterSpacing: "0.02em", transition: "all 0.15s" },
-    btnGhost: { display: "inline-flex", alignItems: "center", background: "transparent", color: "#888", padding: "14px 24px", borderRadius: 10, fontSize: 14, fontWeight: 500, border: "1px solid #2a2a2a", cursor: "pointer", fontFamily: "'DM Mono',monospace", transition: "all 0.15s", textDecoration: "none" },
+    btnPrimary: { display: "inline-flex", alignItems: "center", gap: 8, background: "#f59e0b", color: "#000", padding: "14px 32px", borderRadius: 10, fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.02em", transition: "all 0.15s" },
+    btnGhost: { display: "inline-flex", alignItems: "center", background: "transparent", color: "#888", padding: "14px 24px", borderRadius: 10, fontSize: 14, fontWeight: 500, border: "1px solid #2a2a2a", cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "all 0.15s", textDecoration: "none" },
     section: { padding: "72px 24px", maxWidth: 1040, margin: "0 auto" },
-    sectionLabel: { fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14 },
-    h2: { fontSize: "clamp(28px, 5vw, 48px)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 16, fontFamily: "'DM Mono',monospace" },
+    sectionLabel: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#f59e0b", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14 },
+    h2: { fontSize: "clamp(28px, 5vw, 48px)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" },
     card: { background: "#141414", border: "1px solid #222", borderRadius: 14, padding: "28px 24px" },
     featureGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 2, background: "#1a1a1a", borderRadius: 14, overflow: "hidden" },
     feature: { background: "#0a0a0a", padding: "32px 28px" },
@@ -381,7 +381,7 @@ export function LandingPage({ onAuth }) {
         <div style={{ position: "relative" }}>
           <div className="lp-hero-grid">
             <div className="lp-hero-left">
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 100, padding: "6px 16px", fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 28 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 100, padding: "6px 16px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#f59e0b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 28 }}>
                 <div style={{ width: 6, height: 6, background: "#f59e0b", borderRadius: "50%", animation: "pulse 2s infinite" }} />
                 Voice-first · Inbox-monitored · UK-built
               </div>
@@ -392,7 +392,7 @@ export function LandingPage({ onAuth }) {
                 <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#6b7280", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>Now on iOS &amp; Android</p>
+                <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: "#6b7280", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>Now on iOS &amp; Android</p>
                 <div style={{ display: "inline-flex", gap: 12, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
                   <a href="https://apps.apple.com/gb/app/trade-pa/id6769395416" target="_blank" rel="noopener noreferrer" aria-label="Download Trade PA on the App Store" style={{ display: "inline-block" }}>
                     <img src="/img/app-store-badge.svg" alt="Download on the App Store" style={{ height: 44, display: "block", width: "auto" }} />
@@ -402,8 +402,8 @@ export function LandingPage({ onAuth }) {
                   </a>
                 </div>
               </div>
-              <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
-              <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail &amp; Outlook · Built for UK Trades</p>
+              <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
+              <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail &amp; Outlook · Built for UK Trades</p>
             </div>
             <div>
               <VoiceHeroCard />
@@ -453,8 +453,8 @@ export function LandingPage({ onAuth }) {
             ].map((p) => (
               <div key={p.tag} style={{ background: p.highlight ? "#1a1a1a" : "#141414", border: p.highlight ? "1px solid rgba(245,158,11,0.3)" : "1px solid #222", borderRadius: 14, padding: "24px 22px", position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 3, background: "#f59e0b" }} />
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#f59e0b", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10 }}>{p.tag}</div>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 14, color: "#f0f0f0", marginBottom: 10, lineHeight: 1.35 }}>{p.title}</div>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: "#f59e0b", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10 }}>{p.tag}</div>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, color: "#f0f0f0", marginBottom: 10, lineHeight: 1.35 }}>{p.title}</div>
                 <div style={{ fontSize: 12.5, color: "#888", lineHeight: 1.65, marginBottom: 14 }}>{p.body}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {p.examples.map(ex => (
@@ -469,7 +469,7 @@ export function LandingPage({ onAuth }) {
 
           {/* Learning loop callout */}
           <div style={{ textAlign: "center", padding: "20px 28px", background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 14, marginBottom: 72 }}>
-            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#f59e0b", fontWeight: 700 }}>↻ Learning loop:</span>
+            <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#f59e0b", fontWeight: 700 }}>↻ Learning loop:</span>
             <span style={{ fontSize: 13, color: "#888", marginLeft: 10, lineHeight: 1.7 }}>every approved action teaches the system — known suppliers, customers, job types. Rejected actions teach it harder. Sharper with every tap.</span>
           </div>
         </div>
@@ -516,7 +516,7 @@ export function LandingPage({ onAuth }) {
             ].map((f) => (
               <div key={f.title} style={{ background: "#141414", border: "1px solid #222", borderRadius: 14, padding: "24px 22px", position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 3, background: "#f59e0b" }} />
-                <div style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 14, color: "#f0f0f0", marginBottom: 10, lineHeight: 1.35 }}>{f.title}</div>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, color: "#f0f0f0", marginBottom: 10, lineHeight: 1.35 }}>{f.title}</div>
                 <div style={{ fontSize: 12.5, color: "#888", lineHeight: 1.65 }}>{f.body}</div>
               </div>
             ))}
@@ -536,9 +536,9 @@ export function LandingPage({ onAuth }) {
             { num: "04", icon: "🧠", title: "Gets smarter over time", body: "Dismiss something wrong, tell it why. It learns your suppliers, contractors, regulars." },
           ].map((s, i) => (
             <div key={i} style={{ background: "#0a0a0a", padding: "32px 24px" }}>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 52, fontWeight: 700, color: "rgba(245,158,11,0.07)", lineHeight: 1, marginBottom: 16 }}>{s.num}</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 52, fontWeight: 700, color: "rgba(245,158,11,0.07)", lineHeight: 1, marginBottom: 16 }}>{s.num}</div>
               <div style={{ fontSize: 24, marginBottom: 12 }}>{s.icon}</div>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{s.title}</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{s.title}</div>
               <div style={{ fontSize: 13, color: "#666", lineHeight: 1.7 }}>{s.body}</div>
             </div>
           ))}
@@ -561,9 +561,9 @@ export function LandingPage({ onAuth }) {
             ].map((f, i) => (
               <div key={i} style={{ ...LP.feature }} className="lp-feature">
                 <div style={LP.featureIcon}>{f.icon}</div>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{f.title}</div>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{f.title}</div>
                 <div style={{ fontSize: 13, color: "#666", lineHeight: 1.7 }}>{f.body}</div>
-                {f.badge && <div style={{ display: "inline-block", marginTop: 10, background: f.badgeBg, color: f.badgeColor, border: `1px solid ${f.badgeBorder}`, borderRadius: 100, fontFamily: "'DM Mono',monospace", fontSize: 9, padding: "3px 10px", letterSpacing: "0.06em", textTransform: "uppercase" }}>{f.badge}</div>}
+                {f.badge && <div style={{ display: "inline-block", marginTop: 10, background: f.badgeBg, color: f.badgeColor, border: `1px solid ${f.badgeBorder}`, borderRadius: 100, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 9, padding: "3px 10px", letterSpacing: "0.06em", textTransform: "uppercase" }}>{f.badge}</div>}
               </div>
             ))}
           </div>
@@ -579,8 +579,8 @@ export function LandingPage({ onAuth }) {
           {/* Header */}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", borderBottom: "1px solid #222" }}>
             <div style={{ padding: "16px 20px" }} />
-            <div style={{ padding: "16px 20px", fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#f59e0b", background: "rgba(245,158,11,0.08)", borderLeft: "1px solid rgba(245,158,11,0.2)", borderRight: "1px solid rgba(245,158,11,0.2)" }}>Trade PA</div>
-            <div style={{ padding: "16px 20px", fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#555" }}>Tradify</div>
+            <div style={{ padding: "16px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#f59e0b", background: "rgba(245,158,11,0.08)", borderLeft: "1px solid rgba(245,158,11,0.2)", borderRight: "1px solid rgba(245,158,11,0.2)" }}>Trade PA</div>
+            <div style={{ padding: "16px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#555" }}>Tradify</div>
           </div>
           {[
             ["AI email agent (reads & processes inbox)", true, false],
@@ -602,7 +602,7 @@ export function LandingPage({ onAuth }) {
           ))}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr" }}>
             <div style={{ padding: "14px 20px", fontSize: 13, color: "#666" }}>Monthly price (sole trader)</div>
-            <div style={{ padding: "14px 20px", fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)" }}>from £39</div>
+            <div style={{ padding: "14px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 18, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)" }}>from £39</div>
             <div style={{ padding: "14px 20px", fontSize: 13, color: "#555" }}>£34</div>
           </div>
         </div>
@@ -614,7 +614,7 @@ export function LandingPage({ onAuth }) {
         <h2 style={LP.h2}>Built for how<br/>you actually work.</h2>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 32 }}>
           {["⚡ Electricians","🔧 Plumbers","🔥 Gas Engineers","🛢 Oil Heating","❄ HVAC","🏗 Builders","🪟 Window & Door","🎨 Decorators","🔩 Multi-trade","🏠 Property Maintenance","🌿 Landscapers","🪛 General Contractors"].map(t => (
-            <div key={t} style={{ background: "#141414", border: "1px solid #222", borderRadius: 100, padding: "8px 16px", fontSize: 13, color: "#666", fontFamily: "'DM Mono',monospace", cursor: "default", transition: "all 0.15s" }} className="lp-trade-pill">{t}</div>
+            <div key={t} style={{ background: "#141414", border: "1px solid #222", borderRadius: 100, padding: "8px 16px", fontSize: 13, color: "#666", fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "default", transition: "all 0.15s" }} className="lp-trade-pill">{t}</div>
           ))}
         </div>
       </div>
@@ -644,13 +644,13 @@ export function LandingPage({ onAuth }) {
               <div key={p.name} style={{ background: "#141414", border: p.popular ? "2px solid #f59e0b" : "1px solid #222", borderRadius: 20, padding: "44px 32px 36px", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#f59e0b" }} />
                 {p.popular && (
-                  <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: "#f59e0b", color: "#000", fontFamily: "'DM Mono',monospace", fontSize: 10, fontWeight: 700, padding: "3px 14px", borderRadius: 100, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>MOST POPULAR</div>
+                  <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: "#f59e0b", color: "#000", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, fontWeight: 700, padding: "3px 14px", borderRadius: 100, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>MOST POPULAR</div>
                 )}
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>{p.name}</div>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 52, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em", color: "#f59e0b", marginBottom: 4 }}>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>{p.name}</div>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 52, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em", color: "#f59e0b", marginBottom: 4 }}>
                   {p.price}<span style={{ fontSize: 16, color: "#666", fontWeight: 400 }}>{p.period}</span>
                 </div>
-                <p style={{ color: "#f59e0b", fontSize: 12, fontFamily: "'DM Mono',monospace", marginBottom: 20 }}>{p.users}</p>
+                <p style={{ color: "#f59e0b", fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>{p.users}</p>
                 <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 8, marginBottom: 28, flex: 1 }}>
                   {p.features.map(f => (
                     <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#ccc", lineHeight: 1.5 }}>
@@ -658,15 +658,15 @@ export function LandingPage({ onAuth }) {
                     </li>
                   ))}
                 </ul>
-                <button onClick={() => window.location.href = `/signup.html?plan=${p.plan}`} style={{ background: "#f59e0b", color: "#000", padding: 14, borderRadius: 8, fontWeight: 700, fontSize: 14, textAlign: "center", display: "block", width: "100%", border: "none", cursor: "pointer", fontFamily: "'DM Mono',monospace" }} className="lp-btn-primary">Start free trial →</button>
+                <button onClick={() => window.location.href = `/signup.html?plan=${p.plan}`} style={{ background: "#f59e0b", color: "#000", padding: 14, borderRadius: 8, fontWeight: 700, fontSize: 14, textAlign: "center", display: "block", width: "100%", border: "none", cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }} className="lp-btn-primary">Start free trial →</button>
               </div>
             ))}
           </div>
 
           {/* Mid-month add-ons */}
           <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: "32px 28px", margin: "32px auto 16px", textAlign: "center" }}>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>⚡ Add-on · Any Plan</div>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Need more mid-month?</div>
+            <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>⚡ Add-on · Any Plan</div>
+            <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Need more mid-month?</div>
             <p style={{ color: "#888", fontSize: 14, maxWidth: 560, margin: "0 auto 24px", lineHeight: 1.7 }}>Busy month? Top up any plan with one-off usage add-ons. No subscription change, no commitment — just a boost for the current billing period.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, maxWidth: 700, margin: "0 auto 16px" }}>
               {[
@@ -675,19 +675,19 @@ export function LandingPage({ onAuth }) {
                 { label: "+200 conv & +2h combo", price: "£55", desc: "Save £3 vs buying both separately" },
               ].map(a => (
                 <div key={a.label} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: 14, textAlign: "left" }}>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, color: "#f0f0f0", marginBottom: 6 }}>{a.label}</div>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{a.price}</div>
+                  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, fontWeight: 700, color: "#f0f0f0", marginBottom: 6 }}>{a.label}</div>
+                  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{a.price}</div>
                   <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{a.desc}</div>
                 </div>
               ))}
             </div>
-            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555" }}>One-off · Available to all plans · Expires at billing rollover</p>
+            <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#555" }}>One-off · Available to all plans · Expires at billing rollover</p>
           </div>
 
           {/* Business phone add-on */}
           <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: "32px 28px", textAlign: "center" }}>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📞 Add-on · Any Plan</div>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Business Phone, Built In</div>
+            <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📞 Add-on · Any Plan</div>
+            <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Business Phone, Built In</div>
             <p style={{ color: "#888", fontSize: 14, maxWidth: 620, margin: "0 auto 24px", lineHeight: 1.7 }}>Get a dedicated business number that rings directly inside the Trade PA app — no second SIM, no extra hardware. Every call from a known customer is recorded, transcribed and automatically logged against their job. Missed a call? It falls back to your mobile so you never lose a lead.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, maxWidth: 700, margin: "0 auto 24px" }}>
               {[
@@ -698,7 +698,7 @@ export function LandingPage({ onAuth }) {
               ].map(p => (
                 <div key={p.label} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: 14, textAlign: "left" }}>
                   <div style={{ fontSize: 20, marginBottom: 6 }}>{p.icon}</div>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700, marginBottom: 3 }}>{p.label}</div>
+                  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, fontWeight: 700, marginBottom: 3 }}>{p.label}</div>
                   <div style={{ fontSize: 11, color: "#555" }}>{p.desc}</div>
                 </div>
               ))}
@@ -711,18 +711,18 @@ export function LandingPage({ onAuth }) {
                 { mins: "Unlimited", price: "£104" },
               ].map(t => (
                 <div key={t.mins} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: 14 }}>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "#666", marginBottom: 6 }}>{t.mins}</div>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{t.price}</div>
+                  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: "#666", marginBottom: 6 }}>{t.mins}</div>
+                  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{t.price}</div>
                   <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>per month</div>
                 </div>
               ))}
             </div>
-            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555" }}>Dedicated UK number included · Want to keep your existing number? We support porting · UK GDPR compliant</p>
+            <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#555" }}>Dedicated UK number included · Want to keep your existing number? We support porting · UK GDPR compliant</p>
           </div>
 
           {/* Link to pricing page FAQ */}
           <div style={{ textAlign: "center", marginTop: 32 }}>
-            <a href="/pricing.html" className="lp-btn-ghost" style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: "#888", textDecoration: "none", border: "1px solid #2a2a2a", padding: "10px 20px", borderRadius: 8, display: "inline-block" }}>FAQs and full details →</a>
+            <a href="/pricing.html" className="lp-btn-ghost" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#888", textDecoration: "none", border: "1px solid #2a2a2a", padding: "10px 20px", borderRadius: 8, display: "inline-block" }}>FAQs and full details →</a>
           </div>
 
         </div>
@@ -735,8 +735,8 @@ export function LandingPage({ onAuth }) {
           <h2 style={{ ...LP.h2, marginBottom: 20 }}>Stop doing admin<br/>after hours.</h2>
           <p style={{ fontSize: 17, color: "#888", marginBottom: 40, maxWidth: 500, margin: "0 auto 40px", lineHeight: 1.7 }}>Trade PA runs your inbox while you're on the tools, and chases your money while you sleep. One tap to approve. That's it.</p>
           <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, fontSize: 16, padding: "16px 40px" }} className="lp-btn-primary">Start 30-day free trial →</button>
-          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#f59e0b", marginTop: 16, letterSpacing: "0.06em" }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
-          <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: "#555", marginTop: 8 }}>Works with Gmail · Works with Outlook · Built-in business phone · UK-built for UK trades</p>
+          <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#f59e0b", marginTop: 16, letterSpacing: "0.06em" }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
+          <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#555", marginTop: 8 }}>Works with Gmail · Works with Outlook · Built-in business phone · UK-built for UK trades</p>
         </div>
       </div>
 
@@ -745,10 +745,10 @@ export function LandingPage({ onAuth }) {
         <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
         <div style={{ display: "flex", gap: 24 }}>
           {[["Privacy Policy","privacy-policy.html"],["Terms of Service","terms.html"],["Contact","mailto:hello@tradespa.co.uk"]].map(([l,h]) => (
-            <a key={l} href={h} style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#555", textDecoration: "none" }}>{l}</a>
+            <a key={l} href={h} style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#555", textDecoration: "none" }}>{l}</a>
           ))}
         </div>
-        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "#444" }}>© 2026 Trade PA</div>
+        <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#444" }}>© 2026 Trade PA</div>
       </div>
 
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>

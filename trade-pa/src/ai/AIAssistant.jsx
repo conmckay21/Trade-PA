@@ -6202,7 +6202,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               background: C.surfaceHigh,
               borderRadius: 6,
               fontSize: 10.5,
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
               cursor: "pointer",
               letterSpacing: "0.02em",
               color: tintColor,
@@ -6246,7 +6246,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", color: C.text, lineHeight: 1.1 }}>
               {morningGreeting}
             </div>
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: C.muted, marginTop: 6 }}>
+            <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: C.muted, marginTop: 6 }}>
               Tap to talk, or pick an action below.
             </div>
           </div>
@@ -6294,7 +6294,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>
                       I spotted {n} thing{n === 1 ? "" : "s"} in your inbox
                     </div>
-                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: C.muted, letterSpacing: "0.04em", marginTop: 2 }}>
+                    <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: C.muted, letterSpacing: "0.04em", marginTop: 2 }}>
                       Tap to review and approve →
                     </div>
                   </div>
@@ -6308,7 +6308,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                     </div>
                   ))}
                   {more > 0 && (
-                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: C.muted, letterSpacing: "0.04em" }}>+ {more} more</div>
+                    <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: C.muted, letterSpacing: "0.04em" }}>+ {more} more</div>
                   )}
                 </div>
               </div>
@@ -6318,19 +6318,19 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           {/* 3 stat cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
             <div onClick={() => setView("Schedule")} style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 11px", cursor: "pointer" }}>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>TODAY</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>TODAY</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: "-0.02em", marginTop: 4 }}>{todayJobs.length}</div>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, marginTop: 2 }}>{todayJobs.length === 1 ? "job" : "jobs"}</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 9, color: C.muted, marginTop: 2 }}>{todayJobs.length === 1 ? "job" : "jobs"}</div>
             </div>
             <div onClick={() => setView("Invoices")} style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 11px", cursor: "pointer" }}>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>OVERDUE</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>OVERDUE</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: overdueValue > 0 ? C.amber : C.text, letterSpacing: "-0.02em", marginTop: 4 }}>{fmtStat(overdueValue)}</div>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, marginTop: 2 }}>{overdueInvoices.length} {overdueInvoices.length === 1 ? "invoice" : "invoices"}</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 9, color: C.muted, marginTop: 2 }}>{overdueInvoices.length} {overdueInvoices.length === 1 ? "invoice" : "invoices"}</div>
             </div>
             <div onClick={() => setView("Inbox")} style={{ background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 11px", cursor: "pointer" }}>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>INBOX ACTIONS</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 9, color: C.muted, letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>INBOX ACTIONS</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: pendingInboxActions.length > 0 ? C.amber : C.text, letterSpacing: "-0.02em", marginTop: 4 }}>{pendingInboxActions.length}</div>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: C.muted, marginTop: 2 }}>{pendingInboxActions.length === 1 ? "pending" : "pending"}</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 9, color: C.muted, marginTop: 2 }}>{pendingInboxActions.length === 1 ? "pending" : "pending"}</div>
             </div>
           </div>
 
@@ -6424,7 +6424,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 {vt.label}
               </div>
               <div style={{
-                fontFamily: "'DM Mono', monospace", fontSize: 10,
+                fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10,
                 color: C.muted, letterSpacing: "0.08em",
               }}>
                 {vt.sub}
@@ -6458,7 +6458,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, color: C.text }}>Start hands-free</div>
-                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: C.muted, marginTop: 2 }}>One tap, continuous voice mode</div>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: C.muted, marginTop: 2 }}>One tap, continuous voice mode</div>
               </div>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
             </button>
@@ -6471,7 +6471,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               padding: "10px 14px",
               background: C.green + "14", border: `1px solid ${C.green}44`,
               borderRadius: 12,
-              fontFamily: "'DM Mono', monospace", fontSize: 12, color: C.green,
+              fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: C.green,
             }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, animation: "bellPulse 1.4s ease infinite" }} />
               <span style={{ fontWeight: 700, letterSpacing: "0.08em" }}>HANDS-FREE ON</span>
@@ -6708,7 +6708,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                   }}>
                     <div style={{ fontSize: 18, lineHeight: 1.1, flexShrink: 0 }}>⏱️</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.amber, fontFamily: "'DM Mono', ui-monospace, monospace", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.amber, fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>
                         Processing limit reached
                       </div>
                       <div style={{ fontSize: 13, color: C.text, lineHeight: 1.45 }}>
@@ -6758,10 +6758,10 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                             </div>
                           )}
                           <div style={{ padding: "10px 14px", display: "flex", gap: 8 }}>
-                            <button onClick={() => onShowPdf && onShowPdf(inv)} style={{ flex: 1, padding: "8px", background: C.amber + "22", border: `1px solid ${C.amber}44`, borderRadius: 10, color: C.amber, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+                            <button onClick={() => onShowPdf && onShowPdf(inv)} style={{ flex: 1, padding: "8px", background: C.amber + "22", border: `1px solid ${C.amber}44`, borderRadius: 10, color: C.amber, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                               📄 View PDF
                             </button>
-                            <button onClick={() => send("Update invoice " + inv.id + " for " + inv.customer)} style={{ flex: 1, padding: "8px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+                            <button onClick={() => send("Update invoice " + inv.id + " for " + inv.customer)} style={{ flex: 1, padding: "8px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                               ✏ Edit invoice
                             </button>
                           </div>
@@ -7160,7 +7160,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                           {(m.widget.data.categories || []).map((cat, i) => (
                             <button key={i} onClick={() => send(`${cat}`)}
-                              style={{ padding: "8px 12px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
+                              style={{ padding: "8px 12px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 11, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                               {cat}
                             </button>
                           ))}
@@ -7717,7 +7717,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             border: `1px solid ${voiceState === "idle" ? C.border : vt.color}`,
             background: voiceState === "idle" ? C.surfaceHigh : vt.color + "22",
             color: voiceState === "idle" ? C.muted : vt.color,
-            fontSize: 13, fontFamily: "'DM Mono',monospace",
+            fontSize: 13, fontFamily: "'Plus Jakarta Sans', sans-serif",
             cursor: transcribing ? "default" : "pointer",
             whiteSpace: "nowrap", flexShrink: 0,
             transition: "background 0.2s, border-color 0.2s, color 0.2s",
@@ -7805,7 +7805,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             >
               <div style={{
                 fontSize: 10, color: C.textDim, letterSpacing: "0.1em",
-                textTransform: "uppercase", fontFamily: "'DM Mono', monospace", marginBottom: 10,
+                textTransform: "uppercase", fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 10,
               }}>{copy.showAddons ? "Limit reached" : "Can't continue"}</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{copy.title}</div>
               <div style={{ fontSize: 13, color: C.textDim, margin: "6px 0 16px", lineHeight: 1.55 }}>
@@ -7820,7 +7820,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                   marginBottom: 14,
                 }}>
                   <div style={{
-                    fontSize: 10, color: C.textDim, fontFamily: "'DM Mono', monospace",
+                    fontSize: 10, color: C.textDim, fontFamily: "'Plus Jakarta Sans', sans-serif",
                     letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4,
                   }}>Your message</div>
                   <div style={{
@@ -7862,7 +7862,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                       color: "#412402",
                       fontSize: 12, fontWeight: 700,
                       borderRadius: 6,
-                      fontFamily: "'DM Mono', monospace",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
                       letterSpacing: "0.06em",
                       textTransform: "uppercase",
                       cursor: limitBusy ? "not-allowed" : "pointer",
@@ -7879,7 +7879,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                       color: C.amber,
                       fontSize: 11, fontWeight: 700,
                       borderRadius: 6,
-                      fontFamily: "'DM Mono', monospace",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
                       letterSpacing: "0.06em",
                       textTransform: "uppercase",
                       cursor: limitBusy ? "not-allowed" : "pointer",
@@ -7900,7 +7900,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                     color: C.text,
                     fontSize: 11, fontWeight: 600,
                     borderRadius: 6,
-                    fontFamily: "'DM Mono', monospace",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
                     cursor: limitBusy ? "not-allowed" : "pointer",
@@ -7919,7 +7919,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                   background: "transparent",
                   color: C.textDim,
                   fontSize: 11,
-                  fontFamily: "'DM Mono', monospace",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
                   letterSpacing: "0.06em",
                   textTransform: "uppercase",
                   cursor: limitBusy ? "not-allowed" : "pointer",
@@ -7993,7 +7993,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               </svg>
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 10, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 1 }}>Trade PA</div>
+              <div style={{ fontSize: 10, color: C.muted, fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 1 }}>Trade PA</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{overlayContext}</div>
             </div>
             <button
@@ -8004,7 +8004,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
                 border: `1px solid ${C.border}`,
                 borderRadius: 14,
                 color: C.muted, fontSize: 11,
-                fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em",
+                fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.04em",
                 cursor: "pointer",
               }}
             >

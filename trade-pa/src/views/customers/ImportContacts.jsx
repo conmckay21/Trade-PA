@@ -181,7 +181,7 @@ export function ImportContacts({ onImport, currentCustomers }) {
           <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>
             {busy ? "Loading…" : "Import from contacts"}
           </div>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: C.textDim }}>
+          <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: C.textDim }}>
             {hasContactsAPI ? "Pick from your phone's address book" : "Upload a .vcf file from your contacts app"}
           </div>
         </div>
@@ -228,7 +228,7 @@ export function ImportContacts({ onImport, currentCustomers }) {
               gap: 16,
             }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.14em", color: C.amber, fontWeight: 500 }}>Import contacts</div>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.14em", color: C.amber, fontWeight: 500 }}>Import contacts</div>
                 <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.1, color: C.text }}>
                   {pending.length} {pending.length === 1 ? "contact" : "contacts"} found
                 </div>
@@ -256,7 +256,7 @@ export function ImportContacts({ onImport, currentCustomers }) {
               justifyContent: "space-between",
               alignItems: "center",
             }}>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: C.textDim, letterSpacing: "0.04em" }}>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: C.textDim, letterSpacing: "0.04em" }}>
                 {selectedIdx.size} of {pending.length} selected
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -265,7 +265,7 @@ export function ImportContacts({ onImport, currentCustomers }) {
                   style={{
                     background: "transparent", border: `1px solid ${C.border}`,
                     color: C.textDim, padding: "5px 10px", borderRadius: 10,
-                    fontFamily: "'DM Mono', monospace", fontSize: 10,
+                    fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10,
                     textTransform: "uppercase", letterSpacing: "0.08em",
                     cursor: "pointer",
                   }}
@@ -275,7 +275,7 @@ export function ImportContacts({ onImport, currentCustomers }) {
                   style={{
                     background: "transparent", border: `1px solid ${C.border}`,
                     color: C.textDim, padding: "5px 10px", borderRadius: 10,
-                    fontFamily: "'DM Mono', monospace", fontSize: 10,
+                    fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10,
                     textTransform: "uppercase", letterSpacing: "0.08em",
                     cursor: "pointer",
                   }}
@@ -323,7 +323,7 @@ export function ImportContacts({ onImport, currentCustomers }) {
                       background: `linear-gradient(135deg, ${C.amber}40, ${C.amber}20)`,
                       border: `1px solid ${C.amber}40`,
                       display: "grid", placeItems: "center",
-                      color: C.amber, fontFamily: "'DM Mono', monospace",
+                      color: C.amber, fontFamily: "'Plus Jakarta Sans', sans-serif",
                       fontWeight: 700, fontSize: 12,
                       flexShrink: 0,
                     }}>
@@ -334,7 +334,7 @@ export function ImportContacts({ onImport, currentCustomers }) {
                       <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {c.name}
                       </div>
-                      <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: C.textDim, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: C.textDim, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {[c.phone, c.email].filter(Boolean).join(" · ") || "no contact details"}
                       </div>
                     </div>

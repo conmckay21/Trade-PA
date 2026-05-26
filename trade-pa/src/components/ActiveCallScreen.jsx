@@ -19,10 +19,10 @@ export function ActiveCallScreen({ callerName, callerNumber, direction, startTim
       <div style={{ fontSize: 12, color: "#22c55e", background: "#22c55e18", border: "1px solid #22c55e40", borderRadius: 20, padding: "4px 14px", marginBottom: 32, letterSpacing: "0.08em", textTransform: "uppercase" }}>
         {direction === "outbound" ? "Calling..." : "● Connected"}
       </div>
-      <div style={{ width: 100, height: 100, borderRadius: "50%", background: "linear-gradient(135deg,#1a3320,#166534)", border: "3px solid #22c55e40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 700, color: "#fff", fontFamily: "'DM Mono',monospace", marginBottom: 24, animation: "activePulse 2s ease infinite" }}>{initials}</div>
+      <div style={{ width: 100, height: 100, borderRadius: "50%", background: "linear-gradient(135deg,#1a3320,#166534)", border: "3px solid #22c55e40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 700, color: "#fff", fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 24, animation: "activePulse 2s ease infinite" }}>{initials}</div>
       <div style={{ fontSize: 26, fontWeight: 700, color: "#f0f0f0", marginBottom: 6, textAlign: "center", padding: "0 32px" }}>{callerName}</div>
-      <div style={{ fontSize: 22, color: "#22c55e", fontFamily: "'DM Mono',monospace", marginBottom: 6, letterSpacing: "0.05em" }}>{fmt(elapsed)}</div>
-      {callerNumber && <div style={{ fontSize: 12, color: "#4b5563", fontFamily: "'DM Mono',monospace", marginBottom: 52 }}>{callerNumber}</div>}
+      <div style={{ fontSize: 22, color: "#22c55e", fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 6, letterSpacing: "0.05em" }}>{fmt(elapsed)}</div>
+      {callerNumber && <div style={{ fontSize: 12, color: "#4b5563", fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 52 }}>{callerNumber}</div>}
       <div style={{ display: "flex", gap: 32, alignItems: "flex-end", marginBottom: 48 }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
           <button onClick={onMute} style={{ width: 56, height: 56, borderRadius: "50%", background: muted ? "#f59e0b" : "#1f2937", border: `2px solid ${muted ? "#f59e0b" : "#374151"}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, transition: "all 0.2s" }}>{muted ? "🔇" : "🎙️"}</button>

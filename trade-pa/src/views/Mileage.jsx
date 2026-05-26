@@ -120,7 +120,7 @@ export function MileageTab({ user, setContextHint }) {
         {[["Miles This Tax Year", yearMiles.toFixed(1) + " mi", C.text], ["Tax Relief Value", "£" + yearValue.toFixed(2), C.green], ["Remaining at 45p", Math.max(0, 10000 - yearMiles).toFixed(0) + " mi", C.amber], ["Total Trips", trips.length, C.muted]].map(([l, v, col], i) => (
           <div key={i} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{l}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: col, fontFamily: "'DM Mono',monospace" }}>{v}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: col, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{v}</div>
           </div>
         ))}
       </div>
@@ -163,8 +163,8 @@ export function MileageTab({ user, setContextHint }) {
             <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{new Date(t.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{(t.purpose || t.job_ref) ? ` · ${t.purpose || t.job_ref}` : ""}</div>
           </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>{t.miles} mi</div>
-            <div style={{ fontSize: 11, color: C.green, fontFamily: "'DM Mono',monospace" }}>£{(t.value || 0).toFixed(2)}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{t.miles} mi</div>
+            <div style={{ fontSize: 11, color: C.green, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{(t.value || 0).toFixed(2)}</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
             <button onClick={(e) => { e.stopPropagation(); openEditTrip(t); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "2px 4px" }}>
@@ -199,7 +199,7 @@ export function MileageTab({ user, setContextHint }) {
                   <input style={S.input} type="number" step="0.1" min="0" value={form.miles} onChange={e => setForm(f => ({ ...f, miles: e.target.value }))} placeholder="0.0" />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-                  {form.miles > 0 && <div style={{ fontSize: 12, color: C.green, background: C.green + "11", borderRadius: 10, padding: "8px 10px", textAlign: "center", fontFamily: "'DM Mono',monospace" }}>£{calcValue(form.miles, yearMiles).toFixed(2)} claimable</div>}
+                  {form.miles > 0 && <div style={{ fontSize: 12, color: C.green, background: C.green + "11", borderRadius: 10, padding: "8px 10px", textAlign: "center", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>£{calcValue(form.miles, yearMiles).toFixed(2)} claimable</div>}
                 </div>
               </div>
               <div><label style={S.label}>Job / Purpose</label><input style={S.input} value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} placeholder="e.g. Boiler service — J. Smith" /></div>

@@ -14,7 +14,7 @@ export function AuthScreen({ onAuth, initialMode = "login", onBack }) {
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const authStyles = {
-    wrap: { minHeight: "100vh", background: "#0f0f0f", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono','Courier New',monospace", padding: 16 },
+    wrap: { minHeight: "100vh", background: "#0f0f0f", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Plus Jakarta Sans', sans-serif", padding: 16 },
     box: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 14, padding: 40, width: "100%", maxWidth: 400 },
     logo: { display: "flex", alignItems: "center", gap: 10, marginBottom: 32, justifyContent: "center" },
     logoIcon: { width: 36, height: 36, background: "#f59e0b", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "#000", letterSpacing: "-0.02em" },
@@ -22,9 +22,9 @@ export function AuthScreen({ onAuth, initialMode = "login", onBack }) {
     title: { fontSize: 16, fontWeight: 700, color: "#e5e5e5", marginBottom: 6, textAlign: "center" },
     sub: { fontSize: 12, color: "#6b7280", marginBottom: 28, textAlign: "center", lineHeight: 1.6 },
     label: { fontSize: 11, color: "#6b7280", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6, display: "block" },
-    input: { width: "100%", background: "#242424", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 14px", color: "#e5e5e5", fontSize: 13, fontFamily: "'DM Mono',monospace", outline: "none", boxSizing: "border-box", marginBottom: 16 },
-    btn: { width: "100%", padding: "11px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'DM Mono',monospace", fontWeight: 700, letterSpacing: "0.04em", background: "#f59e0b", color: "#000", marginTop: 4 },
-    ghost: { background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", textDecoration: "underline", padding: 0 },
+    input: { width: "100%", background: "#242424", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 14px", color: "#e5e5e5", fontSize: 13, fontFamily: "'Plus Jakarta Sans', sans-serif", outline: "none", boxSizing: "border-box", marginBottom: 16 },
+    btn: { width: "100%", padding: "11px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, letterSpacing: "0.04em", background: "#f59e0b", color: "#000", marginTop: 4 },
+    ghost: { background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", textDecoration: "underline", padding: 0 },
     error: { background: "#ef444422", border: "1px solid #ef444444", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#ef4444", marginBottom: 16, lineHeight: 1.5 },
     success: { background: "#10b98122", border: "1px solid #10b98144", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#10b981", marginBottom: 16, lineHeight: 1.5 },
     divider: { display: "flex", alignItems: "center", gap: 12, margin: "20px 0" },
@@ -76,7 +76,7 @@ export function AuthScreen({ onAuth, initialMode = "login", onBack }) {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&display=swap'); *{box-sizing:border-box;margin:0;padding:0;} input:focus{border-color:#f59e0b !important;outline:none;} input,textarea,select{font-size:16px !important;}`}</style>
       <div style={authStyles.box}>
         {onBack && (
-          <button onClick={onBack} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12, fontFamily: "'DM Mono',monospace", marginBottom: 20, display: "flex", alignItems: "center", gap: 6, padding: 0 }}>← Back to home</button>
+          <button onClick={onBack} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20, display: "flex", alignItems: "center", gap: 6, padding: 0 }}>← Back to home</button>
         )}
         <div style={authStyles.logo}>
           <div style={authStyles.logoIcon}>TP</div>
