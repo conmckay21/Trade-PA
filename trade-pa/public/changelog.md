@@ -1,5 +1,9 @@
 ## 2026-05-26
 
+🎯 **Setup tour now tells the truth.** The walkthrough used to promise "three buttons in the top-right" — but Help and Feedback actually live in the avatar menu, not as standalone buttons. The tour now describes what's really there: bell up top for reminders and notifications, and your avatar for Settings, Help, Feedback and Sign out. One less step too — went from 8 stops to 7.
+
+## 2026-05-26
+
 🎙 **"What can my PA do?" got a proper answer.** The Help article that lists what your PA can handle was a thin five-bullet stub. It's now a full reference — eight categories of what your PA does (add, get paid, update, find, plan, message, compliance, settings) plus 20 real example commands like "Invoice Patel £580 for the second-fix work" or "Order 4 sheets of 18mm ply from Wickes for the Beech Road job". Find it in Help → Voice & AI → What can my PA do?
 
 ## 2026-05-26

@@ -5393,8 +5393,7 @@ function AppInner() {
           { label: "Diary", desc: "Your week and month at a glance. Tap any day to see what's on. Drag jobs around to reschedule.", tabIndex: 2 },
           { label: "Accounts", desc: "All the money — invoices, quotes, payments, CIS statements, expenses, mileage and reports. Inbox is in here too: connect Gmail or Outlook and your PA reads customer emails and suggests what to do.", tabIndex: 3 },
           { label: "People", desc: "Customers, subcontractors and your team. Add a CIS subbie here and the app handles deductions for you.", tabIndex: 4 },
-          { label: "Settings", desc: "Tap your avatar (top-right) to open Settings — your business brand on invoices, your PA's voice and persona, Xero / QuickBooks / Stripe, and your plan.", tabIndex: -1 },
-          { label: "Reminders, help, feedback", desc: "Three buttons in the top-right of every screen: the bell sets and shows reminders, the ? opens searchable help, and the speech bubble sends us feedback, bugs or ideas — we read every one.", tabIndex: -3 },
+          { label: "Your avatar menu", desc: "Tap your avatar (top-right) for Settings, Help, Feedback and Sign out. The bell next to it shows reminders and notifications — tap it any time.", tabIndex: -1 },
           { label: "Your PA is always here", desc: "This mic button follows you everywhere. Tap to talk once, or hold for hands-free mode where it keeps listening — useful when you're driving or your hands are full on site.", tabIndex: -2 },
         ];
         const DESKTOP_TOUR = [
@@ -5403,7 +5402,7 @@ function AppInner() {
           { label: "Diary", desc: "Your schedule and reminders. Click a day to see what's on, or drag jobs around to reschedule.", group: "diary", itemIndex: -1 },
           { label: "Accounts (money)", desc: "Invoices, Quotes, Payments, Expenses, Mileage, CIS statements and Reports — every part of the money side.", group: "money", itemIndex: -1 },
           { label: "People", desc: "Customers, Subcontractors and your team. CIS subbies get auto-deductions handled.", group: "people", itemIndex: -1 },
-          { label: "Admin & header tools", desc: "Inbox (connect Gmail or Outlook), document storage and CIS sit under Admin. Top-right of every screen has your avatar (Settings), the bell (reminders), the ? (searchable help) and the speech bubble (feedback, bugs, ideas).", group: "admin", itemIndex: -1 },
+          { label: "Admin & header tools", desc: "Inbox (connect Gmail or Outlook), document storage and CIS sit under Admin. The bell (top-right) shows your reminders and notifications. Tap your avatar for Settings, Help, Feedback and Sign out.", group: "admin", itemIndex: -1 },
         ];
         const TOUR = isDesktopBrowser ? DESKTOP_TOUR : MOBILE_TOUR;
         const current = TOUR[navTourStep];
@@ -5463,7 +5462,7 @@ function AppInner() {
           <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#000c", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
             onClick={advance}>
             {/* Tooltip */}
-            <div style={{ position: "absolute", bottom: current.tabIndex === -2 ? 90 : (current.tabIndex === -1 || current.tabIndex === -3) ? "auto" : 66, top: (current.tabIndex === -1 || current.tabIndex === -3) ? 56 : "auto", left: 16, right: 16, display: "flex", justifyContent: (current.tabIndex === -1 || current.tabIndex === -3) ? "flex-end" : current.tabIndex === -2 ? "flex-end" : "center" }} onClick={e => e.stopPropagation()}>
+            <div style={{ position: "absolute", bottom: current.tabIndex === -2 ? 90 : current.tabIndex === -1 ? "auto" : 66, top: current.tabIndex === -1 ? 56 : "auto", left: 16, right: 16, display: "flex", justifyContent: current.tabIndex === -1 ? "flex-end" : current.tabIndex === -2 ? "flex-end" : "center" }} onClick={e => e.stopPropagation()}>
               {tooltip}
             </div>
             {/* Highlighted nav bar */}
@@ -5487,16 +5486,6 @@ function AppInner() {
             {current.tabIndex === -1 && (
               <div style={{ position: "absolute", top: 10, right: 14, padding: 4, borderRadius: "50%", boxShadow: "0 0 0 3px #f59e0b66", background: "#f59e0b11" }}>
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#000" }}>{brand.ownerName?.[0] || "U"}</div>
-              </div>
-            )}
-            {/* Header tools highlight (bell, help, feedback) */}
-            {current.tabIndex === -3 && (
-              <div style={{ position: "absolute", top: 10, right: 56, display: "flex", gap: 6, padding: 4, borderRadius: 10, boxShadow: "0 0 0 3px #f59e0b66", background: "#f59e0b11" }}>
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: "#1a1a1a", border: "1px solid #f59e0b66", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-                </div>
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: "#1a1a1a", border: "1px solid #f59e0b66", display: "flex", alignItems: "center", justifyContent: "center", color: "#f59e0b", fontWeight: 700, fontSize: 13 }}>?</div>
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: "#1a1a1a", border: "1px solid #f59e0b66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>💬</div>
               </div>
             )}
             {/* Mic highlight */}
