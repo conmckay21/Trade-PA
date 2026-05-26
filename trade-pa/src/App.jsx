@@ -4007,6 +4007,7 @@ function AppInner() {
     } catch (err) { console.warn("[onboarding] server mark failed:", err?.message); }
   };
   const [navTourStep, setNavTourStep] = useState(0);
+  const [step2Dismissed, setStep2Dismissed] = useState(false);
 
   // Load assistant persona + custom commands on login
   useEffect(() => {
@@ -5495,6 +5496,65 @@ function AppInner() {
       {pdfHtml && <PDFOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
       {incomingCall?.call && <IncomingCallScreen callerName={incomingCall.callerName} callerNumber={incomingCall.callerNumber} onAnswer={answerCall} onDecline={declineCall} />}
       {activeCall?.call && <ActiveCallScreen callerName={activeCall.callerName} callerNumber={activeCall.callerNumber} direction={activeCall.direction} startTime={activeCall.startTime} muted={callMuted} onMute={toggleMute} onHangUp={hangUp} speaker={callSpeaker} onSpeaker={toggleSpeaker} />}
+      {/* Step 2: AI Chat starter prompts banner */}
+      {onboardingStep === 2 && view === "AI Assistant" && !step2Dismissed && (
+        <div style={{
+          position: "fixed",
+          top: "max(60px, calc(env(safe-area-inset-top, 0px) + 60px))",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "calc(100% - 24px)",
+          maxWidth: 420,
+          zIndex: 150,
+          background: "#1a1a1a",
+          border: "1px solid #f59e0b66",
+          borderRadius: 14,
+          padding: "12px 14px",
+          fontFamily: "'DM Sans', sans-serif",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: "#f0f0f0", fontWeight: 700 }}>Tell your PA about your business</div>
+            <button onClick={() => setStep2Dismissed(true)} aria-label="Dismiss" style={{ background: "none", border: "none", color: "#666", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[
+              "I'm a plumber — set up Mike's Plumbing, Bristol",
+              "Set up Sparks Electrical Ltd, electrician in Leeds",
+              "Builder in London, trading as Mortar & Brick",
+            ].map((cmd, i) => (
+              <button
+                key={i}
+                onClick={() => voiceHandle.current?.sendText?.(cmd)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  background: "#0f0f0f", border: "1px solid #2a2a2a",
+                  borderRadius: 10, padding: "8px 10px",
+                  cursor: "pointer", textAlign: "left",
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                <div style={{ width: 18, height: 18, borderRadius: 6, background: "#f59e0b22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+                </div>
+                <span style={{ flex: 1, fontSize: 12, color: "#ccc", lineHeight: 1.35 }}>"{cmd}"</span>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => advanceOnboarding(3)}
+            style={{
+              background: "none", border: "none",
+              color: "#888", fontSize: 11, cursor: "pointer",
+              padding: "10px 0 2px", width: "100%",
+              textAlign: "center", fontFamily: "'DM Sans', sans-serif",
+            }}
+          >Skip ahead — set up the basics →</button>
+        </div>
+      )}
+
       {micBlocked && (
         <div style={{ position: "fixed", top: "max(52px, env(safe-area-inset-top, 52px))", left: 0, right: 0, zIndex: 200, background: "#ef4444", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 16 }}>🎙️</span>

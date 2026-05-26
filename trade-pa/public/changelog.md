@@ -1,5 +1,9 @@
 ## 2026-05-26
 
+💬 **No more "what do I say?" on the chat screen.** When you first land in the AI chat during setup, you'll now see three example commands at the top — tap one and your PA gets going straight away. Or hit Skip to jump to naming your assistant.
+
+## 2026-05-26
+
 ✨ **Sharper onboarding.** The welcome screen now leads with the actual job ("Stop losing evenings to admin") instead of generic AI talk, and the "try your first command" step now shows three example commands you can tap — customer, expense or quote — to see your PA actually do something. Or hit the mic and say your own.
 
 ## 2026-05-26
