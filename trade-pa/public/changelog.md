@@ -1,5 +1,9 @@
 ## 2026-05-26
 
+📖 **Help button now knows where you are.** Open the avatar menu and tap Help from any screen — you'll land straight on the article that matches what you're looking at. On Customers? You get the "Add a customer" guide. On Inbox? Inbox help. No more scrolling through the index to find the right page.
+
+## 2026-05-26
+
 💬 **No more "what do I say?" on the chat screen.** When you first land in the AI chat during setup, you'll now see three example commands at the top — tap one and your PA gets going straight away. Or hit Skip to jump to naming your assistant.
 
 ## 2026-05-26

@@ -4009,6 +4009,21 @@ function AppInner() {
   const [navTourStep, setNavTourStep] = useState(0);
   const [step2Dismissed, setStep2Dismissed] = useState(false);
 
+  // Map the current `view` to the most relevant HelpCentre article slug.
+  // Used by the avatar-menu Help item so opening Help from a screen lands
+  // directly on the relevant article. Returns null for views where no
+  // single article is a clear fit (HelpCentre opens at the top in that case).
+  const viewToHelpSlug = (v) => ({
+    "AI Assistant": "ai-assistant",
+    "Customers": "add-customer",
+    "Enquiries": "enquiries",
+    "Inbox": "inbox",
+    "Notifications": "enable-notifications",
+    "Payments": "take-payment",
+    "Reminders": "reminders",
+    "Settings": null,
+  })[v] || null;
+
   // Load assistant persona + custom commands on login
   useEffect(() => {
     if (!user?.id) return;
@@ -5840,7 +5855,7 @@ function AppInner() {
 
                 {/* Help & feedback */}
                 <button
-                  onClick={() => { setAvatarMenuOpen(false); setHelpSlug(null); setHelpOpen(true); }}
+                  onClick={() => { setAvatarMenuOpen(false); setHelpSlug(viewToHelpSlug(view)); setHelpOpen(true); }}
                   role="menuitem"
                   style={{
                     display: "grid",
