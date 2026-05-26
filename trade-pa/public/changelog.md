@@ -1,5 +1,9 @@
 ## 2026-05-26
 
+📚 **Help guides now live on the web.** New public help page at tradespa.co.uk/help.html — eight topic sections covering everything from your first invoice to CIS deductions, RAMS generation and voice commands. Searchable in Google so prospects can find answers before they sign up, plus deep-linkable so we can point customers at specific guides.
+
+## 2026-05-26
+
 🎯 **Setup tour now tells the truth.** The walkthrough used to promise "three buttons in the top-right" — but Help and Feedback actually live in the avatar menu, not as standalone buttons. The tour now describes what's really there: bell up top for reminders and notifications, and your avatar for Settings, Help, Feedback and Sign out. One less step too — went from 8 stops to 7.
 
 ## 2026-05-26
