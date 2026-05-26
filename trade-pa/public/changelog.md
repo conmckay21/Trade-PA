@@ -1,5 +1,9 @@
 ## 2026-05-26
 
+📚 **Help guides now live on the web.** New public help page at tradespa.co.uk/help.html — seven topic sections covering everything from your first invoice to CIS deductions, RAMS generation and voice commands. Searchable in Google so prospects can find answers before they sign up, plus deep-linkable so we can point customers at specific guides.
+
+## 2026-05-26
+
 📚 **Help guides now live on the web.** New public help page at tradespa.co.uk/help.html — eight topic sections covering everything from your first invoice to CIS deductions, RAMS generation and voice commands. Searchable in Google so prospects can find answers before they sign up, plus deep-linkable so we can point customers at specific guides.
 
 ## 2026-05-26
