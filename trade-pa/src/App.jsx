@@ -4102,11 +4102,26 @@ function AppInner() {
   };
 
   const makeCall = async (phoneNumber, customerName) => {
-    if (!twilioDevice) { alert("Call tracking is not active. Enable it in Settings."); return; }
+    if (!phoneNumber) return;
+    let num = phoneNumber.replace(/\s/g, "");
+    if (num.startsWith("07")) num = "+44" + num.slice(1);
+    else if (num.startsWith("0")) num = "+44" + num.slice(1);
+
+    // No Twilio business line set up → open the system dialer so the user calls
+    // direct from their phone. Avoids a dead alert and keeps the action useful
+    // for the majority of trial users who haven't enabled call tracking yet.
+    if (!twilioDevice) {
+      const isNative = typeof window !== "undefined" && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+      const telUrl = "tel:" + num;
+      if (isNative) {
+        window.open(telUrl, "_system");
+      } else {
+        window.location.href = telUrl;
+      }
+      return;
+    }
+
     try {
-      let num = phoneNumber.replace(/\s/g, "");
-      if (num.startsWith("07")) num = "+44" + num.slice(1);
-      else if (num.startsWith("0")) num = "+44" + num.slice(1);
       const call = await twilioDevice.connect({ params: { To: num, userId: user.id, customerName: customerName || "Unknown" } });
       setActiveCall({ call, callerName: customerName || phoneNumber, callerNumber: num, direction: "outbound", startTime: Date.now() });
       call.on("disconnect", () => { setActiveCall(null); setCallMuted(false); });

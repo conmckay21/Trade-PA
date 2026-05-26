@@ -2,6 +2,11 @@
 
 ## 2026-05-26
 
+📝 **Quote updates by AI.** Tell your PA "change the Halliday quote to £4,200 and add a line for skirting £180" and it'll update the quote in place — no more delete-and-redo. Works for amount, customer, validity date, status (draft/sent/accepted/declined/expired), address, VAT, and adding or removing line items.
+
+📞 **Tap-to-call now works without a business line.** Before this, tapping a customer or supplier phone number without Twilio set up just popped an alert. Now it opens your phone's dialer so you can call them direct from your own number. Once you set up a Twilio business line, calls route through that instead so the other side sees your business number.
+
+
 🚚 **Supplier orders are back, properly this time.** Open any supplier and tap **Email order or request** to send a material order or price request straight from the app — pick your items, set the quantities, add a job ref or notes, hit send. Goes out from your connected Gmail or Outlook so it lands in your sent folder like normal. Every order is now logged so you can see what you ordered from who, and when.
 
 🤖 **AI can do it too.** Tell your PA "order 30m of 22mm copper from Plumb Centre for job 14" and it'll put the email together and send it to them — same flow, just hands-free. Useful on site when you can't be typing.

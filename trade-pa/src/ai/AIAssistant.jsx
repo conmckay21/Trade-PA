@@ -1625,6 +1625,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         required: ["supplier_name", "kind", "items"]
       }
     },
+    { name: "update_quote", description: "Update an existing quote — change customer, amount, validity date, status, address, VAT, or add/remove line items. Use INSTEAD OF deleting and re-creating when the user wants to amend a quote. Triggers: \"change the [customer] quote to £X\", \"add another line to [customer]'s quote\", \"update validity on [customer]'s estimate\", \"mark [customer]'s quote as accepted\". ASK IF MISSING: which field to change. LINE ITEMS: prefer add_line_items as a structured array — each {description, amount}. Status enum is quote-specific (draft/sent/accepted/declined/expired) — DO NOT use invoice statuses (paid/overdue). AFTER: \"Quote [id] updated — [what changed].\"", input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name to find the quote" }, quote_id: { type: "string", description: "Quote ID — use if customer disambiguation needed" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_valid_until: { type: "string", description: "New validity date YYYY-MM-DD — when the quote expires" }, new_status: { type: "string", enum: ["draft","sent","accepted","declined","expired"] }, new_address: { type: "string" }, new_vat_enabled: { type: "string", description: "true or false" }, add_line_items: { type: "array", description: "Add one or more line items — each {description, amount}.", items: { type: "object", properties: { description: { type: "string" }, amount: { type: "number" } }, required: ["description","amount"] } }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
 ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
@@ -4194,6 +4195,49 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           pendingWidgetRef.current = { type: "invoice", data: updates };
           return `Invoice ${inv.id} updated. Here's the updated invoice:`;
         }
+        case "update_quote": {
+          const term = (input.customer || input.quote_id || "").toLowerCase();
+          if (!term) return "Please specify which quote to update — provide the customer name or quote ID.";
+          const { data: quoteSearchRows } = await db.from("invoices")
+            .select("*").eq("user_id", user?.id).eq("is_quote", true)
+            .order("created_at", { ascending: false }).limit(50);
+          const searchPool = quoteSearchRows || (invoices || []).filter(i => i.isQuote);
+          const q = searchPool.find(i =>
+            (i.id || "").toLowerCase().includes(term) ||
+            (i.customer || "").toLowerCase().includes(term)
+          );
+          if (!q) return `Couldn't find a quote for "${input.customer || input.quote_id}". Try: list_quotes to see all quotes.`;
+          const updates = { ...q };
+          const changed = [];
+          if (input.new_customer !== undefined) { updates.customer = input.new_customer; changed.push("customer"); }
+          if (input.new_amount !== undefined) { updates.amount = parseFloat(input.new_amount); updates.grossAmount = parseFloat(input.new_amount); changed.push("amount"); }
+          if (input.new_valid_until !== undefined) { updates.due = input.new_valid_until; changed.push("validity"); }
+          if (input.new_status !== undefined) { updates.status = input.new_status; changed.push("status"); }
+          if (input.new_address !== undefined) { updates.address = input.new_address; changed.push("address"); }
+          if (input.new_vat_enabled !== undefined) { updates.vatEnabled = input.new_vat_enabled === true || input.new_vat_enabled === "true"; changed.push("VAT"); }
+          if (Array.isArray(input.add_line_items) && input.add_line_items.length) {
+            const newLines = input.add_line_items
+              .filter(li => li && li.description && typeof li.amount === "number")
+              .map(li => ({ description: String(li.description).trim(), amount: parseFloat(li.amount) || 0 }));
+            if (newLines.length) {
+              updates.lineItems = [...(updates.lineItems || q.lineItems || []), ...newLines];
+              updates.amount = updates.lineItems.reduce((s, l) => s + l.amount, 0);
+              updates.grossAmount = updates.amount;
+              changed.push(`${newLines.length} line item${newLines.length === 1 ? "" : "s"} added`);
+            }
+          }
+          if (input.remove_line_item !== undefined) {
+            const removeIdx = parseInt(input.remove_line_item) - 1;
+            updates.lineItems = (q.lineItems || []).filter((_, i) => i !== removeIdx);
+            updates.amount = updates.lineItems.reduce((s, l) => s + l.amount, 0);
+            updates.grossAmount = updates.amount;
+            changed.push("line item removed");
+          }
+          setInvoices(prev => (prev || []).map(i => i.id === q.id ? updates : i));
+          pendingWidgetRef.current = { type: "invoice", data: updates };
+          return `Quote ${q.id} updated${changed.length ? " — " + changed.join(", ") : ""}. Here's the updated quote:`;
+        }
+
 
 
         case "list_quotes": {
