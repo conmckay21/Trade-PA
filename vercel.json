@@ -117,7 +117,7 @@
     },
     {
       "source": "/api/email/send-material-order",
-      "destination": "/api/email.js"
+      "destination": "/api/email"
     },
     {
       "source": "/api/push/subscribe",
