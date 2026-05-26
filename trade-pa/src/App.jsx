@@ -3104,7 +3104,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           const email = m.invited_email || m.users?.email || "Team member";
           const initials = email[0].toUpperCase();
           const perms = m.permissions || {};
-          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Workers", "Subcontractors", "Documents", "Reviews", "Stock", "RAMS"];
+          const ALL_SECTIONS = ["Dashboard", "Schedule", "Jobs", "Customers", "Invoices", "Quotes", "Materials", "Suppliers", "Expenses", "CIS", "AI Assistant", "Reminders", "Payments", "Inbox", "Reports", "Mileage", "Workers", "Subcontractors", "Documents", "Reviews", "Stock", "RAMS"];
 
           return (
             <div key={i} style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 14, marginBottom: 14 }}>

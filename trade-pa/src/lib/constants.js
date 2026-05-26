@@ -83,7 +83,7 @@ export const MILEAGE_RATE = 0.45; // HMRC approved mileage rate
 
 export const NAV_GROUPS = [
   { id: "home",   label: "Home",     views: ["AI Assistant"] },
-  { id: "work",   label: "Jobs",     views: ["Enquiries", "Jobs", "Materials", "Stock", "RAMS", "Documents"] },
+  { id: "work",   label: "Jobs",     views: ["Enquiries", "Jobs", "Materials", "Suppliers", "Stock", "RAMS", "Documents"] },
   { id: "diary",  label: "Diary",    views: ["Schedule", "Reminders"] },
   { id: "money",  label: "Accounts", views: ["Invoices", "Quotes", "Expenses", "Mileage", "Payments", "CIS", "Reports"] },
   { id: "people", label: "People",   views: ["Customers", "Workers", "Subcontractors", "Reviews"] },
