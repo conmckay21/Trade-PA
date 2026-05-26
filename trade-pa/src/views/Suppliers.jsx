@@ -9,6 +9,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../lib/db.js";
 import { C } from "../theme/colors.js";
 import { S } from "../theme/styles.js";
+import SupplierOrderModal from "../modals/SupplierOrderModal.jsx";
 
 function DetailContactRow({ kind, value, onTap, href, onAdd }) {
   const labels = { phone: "PHONE", email: "EMAIL", address: "ADDRESS" };
@@ -47,6 +48,7 @@ export function Suppliers({ user, setView, makeCall, hasTwilio, setContextHint }
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", notes: "" });
   const [sendingOrder, setSendingOrder] = useState(false);
   const [orderResult, setOrderResult] = useState(null);
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -211,7 +213,7 @@ export function Suppliers({ user, setView, makeCall, hasTwilio, setContextHint }
               </div>
             </div>
             <div style={{ margin: "0 16px 14px" }}>
-              <button onClick={() => sendMaterialOrder(selected)} disabled={sendingOrder || !selected.email} style={{ width: "100%", background: selected.email ? C.amber : C.surfaceHigh, color: selected.email ? "#000" : C.muted, border: "none", borderRadius: 12, padding: "12px 14px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: selected.email ? "pointer" : "not-allowed", opacity: sendingOrder ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <button onClick={(e) => { e.stopPropagation(); if (selected && selected.email) setOrderModalOpen(true); }} disabled={sendingOrder || !selected.email} style={{ width: "100%", background: selected.email ? C.amber : C.surfaceHigh, color: selected.email ? "#000" : C.muted, border: "none", borderRadius: 12, padding: "12px 14px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: selected.email ? "pointer" : "not-allowed", opacity: sendingOrder ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                 {sendingOrder ? "Sending…" : selected.email ? "✉ Email materials to order" : "Add an email to send orders"}
               </button>
               {orderResult && (
@@ -239,6 +241,17 @@ export function Suppliers({ user, setView, makeCall, hasTwilio, setContextHint }
           </div>
         </div>
       )}
+
+      <SupplierOrderModal
+        open={orderModalOpen}
+        supplier={selected}
+        userId={user && user.id}
+        onClose={() => setOrderModalOpen(false)}
+        onSent={(data) => {
+          setOrderResult && setOrderResult({ ok: true, ...data });
+          setOrderModalOpen(false);
+        }}
+      />
 
       {(showAdd || editing) && (
         <div onClick={() => { setShowAdd(false); setEditing(false); }} style={{ position: "fixed", inset: 0, background: "#000c", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 320, padding: 16, paddingTop: "max(52px, env(safe-area-inset-top, 52px))", overflowY: "auto" }}>

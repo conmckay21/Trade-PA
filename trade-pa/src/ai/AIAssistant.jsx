@@ -1597,7 +1597,35 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       description: "Store a fact, preference, or pattern about this business for ALL FUTURE conversations. Triggers: \"remember that [fact]\", \"don't forget [fact]\", or when user corrects you about a standing fact.\n\nDO save: durable business facts (trading name, trades, regions worked, default rates, VAT status, preferred suppliers, standing customer quirks, trade preferences, commonly-used phrases).\n\nDO NOT save: today's weather, one-time customer preferences, transient locations, time-bound facts (\"Steve is on holiday until Friday\"), session context, anything the user can reasonably re-state next time, information already in their customer/job data.\n\nRule of thumb: if it would matter in 6 months' time, save it. If it's this-week-only, don't. When unsure, DON'T save — the user can always say \"remember that\" if they want it persisted.\n\nAFTER: \"Got it — I'll remember that.\"",
       input_schema: { type: "object", properties: { content: { type: "string", description: "The fact to remember as a clear statement. E.g. 'Standard call-out rate is £65/hour'" }, category: { type: "string", enum: ["business_fact", "preference", "customer_note", "pattern", "correction"] } }, required: ["content"] },
     },
-  ];
+      {
+      name: "send_supplier_order",
+      description: "Send a material order or price request email to a supplier. Use when the user asks to order materials, request a quote, ask for pricing, or get a price on materials from a named supplier. The supplier must exist in their suppliers list with an email on file. Fuzzy-matches supplier_name (case-insensitive partial — 'Plumb' matches 'Plumb Center'). If multiple suppliers match, the response will say so — ask the user which one and call again with a more specific name. ASK IF MISSING: which supplier, what items, and how many. AFTER: '[Order|Price request] sent to [supplier] for [N] items.'",
+      input_schema: {
+        type: "object",
+        properties: {
+          supplier_name: { type: "string", description: "Name of the supplier — partial match works." },
+          kind: { type: "string", enum: ["order", "price_request"], description: "'order' = committing to buy. 'price_request' = pricing/availability only." },
+          items: {
+            type: "array",
+            description: "Materials being ordered or requested. At least one item.",
+            minItems: 1,
+            items: {
+              type: "object",
+              properties: {
+                item: { type: "string", description: "Description (e.g. '22mm copper pipe', '10A consumer unit')" },
+                qty: { type: "number", description: "Quantity. Default 1." },
+                notes: { type: "string", description: "Optional per-item note" }
+              },
+              required: ["item"]
+            }
+          },
+          job_ref: { type: "string", description: "Optional job reference for the email" },
+          notes: { type: "string", description: "Optional free-text notes for the supplier" }
+        },
+        required: ["supplier_name", "kind", "items"]
+      }
+    },
+];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
   // Email helper — routes to the send-invoice-email endpoint which handles PDF attachment
@@ -1875,6 +1903,39 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     // ─────────────────────────────────────────────────────────────────────────
     try {
       switch (name) {
+        case "send_supplier_order": {
+          try {
+            const res = await fetch("/api/suppliers/send-material-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId: user && user.id,
+                supplierName: input.supplier_name,
+                kind: input.kind || "order",
+                items: (input.items || []).map((i) => ({
+                  item: i.item,
+                  qty: i.qty != null ? i.qty : 1,
+                  notes: i.notes || undefined,
+                })),
+                jobRef: input.job_ref || undefined,
+                notes: input.notes || undefined,
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+              if (data.matches && Array.isArray(data.matches)) {
+                return `Multiple suppliers matched "${input.supplier_name}". Which one: ${data.matches.join(", ")}?`;
+              }
+              return data.error || "Couldn't send to supplier.";
+            }
+            const verb = data.kind === "price_request" ? "Price request" : "Order";
+            const itemWord = data.itemCount === 1 ? "item" : "items";
+            setLastAction && setLastAction({ type: "supplier_order", label: `${verb} sent to ${data.supplierName}`, view: "Suppliers" });
+            return `${verb} sent to ${data.supplierName} (${data.sentTo}) — ${data.itemCount} ${itemWord}.`;
+          } catch (err) {
+            return `Couldn't send to supplier: ${err.message || "network error"}`;
+          }
+        }
         case "create_customer": {
           const existing = (customers || []).find(c => c.name.toLowerCase() === input.name.toLowerCase());
           if (existing) {
