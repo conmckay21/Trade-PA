@@ -168,57 +168,6 @@ async function handler(req, res) {
     try {
       const token = await getToken(userId, "gmail");
       const profile = await (await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", { headers: { Authorization: `Bearer ${token}` } }
-
-  // ── Send Material Order to Supplier ────────────────────────────────────────
-  if (path === "/api/email/send-material-order") {
-    const { userId, supplierId } = req.body;
-    if (!userId || !supplierId) return res.status(400).json({ success: false, error: "userId and supplierId required" });
-    try {
-      const supRes = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/suppliers?id=eq.${supplierId}&user_id=eq.${userId}&deleted_at=is.null&select=*`, { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } });
-      const supplier = (await supRes.json())[0];
-      if (!supplier) return res.status(404).json({ success: false, error: "Supplier not found" });
-      if (!supplier.email) return res.status(400).json({ success: false, error: "Supplier has no email address" });
-
-      const matRes = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/materials?user_id=eq.${userId}&status=eq.to_order&supplier=ilike.${encodeURIComponent(supplier.name)}&select=*&order=created_at.asc`, { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } });
-      const items = await matRes.json();
-      if (!Array.isArray(items) || items.length === 0) return res.json({ success: false, itemCount: 0, message: "No to-order materials match this supplier" });
-
-      const brandRes = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/brand?user_id=eq.${userId}&select=*`, { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } });
-      const brand = (await brandRes.json())[0] || {};
-      const fromName = brand.trading_name || brand.tradingName || "Trade PA customer";
-
-      const connRes = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/email_connections?user_id=eq.${userId}&select=provider`, { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } });
-      const conns = await connRes.json();
-      const provider = conns?.[0]?.provider;
-      if (!provider) return res.status(400).json({ success: false, error: "No email connection — connect Gmail or Outlook in Inbox first" });
-
-      const subject = `Material order from ${fromName}`;
-      const rows = items.map(m => {
-        const qty = m.qty || 1;
-        const item = m.item || "(no description)";
-        const note = m.notes ? ` <span style="color:#666">(${m.notes})</span>` : "";
-        return `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee">${item}${note}</td><td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:right;font-family:monospace">${qty}</td></tr>`;
-      }).join("");
-      const body = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;font-size:14px;color:#111;padding:24px;max-width:600px;margin:0 auto"><p>Hi ${supplier.name},</p><p>Could I order the following please:</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><thead><tr><th style="text-align:left;padding:8px 12px;background:#f3f4f6;font-size:11px;text-transform:uppercase;border-bottom:2px solid #ddd">Item</th><th style="text-align:right;padding:8px 12px;background:#f3f4f6;font-size:11px;text-transform:uppercase;border-bottom:2px solid #ddd">Qty</th></tr></thead><tbody>${rows}</tbody></table><p>Let me know when it's ready for collection or what delivery would be.</p><p>Thanks,<br>${fromName}</p><hr style="border:none;border-top:1px solid #eee;margin:24px 0"><p style="font-size:11px;color:#888">Sent via <a href="https://www.tradespa.co.uk" style="color:#f59e0b;text-decoration:none">Trade PA</a></p></body></html>`;
-
-      if (provider === "gmail") {
-        const token = await getToken(userId, "gmail");
-        const profile = await (await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", { headers: { Authorization: `Bearer ${token}` } })).json();
-        const raw = makeGmailRaw({ to: supplier.email, from: profile.emailAddress, subject, body });
-        const result = await (await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ raw }) })).json();
-        if (result.error) throw new Error(result.error.message);
-        return res.json({ success: true, itemCount: items.length, provider: "gmail", messageId: result.id });
-      } else if (provider === "outlook") {
-        const token = await getToken(userId, "outlook");
-        const result = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ message: { subject, body: { contentType: "HTML", content: body }, toRecipients: [{ emailAddress: { address: supplier.email } }] }, saveToSentItems: true }) });
-        if (!result.ok) { const errText = await result.text(); throw new Error(`Outlook send failed: ${errText}`); }
-        return res.json({ success: true, itemCount: items.length, provider: "outlook" });
-      }
-      return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
-    } catch (err) {
-      return res.status(500).json({ success: false, error: err.message || "Failed to send order" });
-    }
-  }
 )).json();
       const raw = makeGmailRaw({ to, from: profile.emailAddress, subject, body, attachmentBase64, attachmentName });
       const payload = { raw };
