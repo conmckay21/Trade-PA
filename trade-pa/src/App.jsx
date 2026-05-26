@@ -5211,29 +5211,35 @@ function AppInner() {
 
   // ── ONBOARDING: Step 1 — Welcome screen ────────────────────────────
   if (onboardingStep === 1) return (
-    <div style={{ minHeight: "100dvh", background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans', sans-serif", color: "#f0f0f0" }}>
-      <div style={{ maxWidth: 340, width: "100%", textAlign: "center" }}>
-        <div style={{ width: 72, height: 72, borderRadius: 18, background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 900, color: "#000", margin: "0 auto 28px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>TP</div>
-        <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 8 }}>Welcome to Trade PA</div>
-        <div style={{ fontSize: 14, color: "#888", lineHeight: 1.7, marginBottom: 32 }}>Your AI-powered business assistant.<br/>Let's get you set up — takes about 2 minutes.</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, textAlign: "left", marginBottom: 32 }}>
+    <div style={{ minHeight: "100dvh", background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans', sans-serif", color: "#f0f0f0", overflowY: "auto" }}>
+      <div style={{ maxWidth: 360, width: "100%" }}>
+        <div style={{ width: 64, height: 64, borderRadius: 16, background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 900, color: "#000", margin: "0 auto 24px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>TP</div>
+        <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 10, textAlign: "center", lineHeight: 1.15 }}>Stop losing evenings to admin</div>
+        <div style={{ fontSize: 14, color: "#888", lineHeight: 1.6, marginBottom: 28, textAlign: "center" }}>Tell Trade PA what you did. It sorts the paperwork — jobs, quotes, invoices, mileage, CIS, the lot.</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
           {[
-            { icon: "M19 11a7 7 0 01-14 0M12 18v4M8 22h8M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3z", label: "Tell me about your business" },
-            { icon: "M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3zM19 10v2a7 7 0 01-14 0v-2", label: "Name your assistant" },
-            { icon: "M13 10V3L4 14h7v7l9-11h-7z", label: "Try your first voice command" },
+            { title: "Voice-first", sub: '"Log £45 fuel today" → done', paths: ["M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z", "M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"] },
+            { title: "All the paperwork", sub: "Jobs, quotes, invoices, mileage, CIS", paths: ["M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z", "M14 2v6h6M9 13h6M9 17h6"] },
+            { title: "Built for UK trades", sub: "CIS, MTD, RAMS — the lot", paths: ["M12 22s-8-4.5-8-11.8A8 8 0 0112 2a8 8 0 018 8.2c0 7.3-8 11.8-8 11.8z", "M9 12l2 2 4-4"] },
           ].map((item, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, background: "#1a1a1a", border: "1px solid #333", borderRadius: 12, padding: "12px 16px" }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: i === 0 ? "#f59e0b22" : "#1a1a1a", border: `1px solid ${i === 0 ? "#f59e0b44" : "#333"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={i === 0 ? "#f59e0b" : "#888"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={item.icon}/></svg>
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 12, padding: "14px 16px" }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "#f59e0b22", border: "1px solid #f59e0b44", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {item.paths.map((d, j) => <path key={j} d={d}/>)}
+                </svg>
               </div>
-              <span style={{ fontSize: 13, color: i === 0 ? "#f0f0f0" : "#888" }}>{item.label}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#f0f0f0", marginBottom: 2 }}>{item.title}</div>
+                <div style={{ fontSize: 11, color: "#888" }}>{item.sub}</div>
+              </div>
             </div>
           ))}
         </div>
         <button
           onClick={() => { advanceOnboarding(2); setView("AI Assistant"); }}
-          style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: "#f59e0b", color: "#000", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}
-        >Let's go</button>
+          style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: "#f59e0b", color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}
+        >Let's set you up →</button>
+        <div style={{ fontSize: 11, color: "#666", textAlign: "center", marginTop: 12 }}>Takes about 2 minutes</div>
       </div>
     </div>
   );
@@ -5319,26 +5325,45 @@ function AppInner() {
 
       {/* Step 5: Try your first voice command */}
       {onboardingStep === 5 && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
-          <div style={{ maxWidth: 340, width: "100%", textAlign: "center" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "#0a0a0a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif", overflowY: "auto" }}>
+          <div style={{ maxWidth: 360, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 10, color: "#888", fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>Last step</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: "#f0f0f0", marginBottom: 8 }}>Try your first command</div>
-            <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7, marginBottom: 28 }}>{isDesktopBrowser ? "Type this in the chat box..." : "Tap the mic and say..."}</div>
-            <div style={{ background: "#f59e0b0a", border: "1px solid #f59e0b33", borderRadius: 14, padding: "18px 22px", marginBottom: 28 }}>
-              <div style={{ fontSize: 16, color: "#f59e0b", fontFamily: "'Plus Jakarta Sans', sans-serif", lineHeight: 1.6 }}>"Add a customer called John Smith, 07700 900456"</div>
+            <div style={{ fontSize: 13, color: "#888", lineHeight: 1.6, marginBottom: 20 }}>Tap one to see your PA do it. Or hit the mic to say your own.</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18, textAlign: "left" }}>
+              {[
+                "Add Mrs Patel as a customer, 0117 555 0100",
+                "Log £45 fuel from Esso today",
+                "Quote £2,400 for the kitchen on Monday",
+              ].map((cmd, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    advanceOnboarding(6);
+                    setView("AI Assistant");
+                    setTimeout(() => voiceHandle.current?.sendText?.(cmd), 400);
+                  }}
+                  style={{ display: "flex", alignItems: "center", gap: 10, background: "#1a1a1a", border: "1px solid #f59e0b44", borderRadius: 12, padding: "12px 14px", cursor: "pointer", textAlign: "left", fontFamily: "'DM Sans',sans-serif" }}
+                >
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: "#f59e0b22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+                  </div>
+                  <span style={{ flex: 1, fontSize: 13, color: "#f0f0f0", fontFamily: "'Plus Jakarta Sans', sans-serif", lineHeight: 1.4 }}>"{cmd}"</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "4px 0 14px" }}>
+              <div style={{ flex: 1, height: 1, background: "#2a2a2a" }} />
+              <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em", fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>OR</div>
+              <div style={{ flex: 1, height: 1, background: "#2a2a2a" }} />
             </div>
             <button
-              onClick={() => {
-                advanceOnboarding(6);
-                setView("AI Assistant");
-                // Send the command in background — AI processes while nav tour plays
-                setTimeout(() => voiceHandle.current?.sendText?.("Add a customer called John Smith, phone 07700 900456"), 400);
-              }}
-              style={{ width: 110, height: 110, borderRadius: "50%", background: "#f59e0b", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}
+              onClick={() => { advanceOnboarding(6); setView("AI Assistant"); }}
+              style={{ width: 80, height: 80, borderRadius: "50%", background: "#f59e0b", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}
             >
-              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
             </button>
-            <div style={{ fontSize: 12, color: "#666", marginBottom: 20 }}>Or type it — whatever's easier right now</div>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>Open the chat and say anything</div>
             <button onClick={() => advanceOnboarding(6)} style={{ padding: "8px 18px", borderRadius: 10, border: "1px solid #333", background: "transparent", color: "#666", fontSize: 12, cursor: "pointer" }}>Skip — show me around first</button>
           </div>
         </div>

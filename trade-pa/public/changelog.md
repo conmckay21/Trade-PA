@@ -1,5 +1,9 @@
 ## 2026-05-26
 
+✨ **Sharper onboarding.** The welcome screen now leads with the actual job ("Stop losing evenings to admin") instead of generic AI talk, and the "try your first command" step now shows three example commands you can tap — customer, expense or quote — to see your PA actually do something. Or hit the mic and say your own.
+
+## 2026-05-26
+
 🪧 **Cleaner empty screens across the app.** Empty pages used to be a wall of grey text — now Enquiries, Expenses, Stock, Documents, RAMS, CIS, Subcontractors and Purchase Orders all have proper "here's what this is for" cards with a clear next action. Add the first item, or tell PA out loud.
 
 # Changelog
