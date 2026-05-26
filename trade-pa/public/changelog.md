@@ -1,3 +1,7 @@
+## 2026-05-26
+
+🪧 **Cleaner empty screens across the app.** Empty pages used to be a wall of grey text — now Enquiries, Expenses, Stock, Documents, RAMS, CIS, Subcontractors and Purchase Orders all have proper "here's what this is for" cards with a clear next action. Add the first item, or tell PA out loud.
+
 # Changelog
 
 ## 2026-05-26

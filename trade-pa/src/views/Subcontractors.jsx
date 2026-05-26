@@ -15,6 +15,7 @@ import { fileToContentBlock } from "../lib/files.js";
 import { SUB_INVOICE_SCAN_PROMPT } from "../lib/scan-prompts.js";
 import { tmReadWorkers, tmReadSubs } from "../lib/team-members.js";
 import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 export function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }) {
   const [subs, setSubs] = useState([]);
@@ -661,11 +662,14 @@ export function SubcontractorsTab({ user, brand, setContextHint, mode = "subs" }
       )}
 
       {subs.length === 0 && !loading && (
-        <div style={{ textAlign: "center", padding: "32px 16px" }}>
-          <div style={{ fontSize: 28, marginBottom: 10 }}>👷</div>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No subcontractors yet</div>
-          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Tap <strong style={{ color: C.amber }}>+ Add Worker / Sub</strong> above to add a subbie with their UTR + CIS rate. Then scan their invoices and log payments — Trade PA handles the CIS deductions.</div>
-        </div>
+        <EmptyState
+          icon="team"
+          title="No subbies or workers yet"
+          body="Track who you work with, their docs, day rates, CIS status. PA handles deductions automatically."
+          ctaLabel="+ Add subbie"
+          onCta={() => setView("add_worker")}
+          voiceTip={'Or say "Add Dave the brickie at £180/day, CIS at 20%"'}
+        />
       )}
 
       {/* Add Subcontractor Modal */}

@@ -18,6 +18,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { db } from "../lib/db.js";
 import { C } from "../theme/colors.js";
 import { S } from "../theme/styles.js";
+import EmptyState from "../components/EmptyState.jsx";
 
 const SOURCES = {
   all:        { label: "All",          icon: "📚" },
@@ -303,7 +304,14 @@ export function DocumentsTab({ user, customers, setContextHint }) {
 
       {/* List */}
       {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> :
-        items.length === 0 ? <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No documents yet — tap ⬆ Upload to add a file, or create certificates and RAMS from a job.</div> :
+        items.length === 0 ? <EmptyState
+          icon="documents"
+          title="No documents stored"
+          body="Insurance, qualifications, contracts, manuals — one place, sharable with a tap."
+          ctaLabel="⬆ Upload document"
+          onCta={() => fileRef.current?.click()}
+          voiceTip={'Or just drop a file on this screen'}
+        /> :
         filtered.length === 0 ? <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>{search ? `No documents match "${search}".` : `Nothing in ${SOURCES[sourceFilter]?.label || sourceFilter}.`}</div> :
         filtered.map(item => (
           <div key={item.key} style={{ background: C.surfaceHigh, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>

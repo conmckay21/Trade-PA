@@ -6,6 +6,7 @@ import { S } from "../theme/styles.js";
 import { newEnquiryId } from "../lib/ids.js";
 import { statusColor, statusLabel } from "../lib/status.js";
 import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 export function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers, invoices, setInvoices, brand, user, setView, setContextHint }) {
   const [selected, setSelected] = useState(null);
@@ -134,12 +135,14 @@ export function EnquiriesTab({ enquiries, setEnquiries, customers, setCustomers,
 
       {/* List */}
       {filtered.length === 0
-        ? <div style={{ ...S.card, textAlign: "center", padding: 40 }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>📩</div>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>No enquiries</div>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Enquiries come in automatically from your inbox, or add one manually.</div>
-            <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Enquiry</button>
-          </div>
+        ? <EmptyState
+            icon="enquiries"
+            title="No enquiries yet"
+            body="Leads land here from calls, SMS, email or the AI. Convert them to jobs when they're real."
+            ctaLabel="+ Add enquiry"
+            onCta={() => setShowAdd(true)}
+            voiceTip={'Or forward an email and PA will create one'}
+          />
         : filtered.map(enq => (
           <div key={enq.id} onClick={() => setSelected(enq)} style={{ ...S.card, cursor: "pointer", borderLeft: `3px solid ${statusColor[enq.status || "new"]}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>

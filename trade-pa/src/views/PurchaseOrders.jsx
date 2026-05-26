@@ -17,6 +17,7 @@ import { S } from "../theme/styles.js";
 import { fmtCurrency } from "../lib/format.js";
 import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
 import { AssignToJobModal } from "../modals/AssignToJobModal.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 export function PurchaseOrdersTab({ user, brand }) {
   const [orders, setOrders] = useState([]);
@@ -128,7 +129,14 @@ export function PurchaseOrdersTab({ user, brand }) {
       </div>
 
       {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : orders.length === 0 ? (
-        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No purchase orders yet</div>
+        <EmptyState
+          icon="suppliers"
+          title="No purchase orders yet"
+          body="Send POs to suppliers, track delivery, auto-link to job materials."
+          ctaLabel="+ New PO"
+          onCta={() => setShowAdd(true)}
+          voiceTip={'Or say "Raise a PO to Wickes for the Patel kitchen materials"'}
+        />
       ) : orders.map(o => (
         <div key={o.id} style={{ background: C.surfaceHigh, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", cursor: "pointer" }} onClick={() => setSelected(selected?.id === o.id ? null : o)}>

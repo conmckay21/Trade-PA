@@ -6,6 +6,7 @@ import { C } from "../theme/colors.js";
 import { S } from "../theme/styles.js";
 import { fmtCurrency } from "../lib/format.js";
 import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 export function StockTab({ user, setContextHint }) {
   const [items, setItems] = useState([]);
@@ -167,11 +168,14 @@ export function StockTab({ user, setContextHint }) {
       )}
 
       {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : items.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "32px 16px" }}>
-          <div style={{ fontSize: 28, marginBottom: 10 }}>📦</div>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No stock items yet</div>
-          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Tap <strong style={{ color: C.amber }}>+ Add Item</strong> above to track what you carry in the van. Set a reorder level and Trade PA will flag low stock. Or say: "add 5 boxes of 22mm copper to stock".</div>
-        </div>
+        <EmptyState
+          icon="stock"
+          title="Nothing on the van yet"
+          body="Track van stock so you stop double-buying. Set min levels and PA flags what needs reordering."
+          ctaLabel="+ Add stock item"
+          onCta={() => setShowAdd(true)}
+          voiceTip={'Or say "Add 10 boxes of 4mm reds to my van stock"'}
+        />
       ) : filtered.length === 0 ? (
         <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>{search ? `No stock matches "${search}".` : filter === "low" ? "No items below reorder level — all stocked up." : "No items."}</div>
       ) : filtered.map(item => {

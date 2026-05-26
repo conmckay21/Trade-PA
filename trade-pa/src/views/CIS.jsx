@@ -8,6 +8,7 @@ import { fmtCurrency } from "../lib/format.js";
 import { localMonth } from "../lib/time.js";
 import { openHtmlPreview } from "../lib/files.js";
 import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 export function CISStatementsTab({ user, setContextHint }) {
   const [statements, setStatements] = useState([]);
@@ -119,11 +120,15 @@ export function CISStatementsTab({ user, setContextHint }) {
         <div style={S.sectionTitle}>Statements ({visibleStatements.length})</div>
         {loading && <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>}
         {!loading && statements.length === 0 && (
-          <div style={{ textAlign: "center", padding: "32px 16px" }}>
-            <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No CIS statements yet</div>
-            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>When a contractor sends you a CIS statement, log it here so the deductions count toward your tax bill. Or ask Trade PA: "log a CIS statement from Bilfinger for March".</div>
-          </div>
+          <EmptyState
+            dense
+            icon="cis"
+            title="No CIS records yet"
+            body="When you pay a CIS subbie, deductions calculate automatically and statements generate at month end."
+            ctaLabel="+ Add statement"
+            onCta={() => setShowAdd(true)}
+            voiceTip={'Or say "Log a CIS statement from Bilfinger for March"'}
+          />
         )}
         {!loading && statements.length > 0 && visibleStatements.length === 0 && <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "12px 8px" }}>{search ? `No statements match "${search}".` : `No statements in ${yearFilter}.`}</div>}
         {visibleStatements.map(s => (

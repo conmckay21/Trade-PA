@@ -8,6 +8,7 @@ import { fmtCurrency } from "../lib/format.js";
 import { localDate } from "../lib/time.js";
 import { MILEAGE_RATE } from "../lib/constants.js";
 import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 export function ExpensesTab({ user, setContextHint }) {
   const [expenses, setExpenses] = useState([]);
@@ -146,11 +147,15 @@ export function ExpensesTab({ user, setContextHint }) {
         <div style={S.sectionTitle}>Expense Log ({filtered.length})</div>
         {loading && <div style={{ fontSize: 12, color: C.muted }}>Loading...</div>}
         {!loading && expenses.length === 0 && (
-          <div style={{ textAlign: "center", padding: "32px 16px" }}>
-            <div style={{ fontSize: 28, marginBottom: 10 }}>🧾</div>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No expenses logged yet</div>
-            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Tap <strong style={{ color: C.amber }}>+ Log Expense</strong> above, scan a receipt, or just tell Trade PA: "log £42 for diesel today".</div>
-          </div>
+          <EmptyState
+            dense
+            icon="expenses"
+            title="No expenses logged"
+            body="Fuel, parking, tools, anything — log once and it's ready for self-assessment."
+            ctaLabel="+ Add expense"
+            onCta={() => setShowAdd(true)}
+            voiceTip={'Or say "Log £45 fuel from Esso today"'}
+          />
         )}
         {!loading && expenses.length > 0 && filtered.length === 0 && <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "16px 8px" }}>{search ? `No expenses match "${search}".` : "No expenses this period."}</div>}
         {filtered.map(e => (

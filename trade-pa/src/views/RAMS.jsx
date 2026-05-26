@@ -15,6 +15,7 @@ import { tmReadWorkers, tmReadSubs } from "../lib/team-members.js";
 import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
 import { DetailPage } from "../components/DetailPage.jsx";
 import { AssignToJobModal } from "../modals/AssignToJobModal.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 export const HAZARD_LIBRARY = {
   "Working at Height": [
@@ -759,7 +760,14 @@ ${d.emergency_procedure ? `<p style="margin:8px 0;font-size:11px">${d.emergency_
 
       {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> :
         rams.length === 0 ? (
-          <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 40 }}>No RAMS documents yet — tap + New RAMS to get started</div>
+          <EmptyState
+            icon="rams"
+            title="No RAMS yet"
+            body="Tell PA about the site and the work — it drafts a compliant Risk Assessment in seconds."
+            ctaLabel="+ New RAMS"
+            onCta={() => { setForm(blankForm()); setStep(1); setEditingId(null); setScreen("wizard"); }}
+            voiceTip={'Or say "Build a RAMS for working at height on the Patel job"'}
+          />
         ) : listItems.length === 0 ? (
           <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>
             {search ? `No RAMS match "${search}".` : filter === "cdm" ? "No CDM notifiable projects." : "No RAMS linked to a job yet."}
