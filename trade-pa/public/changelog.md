@@ -1,5 +1,9 @@
 ## 2026-05-26
 
+🎙 **"What can my PA do?" got a proper answer.** The Help article that lists what your PA can handle was a thin five-bullet stub. It's now a full reference — eight categories of what your PA does (add, get paid, update, find, plan, message, compliance, settings) plus 20 real example commands like "Invoice Patel £580 for the second-fix work" or "Order 4 sheets of 18mm ply from Wickes for the Beech Road job". Find it in Help → Voice & AI → What can my PA do?
+
+## 2026-05-26
+
 📖 **Help button now knows where you are.** Open the avatar menu and tap Help from any screen — you'll land straight on the article that matches what you're looking at. On Customers? You get the "Add a customer" guide. On Inbox? Inbox help. No more scrolling through the index to find the right page.
 
 ## 2026-05-26
