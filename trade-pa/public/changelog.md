@@ -1,5 +1,7 @@
 ## 2026-05-26
 
+🎯 **Fresh welcome screen on iOS and Android.** Open the app fresh on your phone and you now get a clean dark welcome — the TP mark, the promise ("Stop losing evenings to admin."), the descriptor ("voice-first PA for UK trades") and one big Sign In button. No marketing scroll-fest, no pricing waffle, no clutter — existing subscribers in two taps. New downloads get pointed to tradespa.co.uk to sign up. Web users on laptop or desktop still see the full landing page unchanged.
+
 📦 **Bring your gear across from another app.** New **Import from another app** option on the welcome screen lets you bulk-import from a CSV — customers, jobs, and invoices/quotes. Pick what you're importing, drop the file, we auto-detect the columns and let you tweak the matches if anything's off. Duplicate detection on customer names and job titles so you don't end up with two of everything. Switchers from Tradify, Powered Now, Service M8 — export your data to CSV and pull it across here. Imported invoices and quotes get clearly marked IDs (`INV-IMP-…` / `QTE-IMP-…`) so they're distinct from invoices you raise here.
 
 ## 2026-05-26

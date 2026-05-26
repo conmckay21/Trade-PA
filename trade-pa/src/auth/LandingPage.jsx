@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { AuthScreen } from "./AuthScreen.jsx";
+import { NativeWelcome } from "./NativeWelcome.jsx";
+import { isNative } from "../lib/platform.js";
 
 // ─── Voice Hero Card (cycling live voice → action demo) ──────────────────────
 function VoiceHeroCard() {
@@ -319,6 +321,12 @@ export function LandingPage({ onAuth }) {
 
   if (screen === "login" || screen === "signup") {
     return <AuthScreen onAuth={onAuth} initialMode={screen === "signup" ? "signup" : "login"} onBack={() => setScreen("landing")} />;
+  }
+
+  // NATIVE: branded hero replaces the web marketing landing page.
+  // App Store Guideline 3.1.3(b) — no subscribe CTAs / pricing UI in native.
+  if (isNative()) {
+    return <NativeWelcome onSignIn={() => setScreen("login")} />;
   }
 
   return (
