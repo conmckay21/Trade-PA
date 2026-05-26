@@ -14,6 +14,7 @@ import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
 import { CustomerForm } from "./customers/CustomerForm.jsx";
 import { CompanyForm } from "./customers/CompanyForm.jsx";
 import { ImportContacts } from "./customers/ImportContacts.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 function DetailContactRow({ kind, value, onTap, href, onAdd }) {
   const labels = { phone: "PHONE", email: "EMAIL", address: "ADDRESS" };
@@ -374,27 +375,14 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
 
       {/* ─── Customer cards ────────────────────────────────────────── */}
       {customers.length === 0 ? (
-        <div style={{
-          background: C.surface,
-          border: `1px solid ${C.border}`,
-          borderRadius: 14,
-          padding: "32px 20px",
-          textAlign: "center",
-        }}>
-          <div style={{
-            fontFamily: "'Plus Jakarta Sans', sans-serif",
-            fontSize: 11,
-            textTransform: "uppercase",
-            letterSpacing: "0.12em",
-            color: C.muted,
-            marginBottom: 8,
-          }}>No customers yet</div>
-          <div style={{ fontSize: 14, color: C.textDim, lineHeight: 1.5 }}>
-            Tap <strong style={{ color: C.amber }}>+ Add</strong> to add one manually,{" "}
-            import from your phone's contacts, or they'll be added automatically{" "}
-            when you book jobs via the AI Assistant.
-          </div>
-        </div>
+        <EmptyState
+          icon="customers"
+          title="No customers yet"
+          body="Add a customer once — every job, invoice and call ties back to them automatically. Import from your phone, or let the AI add them as you book jobs."
+          ctaLabel="+ Add customer"
+          onCta={() => { setForm({ name: "", phone: "", email: "", address: "", notes: "" }); setShowAdd(true); }}
+          voiceTip={'Or say "Add Dave Wilson, 07700 900123, 22 Mill Lane, Reading"'}
+        />
       ) : filtered.length === 0 ? (
         <div style={{
           background: C.surface,

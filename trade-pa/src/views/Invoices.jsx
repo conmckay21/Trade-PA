@@ -30,6 +30,7 @@ import { DetailPage } from "../components/DetailPage.jsx";
 import { PortalLinkPanel } from "../components/PortalLinkPanel.jsx";
 import { InvoiceModal } from "../modals/InvoiceModal.jsx";
 import { QuoteModal } from "../modals/QuoteModal.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 function LineItemsDisplay({ inv }) {
   if (!inv) return null;
@@ -1183,12 +1184,14 @@ export function InvoicesView({ brand, invoices, setInvoices, user, customers, cu
       ))}
 
       {allInvoices.length === 0 && (
-        <div style={{ ...S.card, textAlign: "center", padding: 40 }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>💰</div>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>No invoices yet</div>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Create your first invoice or ask the AI Assistant.</div>
-          <button style={S.btn("primary")} onClick={() => setShowModal(true)}>+ Create Invoice</button>
-        </div>
+        <EmptyState
+          icon="invoices"
+          title="No invoices sent yet"
+          body="Invoices pull materials, labour and mileage from the job automatically. Stripe pay-now link included by default — get paid faster."
+          ctaLabel="+ New invoice"
+          onCta={() => setShowModal(true)}
+          voiceTip={'Or say "Invoice the Patel job for the full amount"'}
+        />
       )}
 
       {/* Detail page — Phase 4 */}
@@ -1583,7 +1586,15 @@ export function QuotesView({ brand, invoices, setInvoices, setView, customers, c
       {/* List */}
       <div style={S.card}>
         {allQuotes.length === 0 ? (
-          <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" }}>No quotes yet — tap + New Quote or ask the AI Assistant.</div>
+          <EmptyState
+            dense
+            icon="quotes"
+            title="No quotes yet"
+            body="Quote once, convert to an invoice in one tap when the customer says yes."
+            ctaLabel="+ New quote"
+            onCta={() => setShowModal(true)}
+            voiceTip={'Or say "Create a quote for Dave Wilson, kitchen rewire, £1,800"'}
+          />
         ) : sortedQuotes.length === 0 ? (
           <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "24px 8px" }}>
             {search ? `No quotes match "${search}".` : `No ${filter === "pending" ? "pending" : filter === "expired" ? "expired" : filter === "accepted" ? "accepted" : "declined"} quotes.`}

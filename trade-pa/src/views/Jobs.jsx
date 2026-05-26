@@ -24,6 +24,7 @@ import {
   printComplianceDoc,
   emailComplianceDoc,
 } from "./Certificates.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 export function JobsTab({ user, brand, customers, invoices, setInvoices, setView, setContextHint }) {
   const db = window._supabase;
@@ -607,11 +608,14 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
       {/* Job list */}
       {loading && <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>Loading jobs...</div>}
       {!loading && jobs.length === 0 && !showAdd && (
-        <div style={{ ...S.card, textAlign: "center", padding: 32 }}>
-          <div style={{ fontSize: 24, marginBottom: 8 }}>🔧</div>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>No job cards yet — convert a quote, ask Trade PA, or create one manually.</div>
-          <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add First Job</button>
-        </div>
+        <EmptyState
+          icon="jobs"
+          title="No jobs yet"
+          body="Job cards keep materials, labour, photos, RAMS and the invoice all in one place. Create one, or convert a quote when the customer says yes."
+          ctaLabel="+ Create your first job"
+          onCta={() => setShowAdd(true)}
+          voiceTip={'Or say "Create a job for Mrs Patel, second-fix kitchen, two days"'}
+        />
       )}
       {!loading && jobs.length > 0 && sortedJobs.length === 0 && (
         <div style={{ ...S.card, textAlign: "center", padding: 22 }}>

@@ -6,6 +6,7 @@ import { C } from "../theme/colors.js";
 import { S } from "../theme/styles.js";
 import { fmtCurrency } from "../lib/format.js";
 import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 export function MileageTab({ user, setContextHint }) {
   const [trips, setTrips] = useState([]);
@@ -152,7 +153,14 @@ export function MileageTab({ user, setContextHint }) {
       )}
 
       {loading ? <div style={{ fontSize: 12, color: C.muted, padding: 16 }}>Loading...</div> : trips.length === 0 ? (
-        <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 32 }}>No trips logged yet — tap + Add Trip</div>
+        <EmptyState
+          icon="mileage"
+          title="No mileage logged"
+          body="Average sole-trader misses about 30% of claimable miles. At 45p a mile, that adds up fast — claim every trip."
+          ctaLabel="+ Log mileage"
+          onCta={() => setShowAdd(true)}
+          voiceTip={'Or say "Log 22 miles to the Mill Lane job today"'}
+        />
       ) : visibleTrips.length === 0 ? (
         <div style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: 24 }}>No trips match "{search}".</div>
       ) : visibleTrips.map(t => (

@@ -16,6 +16,7 @@ import { getReceiptViewUrl } from "../lib/receipts.js";
 import { statusColor, statusLabel } from "../lib/status.js";
 import { VoiceFillButton } from "../components/VoiceFillButton.jsx";
 import { AssignToJobModal } from "../modals/AssignToJobModal.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 function MaterialRow({ m, i, cycleStatus, setEditingMaterial, deleteMaterial, markPaid, userId, onAssignJob }) {
   const [expanded, setExpanded] = useState(false);
@@ -781,11 +782,16 @@ Return only JSON, no other text.` },
 
       {/* Unified grouped list — each MaterialRow is its own card, no wrapper */}
       {(materials || []).length === 0 && (
-        <div style={{ ...S.card, textAlign: "center", padding: 32 }}>
-          <div style={{ fontSize: 24, marginBottom: 8 }}>📦</div>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>No materials yet — tap + Add above, scan a receipt, or ask Trade PA.</div>
-          <button style={S.btn("primary")} onClick={() => setShowAdd(true)}>+ Add Material</button>
-        </div>
+        <EmptyState
+          icon="materials"
+          title="No materials yet"
+          body="Voice-fill at the merchant so nothing falls off the invoice. Or photograph a receipt — the AI extracts the line items and links them to a job."
+          ctaLabel="+ Add material"
+          onCta={() => setShowAdd(true)}
+          secondaryCtaLabel="📷 Scan receipt"
+          onSecondaryCta={() => fileRef.current && fileRef.current.click()}
+          voiceTip={'Or tap the mic and say "50 metres of 2.5mm cable, 75 quid"'}
+        />
       )}
       {(materials || []).length > 0 && sortedMaterials.length === 0 && (
         <div style={{ ...S.card, textAlign: "center", padding: 22 }}>

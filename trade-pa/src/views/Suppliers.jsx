@@ -10,6 +10,7 @@ import { db } from "../lib/db.js";
 import { C } from "../theme/colors.js";
 import { S } from "../theme/styles.js";
 import SupplierOrderModal from "../modals/SupplierOrderModal.jsx";
+import EmptyState from "../components/EmptyState.jsx";
 
 function DetailContactRow({ kind, value, onTap, href, onAdd }) {
   const labels = { phone: "PHONE", email: "EMAIL", address: "ADDRESS" };
@@ -159,10 +160,14 @@ export function Suppliers({ user, setView, makeCall, hasTwilio, setContextHint }
       {loading ? (
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, textAlign: "center", color: C.textDim, fontSize: 14 }}>Loading suppliers…</div>
       ) : suppliers.length === 0 ? (
-        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "32px 20px", textAlign: "center" }}>
-          <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.12em", color: C.muted, marginBottom: 8 }}>No suppliers yet</div>
-          <div style={{ fontSize: 14, color: C.textDim, lineHeight: 1.5 }}>Tap <strong style={{ color: C.amber }}>+ Add</strong> to add the merchants you buy from — CEF, Screwfix, Toolstation, your local builder's merchant. Save their phone and email once, never look them up again.</div>
-        </div>
+        <EmptyState
+          icon="suppliers"
+          title="No suppliers saved"
+          body="Keep CEF, Wickes, your local trade counter all in one place. Your PA can email them material orders or price requests on your behalf."
+          ctaLabel="+ Add supplier"
+          onCta={() => { setForm({ name: "", phone: "", email: "", address: "", notes: "" }); setShowAdd(true); }}
+          voiceTip={'Or say "Add Wickes Reading to my suppliers, email is reading@wickes.co.uk"'}
+        />
       ) : filtered.length === 0 ? (
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, textAlign: "center", color: C.textDim, fontSize: 14 }}>No suppliers match your search.</div>
       ) : (
