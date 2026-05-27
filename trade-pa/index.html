@@ -108,10 +108,114 @@
         overflow-x: hidden;
       }
     </style>
-    <style>body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}</style>
+    <style>body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+
+      /* Static SEO content styles — only apply inside .seo-shell before React mounts */
+      .seo-shell { max-width: 1100px; margin: 0 auto; padding: 24px; color: #f0f0f0; }
+      .seo-shell a { color: #f59e0b; text-decoration: none; }
+      .seo-shell nav { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; margin-bottom: 48px; }
+      .seo-shell .seo-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.05em; color: #f59e0b; font-size: 15px; }
+      .seo-shell .seo-mark { width: 28px; height: 28px; background: #f59e0b; color: #000; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; letter-spacing: -0.02em; }
+      .seo-shell .seo-nav-links { display: flex; gap: 22px; font-size: 13px; }
+      .seo-shell .seo-nav-links a { color: #ccc; }
+      .seo-shell .seo-cta { background: #f59e0b; color: #000 !important; padding: 8px 18px; border-radius: 7px; font-weight: 700; font-size: 13px; }
+      .seo-shell h1 { font-size: 52px; line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; margin: 32px 0 20px; max-width: 820px; }
+      .seo-shell .seo-lead { font-size: 19px; line-height: 1.5; color: #c8c8c8; max-width: 600px; margin-bottom: 32px; }
+      .seo-shell .seo-hero-cta { display: inline-block; background: #f59e0b; color: #000; padding: 14px 28px; border-radius: 8px; font-weight: 700; font-size: 15px; margin-right: 12px; }
+      .seo-shell .seo-hero-note { font-size: 13px; color: #888; margin-top: 14px; }
+      .seo-shell h2 { font-size: 32px; font-weight: 700; letter-spacing: -0.01em; margin: 80px 0 16px; }
+      .seo-shell h2 + p { font-size: 16px; color: #aaa; max-width: 580px; line-height: 1.6; margin-bottom: 28px; }
+      .seo-shell .seo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+      .seo-shell .seo-card { padding: 24px; background: #141414; border: 1px solid #222; border-radius: 12px; }
+      .seo-shell .seo-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+      .seo-shell .seo-card p { font-size: 14px; color: #aaa; line-height: 1.6; }
+      .seo-shell .seo-features { background: #141414; border: 1px solid #222; border-radius: 14px; overflow: hidden; }
+      .seo-shell .seo-features li { display: grid; grid-template-columns: 32px 1fr; padding: 14px 20px; border-bottom: 1px solid #1e1e1e; font-size: 15px; color: #ddd; list-style: none; }
+      .seo-shell .seo-features li:last-child { border-bottom: 0; }
+      .seo-shell .seo-features li::before { content: "✓"; color: #f59e0b; font-weight: 700; }
+      .seo-shell .seo-pricing-band { background: rgba(245,158,11,0.05); border-top: 1px solid rgba(245,158,11,0.2); padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; }
+      .seo-shell .seo-pricing-band strong { color: #f59e0b; font-size: 20px; }
+      .seo-shell footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid #222; font-size: 12px; color: #888; text-align: center; }
+      .seo-shell footer a { color: #ccc; margin: 0 10px; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- ============================================================
+           STATIC SEO CONTENT
+           This markup is visible to search engines and social crawlers
+           that don't run JavaScript. When the React app boots on the
+           user's browser, createRoot().render() replaces these contents
+           with the live SPA. Users see the React UI; Googlebot reads
+           the static markup below.
+           ============================================================ -->
+      <div class="seo-shell">
+        <nav>
+          <span class="seo-brand"><span class="seo-mark">TP</span>TRADE PA</span>
+          <span class="seo-nav-links">
+            <a href="/about.html">About</a>
+            <a href="/pricing.html">Pricing</a>
+            <a href="/help.html">Help</a>
+            <a href="/blog/">Blog</a>
+            <a href="/signup.html" class="seo-cta">Start free trial →</a>
+          </span>
+        </nav>
+
+        <h1>Voice-first AI personal assistant for UK tradespeople.</h1>
+        <p class="seo-lead">Trade PA runs the admin behind your trade business — jobs, quotes, invoices, CIS, mileage, materials, emails — all by voice. Designed for sole traders and small firms who have spent enough evenings on the laptop.</p>
+        <a href="/signup.html" class="seo-hero-cta">Start free trial →</a>
+        <a href="/pricing.html" style="color: #ccc; font-size: 14px;">See pricing →</a>
+        <div class="seo-hero-note">Free for 30 days. No card needed. Cancel anytime.</div>
+
+        <h2>Why Trade PA</h2>
+        <p>Built by someone who ran a small building firm. Not a generic CRM. Not a glorified spreadsheet. A genuine PA that understands trade work.</p>
+        <div class="seo-grid">
+          <div class="seo-card"><h3>Voice-first, hands-free</h3><p>Talk to it while driving between jobs, loading the van, or making a cuppa. Trade PA understands UK accents and trade vocabulary — no menu trees, no clicking through screens.</p></div>
+          <div class="seo-card"><h3>Built for UK trades</h3><p>CIS deductions, VAT Domestic Reverse Charge, RAMS, mileage, CP12 and EICR certificates. Compliance that's actually built in, not bolted on.</p></div>
+          <div class="seo-card"><h3>Inbox, phone, jobs — one place</h3><p>AI reads every email. Calls record and transcribe against the right job. Jobs auto-track via GPS. Invoices send themselves when work's done. Less app-switching, more time on the tools.</p></div>
+          <div class="seo-card"><h3>Gets smarter</h3><p>Tell it once how you do things, it remembers. Your suppliers, your typical rates, your regulars, your invoice style. It learns from your corrections — no retraining sessions.</p></div>
+        </div>
+
+        <h2>One plan. The whole assistant.</h2>
+        <p>Everything below is included from £39/month on the Solo plan. No tier games, no feature-gating the basics.</p>
+        <div class="seo-features">
+          <ul style="margin:0; padding:0; list-style:none;">
+            <li>AI email agent — reads and processes your inbox automatically</li>
+            <li>Built-in business phone with call recording &amp; AI transcription</li>
+            <li>GPS job tracking with automatic time logs</li>
+            <li>Voice dictation on every form and field</li>
+            <li>AI that learns from your corrections</li>
+            <li>Domestic Reverse Charge invoicing</li>
+            <li>CIS statement storage with PDF generation</li>
+            <li>Quotes &amp; invoicing with Xero / QuickBooks sync</li>
+            <li>Digital certificates: CP12, EICR, EIC, PAT, Pressure Test &amp; more</li>
+            <li>Full job cards with notes, photos, daywork sheets, customer sign-off</li>
+          </ul>
+          <div class="seo-pricing-band">
+            <span style="font-size: 13px; color: #aaa; letter-spacing: 0.04em;">Solo — monthly price</span>
+            <strong>from £39</strong>
+          </div>
+        </div>
+
+        <h2>Stop losing evenings to admin.</h2>
+        <p>30-day free trial on every plan. No card required to start. Add a card before day 31 to keep going, or cancel without paying anything.</p>
+        <a href="/signup.html" class="seo-hero-cta">Start free trial →</a>
+
+        <footer>
+          <p>© 2026 TRADEPA LTD · Company No. 17176983 · Registered in England &amp; Wales · ICO Ref ZC132378</p>
+          <p style="margin-top: 12px;">
+            <a href="/about.html">About</a> ·
+            <a href="/pricing.html">Pricing</a> ·
+            <a href="/help.html">Help</a> ·
+            <a href="/blog/">Blog</a> ·
+            <a href="/changelog.html">Changelog</a> ·
+            <a href="/privacy-policy.html">Privacy</a> ·
+            <a href="/terms.html">Terms</a>
+          </p>
+        </footer>
+      </div>
+      <!-- End static SEO content -->
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
