@@ -25,6 +25,30 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://www.tradespa.co.uk/blog/</loc>
+    <lastmod>2026-05-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.tradespa.co.uk/blog/why-i-built-trade-pa.html</loc>
+    <lastmod>2026-05-27</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.tradespa.co.uk/blog/tradies-dont-get-paid-for-evenings.html</loc>
+    <lastmod>2026-05-27</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.tradespa.co.uk/blog/what-this-blog-is-for.html</loc>
+    <lastmod>2026-05-27</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://www.tradespa.co.uk/signup.html</loc>
     <lastmod>2026-05-27</lastmod>
     <changefreq>monthly</changefreq>

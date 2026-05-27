@@ -145,7 +145,7 @@ function VoiceHeroCard() {
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", animation: "vc-pulse 1.6s ease-in-out infinite" }} />
             <span style={{ fontSize: 10, letterSpacing: "0.14em", fontWeight: 700, color: "#f59e0b" }}>{phase}</span>
           </div>
-          <span style={{ fontSize: 10, letterSpacing: "0.14em", color: "#666" }}>{timer}</span>
+          <span style={{ fontSize: 10, letterSpacing: "0.14em", color: "#aaa" }}>{timer}</span>
         </div>
 
         {/* Waveform */}
@@ -244,7 +244,7 @@ function InboxDemoCard() {
         <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444" }} />
         <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#f59e0b" }} />
         <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#10b981" }} />
-        <span style={{ fontSize: 10, color: "#444", marginLeft: 8 }}>Trade PA — AI Actions</span>
+        <span style={{ fontSize: 10, color: "#888", marginLeft: 8 }}>Trade PA — AI Actions</span>
         <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 9, letterSpacing: "0.14em", color: "#f59e0b" }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#f59e0b", animation: "vc-pulse 2s ease-in-out infinite" }} /> LIVE
         </span>
@@ -268,7 +268,7 @@ function InboxDemoCard() {
               <div style={{ fontSize: 18 }}>{item.e}</div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: item.color, marginBottom: 2, lineHeight: 1.3 }}>{item.t}</div>
-                <div style={{ fontSize: 11.5, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.d}</div>
+                <div style={{ fontSize: 11.5, color: "#aaa", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.d}</div>
               </div>
               <div style={{
                 padding: "5px 11px",
@@ -288,7 +288,7 @@ function InboxDemoCard() {
           );
         })}
       </div>
-      <div style={{ padding: "12px 4px 0", marginTop: 10, borderTop: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 9.5, color: "#555", letterSpacing: "0.1em" }}>
+      <div style={{ padding: "12px 4px 0", marginTop: 10, borderTop: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 9.5, color: "#888", letterSpacing: "0.1em" }}>
         <span>INBOX · SCANNED 14s AGO</span>
         <span style={{ color: "#10b981" }}>✓ 3 drafted · 1 waiting</span>
       </div>
@@ -340,6 +340,12 @@ export function LandingPage({ onAuth }) {
         .lp-trade-pill:hover{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,0.08);}
         .lp-plan-btn.active{border-color:#f59e0b!important;background:rgba(245,158,11,0.06)!important;}
 
+        /* Nav content links */
+        .lp-nav-link{transition:color 0.15s;}
+        .lp-nav-link:hover{color:#f59e0b!important;}
+        .lp-nav-content{display:flex;align-items:center;gap:28px;}
+        @media (max-width: 880px){.lp-nav-content{display:none;}}
+
         /* Responsive hero two-column grid */
         .lp-hero-grid{display:grid;grid-template-columns:1fr;gap:48px;max-width:1180px;margin:0 auto;align-items:center;text-align:center;}
         .lp-hero-left{text-align:center;}
@@ -376,6 +382,12 @@ export function LandingPage({ onAuth }) {
       {/* NAV */}
       <nav style={LP.nav}>
         <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
+        <div className="lp-nav-content">
+          <a href="/about.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>About</a>
+          <a href="/pricing.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Pricing</a>
+          <a href="/help.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Help</a>
+          <a href="/blog/" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Blog</a>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => setScreen("login")} style={{ ...LP.btnGhost, padding: "8px 18px", fontSize: 13 }} className="lp-btn-ghost">Log in</button>
           <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, padding: "8px 20px", fontSize: 13 }} className="lp-btn-primary">Start free trial →</button>
@@ -411,7 +423,7 @@ export function LandingPage({ onAuth }) {
                 </div>
               </div>
               <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
-              <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#555", letterSpacing: "0.06em" }}>Works with Gmail &amp; Outlook · Built for UK Trades</p>
+              <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#888", letterSpacing: "0.06em" }}>Works with Gmail &amp; Outlook · Built for UK Trades</p>
             </div>
             <div>
               <VoiceHeroCard />
@@ -466,7 +478,7 @@ export function LandingPage({ onAuth }) {
                 <div style={{ fontSize: 12.5, color: "#888", lineHeight: 1.65, marginBottom: 14 }}>{p.body}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {p.examples.map(ex => (
-                    <div key={ex} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#666" }}>
+                    <div key={ex} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#aaa" }}>
                       <span style={{ color: "#f59e0b", fontSize: 10 }}>•</span>{ex}
                     </div>
                   ))}
@@ -547,7 +559,7 @@ export function LandingPage({ onAuth }) {
               <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 52, fontWeight: 700, color: "rgba(245,158,11,0.07)", lineHeight: 1, marginBottom: 16 }}>{s.num}</div>
               <div style={{ fontSize: 24, marginBottom: 12 }}>{s.icon}</div>
               <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{s.title}</div>
-              <div style={{ fontSize: 13, color: "#666", lineHeight: 1.7 }}>{s.body}</div>
+              <div style={{ fontSize: 13, color: "#aaa", lineHeight: 1.7 }}>{s.body}</div>
             </div>
           ))}
         </div>
@@ -570,7 +582,7 @@ export function LandingPage({ onAuth }) {
               <div key={i} style={{ ...LP.feature }} className="lp-feature">
                 <div style={LP.featureIcon}>{f.icon}</div>
                 <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{f.title}</div>
-                <div style={{ fontSize: 13, color: "#666", lineHeight: 1.7 }}>{f.body}</div>
+                <div style={{ fontSize: 13, color: "#aaa", lineHeight: 1.7 }}>{f.body}</div>
                 {f.badge && <div style={{ display: "inline-block", marginTop: 10, background: f.badgeBg, color: f.badgeColor, border: `1px solid ${f.badgeBorder}`, borderRadius: 100, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 9, padding: "3px 10px", letterSpacing: "0.06em", textTransform: "uppercase" }}>{f.badge}</div>}
               </div>
             ))}
@@ -582,13 +594,13 @@ export function LandingPage({ onAuth }) {
       <div style={{ ...LP.section }}>
         <div style={LP.sectionLabel}>How we compare</div>
         <h2 style={LP.h2}>More intelligent.<br/>Better value.</h2>
-        <p style={{ fontSize: 16, color: "#666", marginBottom: 40, lineHeight: 1.7, maxWidth: 560 }}>Tradify is £34/month with no AI. Trade PA Solo is £39/month — with an AI that runs your entire inbox, answers calls and tracks jobs for you.</p>
+        <p style={{ fontSize: 16, color: "#aaa", marginBottom: 40, lineHeight: 1.7, maxWidth: 560 }}>Tradify is £34/month with no AI. Trade PA Solo is £39/month — with an AI that runs your entire inbox, answers calls and tracks jobs for you.</p>
         <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 14, overflow: "hidden" }}>
           {/* Header */}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", borderBottom: "1px solid #222" }}>
             <div style={{ padding: "16px 20px" }} />
             <div style={{ padding: "16px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#f59e0b", background: "rgba(245,158,11,0.08)", borderLeft: "1px solid rgba(245,158,11,0.2)", borderRight: "1px solid rgba(245,158,11,0.2)" }}>Trade PA</div>
-            <div style={{ padding: "16px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#555" }}>Tradify</div>
+            <div style={{ padding: "16px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#aaa" }}>Tradify</div>
           </div>
           {[
             ["AI email agent (reads & processes inbox)", true, false],
@@ -603,15 +615,15 @@ export function LandingPage({ onAuth }) {
             ["Xero & QuickBooks sync", true, true],
           ].map(([label, tp, tr], i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", borderBottom: i < 9 ? "1px solid #1e1e1e" : "none" }}>
-              <div style={{ padding: "14px 20px", fontSize: 13, color: "#666" }}>{label}</div>
-              <div style={{ padding: "14px 20px", fontSize: 16, background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)", color: tp ? "#10b981" : "#444" }}>{tp ? "✓" : "✗"}</div>
-              <div style={{ padding: "14px 20px", fontSize: 16, color: tr ? "#10b981" : "#444" }}>{tr ? "✓" : "✗"}</div>
+              <div style={{ padding: "14px 20px", fontSize: 13, color: "#ddd" }}>{label}</div>
+              <div style={{ padding: "14px 20px", fontSize: 16, background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)", color: tp ? "#10b981" : "#888" }}>{tp ? "✓" : "✗"}</div>
+              <div style={{ padding: "14px 20px", fontSize: 16, color: tr ? "#10b981" : "#888" }}>{tr ? "✓" : "✗"}</div>
             </div>
           ))}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr" }}>
-            <div style={{ padding: "14px 20px", fontSize: 13, color: "#666" }}>Monthly price (sole trader)</div>
+            <div style={{ padding: "14px 20px", fontSize: 13, color: "#ddd" }}>Monthly price (sole trader)</div>
             <div style={{ padding: "14px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 18, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.04)", borderLeft: "1px solid rgba(245,158,11,0.1)", borderRight: "1px solid rgba(245,158,11,0.1)" }}>from £39</div>
-            <div style={{ padding: "14px 20px", fontSize: 13, color: "#555" }}>£34</div>
+            <div style={{ padding: "14px 20px", fontSize: 13, color: "#ddd" }}>£34</div>
           </div>
         </div>
       </div>
@@ -622,7 +634,7 @@ export function LandingPage({ onAuth }) {
         <h2 style={LP.h2}>Built for how<br/>you actually work.</h2>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 32 }}>
           {["⚡ Electricians","🔧 Plumbers","🔥 Gas Engineers","🛢 Oil Heating","❄ HVAC","🏗 Builders","🪟 Window & Door","🎨 Decorators","🔩 Multi-trade","🏠 Property Maintenance","🌿 Landscapers","🪛 General Contractors"].map(t => (
-            <div key={t} style={{ background: "#141414", border: "1px solid #222", borderRadius: 100, padding: "8px 16px", fontSize: 13, color: "#666", fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "default", transition: "all 0.15s" }} className="lp-trade-pill">{t}</div>
+            <div key={t} style={{ background: "#141414", border: "1px solid #222", borderRadius: 100, padding: "8px 16px", fontSize: 13, color: "#aaa", fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "default", transition: "all 0.15s" }} className="lp-trade-pill">{t}</div>
           ))}
         </div>
       </div>
@@ -654,9 +666,9 @@ export function LandingPage({ onAuth }) {
                 {p.popular && (
                   <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: "#f59e0b", color: "#000", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, fontWeight: 700, padding: "3px 14px", borderRadius: 100, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>MOST POPULAR</div>
                 )}
-                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>{p.name}</div>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>{p.name}</div>
                 <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 52, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em", color: "#f59e0b", marginBottom: 4 }}>
-                  {p.price}<span style={{ fontSize: 16, color: "#666", fontWeight: 400 }}>{p.period}</span>
+                  {p.price}<span style={{ fontSize: 16, color: "#aaa", fontWeight: 400 }}>{p.period}</span>
                 </div>
                 <p style={{ color: "#f59e0b", fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>{p.users}</p>
                 <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 8, marginBottom: 28, flex: 1 }}>
@@ -685,11 +697,11 @@ export function LandingPage({ onAuth }) {
                 <div key={a.label} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: 14, textAlign: "left" }}>
                   <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, fontWeight: 700, color: "#f0f0f0", marginBottom: 6 }}>{a.label}</div>
                   <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{a.price}</div>
-                  <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{a.desc}</div>
+                  <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>{a.desc}</div>
                 </div>
               ))}
             </div>
-            <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#555" }}>One-off · Available to all plans · Expires at billing rollover</p>
+            <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#888" }}>One-off · Available to all plans · Expires at billing rollover</p>
           </div>
 
           {/* Business phone add-on */}
@@ -707,7 +719,7 @@ export function LandingPage({ onAuth }) {
                 <div key={p.label} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: 14, textAlign: "left" }}>
                   <div style={{ fontSize: 20, marginBottom: 6 }}>{p.icon}</div>
                   <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, fontWeight: 700, marginBottom: 3 }}>{p.label}</div>
-                  <div style={{ fontSize: 11, color: "#555" }}>{p.desc}</div>
+                  <div style={{ fontSize: 11, color: "#888" }}>{p.desc}</div>
                 </div>
               ))}
             </div>
@@ -719,13 +731,13 @@ export function LandingPage({ onAuth }) {
                 { mins: "Unlimited", price: "£104" },
               ].map(t => (
                 <div key={t.mins} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: 14 }}>
-                  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: "#666", marginBottom: 6 }}>{t.mins}</div>
+                  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 10, color: "#aaa", marginBottom: 6 }}>{t.mins}</div>
                   <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{t.price}</div>
-                  <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>per month</div>
+                  <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>per month</div>
                 </div>
               ))}
             </div>
-            <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#555" }}>Dedicated UK number included · Want to keep your existing number? We support porting · UK GDPR compliant</p>
+            <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#888" }}>Dedicated UK number included · Want to keep your existing number? We support porting · UK GDPR compliant</p>
           </div>
 
           {/* Link to pricing page FAQ */}
@@ -744,7 +756,7 @@ export function LandingPage({ onAuth }) {
           <p style={{ fontSize: 17, color: "#888", marginBottom: 40, maxWidth: 500, margin: "0 auto 40px", lineHeight: 1.7 }}>Trade PA runs your inbox while you're on the tools, and chases your money while you sleep. One tap to approve. That's it.</p>
           <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, fontSize: 16, padding: "16px 40px" }} className="lp-btn-primary">Start 30-day free trial →</button>
           <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#f59e0b", marginTop: 16, letterSpacing: "0.06em" }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
-          <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#555", marginTop: 8 }}>Works with Gmail · Works with Outlook · Built-in business phone · UK-built for UK trades</p>
+          <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#888", marginTop: 8 }}>Works with Gmail · Works with Outlook · Built-in business phone · UK-built for UK trades</p>
         </div>
       </div>
 
@@ -752,11 +764,11 @@ export function LandingPage({ onAuth }) {
       <div style={{ padding: "28px 28px", borderTop: "1px solid #1a1a1a", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
         <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
         <div style={{ display: "flex", gap: 24 }}>
-          {[["Privacy Policy","privacy-policy.html"],["Terms of Service","terms.html"],["Contact","mailto:hello@tradespa.co.uk"]].map(([l,h]) => (
-            <a key={l} href={h} style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#555", textDecoration: "none" }}>{l}</a>
+          {[["About","/about.html"],["Pricing","/pricing.html"],["Help","/help.html"],["Blog","/blog/"],["Privacy Policy","/privacy-policy.html"],["Terms of Service","/terms.html"],["Contact","mailto:hello@tradespa.co.uk"]].map(([l,h]) => (
+            <a key={l} href={h} style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#888", textDecoration: "none" }}>{l}</a>
           ))}
         </div>
-        <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#444" }}>© 2026 Trade PA</div>
+        <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#888" }}>© 2026 Trade PA</div>
       </div>
 
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
