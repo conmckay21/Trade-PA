@@ -75,6 +75,18 @@
       margin-top: 16px; line-height: 1.6; }
     .legal a { color: var(--muted); }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .promo-feedback {
+      font-size: 12px;
+      margin-top: -8px;
+      margin-bottom: 14px;
+      min-height: 16px;
+      line-height: 1.4;
+    }
+    .promo-feedback.promo-checking { color: var(--muted); }
+    .promo-feedback.promo-ok { color: var(--green); font-weight: 600; }
+    .promo-feedback.promo-error { color: var(--red); }
+    #promoCode { text-transform: uppercase; letter-spacing: 0.04em; }
+    #promoCode::placeholder { text-transform: none; letter-spacing: normal; }
     .plan-summary {
       background: var(--surface-high); border-radius: 8px; padding: 12px 14px;
       margin-bottom: 16px; font-size: 12px; color: var(--muted); line-height: 1.6;
@@ -151,6 +163,10 @@
         <option>Other</option>
       </select>
 
+      <label for="promoCode">Got a promo code? <span style="color: var(--muted); font-weight: normal; text-transform: none; letter-spacing: 0;">(optional)</span></label>
+      <input type="text" id="promoCode" placeholder="e.g. BTG" autocomplete="off" autocapitalize="characters" />
+      <div id="promoFeedback" class="promo-feedback"></div>
+
       <button type="submit" id="submitBtn">Start 30-day free trial &rarr;</button>
 
       <div class="error" id="errorMsg"></div>
@@ -186,11 +202,77 @@
     const trialEnd = new Date(Date.now() + 30 * 86400 * 1000).toLocaleDateString("en-GB", {
       day: "numeric", month: "long", year: "numeric"
     });
-    document.getElementById("planSummary").innerHTML =
-      "You're starting a <strong>" + planLabel.name + "</strong> trial (" +
-      planLabel.price + " " + planLabel.interval + " after the trial). " +
-      "Your free trial runs until <strong>" + trialEnd + "</strong>. " +
-      "Add a card before then to keep going \u2014 no charge during your trial.";
+    // Promo code state — set by validation listener, snapshotted on submit
+    let promoCode = "";
+    let promoBonus = 0;
+    let promoValidateTimer = null;
+
+    // Re-render the plan summary, trial banner, and submit button based on
+    // the current total trial length (30 days base + promo bonus).
+    function renderTrialDisplay(totalDays) {
+      const endDate = new Date(Date.now() + totalDays * 86400 * 1000)
+        .toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+      document.getElementById("planSummary").innerHTML =
+        "You're starting a <strong>" + planLabel.name + "</strong> trial (" +
+        planLabel.price + " " + planLabel.interval + " after the trial). " +
+        "Your free trial runs until <strong>" + endDate + "</strong>. " +
+        "Add a card before then to keep going \u2014 no charge during your trial.";
+      document.querySelector(".trial-banner").innerHTML =
+        "\u2713 " + totalDays + " days free \u00b7 \u2713 No card required \u00b7 \u2713 Cancel anytime";
+      document.getElementById("submitBtn").textContent =
+        "Start " + totalDays + "-day free trial \u2192";
+    }
+
+    renderTrialDisplay(30);
+
+    // Promo code: debounced validation on input. Updates promoCode/promoBonus
+    // state and the trial display when a code is found valid.
+    const promoInput = document.getElementById("promoCode");
+    const promoFeedback = document.getElementById("promoFeedback");
+    if (promoInput && promoFeedback) {
+      promoInput.addEventListener("input", () => {
+        const code = promoInput.value.trim();
+        if (promoValidateTimer) clearTimeout(promoValidateTimer);
+
+        if (!code) {
+          promoCode = "";
+          promoBonus = 0;
+          promoFeedback.textContent = "";
+          promoFeedback.className = "promo-feedback";
+          renderTrialDisplay(30);
+          return;
+        }
+
+        promoFeedback.textContent = "Checking\u2026";
+        promoFeedback.className = "promo-feedback promo-checking";
+
+        promoValidateTimer = setTimeout(async () => {
+          try {
+            const { data, error } = await sb.rpc("validate_promo_code", { p_code: code });
+            if (error) throw error;
+            if (data && data.valid) {
+              promoCode = code;
+              promoBonus = data.bonus_days;
+              promoFeedback.textContent = "\u2713 +" + data.bonus_days + " days free trial";
+              promoFeedback.className = "promo-feedback promo-ok";
+              renderTrialDisplay(30 + data.bonus_days);
+            } else {
+              promoCode = "";
+              promoBonus = 0;
+              promoFeedback.textContent = "\u2717 " + ((data && data.error) || "Invalid code");
+              promoFeedback.className = "promo-feedback promo-error";
+              renderTrialDisplay(30);
+            }
+          } catch (err) {
+            promoCode = "";
+            promoBonus = 0;
+            promoFeedback.textContent = "\u2717 Could not check code, try again";
+            promoFeedback.className = "promo-feedback promo-error";
+            renderTrialDisplay(30);
+          }
+        }, 400);
+      });
+    }
 
     document.getElementById("signupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -236,13 +318,37 @@
         const subData = await subRes.json();
         if (!subRes.ok || subData.error) throw new Error(subData.message || subData.error || "Subscription setup failed.");
 
-        // 3. All good \u2014 redirect to app
-        window.location.href = "/?welcome=trial";
+        // 3. Redeem promo code if one was validated. Failures here are
+        //    NON-FATAL — user still gets their standard 30-day trial and
+        //    we log the issue for follow-up.
+        const codeToRedeem = promoCode;
+        const bonusApplied = promoBonus;
+        if (codeToRedeem) {
+          try {
+            const redeemRes = await fetch("/api/promo/redeem", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + session.access_token,
+              },
+              body: JSON.stringify({ code: codeToRedeem }),
+            });
+            const redeemData = await redeemRes.json();
+            if (!redeemData || !redeemData.success) {
+              console.warn("[promo] redemption failed:", redeemData && redeemData.error);
+            }
+          } catch (redeemErr) {
+            console.warn("[promo] redemption call failed:", redeemErr.message);
+          }
+        }
+
+        // 4. All good \u2014 redirect to app
+        window.location.href = "/?welcome=trial" + (bonusApplied ? "&bonus=" + bonusApplied : "");
 
       } catch (err) {
         errMsg.textContent = err.message;
         btn.disabled = false;
-        btn.textContent = "Start 30-day free trial \u2192";
+        btn.textContent = "Start " + (30 + promoBonus) + "-day free trial \u2192";
       }
     });
   </script>
