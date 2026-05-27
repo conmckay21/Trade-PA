@@ -48,15 +48,15 @@ template = """<!DOCTYPE html>
   <meta name="apple-itunes-app" content="app-id=6769395416">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Changelog — Trade PA</title>
-  <meta name="description" content="Every update we've shipped to Trade PA — bug fixes, new features, polish. Plain English, written like a tradie reads." />
+  <title>Changelog | Trade PA</title>
+  <meta name="description" content="Every update we've shipped to Trade PA. Bug fixes, new features, polish. Plain English, written like a tradie reads." />
   <link rel="canonical" href="https://www.tradespa.co.uk/changelog.html" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Trade PA" />
-  <meta property="og:title" content="Changelog — Trade PA" />
-  <meta property="og:description" content="Every update we've shipped to Trade PA — bug fixes, new features, polish." />
+  <meta property="og:title" content="Changelog | Trade PA" />
+  <meta property="og:description" content="Every update we've shipped to Trade PA. Bug fixes, new features, polish." />
   <meta property="og:url" content="https://www.tradespa.co.uk/changelog.html" />
   <meta property="og:image" content="https://www.tradespa.co.uk/og-card.png" />
   <meta property="og:image:width" content="1200" />
@@ -65,8 +65,8 @@ template = """<!DOCTYPE html>
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Changelog — Trade PA" />
-  <meta name="twitter:description" content="Every update we've shipped to Trade PA — bug fixes, new features, polish." />
+  <meta name="twitter:title" content="Changelog | Trade PA" />
+  <meta name="twitter:description" content="Every update we've shipped to Trade PA. Bug fixes, new features, polish." />
   <meta name="twitter:image" content="https://www.tradespa.co.uk/og-card.png" />
 
   <!-- Favicons -->
@@ -81,7 +81,7 @@ template = """<!DOCTYPE html>
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Changelog — Trade PA",
+    "name": "Changelog | Trade PA",
     "description": "Every update we've shipped to Trade PA.",
     "url": "https://www.tradespa.co.uk/changelog.html",
     "dateModified": "__LATEST__",
@@ -187,7 +187,7 @@ __BODY__
 
   <section class="cta-block">
     <h2>Get the latest, on every plan.</h2>
-    <p>Everything below is included on every plan. New features ship continuously — you get them as soon as we deploy them.</p>
+    <p>Everything below is included on every plan. New features ship continuously. You get them as soon as we deploy them.</p>
     <a href="/signup.html" class="cta-btn">Start free trial →</a>
     <span class="cta-note">Free for 30 days. No card needed.</span>
   </section>
