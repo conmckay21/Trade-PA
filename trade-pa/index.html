@@ -24,8 +24,69 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
     <!-- SEO / sharing -->
-    <meta name="description" content="AI-powered admin for UK tradespeople. Voice-first assistant that runs your inbox, books jobs and tracks invoices. Start your 30-day free trial from £49/mo." />
+    <meta name="description" content="AI-powered admin for UK tradespeople. Voice-first assistant that runs your inbox, books jobs and tracks invoices. Start your 30-day free trial from £39/mo." />
     <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="canonical" href="https://www.tradespa.co.uk/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Trade PA" />
+    <meta property="og:title" content="Trade PA — Voice-first PA for UK tradespeople" />
+    <meta property="og:description" content="AI-powered admin for UK tradespeople. Jobs, quotes, invoices, CIS, mileage — all by voice. From £39/mo. 30-day free trial." />
+    <meta property="og:url" content="https://www.tradespa.co.uk/" />
+    <meta property="og:image" content="https://www.tradespa.co.uk/og-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_GB" />
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Trade PA — Voice-first PA for UK tradespeople" />
+    <meta name="twitter:description" content="Jobs, quotes, invoices, CIS, mileage — all by voice. From £39/mo. 30-day free trial." />
+    <meta name="twitter:image" content="https://www.tradespa.co.uk/og-card.png" />
+
+    <!-- Structured data: Organization + SoftwareApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "name": "Trade PA",
+          "legalName": "TRADEPA LTD",
+          "url": "https://www.tradespa.co.uk/",
+          "logo": "https://www.tradespa.co.uk/icon-512.png",
+          "sameAs": [
+            "https://apps.apple.com/gb/app/trade-pa/id6769395416",
+            "https://play.google.com/store/apps/details?id=uk.co.tradespa.app"
+          ]
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "Trade PA",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "iOS, Android, Web",
+          "description": "Voice-first AI personal assistant for UK tradespeople. Handles jobs, quotes, invoices, CIS, mileage, materials and inbox by voice.",
+          "url": "https://www.tradespa.co.uk/",
+          "offers": {
+            "@type": "Offer",
+            "price": "39.00",
+            "priceCurrency": "GBP",
+            "priceSpecification": {
+              "@type": "UnitPriceSpecification",
+              "price": "39.00",
+              "priceCurrency": "GBP",
+              "unitText": "month"
+            }
+          }
+        }
+      ]
+    }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
     <style>
       *, *::before, *::after { box-sizing: border-box; }
@@ -37,6 +98,7 @@
         background: #0f0f0f;
         overflow-x: hidden;
         -webkit-text-size-adjust: 100%;
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       }
       #root {
         width: 100%;

@@ -10,10 +10,18 @@
 
   <!-- Open Graph / Twitter -->
   <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Trade PA" />
   <meta property="og:title" content="Pricing — Trade PA" />
-  <meta property="og:description" content="AI-powered admin for UK tradespeople. From £39/mo. 30-day free trial." />
+  <meta property="og:description" content="AI-powered admin for UK tradespeople. From £39/mo. 30-day free trial, no card needed." />
   <meta property="og:url" content="https://www.tradespa.co.uk/pricing.html" />
+  <meta property="og:image" content="https://www.tradespa.co.uk/og-card.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:locale" content="en_GB" />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Pricing — Trade PA" />
+  <meta name="twitter:description" content="Voice-first PA for UK tradespeople. From £39/mo. 30-day free trial." />
+  <meta name="twitter:image" content="https://www.tradespa.co.uk/og-card.png" />
 
   <!-- Favicons / theme -->
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -90,14 +98,18 @@
   }
   </script>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
   <style>
     :root {
       --bg: #0a0a0a; --surface: #141414; --surface-high: #1a1a1a;
       --border: #222; --border-high: #2a2a2a;
       --text: #f0f0f0; --text-dim: #ccc; --muted: #666; --muted-low: #555;
       --amber: #f59e0b; --amber-dim: #92400e; --green: #10b981; --red: #ef4444;
-      --mono: 'DM Mono', 'SF Mono', Menlo, Monaco, monospace;
-      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--bg); color: var(--text); }
@@ -116,7 +128,7 @@
       backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
       z-index: 100;
     }
-    .nav .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+    .nav .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--amber); }
     .nav .brand-accent { color: var(--amber); }
     .nav-links { display: flex; gap: 20px; font-size: 13px; color: var(--text-dim); }
     .nav-links a:hover { color: var(--amber); }
@@ -284,7 +296,9 @@
     <a href="/" class="brand">Trade <span class="brand-accent">PA</span></a>
     <div class="nav-links">
       <a href="/">Home</a>
+      <a href="/about.html">About</a>
       <a href="/pricing.html">Pricing</a>
+      <a href="/help.html">Help</a>
       <a href="/signup.html">Sign up</a>
     </div>
     <a href="/signup.html" class="nav-cta">Start free trial →</a>
@@ -522,7 +536,7 @@
 
 <!-- App Store badge bar -->
 <div style="text-align: center; padding: 40px 24px; border-top: 1px solid #2a2a2a; background: #0a0a0a;">
-  <p style="font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b7280; margin-bottom: 12px; font-family: 'DM Mono', monospace;">Get the app</p>
+  <p style="font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b7280; margin-bottom: 12px; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">Get the app</p>
   <div style="display: inline-flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center;">
     <a href="https://apps.apple.com/gb/app/trade-pa/id6769395416" target="_blank" rel="noopener" style="display: inline-block;">
       <img src="/img/app-store-badge.svg" alt="Download on the App Store" height="40" style="display: block; height: 40px; width: auto;">
