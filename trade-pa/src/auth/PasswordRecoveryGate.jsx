@@ -48,10 +48,14 @@ export default function PasswordRecoveryGate({ supabase, children }) {
   useEffect(() => {
     if (!supabase) return undefined;
 
-    // Hash check (covers case where event fires before mount,
-    // or where the supabase client has already processed the hash)
-    if (typeof window !== 'undefined' && window.location.hash) {
-      if (window.location.hash.includes('type=recovery')) {
+    // Query param check (most reliable: survives Supabase's URL cleanup)
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('recovery') === '1') {
+        setRecoveryActive(true);
+      }
+      // Hash check (legacy fallback in case redirectTo didn't include the param)
+      if (window.location.hash && window.location.hash.includes('type=recovery')) {
         setRecoveryActive(true);
       }
     }
@@ -92,14 +96,14 @@ export default function PasswordRecoveryGate({ supabase, children }) {
       }
       setSuccess(true);
       setLoading(false);
-      // Clear the hash so refresh does not re-trigger recovery mode
-      if (typeof window !== 'undefined' && window.location.hash) {
+      // Clear hash AND ?recovery=1 so refresh does not re-trigger recovery mode
+      if (typeof window !== 'undefined') {
         try {
-          window.history.replaceState(
-            {},
-            '',
-            window.location.pathname + window.location.search
-          );
+          const params = new URLSearchParams(window.location.search);
+          params.delete('recovery');
+          const qs = params.toString();
+          const cleanUrl = window.location.pathname + (qs ? '?' + qs : '');
+          window.history.replaceState({}, '', cleanUrl);
         } catch (_) {}
       }
       // Auto-dismiss after a couple of seconds

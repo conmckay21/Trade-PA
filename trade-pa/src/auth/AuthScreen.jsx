@@ -62,7 +62,7 @@ export function AuthScreen({ onAuth, initialMode = "login", onBack }) {
     if (!form.email) { setError("Please enter your email address."); return; }
     setLoading(true); setError("");
     const { error } = await db.auth.resetPasswordForEmail(form.email, {
-      redirectTo: window.location.origin,
+      redirectTo: window.location.origin + '/?recovery=1',
     });
     if (error) setError(error.message);
     else setResetSent(true);
