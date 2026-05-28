@@ -298,25 +298,7 @@ function InboxDemoCard() {
 
 // ─── Landing Page ─────────────────────────────────────────────────────────────
 export function LandingPage({ onAuth }) {
-  const [screen, setScreen] = useState("landing");
-
-  // login_query_handler
-  // When app boots with ?login=1 (e.g. from password recovery flow after signout),
-  // skip the marketing landing and jump straight to the login form.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('login') === '1') {
-      setScreen('login');
-      try {
-        params.delete('login');
-        const qs = params.toString();
-        const clean = window.location.pathname + (qs ? '?' + qs : '');
-        window.history.replaceState({}, '', clean);
-      } catch (_) {}
-    }
-  }, []);
- // landing | login | signup
+  const [screen, setScreen] = useState("landing"); // landing | login | signup
   const LP = {
     wrap: { minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0", fontFamily: "'DM Sans','Helvetica Neue',sans-serif", overflowX: "hidden" },
     nav: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 28px", paddingTop: "max(20px, env(safe-area-inset-top, 20px))", borderBottom: "1px solid #1a1a1a", position: "sticky", top: 0, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(8px)", zIndex: 100 },
