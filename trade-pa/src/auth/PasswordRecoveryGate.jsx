@@ -1,0 +1,299 @@
+// =============================================================
+// PasswordRecoveryGate.jsx
+// =============================================================
+// Intercepts Supabase password-recovery sessions and shows a
+// "set new password" modal before the user lands in the app.
+//
+// Drop-in location:
+//   ~/Trade-PA/trade-pa/src/auth/PasswordRecoveryGate.jsx
+//
+// Why this exists:
+//   When a user clicks the "reset password" email link, Supabase
+//   creates a session and fires a PASSWORD_RECOVERY auth event.
+//   Without a listener, the app silently logs them in without
+//   ever asking for a new password. This component listens for
+//   that event (and also checks the URL hash on mount, in case
+//   the event fires before this component is ready) and renders
+//   a full-screen modal asking for the new password.
+//
+// Integration (App.jsx, one line change):
+//   <PasswordRecoveryGate supabase={supabase}>
+//     ...your existing app...
+//   </PasswordRecoveryGate>
+//
+// Behaviour:
+//   - On PASSWORD_RECOVERY event OR URL hash containing
+//     "type=recovery", show the modal.
+//   - User enters new password twice, validates locally
+//     (min 8 chars, both match), calls supabase.auth.updateUser.
+//   - On success: brief confirmation, modal closes, user is
+//     already signed in (session was created by recovery flow),
+//     so they continue into the app.
+//   - On error: shows the message and lets them try again.
+// =============================================================
+
+import React, { useEffect, useState, useCallback } from 'react';
+
+export default function PasswordRecoveryGate({ supabase, children }) {
+  const [recoveryActive, setRecoveryActive] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  // -----------------------------------------------------------
+  // Detect recovery context: URL hash on mount OR auth event
+  // -----------------------------------------------------------
+  useEffect(() => {
+    if (!supabase) return undefined;
+
+    // Hash check (covers case where event fires before mount,
+    // or where the supabase client has already processed the hash)
+    if (typeof window !== 'undefined' && window.location.hash) {
+      if (window.location.hash.includes('type=recovery')) {
+        setRecoveryActive(true);
+      }
+    }
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setRecoveryActive(true);
+      }
+    });
+
+    return () => {
+      try { sub?.subscription?.unsubscribe?.(); } catch (_) {}
+    };
+  }, [supabase]);
+
+  // -----------------------------------------------------------
+  // Submit handler
+  // -----------------------------------------------------------
+  const handleSubmit = useCallback(async () => {
+    setError('');
+    if (!password || password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    if (password !== confirm) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password,
+      });
+      if (updateErr) {
+        setError(updateErr.message || 'Could not update password. Try again.');
+        setLoading(false);
+        return;
+      }
+      setSuccess(true);
+      setLoading(false);
+      // Clear the hash so refresh does not re-trigger recovery mode
+      if (typeof window !== 'undefined' && window.location.hash) {
+        try {
+          window.history.replaceState(
+            {},
+            '',
+            window.location.pathname + window.location.search
+          );
+        } catch (_) {}
+      }
+      // Auto-dismiss after a couple of seconds
+      setTimeout(() => {
+        setRecoveryActive(false);
+        setPassword('');
+        setConfirm('');
+        setSuccess(false);
+      }, 2200);
+    } catch (e) {
+      setError(e?.message || 'Something went wrong. Try again.');
+      setLoading(false);
+    }
+  }, [password, confirm, supabase]);
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter') handleSubmit();
+  };
+
+  return (
+    <>
+      {children}
+      {recoveryActive ? (
+        <div style={styles.overlay}>
+          <div style={styles.modal}>
+            {success ? (
+              <>
+                <div style={styles.brandRow}>
+                  <div style={styles.brandMark}>TP</div>
+                </div>
+                <div style={styles.title}>Password updated ✓</div>
+                <div style={styles.sub}>
+                  You're all set. Taking you back to Trade PA...
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={styles.brandRow}>
+                  <div style={styles.brandMark}>TP</div>
+                </div>
+                <div style={styles.title}>Set a new password</div>
+                <div style={styles.sub}>
+                  Choose a new password for your Trade PA account.
+                </div>
+                {error ? <div style={styles.error}>{error}</div> : null}
+                <label style={styles.label}>New password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={handleKey}
+                  style={styles.input}
+                  placeholder="At least 8 characters"
+                  autoFocus
+                  autoComplete="new-password"
+                />
+                <label style={styles.label}>Confirm new password</label>
+                <input
+                  type="password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  onKeyDown={handleKey}
+                  style={styles.input}
+                  placeholder="Re-enter password"
+                  autoComplete="new-password"
+                />
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  style={{ ...styles.btn, opacity: loading ? 0.7 : 1 }}
+                >
+                  {loading ? 'Updating...' : 'Update password →'}
+                </button>
+                <div style={styles.footnote}>
+                  Trouble updating? Email{' '}
+                  <a href="mailto:support@tradespa.co.uk" style={styles.link}>
+                    support@tradespa.co.uk
+                  </a>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+// =============================================================
+// Styles (matches AuthScreen aesthetic: dark, amber, rounded)
+// =============================================================
+const styles = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(10, 10, 10, 0.92)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10001,
+    padding: 20,
+    fontFamily:
+      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Plus Jakarta Sans', sans-serif",
+  },
+  modal: {
+    background: '#1a1a1a',
+    border: '1px solid #2a2a2a',
+    borderRadius: 16,
+    padding: '32px 28px',
+    maxWidth: 420,
+    width: '100%',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+  },
+  brandRow: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  brandMark: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    background: '#f59e0b',
+    color: '#1a1a1a',
+    fontWeight: 700,
+    fontSize: 18,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    letterSpacing: 0.5,
+  },
+  title: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: 700,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  sub: {
+    color: '#9ca3af',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 22,
+    lineHeight: 1.5,
+  },
+  error: {
+    background: 'rgba(239, 68, 68, 0.12)',
+    border: '1px solid rgba(239, 68, 68, 0.35)',
+    color: '#fca5a5',
+    fontSize: 13,
+    padding: '10px 12px',
+    borderRadius: 8,
+    marginBottom: 14,
+    textAlign: 'center',
+  },
+  label: {
+    display: 'block',
+    color: '#d1d5db',
+    fontSize: 12,
+    fontWeight: 500,
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  input: {
+    width: '100%',
+    background: '#242424',
+    border: '1px solid #333',
+    borderRadius: 8,
+    padding: '12px 14px',
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  btn: {
+    width: '100%',
+    background: '#f59e0b',
+    color: '#1a1a1a',
+    border: 'none',
+    borderRadius: 8,
+    padding: '14px 16px',
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: 'pointer',
+    marginTop: 18,
+  },
+  footnote: {
+    color: '#6b7280',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 18,
+    lineHeight: 1.5,
+  },
+  link: {
+    color: '#f59e0b',
+    textDecoration: 'none',
+  },
+};

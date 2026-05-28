@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/react";
 import { db } from "./lib/db.js";
 import { Device } from "@twilio/voice-sdk";
 import HelpCentre from "./HelpCentre.jsx";
+import PasswordRecoveryGate from "./auth/PasswordRecoveryGate.jsx";
 import AssistantSetup from "./AssistantSetup.jsx";
 import CsvImport from "./components/CsvImport.jsx";
 import FieldMic from "./components/FieldMic.jsx";
@@ -6290,7 +6291,9 @@ function AppInner() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppInner />
+      <PasswordRecoveryGate supabase={db}>
+        <AppInner />
+      </PasswordRecoveryGate>
     </ThemeProvider>
   );
 }
