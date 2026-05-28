@@ -945,32 +945,7 @@ function CertificationsCard({ brand, setBrand }) {
 // pre-launch product but defensive cap regardless.
 // (RecentlyDeleted moved to ./views/RecentlyDeleted.jsx — P7-7A)
 function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit, openAssistantSetup, openFeedback, assistantName, assistantWakeWords, userCommandsCount, usageData, usageCaps }) {
-  // openPortal hoisted to Settings scope so multiple cards can call it
-  const openPortal = async () => {
-    try {
-      const { data: { session } } = await window._supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) {
-        alert("Please log in again to manage your subscription.");
-        return;
-      }
-      const res = await fetch("/api/stripe/portal", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.message || data.error || "Couldn't open billing portal.");
-        return;
-      }
-      window.location.href = data.url;
-    } catch (err) {
-      console.error("[stripe-portal]", err);
-      alert("Couldn't open billing portal. Please try again or email hello@tradespa.co.uk");
-    }
-  };
-
-    // ── Account deletion state (Apple Guideline 5.1.1(v) — required) ────────
+  // ── Account deletion state (Apple Guideline 5.1.1(v) — required) ────────
   // Hard delete with type-to-confirm: user must type their email exactly to
   // unlock the destructive button. Server enforces the same check as a
   // belt-and-braces guard. Calls /api/delete-account which cascades through
@@ -1876,8 +1851,8 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           iOS native (App Store Guideline 3.1.3(b) — no upgrade prompts or
           plan-name/price references in-app). */}
       {planTier !== "business" && !isIOSNative && (
-        <button
-          onClick={openPortal}
+        <a
+          href="mailto:hello@tradespa.co.uk?subject=Trade%20PA%20upgrade%20request"
           style={{
             background: C.surfaceHigh,
             border: `1px solid ${C.border}`,
@@ -1887,11 +1862,8 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
             alignItems: "center",
             justifyContent: "space-between",
             gap: 12,
+            textDecoration: "none",
             color: C.text,
-            cursor: "pointer",
-            width: "100%",
-            textAlign: "left",
-            fontFamily: "inherit",
           }}
         >
           <div style={{ minWidth: 0 }}>
@@ -1916,7 +1888,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 5l7 7-7 7" />
           </svg>
-        </button>
+        </a>
       )}
 
       {/* Manage subscription — Stripe Customer Portal */}
@@ -1927,6 +1899,33 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         const isIOSNative = typeof window !== "undefined"
           && window.Capacitor?.isNativePlatform?.()
           && window.Capacitor?.getPlatform?.() === "ios";
+
+        const openPortal = async () => {
+          try {
+            const { data: { session } } = await window._supabase.auth.getSession();
+            const token = session?.access_token;
+            if (!token) {
+              alert("Please log in again to manage your subscription.");
+              return;
+            }
+            const res = await fetch("/api/stripe/portal", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              alert(data.message || data.error || "Couldn't open billing portal.");
+              return;
+            }
+            window.location.href = data.url;
+          } catch (err) {
+            console.error("[stripe-portal]", err);
+            alert("Couldn't open billing portal. Please try again or email hello@tradespa.co.uk");
+          }
+        };
 
         return (
           <div style={{
