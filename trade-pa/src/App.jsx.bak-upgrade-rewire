@@ -1900,7 +1900,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
           plan-name/price references in-app). */}
       {planTier !== "business" && !isIOSNative && (
         <button
-          onClick={() => openUpgradePage()}
+          onClick={openPortal}
           style={{
             background: C.surfaceHigh,
             border: `1px solid ${C.border}`,
