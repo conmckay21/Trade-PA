@@ -1,37 +1,29 @@
 // api/cron/check-trial-status.js
 //
-// Daily cron that sends trial reminder emails. Runs at 09:00 UTC.
+// Daily cron at 09:00 UTC. Sends trial reminder emails to users without
+// a payment method attached.
 //
 // Logic:
-//   1. Get all subscriptions where status='trialing' OR is_in_trial=true,
-//      and a stripe_subscription_id is set (skip comp/legacy users).
-//   2. For each, retrieve the Stripe subscription to check if a payment
-//      method is attached (default_payment_method on the sub or on the
-//      customer's invoice_settings).
-//   3. SKIP users who already have a payment method - Stripe will charge
-//      them automatically when their trial ends, no reminder needed.
-//   4. For users WITHOUT a payment method:
-//       - 5-day reminder: if 4 <= days_left < 6 and 5d_sent_at is null
-//       - 1-day reminder: if 0 < days_left < 2 and 1d_sent_at is null
-//   5. For canceled subs (trial ended without payment): send expired email
-//      if expired_sent_at is null and trial_ends_at was in last 7 days.
-//   6. Update the tracking column after each successful Resend send.
+//   1. Fetch all subscriptions where status is trialing/canceled or
+//      is_in_trial is true, AND a stripe_subscription_id exists.
+//   2. For trialing subs:
+//        a. Compute days left until trial_ends_at.
+//        b. Determine which reminder window matches (5-day or 1-day).
+//        c. Skip if the reminder was already sent (tracking column).
+//        d. Check Stripe: skip if user has a payment method attached.
+//        e. Send email via shared resend.js helper, mark tracking column.
+//   3. For canceled subs (trial just expired without payment):
+//        Send expired email once, mark tracking column.
 //
-// Auth: Bearer CRON_SECRET in Authorization header (Vercel cron sends this).
-//
-// Env vars required:
-//   CRON_SECRET, STRIPE_SECRET_KEY, RESEND_API_KEY,
-//   SUPABASE_URL (or VITE_SUPABASE_URL), SUPABASE_SERVICE_KEY (or _ROLE_KEY),
-//   FROM_EMAIL (default: 'Trade PA <noreply@tradespa.co.uk>')
+// Auth: Bearer CRON_SECRET in Authorization header.
 
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
 import {
-  fiveDayReminderHtml, fiveDayReminderSubject,
-  oneDayReminderHtml, oneDayReminderSubject,
-  trialExpiredHtml, trialExpiredSubject,
-} from "../lib/trial-emails.js";
+  sendTrial5DayReminder,
+  sendTrial1DayReminder,
+  sendTrialExpired,
+} from "../lib/resend.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2024-06-20",
@@ -43,14 +35,10 @@ const supabaseAdmin = createClient(
   { auth: { persistSession: false } }
 );
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.FROM_EMAIL || "Trade PA <noreply@tradespa.co.uk>";
-const REPLY_TO = process.env.REPLY_TO || "connor@tradespa.co.uk";
-
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 export default async function handler(req, res) {
-  // Auth check: Vercel cron sends Bearer CRON_SECRET
+  // Auth check
   const authHeader = req.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ")
     ? authHeader.slice("Bearer ".length)
@@ -60,11 +48,9 @@ export default async function handler(req, res) {
   }
 
   const now = new Date();
-  const startedAt = now.toISOString();
   const stats = { fiveDay: 0, oneDay: 0, expired: 0, skipped: 0, errors: 0 };
 
   try {
-    // Fetch all candidate subs in one go (small user base, fine for now)
     const { data: subs, error } = await supabaseAdmin
       .from("subscriptions")
       .select(`
@@ -95,7 +81,7 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log("[trial-cron] done", { startedAt, finishedAt: new Date().toISOString(), stats });
+    console.log("[trial-cron] done", { finishedAt: new Date().toISOString(), stats });
     return res.status(200).json({ ok: true, stats });
   } catch (err) {
     console.error("[trial-cron] fatal:", err);
@@ -105,19 +91,16 @@ export default async function handler(req, res) {
 
 // ---------- Per-subscription handler ----------
 async function processSubscription(sub, now, stats) {
-  // ---- Branch 1: trialing user, possibly needing reminder ----
+  // -- Branch 1: trialing user, possibly needing reminder --
   if ((sub.status === "trialing" || sub.is_in_trial) && sub.trial_ends_at) {
     const trialEnd = new Date(sub.trial_ends_at);
-    const msLeft = trialEnd - now;
-    const daysLeft = msLeft / MS_PER_DAY;
+    const daysLeft = (trialEnd - now) / MS_PER_DAY;
 
-    // Only interested in 0-6 day window
     if (daysLeft < 0 || daysLeft >= 6) {
       stats.skipped += 1;
       return;
     }
 
-    // Determine if a reminder window matches and which one
     const window5d = daysLeft >= 4 && daysLeft < 6 && !sub.trial_reminder_5d_sent_at;
     const window1d = daysLeft > 0 && daysLeft < 2 && !sub.trial_reminder_1d_sent_at;
 
@@ -126,7 +109,7 @@ async function processSubscription(sub, now, stats) {
       return;
     }
 
-    // Check Stripe: does this user have a payment method attached?
+    // Stripe check: skip users who already added a card
     let hasPaymentMethod = false;
     try {
       const stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id, {
@@ -139,7 +122,6 @@ async function processSubscription(sub, now, stats) {
       hasPaymentMethod = !!subPm || !!custPm;
     } catch (e) {
       console.warn("[trial-cron] Stripe lookup failed for", sub.user_id, e?.message);
-      // If Stripe lookup fails, err on the side of NOT spamming the user
       stats.skipped += 1;
       return;
     }
@@ -149,7 +131,7 @@ async function processSubscription(sub, now, stats) {
       return;
     }
 
-    // Fetch user email + name
+    // Fetch user email + first name
     const userInfo = await fetchUserInfo(sub.user_id);
     if (!userInfo?.email) {
       console.warn("[trial-cron] No email for user", sub.user_id);
@@ -157,44 +139,52 @@ async function processSubscription(sub, now, stats) {
       return;
     }
 
-    // Send the right reminder. Prefer 1-day if both windows match
-    // (e.g. trial start was off by a day and both columns are null)
+    // Send the right reminder (prefer 1-day if both windows match)
     if (window1d) {
-      await sendReminder({
+      const ok = await sendTrial1DayReminder({
         to: userInfo.email,
-        name: userInfo.name,
-        kind: "1d",
-        userId: sub.user_id,
+        firstName: userInfo.firstName,
+        trialEndsAt: sub.trial_ends_at,
       });
-      stats.oneDay += 1;
+      if (ok) {
+        await markSent(sub.user_id, "trial_reminder_1d_sent_at");
+        stats.oneDay += 1;
+      } else {
+        stats.errors += 1;
+      }
     } else if (window5d) {
-      await sendReminder({
+      const ok = await sendTrial5DayReminder({
         to: userInfo.email,
-        name: userInfo.name,
-        kind: "5d",
-        userId: sub.user_id,
+        firstName: userInfo.firstName,
+        trialEndsAt: sub.trial_ends_at,
       });
-      stats.fiveDay += 1;
+      if (ok) {
+        await markSent(sub.user_id, "trial_reminder_5d_sent_at");
+        stats.fiveDay += 1;
+      } else {
+        stats.errors += 1;
+      }
     }
     return;
   }
 
-  // ---- Branch 2: canceled user, possibly needing expired email ----
+  // -- Branch 2: canceled user, possibly needing expired email --
   if (sub.status === "canceled" && !sub.trial_expired_email_sent_at && sub.trial_ends_at) {
     const trialEnd = new Date(sub.trial_ends_at);
-    const msSince = now - trialEnd;
-    const daysSince = msSince / MS_PER_DAY;
-    // Only send if cancellation happened within last 7 days
+    const daysSince = (now - trialEnd) / MS_PER_DAY;
     if (daysSince >= 0 && daysSince <= 7) {
       const userInfo = await fetchUserInfo(sub.user_id);
       if (userInfo?.email) {
-        await sendReminder({
+        const ok = await sendTrialExpired({
           to: userInfo.email,
-          name: userInfo.name,
-          kind: "expired",
-          userId: sub.user_id,
+          firstName: userInfo.firstName,
         });
-        stats.expired += 1;
+        if (ok) {
+          await markSent(sub.user_id, "trial_expired_email_sent_at");
+          stats.expired += 1;
+        } else {
+          stats.errors += 1;
+        }
       } else {
         stats.skipped += 1;
       }
@@ -207,61 +197,27 @@ async function processSubscription(sub, now, stats) {
   stats.skipped += 1;
 }
 
-// ---------- Fetch user email + name from auth.users ----------
+// ---------- Fetch user email + first name ----------
 async function fetchUserInfo(userId) {
   try {
     const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
     if (error || !data?.user) return null;
     const meta = data.user.user_metadata || {};
-    const first = meta.first_name || meta.firstName || "";
-    const last = meta.last_name || meta.lastName || "";
-    const fullName = [first, last].filter(Boolean).join(" ") || data.user.email;
-    return { email: data.user.email, name: fullName };
+    const firstName = meta.first_name || meta.firstName || meta.full_name?.split(" ")?.[0] || "";
+    return { email: data.user.email, firstName };
   } catch (e) {
     console.warn("[trial-cron] getUserById failed:", e?.message);
     return null;
   }
 }
 
-// ---------- Send one reminder + mark the column ----------
-async function sendReminder({ to, name, kind, userId }) {
-  let subject, html, column;
-  if (kind === "5d") {
-    subject = fiveDayReminderSubject;
-    html = fiveDayReminderHtml(name);
-    column = "trial_reminder_5d_sent_at";
-  } else if (kind === "1d") {
-    subject = oneDayReminderSubject;
-    html = oneDayReminderHtml(name);
-    column = "trial_reminder_1d_sent_at";
-  } else if (kind === "expired") {
-    subject = trialExpiredSubject;
-    html = trialExpiredHtml(name);
-    column = "trial_expired_email_sent_at";
-  } else {
-    return;
-  }
-
-  const { error } = await resend.emails.send({
-    from: FROM,
-    to,
-    reply_to: REPLY_TO,
-    subject,
-    html,
-  });
-
-  if (error) {
-    console.error("[trial-cron] Resend send error:", error);
-    throw new Error(error.message || "Resend send failed");
-  }
-
-  // Mark sent
-  const { error: updErr } = await supabaseAdmin
+// ---------- Mark a reminder column as sent ----------
+async function markSent(userId, column) {
+  const { error } = await supabaseAdmin
     .from("subscriptions")
     .update({ [column]: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("user_id", userId);
-
-  if (updErr) {
-    console.warn("[trial-cron] failed to mark", column, "for", userId, updErr);
+  if (error) {
+    console.warn("[trial-cron] failed to mark", column, "for", userId, error.message);
   }
 }

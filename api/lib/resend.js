@@ -578,3 +578,131 @@ Trade PA Support`;
     text,
   });
 }
+// ============================================================================
+// APPEND THIS BLOCK at the END of ~/Trade-PA/api/lib/resend.js
+// ----------------------------------------------------------------------------
+// Three new templates for the trial reminder cron (api/cron/check-trial-status):
+//   sendTrial5DayReminder   - sent 5 days before trial end (no card yet)
+//   sendTrial1DayReminder   - sent 1 day before trial end  (no card yet)
+//   sendTrialExpired        - sent after trial ends without payment
+//
+// All three reuse the existing helpers (sendEmail, layout, button, escapeHtml,
+// formatDate, FROM_HELLO, BILLING_URL, APP_URL, HELLO_EMAIL, BILLING_EMAIL).
+// No new dependencies. Match the existing Trade-PA-blue Apple-style layout.
+//
+// Called only for users who have NOT added a payment method. Users with a
+// card on file get auto-charged by Stripe and don't need reminders.
+// ============================================================================
+
+
+// ---- Template: 5-day trial reminder ----------------------------------------
+export async function sendTrial5DayReminder({ to, firstName, trialEndsAt }) {
+  const name      = firstName ? escapeHtml(firstName) : "there";
+  const trialDate = formatDate(trialEndsAt);
+  const subject   = "5 days left in your Trade PA trial";
+  const preheader = `Trial ends ${trialDate}. Add a card to keep your account.`;
+
+  const content = `
+<h1 style="margin:0 0 16px;font-size:22px;font-weight:600;color:#1d1d1f;">5 days to go, ${name}</h1>
+<p style="margin:0 0 16px;">Your 30-day Trade PA trial ends on <strong>${trialDate}</strong>.</p>
+<p style="margin:0 0 16px;">To keep using the app without interruption, add a payment method. It takes about 30 seconds and you can cancel anytime.</p>
+${button(BILLING_URL, "Add payment method")}
+<p style="margin:0;color:#86868b;font-size:14px;">Not sure if Trade PA is right for you? Reply to this email and tell me what's missing. I read every reply.</p>
+`;
+
+  const text = `5 days left in your Trade PA trial
+
+Your trial ends on ${trialDate}. To keep using the app, add a payment method:
+${BILLING_URL}
+
+Takes about 30 seconds. Cancel anytime.
+
+Reply to this email if you have any questions.
+
+Trade PA`;
+
+  return sendEmail({
+    from: FROM_HELLO,
+    to,
+    replyTo: HELLO_EMAIL,
+    subject,
+    html: layout({ title: subject, preheader, content }),
+    text,
+  });
+}
+
+
+// ---- Template: 1-day trial reminder ----------------------------------------
+export async function sendTrial1DayReminder({ to, firstName, trialEndsAt }) {
+  const name      = firstName ? escapeHtml(firstName) : "there";
+  const trialDate = formatDate(trialEndsAt);
+  const subject   = "Your Trade PA trial ends tomorrow";
+  const preheader = `Last chance to add a card before your trial ends ${trialDate}.`;
+
+  const content = `
+<h1 style="margin:0 0 16px;font-size:22px;font-weight:600;color:#1d1d1f;">${name}, your trial ends tomorrow</h1>
+<p style="margin:0 0 16px;">This is the last reminder before your Trade PA trial ends on <strong>${trialDate}</strong>.</p>
+<p style="margin:0 0 16px;"><strong>Action needed:</strong> add a payment method today to keep your account active and your data accessible.</p>
+${button(BILLING_URL, "Add payment method now")}
+<p style="margin:0;color:#86868b;font-size:14px;">If you do nothing, your account will be paused at the end of the trial. You'll lose access to your customers, jobs, and invoices until you reactivate.</p>
+`;
+
+  const text = `Your Trade PA trial ends tomorrow
+
+This is the last reminder before your trial ends on ${trialDate}.
+
+Action needed: add a payment method to keep your account active.
+${BILLING_URL}
+
+If you do nothing, your account will be paused at the end of the trial.
+
+Trade PA`;
+
+  return sendEmail({
+    from: FROM_HELLO,
+    to,
+    replyTo: HELLO_EMAIL,
+    subject,
+    html: layout({ title: subject, preheader, content }),
+    text,
+  });
+}
+
+
+// ---- Template: Trial expired -----------------------------------------------
+export async function sendTrialExpired({ to, firstName }) {
+  const name      = firstName ? escapeHtml(firstName) : "there";
+  const upgradeUrl = `${APP_URL}/upgrade.html`;
+  const subject   = "Your Trade PA trial has ended";
+  const preheader = "Your data is safe. Pick a plan to pick up where you left off.";
+
+  const content = `
+<h1 style="margin:0 0 16px;font-size:22px;font-weight:600;color:#1d1d1f;">Your trial has ended</h1>
+<p style="margin:0 0 16px;">Hi ${name}, your Trade PA trial has ended. Your account is paused, but your data is safe and waiting for you.</p>
+<p style="margin:0 0 16px;">Pick a plan to pick up where you left off. All your customers, jobs, and invoices come back the moment you reactivate.</p>
+${button(upgradeUrl, "Choose a plan")}
+<p style="margin:0;color:#86868b;font-size:13px;">We hold your data for 90 days after trial end. After that it is deleted permanently. Any questions, just reply.</p>
+`;
+
+  const text = `Your Trade PA trial has ended
+
+Hi ${name}, your trial has ended and your account is paused. Your data is safe and waiting.
+
+Pick a plan to pick up where you left off:
+${upgradeUrl}
+
+All your customers, jobs, and invoices come back the moment you reactivate.
+
+We hold your data for 90 days after trial end. After that it is deleted permanently.
+
+Trade PA`;
+
+  return sendEmail({
+    from: FROM_HELLO,
+    to,
+    replyTo: HELLO_EMAIL,
+    subject,
+    html: layout({ title: subject, preheader, content }),
+    text,
+  });
+}
