@@ -30,7 +30,11 @@ async function handler(req, res) {
     const ctData = await ctRes.json();
     const callerId = ctData?.[0]?.twilio_number || process.env.TWILIO_PHONE_NUMBER;
 
-    const recordingCallback = `${appUrl}/api/calls/recording?userId=${encodeURIComponent(userId)}&callerNumber=${encodeURIComponent(toClean)}&customerName=${encodeURIComponent(customerName || "Unknown")}&direction=outbound`;
+    // Ampersands must be XML-escaped (&amp;) because this URL goes into a TwiML
+    // attribute below. Raw & made the TwiML invalid, so Twilio could not parse
+    // the Dial and the call failed instantly with a generic gateway error
+    // (31000 in the SDK). incoming.js escapes its callbacks the same way.
+    const recordingCallback = `${appUrl}/api/calls/recording?userId=${encodeURIComponent(userId)}&callerNumber=${encodeURIComponent(toClean)}&customerName=${encodeURIComponent(customerName || "Unknown")}&direction=outbound`.replace(/&/g, '&amp;');
 
     res.setHeader("Content-Type", "text/xml");
     return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
