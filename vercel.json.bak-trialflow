@@ -52,10 +52,6 @@
     {
       "path": "/api/cron/check-upcoming-dates",
       "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/check-trial-status",
-      "schedule": "0 9 * * *"
     }
   ],
   "rewrites": [

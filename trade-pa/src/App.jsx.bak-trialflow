@@ -9,7 +9,6 @@ import CsvImport from "./components/CsvImport.jsx";
 import FieldMic from "./components/FieldMic.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
 import OfflineSettings from "./components/OfflineSettings.jsx";
-import TrialGuard from "./components/TrialGuard.jsx";
 import UpdateBanner from "./components/UpdateBanner.jsx";
 import ChangelogModal from "./components/ChangelogModal.jsx";
 import { prewarmCache } from "./lib/prewarm.js";
@@ -6349,9 +6348,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <PasswordRecoveryGate supabase={db}>
-        <TrialGuard supabase={db}>
-          <AppInner />
-        </TrialGuard>
+        <AppInner />
       </PasswordRecoveryGate>
     </ThemeProvider>
   );

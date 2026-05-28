@@ -1,15 +1,5 @@
 ## 2026-05-26
 
-## Trial reminders, banner, and lock screen
-
-We've added trial-end reminders so you never get caught out:
-
-- A small amber banner appears in the app when you've got 5 days or fewer left.
-- We'll email a reminder 5 days out and again the day before, but only if you haven't added a card yet.
-- If your trial runs out without a payment method, the app shows a clear screen telling you what to do. Your data stays put for 90 days so you can come back any time.
-
-Nothing changes for paying customers or trialing customers who've already added a card.
-
 🎟️ **Launch promo codes are live on the signup page.** New "Got a promo code?" field on tradespa.co.uk/signup.html — anyone with a launch code (BTG, PTG, PT, PGE, PHUK) gets an extra 30 days free on top of the standard 30-day trial. Type the code, see the bonus appear instantly with the new trial end date, and the submit button updates to reflect the longer trial. Every redemption is tracked against the code so we can see which signups came in via which channel.
 
 🎯 **Fresh welcome screen on iOS and Android.** Open the app fresh on your phone and you now get a clean dark welcome. The TP mark, the promise ("Stop losing evenings to admin."), the descriptor ("voice-first PA for UK trades") and one big Sign In button. No marketing scroll-fest, no pricing waffle, no clutter. Existing subscribers in two taps. New downloads get pointed to tradespa.co.uk to sign up. Web users on laptop or desktop still see the full landing page unchanged.
