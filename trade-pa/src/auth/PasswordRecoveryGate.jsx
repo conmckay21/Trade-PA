@@ -1,35 +1,29 @@
 // =============================================================
 // PasswordRecoveryGate.jsx
 // =============================================================
+// Drop in: ~/Trade-PA/trade-pa/src/auth/PasswordRecoveryGate.jsx
+//
 // Intercepts Supabase password-recovery sessions and shows a
-// "set new password" modal before the user lands in the app.
+// "set new password" modal in place of the app. After the user
+// updates their password, the modal shows a brief confirmation,
+// signs them out, and returns them to the login screen so they
+// re-authenticate with the new password.
 //
-// Drop-in location:
-//   ~/Trade-PA/trade-pa/src/auth/PasswordRecoveryGate.jsx
-//
-// Why this exists:
-//   When a user clicks the "reset password" email link, Supabase
-//   creates a session and fires a PASSWORD_RECOVERY auth event.
-//   Without a listener, the app silently logs them in without
-//   ever asking for a new password. This component listens for
-//   that event (and also checks the URL hash on mount, in case
-//   the event fires before this component is ready) and renders
-//   a full-screen modal asking for the new password.
-//
-// Integration (App.jsx, one line change):
-//   <PasswordRecoveryGate supabase={supabase}>
-//     ...your existing app...
+// Integration in App.jsx (already wired):
+//   <PasswordRecoveryGate supabase={db}>
+//     ...app...
 //   </PasswordRecoveryGate>
 //
 // Behaviour:
-//   - On PASSWORD_RECOVERY event OR URL hash containing
-//     "type=recovery", show the modal.
-//   - User enters new password twice, validates locally
-//     (min 8 chars, both match), calls supabase.auth.updateUser.
-//   - On success: brief confirmation, modal closes, user is
-//     already signed in (session was created by recovery flow),
-//     so they continue into the app.
-//   - On error: shows the message and lets them try again.
+//   1. Detect recovery context via:
+//      a) ?recovery=1 query param (most reliable, survives Supabase URL cleanup)
+//      b) #type=recovery hash (legacy fallback)
+//      c) PASSWORD_RECOVERY auth event (for late-firing case)
+//   2. Render password modal IN PLACE of app (app does not render
+//      behind the modal, so no visual leakage of dashboard).
+//   3. On submit: validate (min 8, must match), call updateUser,
+//      show "Password updated" success message, wait 2.2s, sign
+//      user out, return them to login screen.
 // =============================================================
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -43,7 +37,7 @@ export default function PasswordRecoveryGate({ supabase, children }) {
   const [success, setSuccess] = useState(false);
 
   // -----------------------------------------------------------
-  // Detect recovery context: URL hash on mount OR auth event
+  // Detect recovery context
   // -----------------------------------------------------------
   useEffect(() => {
     if (!supabase) return undefined;
@@ -126,7 +120,7 @@ export default function PasswordRecoveryGate({ supabase, children }) {
 
   return (
     <>
-      {children}
+      {!recoveryActive ? children : null}
       {recoveryActive ? (
         <div style={styles.overlay}>
           <div style={styles.modal}>
@@ -193,9 +187,6 @@ export default function PasswordRecoveryGate({ supabase, children }) {
   );
 }
 
-// =============================================================
-// Styles (matches AuthScreen aesthetic: dark, amber, rounded)
-// =============================================================
 const styles = {
   overlay: {
     position: 'fixed',
