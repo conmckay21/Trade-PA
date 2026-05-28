@@ -23,7 +23,9 @@ async function handler(req, res) {
 
   console.log(`App client ${callStatus} for conf ${confName} — dialling mobile ${forwardTo}`);
 
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  // ie1 to match the inbound call and conference, so the mobile leg joins the
+  // same conference rather than a separate us1 one.
+  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN, { region: 'ie1', edge: 'dublin' });
 
   const mobileTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>

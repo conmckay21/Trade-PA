@@ -114,8 +114,14 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
 
-  // Default region (US1) — matches where TwiML App and phone numbers live
-  const client = twilio(accountSid, authToken);
+  // Match the Device's region. Tokens are minted for ie1 and the number's
+  // active region is Ireland, so the inbound call and its conference live in
+  // ie1. Creating this dial-in on the default us1 region put the leg in a
+  // different region, where it could not reach the ie1-registered client and
+  // would have joined a separate us1 conference of the same name, leaving the
+  // caller alone on hold. Creating it on ie1 reaches both the client and the
+  // same conference.
+  const client = twilio(accountSid, authToken, { region: 'ie1', edge: 'dublin' });
 
   const identity = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
 
