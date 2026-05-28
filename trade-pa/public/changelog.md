@@ -1,3 +1,7 @@
+## 2026-05-28
+
+📞 **Incoming calls now ring inside the app.** When someone rings your Trade PA number, the call pops straight up on screen, on your phone or your laptop, with the caller's name if they're already in your contacts. Tap to answer and you're connected. Don't get to it within 20 seconds? It rings through to your mobile like before, so nothing slips past you.
+
 ## 2026-05-26
 
 ## Trial reminders, banner, and lock screen

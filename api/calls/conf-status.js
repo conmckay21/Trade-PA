@@ -142,7 +142,13 @@ export default async function handler(req, res) {
         `&customerName=${encodeURIComponent(customerName || '')}` +
         `&twilioNumber=${encodeURIComponent(userTwilioNumber)}`,
       statusCallbackMethod: 'POST',
-      statusCallbackEvent: ['completed', 'no-answer', 'busy', 'failed'],
+      // Calls API only accepts: initiated, ringing, answered, completed.
+      // 'completed' fires at terminal state and delivers the final CallStatus
+      // (completed/no-answer/busy/failed), which app-status.js inspects to
+      // decide the mobile fallback. The old list also passed no-answer, busy
+      // and failed, which are not valid event names, so Twilio rejected the
+      // dial with error 21626 and the app was never added to the conference.
+      statusCallbackEvent: ['completed'],
       timeout: 20,
     });
     appDialedOk = true;
