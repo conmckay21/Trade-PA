@@ -9,6 +9,7 @@ import CsvImport from "./components/CsvImport.jsx";
 import FieldMic from "./components/FieldMic.jsx";
 import OfflineBanner from "./components/OfflineBanner.jsx";
 import OfflineSettings from "./components/OfflineSettings.jsx";
+import SubscriptionSection from "./components/SubscriptionSection.jsx";
 import UpdateBanner from "./components/UpdateBanner.jsx";
 import ChangelogModal from "./components/ChangelogModal.jsx";
 import { prewarmCache } from "./lib/prewarm.js";
@@ -1786,6 +1787,7 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
       </>)}
 
       {subview === "plan" && (<>
+        <SubscriptionSection user={user} planTier={planTier} isIOSNative={isIOSNative} />
       {/* Plan hero — big, clear at-a-glance status. Reads all presentation
           details from TIER_CONFIG so a tier added/renamed upstream flows
           through without editing this block. Hidden on iOS native (App Store

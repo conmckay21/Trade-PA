@@ -80,26 +80,11 @@ async function handler(req, res) {
       return res.status(500).json({ error: "Lookup failed" });
     }
 
-    // auto-create customer if missing (e.g. comp accounts or trial users
-    // who signed up before Stripe customer creation was in the flow)
-    let stripeCustomerId = sub?.stripe_customer_id;
-    if (!stripeCustomerId) {
-      // Get user email for the customer
-      const { data: { user: authUser } } = await supabaseAnon.auth.getUser(token);
-      const customer = await stripe.customers.create({
-        email: authUser?.email,
-        metadata: { user_id: userId, source: "portal_auto_create" },
+    if (!sub?.stripe_customer_id) {
+      return res.status(404).json({
+        error: "No subscription found",
+        message: "You don't have an active subscription to manage yet.",
       });
-      stripeCustomerId = customer.id;
-
-      // Persist the new customer id so future calls skip this branch
-      const { error: upsertErr } = await supabaseAdmin
-        .from("subscriptions")
-        .update({ stripe_customer_id: stripeCustomerId, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
-      if (upsertErr) {
-        console.error("[stripe-portal] failed to persist customer id:", upsertErr);
-      }
     }
 
     // ── 3. Create a portal session ─────────────────────────────────
@@ -111,7 +96,7 @@ async function handler(req, res) {
       || "https://www.tradespa.co.uk";
 
     const portalSession = await stripe.billingPortal.sessions.create({
-      customer: stripeCustomerId,
+      customer: sub.stripe_customer_id,
       return_url: `${origin}/?settings=subscription`,
     });
 
