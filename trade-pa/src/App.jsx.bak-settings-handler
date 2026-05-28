@@ -3884,27 +3884,6 @@ function AppInner() {
     return "work";
   });
   const view = viewRaw;
-  // settings_subscription_handler
-  // When the app boots with ?settings=subscription in the URL (e.g. user
-  // returning from Stripe Checkout or Customer Portal), auto-route them to
-  // Settings -> Plan & billing tab.
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("settings") === "subscription") {
-      setView("Settings");
-      if (typeof setSubview === "function") {
-        setSubview("plan");
-      }
-      try {
-        params.delete("settings");
-        const qs = params.toString();
-        const clean = window.location.pathname + (qs ? "?" + qs : "");
-        window.history.replaceState({}, "", clean);
-      } catch (_) {}
-    }
-  }, []);
-
   const setView = (v) => {
     setViewRaw(v);
     const grp = viewGroup(v);

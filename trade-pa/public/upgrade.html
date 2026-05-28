@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="apple-itunes-app" content="app-id=6769395416">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Change plan | Trade PA</title>
+  <meta name="description" content="Upgrade or downgrade your Trade PA plan. Changes via Stripe, secure and instant." />
+  <link rel="canonical" href="https://www.tradespa.co.uk/upgrade.html" />
+  <meta name="robots" content="noindex" />
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png" />
+  <meta name="theme-color" content="#f59e0b" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg: #0a0a0a; --surface: #141414; --surface-high: #1a1a1a;
+      --border: #222; --border-high: #2a2a2a;
+      --text: #f0f0f0; --text-dim: #ccc; --muted: #666; --muted-low: #555;
+      --amber: #f59e0b; --amber-dim: #92400e; --green: #10b981; --red: #ef4444;
+      --sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--text); }
+    body {
+      font-family: var(--sans);
+      min-height: 100vh; line-height: 1.6;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    .nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 24px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      z-index: 100;
+    }
+    .nav .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--amber); }
+    .nav .back {
+      font-size: 13px; color: var(--text-dim);
+    }
+    .nav .back:hover { color: var(--amber); }
+
+    .hero { padding: 64px 24px 32px; text-align: center; }
+    .hero-label {
+      font-family: var(--sans); font-size: 11px; color: var(--amber);
+      text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 16px;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 4.5vw, 42px); font-weight: 800;
+      letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 14px;
+    }
+    .hero .sub {
+      font-size: 15px; color: var(--muted); max-width: 560px;
+      margin: 0 auto; line-height: 1.7;
+    }
+    .hero .current-banner {
+      display: inline-block; background: var(--surface-high);
+      border: 1px solid var(--border-high); border-radius: 100px;
+      padding: 6px 16px; font-size: 12px; color: var(--text-dim);
+      margin-top: 18px;
+    }
+    .hero .current-banner b { color: var(--amber); }
+
+    .section { padding: 32px 24px 64px; }
+    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; max-width: 1100px; margin: 0 auto; }
+    .plan {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 44px 32px 36px; position: relative;
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .plan.current { border: 2px solid var(--amber); }
+    .plan-top-stripe { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--amber); }
+    .plan-current-badge {
+      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+      background: var(--amber); color: #000; font-family: var(--sans);
+      font-size: 10px; font-weight: 700; padding: 3px 14px;
+      border-radius: 100px; letter-spacing: 0.08em; white-space: nowrap;
+    }
+    .plan-name {
+      font-family: var(--sans); font-size: 11px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;
+    }
+    .plan-price {
+      font-family: var(--sans); font-size: 52px; font-weight: 700;
+      line-height: 1; letter-spacing: -0.03em; color: var(--amber); margin-bottom: 4px;
+    }
+    .plan-price .period { font-size: 16px; color: var(--muted); font-weight: 400; }
+    .plan-users { color: var(--amber); font-size: 12px; font-family: var(--sans); margin-bottom: 20px; }
+    .plan-features { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; flex: 1; }
+    .plan-features li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+    .plan-features .check { color: var(--green); font-weight: 700; flex-shrink: 0; }
+
+    .plan-cta {
+      background: var(--amber); color: #000; padding: 14px; border-radius: 8px;
+      font-weight: 700; font-size: 14px; text-align: center; display: block;
+      cursor: pointer; border: none; width: 100%; font-family: var(--sans);
+    }
+    .plan-cta:hover:not(:disabled) { opacity: 0.9; }
+    .plan-cta.downgrade { background: var(--surface-high); color: var(--text-dim); border: 1px solid var(--border-high); }
+    .plan-cta.downgrade:hover:not(:disabled) { background: var(--border-high); color: var(--text); }
+    .plan-cta.current-disabled { background: transparent; color: var(--muted); cursor: default; border: 1px solid var(--border); }
+
+    .footnote {
+      text-align: center; color: var(--muted); font-size: 12px; line-height: 1.7;
+      padding: 0 24px 64px; max-width: 640px; margin: 0 auto;
+    }
+    .footnote a { color: var(--amber); }
+
+    .loading, .error {
+      text-align: center; padding: 80px 24px; color: var(--muted); font-size: 14px;
+    }
+    .error { color: #fca5a5; }
+
+    footer {
+      padding: 32px 24px; border-top: 1px solid var(--border);
+      text-align: center; color: var(--muted); font-size: 12px;
+    }
+
+    @media (max-width: 640px) {
+      .nav { padding: 14px 16px; }
+      .hero { padding: 48px 20px 24px; }
+      .section { padding: 24px 20px 48px; }
+      .plans { grid-template-columns: 1fr; }
+      .plan { padding: 36px 24px 28px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <a href="/" class="brand">Trade PA</a>
+    <a href="/" class="back">← Back to app</a>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-label">Change plan</div>
+    <h1>Pick the plan that fits.</h1>
+    <p class="sub">Upgrades take effect right away with prorated billing. Downgrades take effect at the end of your current billing period, no refunds.</p>
+    <div id="currentBanner" class="current-banner" style="display:none;"></div>
+  </header>
+
+  <main id="main">
+    <section class="section">
+      <div id="plansContainer">
+        <div class="loading">Loading your subscription...</div>
+      </div>
+    </section>
+
+    <p class="footnote">
+      All changes are processed securely via Stripe. After picking a plan you'll be redirected to complete payment or confirm the change. Need help? Email <a href="mailto:support@tradespa.co.uk">support@tradespa.co.uk</a>.
+    </p>
+  </main>
+
+  <footer>
+    <div>© Trade PA Ltd · Company No. 17176983 · Registered in England &amp; Wales · ICO Ref ZC132378</div>
+  </footer>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+    // ENV: pull from same Supabase project as the rest of the app
+    const SUPABASE_URL = 'https://xgygnthsjihrrqwscjbf.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_ZuuJ6eYjPv6eib-4xSOd8A_44c0RzxB';
+
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const PLANS = [
+      {
+        key: 'solo',
+        planKey: 'solo_monthly',
+        name: 'Solo',
+        price: 39,
+        users: '1 user',
+        features: [
+          '100 AI conversations per month',
+          '1 hour hands-free per month',
+          'Tap-to-talk voice, never capped',
+          'All 43 features included',
+          'Allowance resets 1st of month',
+        ],
+      },
+      {
+        key: 'pro_solo',
+        planKey: 'pro_solo_monthly',
+        name: 'Pro Solo',
+        price: 59,
+        users: '1 user',
+        features: [
+          '200 AI conversations per month',
+          '3 hours hands-free per month',
+          'Tap-to-talk voice, never capped',
+          'All 43 features included',
+          'Priority for new features',
+        ],
+      },
+      {
+        key: 'team',
+        planKey: 'team_monthly',
+        name: 'Team',
+        price: 89,
+        users: 'Up to 5 users',
+        features: [
+          '400 AI conversations per month',
+          '4 hours hands-free per month',
+          'Team scheduling and per-user permissions',
+          'Staff timesheets and GPS tracking',
+          'All 43 features included',
+        ],
+      },
+      {
+        key: 'business',
+        planKey: 'business_monthly',
+        name: 'Business',
+        price: 129,
+        users: 'Up to 10 users',
+        features: [
+          '800 AI conversations per month',
+          '8 hours hands-free per month',
+          'Priority support',
+          'Everything in Team, more capacity',
+          'All 43 features included',
+        ],
+      },
+    ];
+
+    const planTierIndex = (key) => PLANS.findIndex(p => p.key === key);
+
+    async function init() {
+      // 1. Check session
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session?.user) {
+        // Not logged in - redirect to signup so they can start fresh
+        document.getElementById('plansContainer').innerHTML =
+          '<div class="error">You need to be signed in to change your plan. ' +
+          '<a href="/signup.html" style="color: var(--amber);">Sign up</a> or ' +
+          '<a href="/" style="color: var(--amber);">log in to the app</a> first.</div>';
+        return;
+      }
+
+      // 2. Fetch current subscription
+      const { data: sub, error } = await sb
+        .from('subscriptions')
+        .select('plan, status, is_in_trial, current_period_end, trial_ends_at, stripe_subscription_id')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('subscription fetch error:', error);
+      }
+
+      const currentPlanKey = sub?.plan || null;
+      const isTrialing = sub?.is_in_trial || sub?.status === 'trialing';
+      const isCancelled = sub?.status === 'canceled' || sub?.status === 'incomplete_expired' || !sub;
+
+      renderBanner(sub, currentPlanKey, isTrialing, isCancelled);
+      renderPlans(currentPlanKey, isCancelled, session.access_token);
+    }
+
+    function renderBanner(sub, currentPlanKey, isTrialing, isCancelled) {
+      const el = document.getElementById('currentBanner');
+      if (!sub) {
+        el.style.display = 'inline-block';
+        el.innerHTML = 'No active subscription. Pick a plan below to get started.';
+        return;
+      }
+      const planName = PLANS.find(p => p.key === currentPlanKey)?.name || currentPlanKey;
+      let label = '';
+      if (isCancelled) {
+        label = `Your <b>${planName}</b> subscription has ended. Pick a plan to resume.`;
+      } else if (isTrialing) {
+        label = `Currently trialing <b>${planName}</b>. Switch plan any time.`;
+      } else {
+        label = `Currently on <b>${planName}</b>. Change plan below.`;
+      }
+      el.style.display = 'inline-block';
+      el.innerHTML = label;
+    }
+
+    function renderPlans(currentPlanKey, isCancelled, accessToken) {
+      const container = document.getElementById('plansContainer');
+      const currentIdx = currentPlanKey ? planTierIndex(currentPlanKey) : -1;
+
+      const grid = document.createElement('div');
+      grid.className = 'plans';
+
+      PLANS.forEach((plan, idx) => {
+        const isCurrent = !isCancelled && idx === currentIdx;
+        const isUpgrade = currentIdx >= 0 && idx > currentIdx && !isCancelled;
+        const isDowngrade = currentIdx >= 0 && idx < currentIdx && !isCancelled;
+
+        let buttonHtml = '';
+        if (isCurrent) {
+          buttonHtml = '<button class="plan-cta current-disabled" disabled>Your current plan</button>';
+        } else if (isCancelled) {
+          buttonHtml = `<button class="plan-cta" data-plan="${plan.planKey}">Start with ${plan.name} →</button>`;
+        } else if (isUpgrade) {
+          buttonHtml = `<button class="plan-cta" data-plan="${plan.planKey}">Upgrade to ${plan.name} →</button>`;
+        } else if (isDowngrade) {
+          buttonHtml = `<button class="plan-cta downgrade" data-plan="${plan.planKey}">Downgrade to ${plan.name}</button>`;
+        } else {
+          buttonHtml = `<button class="plan-cta" data-plan="${plan.planKey}">Choose ${plan.name} →</button>`;
+        }
+
+        const features = plan.features.map(f =>
+          `<li><span class="check">✓</span> ${f}</li>`
+        ).join('');
+
+        const card = document.createElement('div');
+        card.className = 'plan' + (isCurrent ? ' current' : '');
+        card.innerHTML = `
+          ${isCurrent ? '<div class="plan-current-badge">CURRENT</div>' : ''}
+          <div class="plan-top-stripe"></div>
+          <div class="plan-name">${plan.name}</div>
+          <div class="plan-price">£${plan.price}<span class="period">/mo</span></div>
+          <p class="plan-users">${plan.users}</p>
+          <ul class="plan-features">${features}</ul>
+          ${buttonHtml}
+        `;
+        grid.appendChild(card);
+      });
+
+      container.innerHTML = '';
+      container.appendChild(grid);
+
+      // Wire up buttons
+      grid.querySelectorAll('button[data-plan]').forEach(btn => {
+        btn.addEventListener('click', () => handlePlanClick(btn, accessToken));
+      });
+    }
+
+    async function handlePlanClick(btn, accessToken) {
+      const planKey = btn.dataset.plan;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Preparing checkout...';
+
+      try {
+        const res = await fetch('/api/stripe/create-checkout-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ plan_key: planKey }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert(data?.message || data?.error || 'Could not start checkout. Try again or email support@tradespa.co.uk');
+          btn.disabled = false;
+          btn.textContent = originalText;
+          return;
+        }
+
+        if (data.url) {
+          // New subscription flow: redirect to Stripe Checkout
+          window.location.href = data.url;
+        } else if (data.updated) {
+          // In-place plan change: show success and redirect back to app
+          alert(`Plan changed successfully. ${data.message || ''}`);
+          window.location.href = '/?settings=subscription';
+        } else {
+          alert('Plan change completed.');
+          window.location.href = '/?settings=subscription';
+        }
+      } catch (err) {
+        console.error('checkout error:', err);
+        alert('Network error. Please try again.');
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    }
+
+    init().catch(err => {
+      console.error('init error:', err);
+      document.getElementById('plansContainer').innerHTML =
+        '<div class="error">Something went wrong loading your subscription. ' +
+        'Refresh the page or email support@tradespa.co.uk if it keeps happening.</div>';
+    });
+  </script>
+
+</body>
+</html>

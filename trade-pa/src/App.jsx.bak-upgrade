@@ -970,29 +970,6 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
     }
   };
 
-  // Open the upgrade/plan-picker page. Web: same-tab navigation.
-  // Native (iOS + Android): Capacitor Browser plugin opens external system
-  // browser, so all plan/pricing UI stays off-app (Apple Guideline 3.1.3(b)
-  // safe for iOS, equally clean for Android).
-  const openUpgradePage = async () => {
-    const url = "https://www.tradespa.co.uk/upgrade.html";
-    const isNative = typeof window !== "undefined"
-      && window.Capacitor?.isNativePlatform?.();
-    if (isNative && window.Capacitor?.Plugins?.Browser) {
-      try {
-        await window.Capacitor.Plugins.Browser.open({ url });
-        return;
-      } catch (_) {
-        // fall through to default open below
-      }
-    }
-    if (isNative) {
-      window.open(url, "_blank");
-    } else {
-      window.location.href = url;
-    }
-  };
-
     // ── Account deletion state (Apple Guideline 5.1.1(v) — required) ────────
   // Hard delete with type-to-confirm: user must type their email exactly to
   // unlock the destructive button. Server enforces the same check as a
@@ -1973,34 +1950,23 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
               </div>
             </div>
             {isIOSNative ? (
-              <button
-                onClick={async () => {
-                  const url = "https://www.tradespa.co.uk/?settings=subscription";
-                  if (window.Capacitor?.Plugins?.Browser) {
-                    try {
-                      await window.Capacitor.Plugins.Browser.open({ url });
-                      return;
-                    } catch (_) {}
-                  }
-                  window.open(url, "_blank");
-                }}
+              <a
+                href="https://www.tradespa.co.uk"
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
                   fontFamily: "'Plus Jakarta Sans', sans-serif",
                   fontSize: 10,
                   color: C.amber,
                   letterSpacing: "0.08em",
                   fontWeight: 700,
+                  textDecoration: "none",
                   textTransform: "uppercase",
-                  background: "transparent",
-                  border: `1px solid ${C.amber}`,
-                  borderRadius: 6,
-                  padding: "6px 12px",
-                  cursor: "pointer",
                   flexShrink: 0,
                 }}
               >
                 Open web →
-              </button>
+              </a>
             ) : (
               <button
                 onClick={openPortal}
@@ -3884,27 +3850,6 @@ function AppInner() {
     return "work";
   });
   const view = viewRaw;
-  // settings_subscription_handler
-  // When the app boots with ?settings=subscription in the URL (e.g. user
-  // returning from Stripe Checkout or Customer Portal), auto-route them to
-  // Settings -> Plan & billing tab.
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("settings") === "subscription") {
-      setView("Settings");
-      if (typeof setSubview === "function") {
-        setSubview("plan");
-      }
-      try {
-        params.delete("settings");
-        const qs = params.toString();
-        const clean = window.location.pathname + (qs ? "?" + qs : "");
-        window.history.replaceState({}, "", clean);
-      } catch (_) {}
-    }
-  }, []);
-
   const setView = (v) => {
     setViewRaw(v);
     const grp = viewGroup(v);
