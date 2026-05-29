@@ -121,7 +121,7 @@ export default async function handler(req, res) {
   // would have joined a separate us1 conference of the same name, leaving the
   // caller alone on hold. Creating it on ie1 reaches both the client and the
   // same conference.
-  const client = twilio(accountSid, authToken, { region: 'ie1', edge: 'dublin' });
+  const client = twilio(accountSid, authToken);
 
   const identity = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
 
