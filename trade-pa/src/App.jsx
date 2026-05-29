@@ -4431,7 +4431,7 @@ function AppInner() {
         const d = new Device(token, {
           logLevel: 1,
           codecPreferences: ["opus", "pcmu"],
-          edge: "dublin",
+          edge: "ashburn",
         });
 
         d.on("incoming", call => {

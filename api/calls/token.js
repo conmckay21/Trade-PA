@@ -30,7 +30,7 @@ async function handler(req, res) {
       process.env.TWILIO_ACCOUNT_SID,
       process.env.TWILIO_API_KEY,
       process.env.TWILIO_API_SECRET,
-      { identity, ttl: 3600, region: "ie1" }
+      { identity, ttl: 3600, region: "us1" }
     );
 
     const voiceGrant = new VoiceGrant({
