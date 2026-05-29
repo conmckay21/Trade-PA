@@ -4451,7 +4451,7 @@ function AppInner() {
           } catch {}
         });
 
-        d.on("error", err => console.log("Twilio Device error:", err.message));
+        d.on("error", err => console.log("Twilio Device error:", err?.code, err?.message, err));
 
         await d.register();
         twilioDeviceRef.current = d;
