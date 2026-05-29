@@ -1,3 +1,7 @@
+## 2026-05-29
+
+🧠 **Sharper memory.** Your assistant now hangs on to the things that matter (how you like to work, your regulars, your preferences) and stops cluttering itself up with day-to-day noise like how many jobs are on this week. Best bit: when you put it right on something, it sticks now, so it stops making the same slip twice.
+
 ## 2026-05-28
 
 📞 **Incoming calls now ring inside the app.** When someone rings your Trade PA number, the call pops straight up on screen, on your phone or your laptop, with the caller's name if they're already in your contacts. Tap to answer and you're connected. Don't get to it within 20 seconds? It rings through to your mobile like before, so nothing slips past you.

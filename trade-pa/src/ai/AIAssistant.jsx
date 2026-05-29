@@ -255,38 +255,42 @@ export function AIAssistant({ isVisible = true, isTablet = false, brand, setBran
   const sessionActionsRef = useRef([]); // tracks successful action tool calls this session
   useEffect(() => { paMemoriesRef.current = paMemories; }, [paMemories]);
 
-  // Load memories from Supabase on mount
+  // Load memories from Supabase on mount: active only, always include corrections
   useEffect(() => {
     if (!user?.id) return;
-    db.from("pa_memories")
-      .select("id, content, category, times_reinforced")
-      .eq("user_id", user.id)
-      .order("times_reinforced", { ascending: false })
-      .order("last_used", { ascending: false })
-      .limit(40)
-      .then(({ data }) => {
-        if (data?.length) setPaMemories(data);
-      }).catch(() => {});
+    (async () => {
+      try {
+        const [corr, facts] = await Promise.all([
+          db.from("pa_memories")
+            .select("id, content, category, times_reinforced, recurred_count")
+            .eq("user_id", user.id).eq("is_active", true).eq("category", "correction")
+            .order("last_used", { ascending: false }).limit(25),
+          db.from("pa_memories")
+            .select("id, content, category, times_reinforced, recurred_count")
+            .eq("user_id", user.id).eq("is_active", true).neq("category", "correction")
+            .order("times_reinforced", { ascending: false })
+            .order("last_used", { ascending: false }).limit(30),
+        ]);
+        const merged = [...(corr.data || []), ...(facts.data || [])];
+        if (merged.length) setPaMemories(merged);
+      } catch (e) { /* silent */ }
+    })();
   }, [user?.id]);
 
-  // Persist a single memory — reinforces if similar one already exists
+  // Persist a single memory via server-side dedup (pa_remember handles match, cap, corrections)
   const persistMemory = async (memContent, category, boost = 1) => {
     if (!memContent || memContent.length < 10 || !user?.id) return;
-    const existing = paMemoriesRef.current.find(m =>
-      m.content.toLowerCase().includes(memContent.slice(0, 25).toLowerCase())
-    );
-    if (existing) {
-      const n = (existing.times_reinforced || 1) + boost;
-      await db.from("pa_memories")
-        .update({ times_reinforced: n, last_used: new Date().toISOString() }).eq("id", existing.id);
-      setPaMemories(prev => prev.map(m => m.id === existing.id ? { ...m, times_reinforced: n } : m));
-    } else {
-      const { data: ins } = await db.from("pa_memories").insert({
-        user_id: user.id, content: memContent, category: category || "fact",
-        times_reinforced: boost, created_at: new Date().toISOString(), last_used: new Date().toISOString(),
-      }).select().single();
-      if (ins) setPaMemories(prev => [...prev, ins]);
-    }
+    try {
+      const { data: row } = await db.rpc("pa_remember", {
+        p_content: memContent, p_category: category || "fact", p_boost: boost,
+      });
+      if (!row) return;
+      setPaMemories(prev => {
+        const i = prev.findIndex(m => m.id === row.id);
+        if (i === -1) return [...prev, row];
+        const next = prev.slice(); next[i] = row; return next;
+      });
+    } catch (e) { /* silent */ }
   };
 
   const lastRequestRef = React.useRef({ text: null, time: 0 });
@@ -318,12 +322,12 @@ export function AIAssistant({ isVisible = true, isTablet = false, brand, setBran
 User follow-up: "${userText}"
 New PA response: "${assistantText.slice(0, 250)}"
 
-1. Is the user correcting/rejecting the PREVIOUS response? If yes, one sentence describing the mistake. If no, null.
-2. Up to 2 concrete long-term facts about this business. Skip greetings.
-Return ONLY JSON: {"correction": "description of what PA did wrong" | null, "memories": [{"content": "...", "category": "business_fact|preference|customer_note|pattern"}]}`
+1. Is the user correcting or rejecting the PREVIOUS response? If yes, write a SHORT IMPERATIVE RULE telling the PA what to do differently next time (for example "Always delete the old materials before adding new ones"). An instruction, not a description. If no correction, null.
+2. Up to 2 DURABLE facts about how this business works: preferences, how they like things done, stable client traits, pricing rules, recurring habits. DO NOT store live state such as job counts, what is scheduled this week, current job values or revenue, invoice statuses, or anything answerable from their live data or that changes day to day. Skip greetings.
+Return ONLY JSON: {"correction": "imperative rule" | null, "memories": [{"content": "...", "category": "business_fact|preference|customer_note|pattern"}]}`
         : `User: "${userText}"
 PA: "${assistantText.slice(0, 250)}"
-Extract up to 2 concrete long-term facts. Skip greetings.
+Up to 2 DURABLE facts about how this business works: preferences, stable client traits, pricing rules, recurring habits. DO NOT store live state such as job counts, schedules, current job values, invoice statuses, or anything that changes day to day or is answerable from live data. Skip greetings.
 Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category": "business_fact|preference|customer_note|pattern"}]}`;
 
       const res = await fetch("/api/claude", {
@@ -344,7 +348,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
       // Correction: high-priority memory + error log
       if (parsed?.correction && typeof parsed.correction === "string" && parsed.correction.length > 15) {
-        await persistMemory("LESSON: " + parsed.correction, "correction", 3);
+        await persistMemory(parsed.correction, "correction", 1);
         await logError("correction", {
           error_msg: parsed.correction,
           user_input: userText?.slice(0, 300),
@@ -4743,31 +4747,19 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
         case "save_memory": {
           const memContent = (input.content || "").trim();
-          if (!memContent) return "Nothing to save — please provide the fact to remember.";
-          const existing = paMemoriesRef.current.find(m =>
-            m.content.toLowerCase().includes(memContent.slice(0, 20).toLowerCase())
-          );
-          if (existing) {
-            await db.from("pa_memories")
-              .update({ times_reinforced: (existing.times_reinforced || 1) + 1, last_used: new Date().toISOString() })
-              .eq("id", existing.id);
-            setPaMemories(prev => prev.map(m => m.id === existing.id
-              ? { ...m, times_reinforced: (m.times_reinforced || 1) + 1 }
-              : m
-            ));
-            return `Got it — I already knew that. I'll keep it in mind.`;
-          }
-          const { data: inserted, error } = await db.from("pa_memories").insert({
-            user_id: user?.id,
-            content: memContent,
-            category: input.category || "fact",
-            times_reinforced: 1,
-            created_at: new Date().toISOString(),
-            last_used: new Date().toISOString(),
-          }).select().single();
+          if (!memContent) return "Nothing to save. Tell me the fact you want me to remember.";
+          const knownIds = new Set((paMemoriesRef.current || []).map(m => m.id));
+          const { data: row, error } = await db.rpc("pa_remember", {
+            p_content: memContent, p_category: input.category || "fact", p_boost: 1,
+          });
           if (error) return `Couldn't save that memory: ${error.message}`;
-          if (inserted) setPaMemories(prev => [...prev, inserted]);
-          return `Noted — I'll remember that for every future conversation.`;
+          if (!row) return "That was a little short to save. Give me a touch more detail.";
+          if (knownIds.has(row.id)) {
+            setPaMemories(prev => prev.map(m => m.id === row.id ? row : m));
+            return "Got it, I already knew that. I'll keep it in mind.";
+          }
+          setPaMemories(prev => [...prev, row]);
+          return "Noted, I'll remember that for every future conversation.";
         }
 
         case "escalate_to_support": {
@@ -4966,7 +4958,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "- REMINDERS BEHAVIOUR: When a reminder fires at its set time, it does NOT automatically disappear. It stays in the user's Upcoming list as 'Overdue' (red bar) until they explicitly tap 'Done ✓' to mark it complete. This is deliberate — so users don't lose track of things they haven't actually followed through on. If a user asks 'where did my reminder go' or 'why is my reminder still showing', explain: 'Reminders stay in your Upcoming list until you tap Done ✓ — that way nothing slips. Tap Done ✓ once you've actually done it, or ✕ to delete it entirely.'\n"
   + "- DESKTOP LAYOUT: On a desktop browser (≥900px wide), the navigation appears as a left-hand sidebar instead of category pills. On phones and PWAs, the pills layout is used. If a user mentions can't find the menu on desktop, tell them to look at the left side of the screen.\n"
   + (handsFree ? "\n\nHANDS-FREE MODE: Your reply is spoken aloud by text-to-speech. Rules:\n- Plain spoken English only. No markdown, bullets, asterisks or formatting.\n- Keep your text reply to 1-2 sentences — a brief spoken intro only.\n- When you use a tool to fetch data, your text reply is the spoken intro. E.g. \'You have four invoices awaiting payment, totalling 32700 pounds. What would you like to do?\'\n- ALWAYS end your reply with a question or prompt so the user knows to respond.\n- When the user questions or corrects data you returned: acknowledge it directly, explain what the system shows (e.g. \'Those invoices show as sent in the system, meaning they have been issued but not yet marked as paid.\'), and offer what you can do — mark as paid, filter differently, etc. Never just repeat the same data without explanation.\n- If the user says something seems wrong, explain the status honestly: sent = issued, awaiting payment. overdue = past due date. paid = marked paid. draft = not yet sent.\n- Be a real PA: if the data surprises them, help them understand it and offer next steps." : "")
-  + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
+  + (() => {
+      const mems = paMemoriesRef.current || [];
+      const facts = mems.filter(m => m.category !== "correction");
+      const rules = mems.filter(m => m.category === "correction");
+      let out = "";
+      if (facts.length) out += "\n\nWHAT YOU KNOW ABOUT THIS BUSINESS (from past chats, use to personalise your answers):\n" + facts.slice(0, 30).map(m => "- " + m.content).join("\n") + "\n";
+      if (rules.length) out += "\n\nRULES YOU MUST FOLLOW (you got these wrong before, do not repeat the mistake):\n" + rules.slice(0, 20).map(m => "- " + m.content.replace(/^LESSON:\s*/i, "")).join("\n") + "\n";
+      return out;
+    })()
   + (sessionActionsRef.current.length ? "\n\nACTIONS ALREADY COMPLETED THIS SESSION (do NOT repeat these):\n" + sessionActionsRef.current.map(a => "- " + a).join("\n") + "\n" : "")
   + (supportMode ? "\nSUPPORT MODE ACTIVE: The user needs help with the app. Your job is to resolve their issue conversationally — walk them through it step by step, explain how features work, and troubleshoot problems. You know every feature of Trade PA in detail. If after 3 genuine attempts you still cannot resolve the issue, use the escalate_to_support tool to collect their details and email the issue to the support team. Be warm, patient and thorough. Never tell them to contact support unless you have tried everything." : "");
 
@@ -4998,7 +4998,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     + "- Enquiries: " + ((enquiries||[]).length === 0 ? "none" : (enquiries||[]).map(e=>e.name).join(", ")) + "\n"
     + "- Inbox actions pending approval: " + (pendingInboxCount === 0 ? "none" : `${pendingInboxCount} waiting — tell the user if they ask, or call list_inbox_actions to show them`) + "\n"
     + "- Current RAMS session: " + (ramsSession ? "YES - step " + ramsSession.step : "none") + "\n"
-    + (paMemoriesRef.current.length ? "\n\nTHINGS YOU HAVE LEARNED ABOUT THIS BUSINESS (from past conversations — use these to give better, more personalised responses):\n" + paMemoriesRef.current.slice(0, 25).map(m => "- " + m.content).join("\n") + "\n" : "")
+    + (() => {
+      const mems = paMemoriesRef.current || [];
+      const facts = mems.filter(m => m.category !== "correction");
+      const rules = mems.filter(m => m.category === "correction");
+      let out = "";
+      if (facts.length) out += "\n\nWHAT YOU KNOW ABOUT THIS BUSINESS (from past chats, use to personalise your answers):\n" + facts.slice(0, 30).map(m => "- " + m.content).join("\n") + "\n";
+      if (rules.length) out += "\n\nRULES YOU MUST FOLLOW (you got these wrong before, do not repeat the mistake):\n" + rules.slice(0, 20).map(m => "- " + m.content.replace(/^LESSON:\s*/i, "")).join("\n") + "\n";
+      return out;
+    })()
     + (sessionActionsRef.current.length ? "\n\nACTIONS ALREADY COMPLETED THIS SESSION (do NOT repeat these):\n" + sessionActionsRef.current.map(a => "- " + a).join("\n") + "\n" : "")
     + (overlayContext ? `\n\nCURRENT SCREEN CONTEXT (user invoked you from a specific screen — act on THIS record first unless they say otherwise):\n${overlayContext}\n` : "");
 
