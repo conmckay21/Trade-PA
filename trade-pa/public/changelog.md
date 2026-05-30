@@ -1,6 +1,14 @@
+## 2026-05-30
+
+🔄 **Restarting your plan is one tap now.** If your trial runs out before you've added a card, the "Subscribe Now" button takes you straight to a secure checkout to pick up where you left off, instead of bouncing you to the sign-up page. And if a card payment ever fails later on, the same screen sends you right to your billing details to sort it.
+
 ## 2026-05-29
 
 🧠 **Sharper memory.** Your assistant now hangs on to the things that matter (how you like to work, your regulars, your preferences) and stops cluttering itself up with day-to-day noise like how many jobs are on this week. Best bit: when you put it right on something, it sticks now, so it stops making the same slip twice.
+
+## 2026-05-30
+
+📞 **Keep your own number.** No need to switch to use Trade PA. Forward your existing number across in about ten seconds using the code in Call Settings, and your calls keep coming through the app. Porting is still there if you'd rather move the number over for good.
 
 ## 2026-05-28
 

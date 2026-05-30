@@ -64,7 +64,7 @@ export default async function handler(req, res) {
         trial_reminder_1d_sent_at,
         trial_expired_email_sent_at
       `)
-      .or("status.eq.trialing,status.eq.canceled,is_in_trial.eq.true")
+      .or("status.eq.trialing,status.eq.canceled,status.eq.cancelled,is_in_trial.eq.true")
       .not("stripe_subscription_id", "is", null);
 
     if (error) {
@@ -169,7 +169,7 @@ async function processSubscription(sub, now, stats) {
   }
 
   // -- Branch 2: canceled user, possibly needing expired email --
-  if (sub.status === "canceled" && !sub.trial_expired_email_sent_at && sub.trial_ends_at) {
+  if ((sub.status === "canceled" || sub.status === "cancelled") && !sub.trial_expired_email_sent_at && sub.trial_ends_at) {
     const trialEnd = new Date(sub.trial_ends_at);
     const daysSince = (now - trialEnd) / MS_PER_DAY;
     if (daysSince >= 0 && daysSince <= 7) {

@@ -449,13 +449,25 @@ function CallTrackingSettings({ user }) {
           </div>
         </div>
         <div onClick={() => setShowPortInfo(p => !p)} style={{ background: C.surfaceHigh, borderRadius: 8, padding: 12, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 12, color: C.muted }}>Want to use your existing number?</div>
+          <div style={{ fontSize: 12, color: C.muted }}>Want to keep your existing number?</div>
           <div style={{ fontSize: 11, color: C.amber }}>{showPortInfo ? "▲ Hide" : "▼ Show"}</div>
         </div>
         {showPortInfo && (
           <div style={{ background: C.surfaceHigh, borderRadius: 8, padding: 14, marginTop: 2, borderTop: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 12, color: C.text, lineHeight: 1.7, marginBottom: 8 }}>You can port your existing mobile or landline number into Trade PA so customers keep calling the same number they always have.</div>
-            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>UK number porting typically takes 2–4 weeks. Contact us at <span style={{ color: C.amber }}>hello@tradespa.co.uk</span> to get started — we'll handle the process with you.</div>
+            <div style={{ fontSize: 12, color: C.text, lineHeight: 1.7, marginBottom: 8 }}>No need to switch numbers. Keep giving out the one you already use and forward it to Trade PA, so every call still comes through the app with the same fallback to your mobile.</div>
+            {callTracking.forwarding_code ? (
+              <div style={{ background: C.surface, borderRadius: 6, padding: "10px 12px", marginBottom: 8 }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Set it up in 10 seconds</div>
+                <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6, marginBottom: 6 }}>On the phone that has your existing number, dial:</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: C.amber, fontFamily: "monospace" }}>{callTracking.forwarding_code}</div>
+                {callTracking.disable_code && (
+                  <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginTop: 8 }}>To turn forwarding off again, dial <span style={{ color: C.text, fontFamily: "monospace" }}>{callTracking.disable_code}</span>.</div>
+                )}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>As soon as your Trade PA number is active, a short forwarding code shows here to point your existing number at it.</div>
+            )}
+            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>Prefer to move your number across for good? UK porting takes 2 to 4 weeks, just email <span style={{ color: C.amber }}>hello@tradespa.co.uk</span> and we will sort it with you.</div>
           </div>
         )}
 
@@ -5225,6 +5237,46 @@ function AppInner() {
   // Accounts that bypass the subscription check (owner/test accounts)
   const isExempt = isExemptAccount(user?.email);
 
+  // Paywall actions (web only). Route a lapsed or cancelled user into a real
+  // add-card flow instead of the sign-up page. iOS keeps its website link.
+  const openReactivate = async () => {
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { alert("Please log in again to continue."); return; }
+      const planKey = ({ solo: "solo_monthly", pro_solo: "pro_solo_monthly", team: "team_monthly", business: "business_monthly" })[planTier] || "solo_monthly";
+      const res = await fetch("/api/stripe/create-checkout-session", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_key: planKey }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.message || data.error || "Couldn't start checkout. Please try again or email hello@tradespa.co.uk"); return; }
+      if (data.url) window.location.href = data.url;
+      else window.location.reload();
+    } catch (err) {
+      console.error("[paywall-reactivate]", err);
+      alert("Couldn't start checkout. Please try again or email hello@tradespa.co.uk");
+    }
+  };
+  const openManagePayment = async () => {
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { alert("Please log in again to continue."); return; }
+      const res = await fetch("/api/stripe/portal", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.message || data.error || "Couldn't open billing. Please try again or email hello@tradespa.co.uk"); return; }
+      if (data.url) window.location.href = data.url;
+    } catch (err) {
+      console.error("[paywall-portal]", err);
+      alert("Couldn't open billing. Please try again or email hello@tradespa.co.uk");
+    }
+  };
+
   // Subscription paywall — blocks access if payment has lapsed.
   // On iOS native, App Store Guideline 3.1.3(b) forbids any in-app reference
   // to subscriptions, payments, or "subscribe" CTAs — so we render a neutral
@@ -5257,9 +5309,9 @@ function AppInner() {
               Visit tradespa.co.uk →
             </a>
           ) : (
-            <a href="https://www.tradespa.co.uk/signup.html" style={{ display: "block", background: "#f59e0b", color: "#000", padding: "16px 32px", borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: "none", marginBottom: 12 }}>
+            <button onClick={subscriptionStatus === "past_due" ? openManagePayment : openReactivate} style={{ display: "block", width: "100%", background: "#f59e0b", color: "#000", padding: "16px 32px", borderRadius: 10, fontWeight: 700, fontSize: 15, border: "none", cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 12 }}>
               {subscriptionStatus === "past_due" ? "Update Payment Details →" : "Subscribe Now →"}
-            </a>
+            </button>
           )}
           <button onClick={async () => { await db.auth.signOut(); setUser(null); }} style={{ background: "transparent", border: "none", color: "#555", fontSize: 13, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             Sign out
