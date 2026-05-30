@@ -24,24 +24,57 @@ async function handler(req, res) {
     // Add .mp3 if not already there
     const mp3Url = recordingUrl.endsWith(".mp3") ? recordingUrl : `${recordingUrl}.mp3`;
 
-    // Fetch with API key credentials (IE1 regional endpoint)
-    const response = await fetch(mp3Url, {
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_API_KEY}:${process.env.TWILIO_API_SECRET}`).toString("base64")}`,
-      },
-    });
+    // Forward the browser's Range header. iOS Safari / WKWebView require byte-range
+    // support (a 206 response) to play <audio>; without it the recording won't play.
+    const rangeHeader = req.headers.range;
+    const fetchHeaders = {
+      Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_API_KEY}:${process.env.TWILIO_API_SECRET}`).toString("base64")}`,
+    };
+    if (rangeHeader) fetchHeaders.Range = rangeHeader;
 
-    if (!response.ok) {
+    const response = await fetch(mp3Url, { headers: fetchHeaders });
+
+    if (!response.ok && response.status !== 206) {
       console.error(`Audio proxy: Failed to fetch recording — status ${response.status}`);
       return res.status(response.status).json({ error: "Failed to fetch recording" });
     }
 
-    // Stream the audio back with proper headers
     res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("Cache-Control", "private, max-age=3600");
 
-    const buffer = await response.arrayBuffer();
-    return res.send(Buffer.from(buffer));
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    // Twilio already returned a partial response — relay it as-is.
+    if (response.status === 206 && response.headers.get("content-range")) {
+      res.setHeader("Content-Range", response.headers.get("content-range"));
+      res.setHeader("Content-Length", String(buffer.length));
+      return res.status(206).send(buffer);
+    }
+
+    // We have the full file. If the client asked for a range, satisfy it ourselves
+    // so iOS gets its 206 even when Twilio ignored the Range header.
+    if (rangeHeader) {
+      const m = /bytes=(\d*)-(\d*)/.exec(rangeHeader);
+      if (m) {
+        const total = buffer.length;
+        let start = m[1] ? parseInt(m[1], 10) : 0;
+        let end = m[2] ? parseInt(m[2], 10) : total - 1;
+        if (isNaN(start) || start < 0) start = 0;
+        if (isNaN(end) || end >= total) end = total - 1;
+        if (start > end || start >= total) {
+          res.setHeader("Content-Range", `bytes */${total}`);
+          return res.status(416).end();
+        }
+        const chunk = buffer.subarray(start, end + 1);
+        res.setHeader("Content-Range", `bytes ${start}-${end}/${total}`);
+        res.setHeader("Content-Length", String(chunk.length));
+        return res.status(206).send(chunk);
+      }
+    }
+
+    res.setHeader("Content-Length", String(buffer.length));
+    return res.status(200).send(buffer);
 
   } catch (err) {
     console.error("Audio proxy error:", err.message);

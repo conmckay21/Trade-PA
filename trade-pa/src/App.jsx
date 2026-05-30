@@ -190,6 +190,12 @@ function CallTrackingSettings({ user }) {
   const [loaded, setLoaded] = useState(false);
   const [showPortInfo, setShowPortInfo] = useState(false);
   const [micStatus, setMicStatus] = useState(null); // granted | denied | prompt | unknown
+  const [areaQuery, setAreaQuery] = useState("");
+  const [numberResults, setNumberResults] = useState([]);
+  const [searchingNumbers, setSearchingNumbers] = useState(false);
+  const [chosenNumber, setChosenNumber] = useState("");
+  const [numbersError, setNumbersError] = useState("");
+  const [numberFellBack, setNumberFellBack] = useState(false);
 
   // ─── iOS native flag ─────────────────────────────────────────────────────
   // Path A (App Store Guideline 3.1.3(b)): on iOS, phone subscription UI is
@@ -231,6 +237,30 @@ function CallTrackingSettings({ user }) {
       .catch(() => setMicStatus("unknown"));
   }, [callTracking?.twilio_number]);
 
+  const searchNumbers = async () => {
+    setSearchingNumbers(true);
+    setNumbersError("");
+    setNumberFellBack(false);
+    try {
+      const res = await fetch("/api/calls/search-numbers?q=" + encodeURIComponent(areaQuery.trim()), {
+        headers: await authHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || "Search failed");
+      const list = data.numbers || [];
+      setNumberResults(list);
+      setNumberFellBack(!!data.fell_back);
+      setChosenNumber((list[0] && list[0].phone_number) || "");
+      if (list.length === 0) setNumbersError("No UK numbers available right now. Please try again shortly.");
+    } catch (err) {
+      setNumberResults([]);
+      setChosenNumber("");
+      setNumbersError(err.message || "Couldn't search numbers. Please try again.");
+    } finally {
+      setSearchingNumbers(false);
+    }
+  };
+
   const activate = async () => {
     if (!forwardTo.trim()) { setError("Please enter your mobile number for missed call fallback"); return; }
     if (!selectedPhonePlan) { setError("Please choose a plan"); return; }
@@ -252,6 +282,7 @@ function CallTrackingSettings({ user }) {
         body: JSON.stringify({
           phone_plan: selectedPhonePlan,
           forward_to: forwardTo.trim(),
+          chosen_number: chosenNumber || undefined,
         }),
       });
       const data = await res.json();
@@ -754,6 +785,73 @@ function CallTrackingSettings({ user }) {
         })}
       </div>
 
+      {/* Choose a local number: search by town or area code, pick from the list */}
+      <label style={{ ...S.label, marginBottom: 6 }}>Choose your number</label>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 8, lineHeight: 1.6 }}>
+        Search by your town or area code (e.g. "Derby" or "01332") to get a number local to you. Leave it blank and we'll pick the first available UK number.
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+        <input
+          style={{ ...S.input, marginBottom: 0, flex: 1 }}
+          placeholder="Town or area code"
+          value={areaQuery}
+          onChange={e => setAreaQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") searchNumbers(); }}
+        />
+        <button
+          type="button"
+          onClick={searchNumbers}
+          disabled={searchingNumbers}
+          style={{
+            background: C.surfaceHigh,
+            border: `1.5px solid ${C.border}`,
+            borderRadius: 8,
+            color: C.text,
+            fontSize: 13,
+            fontWeight: 600,
+            padding: "0 16px",
+            cursor: searchingNumbers ? "default" : "pointer",
+            whiteSpace: "nowrap",
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
+          }}
+        >
+          {searchingNumbers ? "..." : "Search"}
+        </button>
+      </div>
+      {numbersError && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{numbersError}</div>}
+      {numberResults.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          {numberFellBack && (
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>No numbers free in that area right now. Here are other available UK numbers.</div>
+          )}
+          <div style={{ display: "grid", gap: 6 }}>
+            {numberResults.map(n => {
+              const sel = chosenNumber === n.phone_number;
+              const place = [n.locality, n.region].filter(Boolean).join(", ");
+              return (
+                <div
+                  key={n.phone_number}
+                  onClick={() => setChosenNumber(n.phone_number)}
+                  style={{
+                    background: sel ? `${C.amber}14` : C.surfaceHigh,
+                    border: `1.5px solid ${sel ? C.amber : C.border}`,
+                    borderRadius: 8,
+                    padding: "10px 12px",
+                    cursor: "pointer",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 700, color: sel ? C.amber : C.text, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{n.phone_number}</span>
+                  <span style={{ fontSize: 11, color: C.muted }}>{place || "UK"}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, lineHeight: 1.6 }}>
         Enter your personal mobile as a fallback. If you don't answer in the app within 30 seconds, the call will ring your mobile instead so you never miss anything.
       </div>
@@ -4493,7 +4591,14 @@ function AppInner() {
 
         d.on("error", err => console.log("Twilio Device error:", err?.code, err?.message, err));
 
-        await d.register();
+        // iOS native: incoming rings via the native CallKit/VoIP path, which
+        // defaults to the earpiece and has a working speaker button. The web SDK's
+        // WebRTC audio on iOS WebKit defaults to the loudspeaker and ignores
+        // setSinkId, so we skip JS incoming registration on iOS. The Device stays
+        // available for outgoing calls.
+        if (!(typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.() && window.Capacitor?.getPlatform?.() === "ios")) {
+          await d.register();
+        }
         twilioDeviceRef.current = d;
         setTwilioDevice(d);
         console.log("✓ Twilio Device registered");

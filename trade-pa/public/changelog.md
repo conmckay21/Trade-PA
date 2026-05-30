@@ -1,5 +1,9 @@
 ## 2026-05-30
 
+🔊 **iPhone calls play through the earpiece, like a normal phone call.** Answer a call on iPhone and it now comes through the earpiece by default, with the speaker button on the call screen there when you want it. Before, iPhone calls could stick on loudspeaker.
+
+📍 **Pick a local number for Business Phone.** Now when you set up your business number you can search by your town or area code and choose from the list, so customers see a local number they recognise instead of whatever came up first. Leave it blank and we'll still grab the first available UK number.
+
 🔄 **Restarting your plan is one tap now.** If your trial runs out before you've added a card, the "Subscribe Now" button takes you straight to a secure checkout to pick up where you left off, instead of bouncing you to the sign-up page. And if a card payment ever fails later on, the same screen sends you right to your billing details to sort it.
 
 ## 2026-05-29

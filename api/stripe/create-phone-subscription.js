@@ -48,7 +48,7 @@ async function getUserIdFromRequest(req) {
   } catch { return null; }
 }
 
-async function twilioBuyNumber(userId) {
+async function twilioBuyNumber(userId, preferredNumber) {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const appUrl = process.env.APP_URL;
@@ -63,7 +63,7 @@ async function twilioBuyNumber(userId) {
   const searchData = await searchRes.json();
   const available = searchData.available_phone_numbers || [];
   if (available.length === 0) throw new Error("twilio_no_numbers_available");
-  const chosenNumber = available[0].phone_number;
+  const chosenNumber = preferredNumber || available[0].phone_number;
 
   const webhookUrl = `${appUrl}/api/calls/incoming?userId=${userId}`;
   const purchaseRes = await fetch(`${twilioBase}/IncomingPhoneNumbers.json`, {
@@ -102,7 +102,7 @@ async function handler(req, res) {
   const userId = await getUserIdFromRequest(req);
   if (!userId) return res.status(401).json({ error: "unauthorised", message: "Valid auth token required." });
 
-  const { phone_plan, forward_to } = req.body || {};
+  const { phone_plan, forward_to, chosen_number } = req.body || {};
   const planConfig = PHONE_PLAN_CATALOGUE[phone_plan];
   if (!planConfig) return res.status(400).json({ error: "invalid_phone_plan", message: "Unknown phone plan." });
   if (!forward_to || typeof forward_to !== "string" || forward_to.trim().length < 6) {
@@ -155,7 +155,10 @@ async function handler(req, res) {
       });
     }
 
-    purchasedNumber = await twilioBuyNumber(userId);
+    const _chosen = (chosen_number || "").trim();
+    const _digits = _chosen.replace(/[^0-9]/g, "");
+    const _validChosen = _chosen.startsWith("+") && _digits.length >= 7 && _digits.length <= 16;
+    purchasedNumber = await twilioBuyNumber(userId, _validChosen ? _chosen : null);
     console.log(`[create-phone-sub] Bought ${purchasedNumber.twilio_number} for user ${userId}`);
 
     let subscription;
