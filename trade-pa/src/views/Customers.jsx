@@ -1211,7 +1211,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
                         {log.summary && <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, marginTop: 6 }}>{log.summary}</div>}
                         {log.recording_url && (
                           <audio controls style={{ width: "100%", marginTop: 8, height: 32 }}
-                            src={`/api/calls/audio?url=${encodeURIComponent(log.recording_url)}`}>
+                            src={`${typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.() ? "https://www.tradespa.co.uk" : ""}/api/calls/audio?url=${encodeURIComponent(log.recording_url)}`}>
                             Your browser does not support audio playback.
                           </audio>
                         )}

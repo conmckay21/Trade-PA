@@ -28,7 +28,10 @@ async function handler(req, res) {
     // support (a 206 response) to play <audio>; without it the recording won't play.
     const rangeHeader = req.headers.range;
     const fetchHeaders = {
-      Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_API_KEY}:${process.env.TWILIO_API_SECRET}`).toString("base64")}`,
+      // Account SID + Auth Token are account-wide and authenticate against any
+      // Twilio region. API keys are region-scoped, so a US1 key 401s on recordings
+      // stored in another region (e.g. older ie1/Dublin recordings).
+      Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
     };
     if (rangeHeader) fetchHeaders.Range = rangeHeader;
 

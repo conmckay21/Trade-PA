@@ -1149,7 +1149,7 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
                       {log.key_details && <div style={{ fontSize: 11, color: C.amber }}>📌 {log.key_details}</div>}
                       {log.recording_url && (
                         <audio controls style={{ width: "100%", marginTop: 8, height: 32 }}
-                          src={`/api/calls/audio?url=${encodeURIComponent(log.recording_url)}`}>
+                          src={`${typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.() ? "https://www.tradespa.co.uk" : ""}/api/calls/audio?url=${encodeURIComponent(log.recording_url)}`}>
                           Your browser does not support audio playback.
                         </audio>
                       )}

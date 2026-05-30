@@ -1,5 +1,7 @@
 ## 2026-05-30
 
+🎧 **Call recordings now play on iPhone.** Tapping play on a call recording now works in the iPhone app, and older recordings from earlier in the year play too. Before, some recordings showed an error instead of playing.
+
 🔊 **iPhone calls play through the earpiece, like a normal phone call.** Answer a call on iPhone and it now comes through the earpiece by default, with the speaker button on the call screen there when you want it. Before, iPhone calls could stick on loudspeaker.
 
 📍 **Pick a local number for Business Phone.** Now when you set up your business number you can search by your town or area code and choose from the list, so customers see a local number they recognise instead of whatever came up first. Leave it blank and we'll still grab the first available UK number.
