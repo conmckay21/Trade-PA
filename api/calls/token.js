@@ -33,9 +33,18 @@ async function handler(req, res) {
       { identity, ttl: 3600, region: "us1" }
     );
 
+    // Platform selects which VoIP push credential Twilio uses to wake the app.
+    // Web sends no platform and gets no credential, so web calling is unchanged.
+    const platform = String(req.query.platform || "").toLowerCase();
+    const pushCredentialSid =
+      platform === "ios" ? process.env.TWILIO_PUSH_CREDENTIAL_SID_IOS :
+      platform === "android" ? process.env.TWILIO_PUSH_CREDENTIAL_SID_ANDROID :
+      undefined;
+
     const voiceGrant = new VoiceGrant({
       outgoingApplicationSid: process.env.TWILIO_TWIML_APP_SID,
       incomingAllow: true,
+      ...(pushCredentialSid ? { pushCredentialSid } : {}),
     });
 
     token.addGrant(voiceGrant);

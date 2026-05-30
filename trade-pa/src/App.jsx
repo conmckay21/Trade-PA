@@ -3929,6 +3929,34 @@ function AppInner() {
   const [bellFlash, setBellFlash] = useState(false);
   const [twilioDevice, setTwilioDevice] = useState(null);
   const twilioDeviceRef = useRef(null);
+
+  // Native iOS CallKit / VoIP: register the device so incoming calls ring even
+  // when the app is fully closed. iOS-native only and additive; web and Android
+  // keep the in-app Twilio Device. (Open-app dedup is the next step.)
+  useEffect(() => {
+    if (!user?.id) return;
+    const isIOSNative = typeof window !== "undefined"
+      && window.Capacitor?.isNativePlatform?.()
+      && window.Capacitor?.getPlatform?.() === "ios";
+    if (!isIOSNative) return;
+    const CallKitVoip = window.Capacitor?.registerPlugin?.("CallKitVoip");
+    if (!CallKitVoip) { console.log("CallKitVoip plugin not available"); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: ct } = await db.from("call_tracking").select("twilio_number").eq("user_id", user.id).limit(1).maybeSingle();
+        if (cancelled || !ct?.twilio_number) return;
+        const res = await fetch("/api/calls/token?platform=ios", { method: "POST", headers: await authHeaders() });
+        const { token } = await res.json();
+        if (cancelled || !token) return;
+        await CallKitVoip.register({ accessToken: token });
+        console.log("\u2713 CallKit VoIP registered");
+      } catch (e) {
+        console.log("CallKit VoIP register error:", e?.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
   const [callMuted, setCallMuted] = useState(false);

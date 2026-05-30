@@ -15,6 +15,10 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		A084ECDBA7D38E1E42DFC39D /* Pods_App.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */; };
+		B345D7012FCAF02800C142CD /* TwilioCallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B345D7002FCAF02800C142CD /* TwilioCallManager.swift */; };
+		B345D7032FCAF03900C142CD /* CallKitVoipPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B345D7022FCAF03900C142CD /* CallKitVoipPlugin.swift */; };
+		B345D7052FCAF85900C142CD /* CallKitVoipPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = B345D7042FCAF85900C142CD /* CallKitVoipPlugin.m */; };
+		B345D7072FCAF98E00C142CD /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B345D7062FCAF98E00C142CD /* MainViewController.swift */; };
 		B3EFE28E2FB5EE9A005C55A8 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = B3EFE28D2FB5EE9A005C55A8 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
@@ -30,6 +34,10 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_App.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.release.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.release.xcconfig"; sourceTree = "<group>"; };
+		B345D7002FCAF02800C142CD /* TwilioCallManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwilioCallManager.swift; sourceTree = "<group>"; };
+		B345D7022FCAF03900C142CD /* CallKitVoipPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallKitVoipPlugin.swift; sourceTree = "<group>"; };
+		B345D7042FCAF85900C142CD /* CallKitVoipPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CallKitVoipPlugin.m; sourceTree = "<group>"; };
+		B345D7062FCAF98E00C142CD /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		B3EFE28D2FB5EE9A005C55A8 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		B3EFE28F2FB5F19C005C55A8 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
@@ -76,6 +84,10 @@
 		504EC3061FED79650016851F /* App */ = {
 			isa = PBXGroup;
 			children = (
+				B345D7062FCAF98E00C142CD /* MainViewController.swift */,
+				B345D7042FCAF85900C142CD /* CallKitVoipPlugin.m */,
+				B345D7022FCAF03900C142CD /* CallKitVoipPlugin.swift */,
+				B345D7002FCAF02800C142CD /* TwilioCallManager.swift */,
 				B3EFE28F2FB5F19C005C55A8 /* App.entitlements */,
 				B3EFE28D2FB5EE9A005C55A8 /* GoogleService-Info.plist */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
@@ -132,7 +144,7 @@
 				TargetAttributes = {
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
-						LastSwiftMigration = 1100;
+						LastSwiftMigration = 2640;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -216,6 +228,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				B345D7012FCAF02800C142CD /* TwilioCallManager.swift in Sources */,
+				B345D7032FCAF03900C142CD /* CallKitVoipPlugin.swift in Sources */,
+				B345D7052FCAF85900C142CD /* CallKitVoipPlugin.m in Sources */,
+				B345D7072FCAF98E00C142CD /* MainViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -353,19 +369,21 @@
 			baseConfigurationReference = FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = FM5UY8KLD6;
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Trade PA";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0.8;
+				MARKETING_VERSION = 1.1.1;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.tradespa.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -376,15 +394,16 @@
 			baseConfigurationReference = AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = FM5UY8KLD6;
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Trade PA";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0.8;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.tradespa.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";

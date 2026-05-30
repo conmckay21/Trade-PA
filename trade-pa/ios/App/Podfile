@@ -16,7 +16,8 @@ end
 
 target 'App' do
   capacitor_pods
-  # Add your Pods here
+  # Twilio Voice native SDK for CallKit + VoIP push
+  pod 'TwilioVoice', '~> 6.0'
 end
 
 post_install do |installer|
