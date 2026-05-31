@@ -86,7 +86,7 @@ export const NAV_GROUPS = [
   { id: "work",   label: "Jobs",     views: ["Enquiries", "Jobs", "Materials", "Suppliers", "Stock", "RAMS", "Documents"] },
   { id: "diary",  label: "Diary",    views: ["Schedule", "Reminders"] },
   { id: "money",  label: "Accounts", views: ["Invoices", "Quotes", "Expenses", "Mileage", "Payments", "CIS", "Reports"] },
-  { id: "people", label: "People",   views: ["Customers", "Workers", "Subcontractors", "Reviews"] },
+  { id: "people", label: "People",   views: ["Customers", "Calls", "Workers", "Subcontractors", "Reviews"] },
   { id: "admin",  label: "Admin",    views: ["Inbox", "Settings"] },
 ];
 // Flat list still used for permissions checks
