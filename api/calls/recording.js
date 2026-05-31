@@ -46,12 +46,37 @@ async function transcribeAudio(audioBytes) {
 }
 
 async function processRecording(req) {
-  const { RecordingUrl, RecordingDuration, CallSid } = req.body || {};
+  const { RecordingUrl, RecordingDuration, CallSid, RecordingStatus } = req.body || {};
   const { userId, callerNumber, customerName, direction } = req.query;
 
   if (!RecordingUrl || !userId) {
     console.error("recording.js: Missing RecordingUrl or userId");
     return;
+  }
+
+  // Only the final recording matters. Twilio can fire this callback more than
+  // once; ignore anything that is not the completed event.
+  if (RecordingStatus && RecordingStatus !== "completed") {
+    console.log(`recording.js: Ignoring RecordingStatus=${RecordingStatus}`);
+    return;
+  }
+
+  // Dedup: if we already logged this call, skip — prevents duplicate
+  // transcription, Claude spend, and call_logs rows from repeated callbacks.
+  if (CallSid) {
+    try {
+      const dupeRes = await fetch(
+        `${process.env.VITE_SUPABASE_URL}/rest/v1/call_logs?call_sid=eq.${encodeURIComponent(CallSid)}&select=id&limit=1`,
+        { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+      );
+      const dupeRows = await dupeRes.json();
+      if (Array.isArray(dupeRows) && dupeRows.length > 0) {
+        console.log(`recording.js: call_sid ${CallSid} already logged — skipping`);
+        return;
+      }
+    } catch (e) {
+      console.warn("recording.js: dedup check failed, continuing:", e.message);
+    }
   }
 
   const isOutbound = direction === "outbound";
@@ -65,7 +90,9 @@ async function processRecording(req) {
     for (let attempt = 1; attempt <= 5; attempt++) {
       recordingRes = await fetch(`${RecordingUrl}.mp3`, {
         headers: {
-          Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_API_KEY}:${process.env.TWILIO_API_SECRET}`).toString("base64")}`,
+          // Account credentials are region-agnostic; the region-scoped API key
+          // 401s on recordings stored outside its home region.
+          Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
         },
       });
       if (recordingRes.ok) { console.log(`recording.js: Downloaded on attempt ${attempt}`); break; }
