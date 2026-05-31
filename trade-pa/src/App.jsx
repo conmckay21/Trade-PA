@@ -122,6 +122,7 @@ import { JobsHub } from "./views/hubs/JobsHub.jsx";
 import { DiaryHub } from "./views/hubs/DiaryHub.jsx";
 import { AccountsHub } from "./views/hubs/AccountsHub.jsx";
 import { PeopleHub } from "./views/hubs/PeopleHub.jsx";
+import { Calls } from "./views/Calls.jsx";
 import { Suppliers } from "./views/Suppliers.jsx";
 // ─── P10: AIAssistant extracted from App.jsx (28 Apr 2026) ─────────────────
 // Verbatim move — no behavioural changes. AIAssistant body (~7,850 lines)
@@ -6392,6 +6393,7 @@ function AppInner() {
         {view === "Schedule" && <Schedule jobs={jobs} setJobs={setJobs} customers={customers} setContextHint={setContextHint} user={user} />}
         {view === "Enquiries" && <EnquiriesTab enquiries={enquiries} setEnquiries={setEnquiries} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} brand={brand} user={user} setView={setView} setContextHint={setContextHint} />}
         {view === "Jobs" && <JobsTab key={jobsRefreshKey} user={user} brand={brand} customers={customers} invoices={invoices} setInvoices={setInvoices} setView={setView} setContextHint={setContextHint} />}
+        {view === "Calls" && <Calls user={user} customers={customers} setCustomers={setCustomers} enquiries={enquiries} setEnquiries={setEnquiries} setView={setView} makeCall={makeCall} hasTwilio={!!twilioDevice} setContextHint={setContextHint} companyId={companyId} />}
         {view === "Customers" && <Customers customers={customers} setCustomers={setCustomers} customerContacts={customerContacts} setCustomerContacts={setCustomerContacts} jobs={jobs} invoices={invoices} setView={setView} user={user} makeCall={makeCall} hasTwilio={!!twilioDevice} setContextHint={setContextHint} companyId={companyId} />}
         {view === "Suppliers" && <Suppliers user={user} setView={setView} makeCall={makeCall} hasTwilio={!!twilioDevice} setContextHint={setContextHint} />}
         {view === "Invoices" && <InvoicesView brand={brand} invoices={invoices} setInvoices={setInvoices} user={user} customers={customers} customerContacts={customerContacts} setContextHint={setContextHint} />}

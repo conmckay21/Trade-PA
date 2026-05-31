@@ -63,7 +63,7 @@ export function BottomTabBar({ view, setView, isDesktopBrowser }) {
       id: "People",
       label: "People",
       view: "PeopleHub",
-      activeOn: ["PeopleHub", "Customers", "Workers", "Subcontractors", "Reviews", "Inbox"],
+      activeOn: ["PeopleHub", "Customers", "Calls", "Workers", "Subcontractors", "Reviews", "Inbox"],
       icon: (active) => (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="8" r="4" />
