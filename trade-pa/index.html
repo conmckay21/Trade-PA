@@ -111,6 +111,7 @@
     <style>body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
 
       /* Static SEO content styles: only apply inside .seo-shell before React mounts */
+      .app-authed .seo-shell { display: none !important; }
       .seo-shell { max-width: 1100px; margin: 0 auto; padding: 24px; color: #f0f0f0; }
       .seo-shell a { color: #f59e0b; text-decoration: none; }
       .seo-shell nav { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; margin-bottom: 48px; }
@@ -138,6 +139,20 @@
       .seo-shell footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid #222; font-size: 12px; color: #888; text-align: center; }
       .seo-shell footer a { color: #ccc; margin: 0 10px; }
     </style>
+      <script>
+      // Skip the static marketing shell for signed-in users so they land
+      // straight on the app instead of seeing it flash on load. Logged-out
+      // visitors and crawlers still get the shell (kept for SEO).
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf("-auth-token") !== -1 && localStorage.getItem(k)) {
+            document.documentElement.classList.add("app-authed");
+            break;
+          }
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root">
