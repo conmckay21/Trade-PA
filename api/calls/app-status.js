@@ -38,7 +38,7 @@ async function handler(req, res) {
     });
     console.log(`App ${callStatus} — caller ${callerCallSid} sent to voicemail`);
   } catch (err) {
-    console.error('Voicemail redirect failed:', err.message);
+    console.error(`VMFAIL code=${err.code || 'none'} status=${err.status || 'none'} sid=${callerCallSid} :: ${err.message}`);
   }
 }
 
