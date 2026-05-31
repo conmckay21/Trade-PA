@@ -135,7 +135,13 @@ export default async function handler(req, res) {
   // Dial the app client. 20s timeout — if no answer, app-status.js fires mobile fallback.
   let appDialedOk = false;
   try {
-    const appCall = await client.calls.create({
+    // App leg parameters. We present the REAL caller's number as the caller ID
+    // (set below) so the phone and the VoIP push -> CallKit show who is calling
+    // instead of our own Twilio number. statusCallbackEvent uses only
+    // 'completed' because the Calls API rejects no-answer/busy/failed as event
+    // names (error 21626); 'completed' delivers the final CallStatus that
+    // app-status.js inspects to decide the mobile fallback.
+    const appLegParams = {
       to: `client:${identity}`,
       from: userTwilioNumber,
       twiml: joinConferenceTwiml,
@@ -148,15 +154,25 @@ export default async function handler(req, res) {
         `&customerName=${encodeURIComponent(customerName || '')}` +
         `&twilioNumber=${encodeURIComponent(userTwilioNumber)}`,
       statusCallbackMethod: 'POST',
-      // Calls API only accepts: initiated, ringing, answered, completed.
-      // 'completed' fires at terminal state and delivers the final CallStatus
-      // (completed/no-answer/busy/failed), which app-status.js inspects to
-      // decide the mobile fallback. The old list also passed no-answer, busy
-      // and failed, which are not valid event names, so Twilio rejected the
-      // dial with error 21626 and the app was never added to the conference.
       statusCallbackEvent: ['completed'],
       timeout: 20,
-    });
+    };
+    // Use the caller's number as caller ID when it is a valid E.164-ish value.
+    // Twilio normally allows an arbitrary From on a client leg; if it rejects
+    // this one we retry with the Twilio number so app dialling never breaks.
+    const callerIdDigits = (callerNumber || '').replace(/[^\d+]/g, '');
+    const useCallerId = /^\+?\d{7,15}$/.test(callerIdDigits);
+    let appCall;
+    try {
+      appCall = await client.calls.create({ ...appLegParams, from: useCallerId ? callerIdDigits : userTwilioNumber });
+    } catch (err) {
+      if (useCallerId) {
+        console.warn(`[conf-status] app dial with caller ID rejected (code=${err.code || 'none'}); retrying with Twilio number`);
+        appCall = await client.calls.create(appLegParams);
+      } else {
+        throw err;
+      }
+    }
     appDialedOk = true;
     console.log(`[conf-status] <<< DIAL APP OK sid=${appCall.sid}`);
   } catch (err) {
