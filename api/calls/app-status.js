@@ -11,11 +11,19 @@ async function handler(req, res) {
   const { userId, confName, forwardTo, callerNumber, customerName, callerCallSid } = req.query;
   checkTwilioSignature(req, "calls/app-status"); // monitor mode: logs only
   const callStatus = req.body?.CallStatus;
+  const callDuration = parseInt(req.body?.CallDuration || '0', 10);
 
   res.status(200).send('OK');
 
-  // App answered — nothing to do, conference is running
-  if (callStatus === 'in-progress' || callStatus === 'completed') return;
+  console.log(`VMTRACE status=${callStatus} dur=${callDuration} sid=${callerCallSid || 'none'} conf=${confName}`);
+
+  // App "answered" only if it actually connected. 'completed' on its own is NOT
+  // proof: a rung-out Voice SDK / CallKit leg also reports 'completed' with 0
+  // duration. Require real talk time, else fall through to Trade PA voicemail.
+  const appAnswered =
+    callStatus === 'in-progress' ||
+    (callStatus === 'completed' && callDuration > 0);
+  if (appAnswered) return;
 
   // App didn't answer (no-answer, busy, failed) → send the caller to Trade PA
   // voicemail (B: no mobile forward). We pull the caller's leg out of the
