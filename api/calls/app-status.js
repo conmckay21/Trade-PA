@@ -7,7 +7,7 @@ import twilio from 'twilio';
 import { withSentry } from "../lib/sentry.js";
 
 async function handler(req, res) {
-  const { userId, confName, forwardTo, callerNumber, customerName } = req.query;
+  const { userId, confName, forwardTo, callerNumber, customerName, callerCallSid } = req.query;
   const callStatus = req.body?.CallStatus;
 
   res.status(200).send('OK');
@@ -15,40 +15,28 @@ async function handler(req, res) {
   // App answered — nothing to do, conference is running
   if (callStatus === 'in-progress' || callStatus === 'completed') return;
 
-  // App didn't answer (no-answer, busy, failed) → ring mobile into conference
-  if (!forwardTo) {
-    console.log(`App ${callStatus} — no mobile fallback configured for user ${userId}`);
+  // App didn't answer (no-answer, busy, failed) → send the caller to Trade PA
+  // voicemail (B: no mobile forward). We pull the caller's leg out of the
+  // conference and into /api/calls/voicemail, which records + transcribes.
+  if (!callerCallSid) {
+    console.log(`App ${callStatus} for conf ${confName} — no callerCallSid, cannot route to voicemail`);
     return;
   }
 
-  console.log(`App client ${callStatus} for conf ${confName} — dialling mobile ${forwardTo}`);
-
-  // ie1 to match the inbound call and conference, so the mobile leg joins the
-  // same conference rather than a separate us1 one.
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-  const mobileTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Dial>
-    <Conference
-      startConferenceOnEnter="true"
-      endConferenceOnExit="false"
-      beep="false">
-      ${confName}
-    </Conference>
-  </Dial>
-</Response>`;
-
   try {
-    await client.calls.create({
-      to: forwardTo,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      twiml: mobileTwiml,
-      timeout: 30,
+    await client.calls(callerCallSid).update({
+      method: 'POST',
+      url:
+        `${process.env.APP_URL}/api/calls/voicemail` +
+        `?userId=${encodeURIComponent(userId || '')}` +
+        `&callerNumber=${encodeURIComponent(callerNumber || '')}` +
+        `&customerName=${encodeURIComponent(customerName || '')}`,
     });
-    console.log(`Mobile ${forwardTo} dialled into conf ${confName} — recording continues`);
+    console.log(`App ${callStatus} — caller ${callerCallSid} sent to voicemail`);
   } catch (err) {
-    console.error('Mobile dial failed:', err.message);
+    console.error('Voicemail redirect failed:', err.message);
   }
 }
 

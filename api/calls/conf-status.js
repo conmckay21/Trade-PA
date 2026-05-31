@@ -152,7 +152,8 @@ export default async function handler(req, res) {
         `&forwardTo=${encodeURIComponent(userForwardTo || '')}` +
         `&callerNumber=${encodeURIComponent(callerNumber || '')}` +
         `&customerName=${encodeURIComponent(customerName || '')}` +
-        `&twilioNumber=${encodeURIComponent(userTwilioNumber)}`,
+        `&twilioNumber=${encodeURIComponent(userTwilioNumber)}` +
+        `&callerCallSid=${encodeURIComponent(callSid || '')}`,
       statusCallbackMethod: 'POST',
       statusCallbackEvent: ['completed'],
       timeout: 20,
@@ -181,20 +182,21 @@ export default async function handler(req, res) {
     );
   }
 
-  // If app dial creation itself failed AND mobile is set, dial mobile immediately
-  if (!appDialedOk && userForwardTo) {
+  // If the app dial could not even be created, send the caller to voicemail now
+  // (B: no mobile forward — the app rings, otherwise Trade PA voicemail).
+  if (!appDialedOk && callSid) {
     try {
-      const mobileCall = await client.calls.create({
-        to: userForwardTo,
-        from: userTwilioNumber,
-        twiml: joinConferenceTwiml,
-        timeout: 30,
+      await client.calls(callSid).update({
+        method: 'POST',
+        url:
+          `${appUrl}/api/calls/voicemail` +
+          `?userId=${encodeURIComponent(userId)}` +
+          `&callerNumber=${encodeURIComponent(callerNumber || '')}` +
+          `&customerName=${encodeURIComponent(customerName || '')}`,
       });
-      console.log(`[conf-status] <<< DIAL MOBILE OK sid=${mobileCall.sid}`);
-    } catch (mobileErr) {
-      console.error(
-        `[conf-status] !!! DIAL MOBILE ERROR: ${mobileErr.message} code=${mobileErr.code || 'none'}`
-      );
+      console.log(`[conf-status] app dial not created — caller ${callSid} sent to voicemail`);
+    } catch (vmErr) {
+      console.error(`[conf-status] !!! VOICEMAIL REDIRECT ERROR: ${vmErr.message}`);
     }
   }
 
