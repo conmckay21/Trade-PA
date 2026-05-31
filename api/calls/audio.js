@@ -21,6 +21,23 @@ async function handler(req, res) {
       return res.status(400).json({ error: "Invalid URL" });
     }
 
+    // Only proxy recordings we actually have on record. Without this the
+    // endpoint would fetch ANY twilio.com URL with our account credentials.
+    try {
+      const lookupUrl = recordingUrl.replace(/\.mp3$/, "");
+      const chkRes = await fetch(
+        `${process.env.VITE_SUPABASE_URL}/rest/v1/call_logs?recording_url=eq.${encodeURIComponent(lookupUrl)}&select=id&limit=1`,
+        { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+      );
+      const chkRows = await chkRes.json();
+      if (!Array.isArray(chkRows) || chkRows.length === 0) {
+        return res.status(404).json({ error: "Recording not found" });
+      }
+    } catch (lookupErr) {
+      console.error("Audio proxy: call_logs lookup failed:", lookupErr.message);
+      return res.status(500).json({ error: "Internal error" });
+    }
+
     // Add .mp3 if not already there
     const mp3Url = recordingUrl.endsWith(".mp3") ? recordingUrl : `${recordingUrl}.mp3`;
 

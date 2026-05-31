@@ -3,8 +3,10 @@
 // Params sent from the app via device.connect({ params: { To, userId, customerName } })
 
 import { withSentry } from "../lib/sentry.js";
+import { checkTwilioSignature } from "../lib/twilio-verify.js";
 
 async function handler(req, res) {
+  checkTwilioSignature(req, "calls/outbound"); // monitor mode: logs only
   const { To, userId, customerName } = req.body || {};
 
   if (!To || !userId) {

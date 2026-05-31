@@ -185,13 +185,21 @@ export function JobsTab({ user, brand, customers, invoices, setInvoices, setView
       loadJobDetails(selected.id);
       // Load call logs for this job
       if (user?.id) {
-        db.from("call_logs")
-          .select("*")
-          .eq("user_id", user.id)
-          .ilike("customer_name", selected.customer || "")
-          .order("created_at", { ascending: false })
-          .then(({ data }) => setJobCallLogs(data || []))
-          .catch(() => setJobCallLogs([]));
+        (async () => {
+          try {
+            // Prefer matching by customer_id (exact). Jobs store the customer
+            // name, so resolve it to an id first; fall back to the name for any
+            // customer without a matching record.
+            let query = db.from("call_logs").select("*").eq("user_id", user.id);
+            const { data: custRows } = await db
+              .from("customers").select("id").eq("user_id", user.id)
+              .ilike("name", selected.customer || "").limit(1);
+            if (custRows && custRows[0]?.id) query = query.eq("customer_id", custRows[0].id);
+            else query = query.ilike("customer_name", selected.customer || "");
+            const { data } = await query.order("created_at", { ascending: false });
+            setJobCallLogs(data || []);
+          } catch { setJobCallLogs([]); }
+        })();
       }
     }
   }, [selected?.id]);

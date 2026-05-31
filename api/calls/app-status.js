@@ -5,9 +5,11 @@
 
 import twilio from 'twilio';
 import { withSentry } from "../lib/sentry.js";
+import { checkTwilioSignature } from "../lib/twilio-verify.js";
 
 async function handler(req, res) {
   const { userId, confName, forwardTo, callerNumber, customerName, callerCallSid } = req.query;
+  checkTwilioSignature(req, "calls/app-status"); // monitor mode: logs only
   const callStatus = req.body?.CallStatus;
 
   res.status(200).send('OK');

@@ -4,8 +4,10 @@
 // message, and sends the recording to recording.js — the same transcription +
 // action pipeline as a normal call (recording.js reads ?voicemail=true).
 import { withSentry } from "../lib/sentry.js";
+import { checkTwilioSignature } from "../lib/twilio-verify.js";
 
 async function handler(req, res) {
+  checkTwilioSignature(req, "calls/voicemail"); // monitor mode: logs only
   const { userId, callerNumber, customerName } = req.query;
   const appUrl = process.env.APP_URL;
 

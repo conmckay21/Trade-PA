@@ -1,10 +1,12 @@
 // api/calls/incoming.js
 import { createClient } from '@supabase/supabase-js';
 import { withSentry } from "../lib/sentry.js";
+import { checkTwilioSignature } from "../lib/twilio-verify.js";
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 async function handler(req, res) {
   const { userId } = req.query;
+  checkTwilioSignature(req, "calls/incoming"); // monitor mode: logs only
   const callerNumber = req.body?.From || '';
   const normalised = callerNumber.replace(/\s/g, '');
 

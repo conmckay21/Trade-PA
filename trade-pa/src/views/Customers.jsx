@@ -176,7 +176,7 @@ export function Customers({ customers, setCustomers, customerContacts, setCustom
     db.from("call_logs")
       .select("*")
       .eq("user_id", user.id)
-      .ilike("customer_name", selected.name)
+      .eq("customer_id", selected.id)
       .order("created_at", { ascending: false })
       .limit(20)
       .then(({ data }) => setCallLogs(data || []));

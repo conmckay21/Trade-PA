@@ -22,6 +22,7 @@
 //   than in-app. Tracking for later resolution.
 
 import twilio from 'twilio';
+import { checkTwilioSignature } from "../lib/twilio-verify.js";
 
 const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -34,6 +35,7 @@ if (!global.__tradepa_dialedConferences) {
 const dialedConferences = global.__tradepa_dialedConferences;
 
 export default async function handler(req, res) {
+  checkTwilioSignature(req, "calls/conf-status"); // monitor mode: logs only
   const { userId, callerNumber, customerName, confName, forwardTo } = req.query;
   const event = req.body?.StatusCallbackEvent;
   const conferenceSid = req.body?.ConferenceSid;

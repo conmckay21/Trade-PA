@@ -4,6 +4,7 @@
 // Transcribes via Deepgram (primary) or Whisper (fallback) — keys server-side only
 import { waitUntil } from "@vercel/functions";
 import { withSentry } from "../lib/sentry.js";
+import { checkTwilioSignature } from "../lib/twilio-verify.js";
 
 async function transcribeAudio(audioBytes) {
   // Try Deepgram first (faster, cheaper, no OpenAI dependency)
@@ -302,6 +303,7 @@ Respond ONLY with JSON:
 }
 
 async function handler(req, res) {
+  checkTwilioSignature(req, "calls/recording"); // monitor mode: logs only
   res.status(200).json({ received: true });
   waitUntil(processRecording(req));
 }
