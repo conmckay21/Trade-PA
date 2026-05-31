@@ -4039,7 +4039,7 @@ function AppInner() {
       && window.Capacitor?.getPlatform?.() === "ios";
     if (!isIOSNative) return;
     const CallKitVoip = window.Capacitor?.registerPlugin?.("CallKitVoip");
-    if (!CallKitVoip) { console.log("CallKitVoip plugin not available"); return; }
+    if (!CallKitVoip || window.Capacitor?.getPlatform?.() !== "ios") { console.log("CallKitVoip skipped (iOS only)"); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -4808,7 +4808,7 @@ function AppInner() {
   // customer's name (iOS native only; a no-op on web/Android).
   useEffect(() => {
     const CallKitVoip = window.Capacitor?.registerPlugin?.("CallKitVoip");
-    if (!CallKitVoip || !window.Capacitor?.isNativePlatform?.()) return;
+    if (!CallKitVoip || window.Capacitor?.getPlatform?.() !== "ios") return;
     try {
       const contacts = (customers || [])
         .filter((c) => c && c.phone && c.name)
