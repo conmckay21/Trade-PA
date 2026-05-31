@@ -4,14 +4,21 @@
 // Returns { twilioNumber, forwardingCode, disableCode }
 
 import { withSentry } from "../lib/sentry.js";
+import { requireAuth } from "../lib/auth.js";
 
 async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { userId, forwardTo } = req.body || {};
+  // Identity comes from the verified JWT only, never the body. This endpoint
+  // buys a Twilio number (spends money), so it must not trust a client-supplied
+  // userId.
+  const userId = await requireAuth(req, res);
+  if (!userId) return; // 401 already sent
 
-  if (!userId || !forwardTo) {
-    return res.status(400).json({ error: "userId and forwardTo are required" });
+  const { forwardTo } = req.body || {};
+
+  if (!forwardTo) {
+    return res.status(400).json({ error: "forwardTo is required" });
   }
 
   const forwardToClean = forwardTo.replace(/\s/g, "");
