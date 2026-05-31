@@ -4803,6 +4803,18 @@ function AppInner() {
   const [materials, setMaterialsRaw] = useState([]);
   const [subbiePayments, setSubbiePaymentsRaw] = useState([]);
   const [customers, setCustomersRaw] = useState([]);
+  // Keep the native CallKit contact cache in sync so incoming calls show the
+  // customer's name (iOS native only; a no-op on web/Android).
+  useEffect(() => {
+    const CallKitVoip = window.Capacitor?.registerPlugin?.("CallKitVoip");
+    if (!CallKitVoip || !window.Capacitor?.isNativePlatform?.()) return;
+    try {
+      const contacts = (customers || [])
+        .filter((c) => c && c.phone && c.name)
+        .map((c) => ({ number: String(c.phone), name: String(c.name) }));
+      CallKitVoip.setContacts({ json: JSON.stringify(contacts) });
+    } catch {}
+  }, [customers]);
   const [customerContacts, setCustomerContactsRaw] = useState([]);
   const [dbLoading, setDbLoading] = useState(false);
   const [jobsRefreshKey, setJobsRefreshKey] = useState(0);

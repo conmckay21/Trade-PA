@@ -11,6 +11,7 @@ public class CallKitVoipPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "register", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "unregister", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setContacts", returnType: CAPPluginReturnPromise),
     ]
 
     @objc func register(_ call: CAPPluginCall) {
@@ -24,6 +25,14 @@ public class CallKitVoipPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func unregister(_ call: CAPPluginCall) {
         TwilioCallManager.shared.unregister()
+        call.resolve()
+    }
+
+    // Receives the user's customers as a JSON string ([{number, name}, ...]) and
+    // caches them on-device so incoming calls can show the caller's name.
+    @objc func setContacts(_ call: CAPPluginCall) {
+        let json = call.getString("json") ?? "[]"
+        TwilioCallManager.shared.cacheContacts(json: json)
         call.resolve()
     }
 }

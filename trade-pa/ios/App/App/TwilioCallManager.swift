@@ -81,6 +81,34 @@ final class TwilioCallManager: NSObject {
         userInitiatedDisconnect = false
         audioDevice.isEnabled = false
     }
+
+    // Local cache of {last-9-digits of phone -> customer name}, written by the
+    // web layer via CallKitVoip.setContacts. Lets the incoming-call UI show the
+    // customer's name even on a cold start, when no network or DB is available.
+    // Last 9 digits so +44 / 0 prefixes still match.
+    private static let contactsKey = "tradepa_call_contacts"
+
+    func cacheContacts(json: String) {
+        guard let data = json.data(using: .utf8),
+              let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return }
+        var map: [String: String] = [:]
+        for item in arr {
+            guard let number = item["number"] as? String,
+                  let name = item["name"] as? String, !name.isEmpty else { continue }
+            let digits = number.filter { $0.isNumber }
+            guard digits.count >= 7 else { continue }
+            map[String(digits.suffix(9))] = name
+        }
+        UserDefaults.standard.set(map, forKey: TwilioCallManager.contactsKey)
+    }
+
+    static func resolveName(forNumber raw: String) -> String? {
+        let digits = raw.filter { $0.isNumber }
+        guard digits.count >= 7 else { return nil }
+        let key = String(digits.suffix(9))
+        let map = (UserDefaults.standard.dictionary(forKey: contactsKey) as? [String: String]) ?? [:]
+        return map[key]
+    }
 }
 
 // MARK: - PushKit
@@ -118,10 +146,13 @@ extension TwilioCallManager: NotificationDelegate {
         activeCallInvite = callInvite
         activeCallUUID = callInvite.uuid
 
-        let caller = (callInvite.from ?? "Unknown caller")
+        let rawFrom = (callInvite.from ?? "")
             .replacingOccurrences(of: "client:", with: "")
+        let resolvedName = TwilioCallManager.resolveName(forNumber: rawFrom)
+        let handleValue = rawFrom.isEmpty ? "Unknown caller" : rawFrom
         let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .generic, value: caller)
+        update.remoteHandle = CXHandle(type: .generic, value: handleValue)
+        update.localizedCallerName = resolvedName ?? handleValue
         update.hasVideo = false
 
         audioDevice.isEnabled = false
