@@ -12,7 +12,19 @@ public class CallKitVoipPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "register", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "unregister", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setContacts", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "endCall", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setMuted", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setSpeaker", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getActiveCall", returnType: CAPPluginReturnPromise),
     ]
+
+    override public func load() {
+        // Bridge the native call lifecycle to JS so the web layer can show the
+        // in-call screen and control the call (hang up / mute / speaker).
+        TwilioCallManager.shared.eventSink = { [weak self] name, data in
+            self?.notifyListeners(name, data: data)
+        }
+    }
 
     @objc func register(_ call: CAPPluginCall) {
         guard let accessToken = call.getString("accessToken"), !accessToken.isEmpty else {
@@ -34,5 +46,24 @@ public class CallKitVoipPlugin: CAPPlugin, CAPBridgedPlugin {
         let json = call.getString("json") ?? "[]"
         TwilioCallManager.shared.cacheContacts(json: json)
         call.resolve()
+    }
+
+    @objc func endCall(_ call: CAPPluginCall) {
+        TwilioCallManager.shared.endActiveCallFromJS()
+        call.resolve()
+    }
+
+    @objc func setMuted(_ call: CAPPluginCall) {
+        TwilioCallManager.shared.setMuted(call.getBool("muted") ?? false)
+        call.resolve()
+    }
+
+    @objc func setSpeaker(_ call: CAPPluginCall) {
+        TwilioCallManager.shared.setSpeaker(call.getBool("on") ?? false)
+        call.resolve()
+    }
+
+    @objc func getActiveCall(_ call: CAPPluginCall) {
+        call.resolve(TwilioCallManager.shared.activeCallInfo())
     }
 }

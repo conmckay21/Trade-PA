@@ -4028,6 +4028,7 @@ function AppInner() {
   const [bellFlash, setBellFlash] = useState(false);
   const [twilioDevice, setTwilioDevice] = useState(null);
   const twilioDeviceRef = useRef(null);
+  const callKitRef = useRef(null);
 
   // Native iOS CallKit / VoIP: register the device so incoming calls ring even
   // when the app is fully closed. iOS-native only and additive; web and Android
@@ -4041,6 +4042,7 @@ function AppInner() {
     const CallKitVoip = window.Capacitor?.registerPlugin?.("CallKitVoip");
     if (!CallKitVoip || window.Capacitor?.getPlatform?.() !== "ios") { console.log("CallKitVoip skipped (iOS only)"); return; }
     let cancelled = false;
+    const callKitSubs = [];
     (async () => {
       try {
         const { data: ct } = await db.from("call_tracking").select("twilio_number").eq("user_id", user.id).limit(1).maybeSingle();
@@ -4049,12 +4051,32 @@ function AppInner() {
         const { token } = await res.json();
         if (cancelled || !token) return;
         await CallKitVoip.register({ accessToken: token });
+        callKitRef.current = CallKitVoip;
+        try {
+          const s1 = await CallKitVoip.addListener("callStarted", (info) => {
+            if (cancelled) return;
+            setActiveCall({ native: true, callerName: info?.callerName || "Unknown caller", callerNumber: info?.callerNumber || "", direction: "inbound", startTime: info?.startTime || Date.now() });
+            setCallMuted(false);
+          });
+          const s2 = await CallKitVoip.addListener("callEnded", () => {
+            if (cancelled) return;
+            setActiveCall(null);
+            setCallMuted(false);
+          });
+          callKitSubs.push(s1, s2);
+          const cur = await CallKitVoip.getActiveCall();
+          if (!cancelled && cur?.active) {
+            setActiveCall({ native: true, callerName: cur.callerName || "Unknown caller", callerNumber: cur.callerNumber || "", direction: "inbound", startTime: cur.startTime || Date.now() });
+          }
+        } catch (e) {
+          console.log("CallKit listeners error:", e?.message);
+        }
         console.log("\u2713 CallKit VoIP registered");
       } catch (e) {
         console.log("CallKit VoIP register error:", e?.message);
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; callKitSubs.forEach((s) => s?.remove?.()); };
   }, [user?.id]);
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
@@ -4348,15 +4370,17 @@ function AppInner() {
   };
 
   const hangUp = () => {
-    if (activeCall?.call) activeCall.call.disconnect();
+    if (activeCall?.native) { try { callKitRef.current?.endCall?.(); } catch {} }
+    else if (activeCall?.call) activeCall.call.disconnect();
     setActiveCall(null);
     setCallMuted(false);
     setCallSpeaker(true);
   };
 
   const toggleMute = () => {
-    if (!activeCall?.call) return;
     const next = !callMuted;
+    if (activeCall?.native) { try { callKitRef.current?.setMuted?.({ muted: next }); } catch {} setCallMuted(next); return; }
+    if (!activeCall?.call) return;
     activeCall.call.mute(next);
     setCallMuted(next);
   };
@@ -4364,6 +4388,7 @@ function AppInner() {
   const toggleSpeaker = async () => {
     const next = !callSpeaker;
     setCallSpeaker(next);
+    if (activeCall?.native) { try { callKitRef.current?.setSpeaker?.({ on: next }); } catch {} return; }
     // Use setSinkId if available (Chrome/Android) to switch output device
     try {
       const audioElements = document.querySelectorAll("audio");
@@ -5758,7 +5783,7 @@ function AppInner() {
       })()}
       {pdfHtml && <PDFOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
       {incomingCall?.call && <IncomingCallScreen callerName={incomingCall.callerName} callerNumber={incomingCall.callerNumber} onAnswer={answerCall} onDecline={declineCall} />}
-      {activeCall?.call && <ActiveCallScreen callerName={activeCall.callerName} callerNumber={activeCall.callerNumber} direction={activeCall.direction} startTime={activeCall.startTime} muted={callMuted} onMute={toggleMute} onHangUp={hangUp} speaker={callSpeaker} onSpeaker={toggleSpeaker} />}
+      {activeCall && <ActiveCallScreen callerName={activeCall.callerName} callerNumber={activeCall.callerNumber} direction={activeCall.direction} startTime={activeCall.startTime} muted={callMuted} onMute={toggleMute} onHangUp={hangUp} speaker={callSpeaker} onSpeaker={toggleSpeaker} />}
       {/* Step 2: AI Chat starter prompts banner */}
       {onboardingStep === 2 && view === "AI Assistant" && !step2Dismissed && (
         <div style={{

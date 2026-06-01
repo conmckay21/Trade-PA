@@ -22,8 +22,15 @@ final class TwilioCallManager: NSObject {
     private var activeCallInvite: CallInvite?
     private var activeCall: Call?
     private var activeCallUUID: UUID?
+    private var activeCallerName: String?
+    private var activeCallerNumber: String?
+    private var activeCallStart: Date?
     private var userInitiatedDisconnect = false
     private var incomingPushCompletion: (() -> Void)?
+
+    // Set by CallKitVoipPlugin.load(); forwards native call lifecycle to JS.
+    var eventSink: ((String, [String: Any]) -> Void)?
+    private let callController = CXCallController()
 
     private override init() {
         super.init()
@@ -75,11 +82,43 @@ final class TwilioCallManager: NSObject {
     }
 
     private func endActiveCall() {
+        eventSink?("callEnded", [:])
         activeCall = nil
         activeCallInvite = nil
         activeCallUUID = nil
+        activeCallerName = nil
+        activeCallerNumber = nil
+        activeCallStart = nil
         userInitiatedDisconnect = false
         audioDevice.isEnabled = false
+    }
+
+    // MARK: - JS bridge helpers (called from CallKitVoipPlugin)
+
+    func endActiveCallFromJS() {
+        guard let uuid = activeCallUUID else { return }
+        callController.request(CXTransaction(action: CXEndCallAction(call: uuid))) { error in
+            if let error = error {
+                NSLog("[CallKitVoip] endCall request failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func setMuted(_ muted: Bool) {
+        activeCall?.isMuted = muted
+    }
+
+    func setSpeaker(_ on: Bool) {
+        try? AVAudioSession.sharedInstance().overrideOutputAudioPort(on ? .speaker : .none)
+    }
+
+    func activeCallInfo() -> [String: Any] {
+        guard activeCall != nil else { return ["active": false] }
+        var info: [String: Any] = ["active": true]
+        if let n = activeCallerName { info["callerName"] = n }
+        if let num = activeCallerNumber { info["callerNumber"] = num }
+        if let s = activeCallStart { info["startTime"] = Int(s.timeIntervalSince1970 * 1000) }
+        return info
     }
 
     // Local cache of {last-9-digits of phone -> customer name}, written by the
@@ -150,6 +189,8 @@ extension TwilioCallManager: NotificationDelegate {
             .replacingOccurrences(of: "client:", with: "")
         let resolvedName = TwilioCallManager.resolveName(forNumber: rawFrom)
         let handleValue = rawFrom.isEmpty ? "Unknown caller" : rawFrom
+        activeCallerNumber = rawFrom
+        activeCallerName = resolvedName ?? handleValue
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .generic, value: handleValue)
         update.localizedCallerName = resolvedName ?? handleValue
@@ -182,6 +223,11 @@ extension TwilioCallManager: CallDelegate {
 
     func callDidConnect(call: Call) {
         NSLog("[CallKitVoip] call connected")
+        activeCallStart = Date()
+        var data: [String: Any] = ["startTime": Int(Date().timeIntervalSince1970 * 1000)]
+        if let n = activeCallerName { data["callerName"] = n }
+        if let num = activeCallerNumber { data["callerNumber"] = num }
+        eventSink?("callStarted", data)
     }
 
     func callDidDisconnect(call: Call, error: Error?) {
