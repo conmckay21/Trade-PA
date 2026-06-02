@@ -235,7 +235,7 @@ export function Calls({ user, customers, setCustomers, enquiries, setEnquiries, 
                     </div>
                   )}
                   {c.recording_url && (
-                    <audio controls style={{ width: "100%", marginTop: 4, height: 36 }} src={`/api/calls/audio?url=${encodeURIComponent(c.recording_url)}`} />
+                    <audio controls style={{ width: "100%", marginTop: 4, height: 36 }} src={`${typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.() ? "https://www.tradespa.co.uk" : ""}/api/calls/audio?url=${encodeURIComponent(c.recording_url)}`} />
                   )}
 
                   <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>

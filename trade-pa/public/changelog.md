@@ -1,3 +1,13 @@
+## 2026-06-02
+
+🔔 **You now get a nudge when the AI lines up an action for you.** As soon as a call or email creates an action to approve, your phone pings so nothing slips through the cracks. At the end of each day you also get a quick summary of how many are still waiting, and only on days you actually have something to approve.
+
+🎧 **Call recordings now play inside the app.** Tapping play on a saved recording now works in the installed Android and iPhone apps, not just on the website. Before, recordings played fine online but showed an error in the app.
+
+## 2026-06-01
+
+📞 **Incoming calls now ring on Android even when the app is closed.** Just like on iPhone, your Android phone now rings for an incoming call even if Trade PA is shut. Answer straight from the lock screen and you drop right into the call, with mute, speaker and hang up all there. Before, Android calls only came through while the app was already open.
+
 ## 2026-05-30
 
 🎧 **Call recordings now play on iPhone.** Tapping play on a call recording now works in the iPhone app, and older recordings from earlier in the year play too. Before, some recordings showed an error instead of playing.

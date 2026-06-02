@@ -281,6 +281,17 @@ Respond ONLY with JSON:
         }),
       });
       console.log(`recording.js: ✓ Action: ${action.action_type}`);
+      // Immediate push for this specific AI action awaiting approval.
+      fetch(`${process.env.APP_URL}/api/push/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          title: `🔔 Action to approve from ${customerName}`,
+          body: action.description || "An AI action is waiting for your approval.",
+          url: "/", type: "ai_action", tag: `action-call_${CallSid}_${action.action_type}`,
+        }),
+      }).catch(() => {});
     }
 
     // 8. Push notification

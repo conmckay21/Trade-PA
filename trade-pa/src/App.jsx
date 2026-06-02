@@ -4078,6 +4078,54 @@ function AppInner() {
     })();
     return () => { cancelled = true; callKitSubs.forEach((s) => s?.remove?.()); };
   }, [user?.id]);
+  // Native Android: register with Twilio Voice so incoming calls ring even when
+  // the app is fully closed. Mirrors the iOS CallKit path through the same
+  // "CallKitVoip" bridge; additive and Android-native only.
+  useEffect(() => {
+    if (!user?.id) return;
+    const isAndroidNative = typeof window !== "undefined"
+      && window.Capacitor?.isNativePlatform?.()
+      && window.Capacitor?.getPlatform?.() === "android";
+    if (!isAndroidNative) return;
+    const CallKitVoip = window.Capacitor?.registerPlugin?.("CallKitVoip");
+    if (!CallKitVoip || window.Capacitor?.getPlatform?.() !== "android") { console.log("CallKitVoip skipped (Android only)"); return; }
+    let cancelled = false;
+    const callKitSubs = [];
+    (async () => {
+      try {
+        const { data: ct } = await db.from("call_tracking").select("twilio_number").eq("user_id", user.id).limit(1).maybeSingle();
+        if (cancelled || !ct?.twilio_number) return;
+        const res = await fetch("/api/calls/token?platform=android", { method: "POST", headers: await authHeaders() });
+        const { token } = await res.json();
+        if (cancelled || !token) return;
+        await CallKitVoip.register({ accessToken: token });
+        callKitRef.current = CallKitVoip;
+        try {
+          const s1 = await CallKitVoip.addListener("callStarted", (info) => {
+            if (cancelled) return;
+            setActiveCall({ native: true, callerName: info?.callerName || "Unknown caller", callerNumber: info?.callerNumber || "", direction: "inbound", startTime: info?.startTime || Date.now() });
+            setCallMuted(false);
+          });
+          const s2 = await CallKitVoip.addListener("callEnded", () => {
+            if (cancelled) return;
+            setActiveCall(null);
+            setCallMuted(false);
+          });
+          callKitSubs.push(s1, s2);
+          const cur = await CallKitVoip.getActiveCall();
+          if (!cancelled && cur?.active) {
+            setActiveCall({ native: true, callerName: cur.callerName || "Unknown caller", callerNumber: cur.callerNumber || "", direction: "inbound", startTime: cur.startTime || Date.now() });
+          }
+        } catch (e) {
+          console.log("CallKit listeners error:", e?.message);
+        }
+        console.log("\u2713 CallKit VoIP registered (Android)");
+      } catch (e) {
+        console.log("CallKit VoIP register error:", e?.message);
+      }
+    })();
+    return () => { cancelled = true; callKitSubs.forEach((s) => s?.remove?.()); };
+  }, [user?.id]);
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
   const [callMuted, setCallMuted] = useState(false);
@@ -4622,7 +4670,8 @@ function AppInner() {
         // WebRTC audio on iOS WebKit defaults to the loudspeaker and ignores
         // setSinkId, so we skip JS incoming registration on iOS. The Device stays
         // available for outgoing calls.
-        if (!(typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.() && window.Capacitor?.getPlatform?.() === "ios")) {
+        const nativeIncoming = typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.() && (window.Capacitor?.getPlatform?.() === "ios" || window.Capacitor?.getPlatform?.() === "android");
+        if (!nativeIncoming) {
           await d.register();
         }
         twilioDeviceRef.current = d;
@@ -4833,7 +4882,7 @@ function AppInner() {
   // customer's name (iOS native only; a no-op on web/Android).
   useEffect(() => {
     const CallKitVoip = window.Capacitor?.registerPlugin?.("CallKitVoip");
-    if (!CallKitVoip || window.Capacitor?.getPlatform?.() !== "ios") return;
+    if (!CallKitVoip || (window.Capacitor?.getPlatform?.() !== "ios" && window.Capacitor?.getPlatform?.() !== "android")) return;
     try {
       const contacts = (customers || [])
         .filter((c) => c && c.phone && c.name)
