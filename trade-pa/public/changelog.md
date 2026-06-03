@@ -1,5 +1,7 @@
 ## 2026-06-02
 
+📥 **You can now import your data from Settings.** Moving over from another app? Head to Settings and tap Import data to bring your customers, jobs and invoices in from a CSV. It used to be tucked away in setup only, now it is there whenever you need it.
+
 🗑️ **You can now delete calls from the call log.** Open any call and tap Delete to clear out the rubbish like sales and spam calls. Deleted calls move to Recently Deleted, so if you bin one by mistake you have 14 days to get it back.
 
 🔔 **You now get a nudge when the AI lines up an action for you.** As soon as a call or email creates an action to approve, your phone pings so nothing slips through the cracks. At the end of each day you also get a quick summary of how many are still waiting, and only on days you actually have something to approve.

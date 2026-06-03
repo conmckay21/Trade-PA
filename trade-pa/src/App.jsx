@@ -1056,7 +1056,7 @@ function CertificationsCard({ brand, setBrand }) {
 // initial render fast — a Trash with 5,000 items is unlikely on a
 // pre-launch product but defensive cap regardless.
 // (RecentlyDeleted moved to ./views/RecentlyDeleted.jsx — P7-7A)
-function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit, openAssistantSetup, openFeedback, assistantName, assistantWakeWords, userCommandsCount, usageData, usageCaps }) {
+function Settings({ brand, setBrand, companyId, companyName, userRole, members, user, planTier, userLimit, openAssistantSetup, openFeedback, openCsvImport, assistantName, assistantWakeWords, userCommandsCount, usageData, usageCaps }) {
   // openPortal hoisted to Settings scope so multiple cards can call it
   const openPortal = async () => {
     try {
@@ -3352,6 +3352,34 @@ function Settings({ brand, setBrand, companyId, companyName, userRole, members, 
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>What's new ✨</div>
           <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>See the latest features and improvements</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      {/* Import data row, opens the existing CSV importer */}
+      <button
+        onClick={() => openCsvImport && openCsvImport()}
+        style={{
+          background: C.surfaceHigh,
+          border: `1px solid ${C.border}`,
+          borderRadius: 12,
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          cursor: "pointer",
+          width: "100%",
+          textAlign: "left",
+          color: C.text,
+          fontFamily: "'DM Sans', sans-serif",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, letterSpacing: "-0.01em" }}>Import data 📥</div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>Bring in customers, jobs and invoices from a CSV</div>
         </div>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 5l7 7-7 7" />
@@ -6498,7 +6526,7 @@ function AppInner() {
         {view === "Reviews" && <ReviewsTab user={user} brand={brand} customers={customers} setContextHint={setContextHint} />}
         {view === "Stock" && <StockTab user={user} setContextHint={setContextHint} />}
         {view === "RAMS" && <RAMSTab user={user} brand={brand} setContextHint={setContextHint} />}
-        {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} openAssistantSetup={() => setAssistantSetupOpen(true)} openFeedback={() => setFeedbackOpen(true)} assistantName={assistantName} assistantWakeWords={assistantWakeWords} userCommandsCount={userCommands.length} usageData={usageData} usageCaps={usageCaps} /></ErrorBoundary>}
+        {view === "Settings" && <ErrorBoundary><Settings brand={brand} setBrand={setBrand} companyId={companyId} companyName={companyName} userRole={userRole} members={members} user={user} planTier={planTier} userLimit={userLimit} openAssistantSetup={() => setAssistantSetupOpen(true)} openFeedback={() => setFeedbackOpen(true)} openCsvImport={() => setCsvImportOpen(true)} assistantName={assistantName} assistantWakeWords={assistantWakeWords} userCommandsCount={userCommands.length} usageData={usageData} usageCaps={usageCaps} /></ErrorBoundary>}
         </div>
       </main>
       </div>
