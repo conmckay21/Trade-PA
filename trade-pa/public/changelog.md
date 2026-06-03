@@ -1,5 +1,7 @@
 ## 2026-06-02
 
+🗑️ **You can now delete calls from the call log.** Open any call and tap Delete to clear out the rubbish like sales and spam calls. Deleted calls move to Recently Deleted, so if you bin one by mistake you have 14 days to get it back.
+
 🔔 **You now get a nudge when the AI lines up an action for you.** As soon as a call or email creates an action to approve, your phone pings so nothing slips through the cracks. At the end of each day you also get a quick summary of how many are still waiting, and only on days you actually have something to approve.
 
 🎧 **Call recordings now play inside the app.** Tapping play on a saved recording now works in the installed Android and iPhone apps, not just on the website. Before, recordings played fine online but showed an error in the app.

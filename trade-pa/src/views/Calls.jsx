@@ -152,6 +152,30 @@ export function Calls({ user, customers, setCustomers, enquiries, setEnquiries, 
     setDone((prev) => ({ ...prev, [c.id]: "enquiry" }));
   }
 
+  // Soft-delete a call (nuisance/sales calls). Sets deleted_at so it drops
+  // out of the list and lands in Recently Deleted, restorable for 14 days.
+  async function deleteCall(c) {
+    if (busy) return;
+    if (typeof window !== "undefined" && !window.confirm("Delete this call? You can restore it from Recently Deleted for 14 days.")) return;
+    setBusy(c.id);
+    try {
+      const { error } = await db
+        .from("call_logs")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", c.id)
+        .eq("user_id", user.id);
+      if (error) {
+        alert(`Couldn't delete call: ${error.message}`);
+        setBusy(null);
+        return;
+      }
+      setCalls((prev) => prev.filter((x) => x.id !== c.id));
+    } catch (e) {
+      alert(`Couldn't delete call: ${e.message}`);
+    }
+    setBusy(null);
+  }
+
   return (
     <div>
       <div
@@ -255,6 +279,9 @@ export function Calls({ user, customers, setCustomers, enquiries, setEnquiries, 
                         Save as customer
                       </button>
                     )}
+                    <button onClick={() => deleteCall(c)} disabled={busy === c.id} style={{ ...S.btn("ghost", busy === c.id), color: C.red }}>
+                      Delete
+                    </button>
                   </div>
                 </div>
               )}
