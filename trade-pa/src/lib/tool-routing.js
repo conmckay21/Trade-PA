@@ -1,99 +1,147 @@
-// ─── Thin tool routing — per-message dynamic tool subset ────────────────────
-// The voice assistant ships 38 tool definitions to Claude on every call.
-// At ~80KB / ~20K tokens of tool defs alone, that's a real cost driver
-// at scale. Most messages only need 2-5 tools. This module-level helper
-// matches the user's message against keyword clusters and ships only the
-// relevant subset to Claude.
+// ─── Tool routing — per-message fixed-group tool scoping ────────────────────
+// The voice assistant defines ~96 tools. Shipping all of them on every call is
+// the dominant API input-token cost, and (because Anthropic's cache prefix is
+// tools -> system -> messages) a tool list that changes shape from message to
+// message also keeps invalidating the cached system prompt behind it.
 //
-// Strategy:
-//   Tier 1 — ALWAYS_INCLUDE: cheap context-gathering tools (find/list/get).
-//            Total ~6KB. Always shipped so Claude can resolve references
-//            ("the Smith job", "that invoice") without needing a specific
-//            cluster match.
-//   Tier 2 — TOOL_CLUSTERS: action tools (create/update/delete/log)
-//            grouped by domain. Heavier schemas — only ship when the
-//            domain is mentioned.
+// This module maps EVERY tool to exactly one place:
+//   - ALWAYS_INCLUDE_TOOLS: read-only lookup + universal tools. Tiny schemas,
+//     shipped on every call so Claude can resolve references ("the Smith job",
+//     "that invoice") regardless of which action group is active.
+//   - TOOL_CLUSTERS: action tools grouped by domain. Only the group(s) matching
+//     the user's message get shipped.
 //
-// Special cases:
-//   - update_brand is 40KB on its own (half the entire payload). Clustered
-//     under `settings` so it only ships when the user is talking about
-//     business profile / branding.
-//   - set_reminder is 4.3KB. Clustered under `reminders` because users
-//     mention "remind" explicitly, so detection is reliable.
+// Why fixed groups (not an arbitrary per-message subset):
+//   A given instruction maps to the same group every time, so the tool list is
+//   byte-identical on repeat use within a domain and the cache actually hits.
+//   The previous version only mapped ~38 of the 96 tools, so most commands fell
+//   through to "ship everything", and the routing flip-flopped between a small
+//   subset and the full catalogue — which thrashed the cache. Completing the map
+//   removes both problems.
 //
-// Safety nets:
-//   - Short messages (<3 words) → ship all tools (too ambiguous to classify)
-//   - Zero clusters matched → ship all tools (don't gamble on uncertain class)
-//   - RAMS active → ship all tools (stateful flow needs everything)
+// Multi-intent: if a message matches more than one group, the groups union
+//   (e.g. "invoice Steve and mark the job done" ships invoicing + jobs).
 //
-// Telemetry: classification logged once per send() to usage_events for tuning.
+// Safety:
+//   - RAMS active -> ship all tools (stateful multi-domain flow; left as-is).
+//   - Zero groups matched -> ship all tools (correctness over cost). With the
+//     map now complete this is rare, but it guarantees nothing ever breaks for
+//     lack of a tool.
+//
+// Telemetry: classification is logged once per send() to usage_events so the
+//   patterns can be tuned against real usage.
+
+// Read-only lookups + universal actions. Constant base on every call.
 export const ALWAYS_INCLUDE_TOOLS = [
-  // Read-only context gathering — Claude needs these to look up data
-  // referenced in the user's message. Tiny schemas (~500 chars each).
-  "list_schedule",
-  "list_invoices",
-  "list_jobs",
-  "list_materials",
+  // Cross-domain lookups Claude needs to resolve references in any message.
   "find_invoice",
   "find_quote",
   "find_job_card",
   "find_material_receipt",
   "get_job_full",
   "get_job_profit",
-  // Universal lightweight actions
+  "list_schedule",
+  "list_invoices",
+  "list_jobs",
+  "list_materials",
+  "list_customers",
+  // Universal, domain-agnostic.
   "save_memory",
   "restore_recently_deleted",
+  "escalate_to_support",
 ];
 
+// Action tools (and domain-specific lists) grouped by domain. A tool may appear
+// in more than one group where it legitimately spans domains.
 export const TOOL_CLUSTERS = {
   invoicing: [
-    "create_invoice", "create_quote", "mark_invoice_paid",
-    "delete_invoice", "convert_quote_to_invoice",
+    "create_invoice", "update_invoice", "delete_invoice",
+    "mark_invoice_paid", "mark_invoice_paid_xero",
+    "send_invoice", "chase_invoice",
+    "create_invoice_from_job", "add_stage_payment", "list_unpaid",
+    "create_quote", "update_quote", "send_quote",
+    "convert_quote_to_invoice", "list_quotes",
   ],
   jobs: [
-    "create_job", "create_job_card", "update_job_status",
-    "delete_job", "add_job_note",
-  ],
-  customers: [
-    "create_customer", "delete_customer", "log_enquiry", "delete_enquiry",
+    "create_job", "update_job_status", "delete_job", "add_job_note",
+    "create_job_card", "update_job_card", "delete_job_card",
+    "assign_material_to_job",
   ],
   materials: [
-    "create_material", "update_material", "update_material_status",
-    "delete_material", "assign_material_to_job", "update_stock",
+    "create_material", "update_material", "delete_material",
+    "update_material_status", "assign_material_to_job",
+    "update_stock", "add_stock_item", "delete_stock_item", "list_stock",
+    "send_supplier_order",
+    "sync_material_to_xero", "sync_material_to_quickbooks",
   ],
-  money: [
-    "log_time", "log_mileage",
+  customers: [
+    "create_customer", "delete_customer",
+    "log_enquiry", "delete_enquiry", "list_enquiries",
+    "send_review_request",
+  ],
+  time_mileage: [
+    "log_time", "log_mileage", "delete_mileage", "list_mileage", "log_daywork",
+  ],
+  expenses: [
+    "log_expense", "delete_expense", "list_expenses",
+  ],
+  cis: [
+    "log_cis_statement", "delete_cis_statement", "list_cis_statements",
+  ],
+  subcontractors: [
+    "add_subcontractor", "delete_subcontractor",
+    "log_subcontractor_payment", "update_subcontractor_payment",
+    "delete_subcontractor_payment", "generate_subcontractor_statement",
+    "list_subcontractors",
+  ],
+  workers: [
+    "add_worker", "update_worker", "delete_worker",
+    "assign_worker_to_job", "log_worker_time", "add_worker_document",
+    "list_workers", "list_expiring_documents",
   ],
   rams: [
-    "start_rams", "rams_confirm_hazards",
-    "rams_save_step1", "rams_save_step2", "rams_save_step3",
-    "rams_save_step4", "rams_save_step5",
+    "start_rams", "rams_confirm_hazards", "delete_rams", "list_rams",
+    "add_compliance_cert", "add_variation_order", "request_signature",
   ],
   reminders: [
-    "set_reminder",
+    "set_reminder", "list_reminders",
   ],
   settings: [
     "update_brand",
   ],
+  accounting: [
+    "sync_to_xero", "sync_to_quickbooks",
+  ],
+  inbox: [
+    "approve_inbox_action", "reject_inbox_action", "list_inbox_actions",
+  ],
+  reports: [
+    "get_report",
+  ],
 };
 
-// Keyword regex per cluster. Tuned for tradie phrasing — short verbs,
-// common abbreviations, brand names. Comments next to each pattern
-// explain what tradie-speak it's catching.
+// Keyword regex per group. Tuned for tradie phrasing — short verbs, common
+// abbreviations, merchant and software names. Overlap between groups is fine:
+// it just unions a few extra tools, which is cheaper than missing one.
 export const CLUSTER_PATTERNS = {
-  invoicing: /\b(invoic\w*|bill(ed|ing)?|quote(d|s)?|quoting|paid|payment|owed|owe me|owes me|owing|outstanding|chase\w*|chasing|raise an?|due|sent it|payment|paying|collect|receipt for)\b/i,
-  jobs: /\b(job\w*|booking|book in|booked|schedule\w*|diary|calendar|appointment\w*|today|tomorrow|next week|this week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|on site|on-site|day off|holiday|completed it|finished the|note on|notes? on)\b/i,
-  customers: /\b(customer\w*|client\w*|enquir\w*|new lead|got a call|rang up|rang me|inquired|interested|prospect\w*)\b/i,
-  materials: /\b(material\w*|supply|supplies|stock|reorder|to order|ordered|collected|toolstation|screwfix|plumb\w*|wickes|b&q|jewson|travis|merchant|purchase order|po for|po\d+|receipt scan|scan a receipt|scanned)\b/i,
-  money: /\b(mileage|miles|fuel|drove|drive|hours|time on|logged time|time log|log (time|hours)|hours? worked|worked from|hours? at|started at \d|finished at \d|clocked (in|on|out))\b/i,
-  rams: /\b(rams|risk assessment|method statement|safety doc|hazards?|control measures|h&s|cdm)\b/i,
-  reminders: /\b(remind\w*)\b/i,
-  // Settings — keywords that suggest the user wants to update brand/business profile.
-  // Deliberately conservative because update_brand is 40KB.
+  invoicing: /\b(invoic\w*|bill(ed|ing|s)?|quot\w*|paid|pay(ment|ing|s)?|owe\w*|owing|outstanding|chas\w*|due|deposit|stage payment|raise an?|send (it|the|that)|sent it|collect)\b/i,
+  jobs: /\b(job\w*|booking|book(ed| in)?|schedul\w*|diary|calendar|appointment\w*|on[- ]?site|complet\w*|finish\w*|note\w*|job ?card|job ?sheet|day off|holiday)\b/i,
+  materials: /\b(material\w*|suppl(y|ies|ier)|stock|reorder|to order|ordered|collect\w*|toolstation|screwfix|wickes|b&q|jewson|travis|merchant|purchase order|po for|po\d+|receipt|scan\w*)\b/i,
+  customers: /\b(customer\w*|client\w*|enquir\w*|inquir\w*|new lead|lead\b|got a call|rang (up|me)|prospect\w*|review request|google review|leave a review)\b/i,
+  time_mileage: /\b(mileage|miles|fuel|drove|driv\w*|hours?|time on|log(ged)? (time|hours)|time log|worked|clock\w*|day ?work)\b/i,
+  expenses: /\b(expense\w*|spent|spend|outgoing\w*|cost me|paid out|petrol|parking|tools? cost|bought)\b/i,
+  cis: /\b(cis|subcontractor tax|tax deduction|deduction\w*|cis statement|verif\w*|gross status)\b/i,
+  subcontractors: /\b(subcontractor\w*|subbie\w*|sub\b|labour only|labour[- ]only|day rate)\b/i,
+  workers: /\b(worker\w*|employee\w*|staff|team member|operative\w*|labourer\w*|apprentice\w*|document\w*|cert\w* expir\w*|expiring)\b/i,
+  rams: /\b(rams|risk assessment|method statement|safety doc\w*|hazard\w*|control measures?|h&s|cdm|compliance|certificate\w*|variation\w*|signature|sign[- ]?off|signed off)\b/i,
+  reminders: /\b(remind\w*|nudge|chase me|don'?t let me forget)\b/i,
   settings: /\b(brand\w*|(business|company) (name|address|phone|number|email)|trading name|logo|vat number|payment terms?|invoice (terms|number)|contact details?|business profile|setting\w*|preferences?)\b/i,
+  accounting: /\b(xero|quickbooks|quick books|qbo?\b|accounting|sync to|push to (xero|quickbooks)|bookkeep\w*)\b/i,
+  inbox: /\b(inbox|approve\w*|reject\w*|pending action\w*|action list|to approve|awaiting approval)\b/i,
+  reports: /\b(report\w*|summary|summaris\w*|breakdown|how much (did|have) i|total for|figures|turnover|profit|takings|earned)\b/i,
 };
 
-// Returns a Set of cluster names matching the message text.
+// Returns a Set of group names whose pattern matches the message text.
 export function classifyToolClusters(text) {
   if (!text || typeof text !== "string") return new Set();
   const matched = new Set();
@@ -103,18 +151,23 @@ export function classifyToolClusters(text) {
   return matched;
 }
 
-// Build the actual tool subset to ship. Falls back to all tools whenever
-// classification is uncertain — token cost is preferable to missing a tool.
+// Build the tool subset to ship. Fixed groups, deterministic order (the master
+// TOOLS order is preserved by filter, so the same matched groups always produce
+// a byte-identical list -> the cache hits on repeat use within a domain).
+// Falls back to all tools only when RAMS is active or nothing matched.
 export function buildToolSubset(text, allTools, opts = {}) {
   const { forceAll = false } = opts;
+
+  // RAMS is a stateful, multi-domain flow — give it everything (stable set, so
+  // it still caches across the session).
   if (forceAll) {
     return { tools: allTools, clusters: ["all"], forcedAll: true, reason: "forced" };
   }
-  if (!text || text.trim().split(/\s+/).length < 3) {
-    return { tools: allTools, clusters: ["all"], forcedAll: true, reason: "short_message" };
-  }
 
   const clusters = classifyToolClusters(text);
+
+  // Nothing matched — ship everything rather than risk missing a tool. With the
+  // map complete this is rare, and it guarantees correctness.
   if (clusters.size === 0) {
     return { tools: allTools, clusters: ["all"], forcedAll: true, reason: "no_match" };
   }
@@ -125,12 +178,13 @@ export function buildToolSubset(text, allTools, opts = {}) {
       allowedNames.add(toolName);
     }
   }
-  const subset = allTools.filter(t => allowedNames.has(t.name));
-  // Defensive: if for some reason we'd ship < 5 tools (something's wrong with
-  // our cluster definitions), fall back to all. Clusters get edited, mistakes
-  // happen — this prevents a misconfig from breaking voice flow in production.
-  if (subset.length < 5) {
-    return { tools: allTools, clusters: ["all"], forcedAll: true, reason: "subset_too_small" };
+  const subset = allTools.filter((t) => allowedNames.has(t.name));
+
+  // Defensive: should be impossible (ALWAYS_INCLUDE alone is non-empty), but if
+  // we somehow produced an empty set, fall back to all.
+  if (subset.length === 0) {
+    return { tools: allTools, clusters: ["all"], forcedAll: true, reason: "empty_subset" };
   }
+
   return { tools: subset, clusters: Array.from(clusters), forcedAll: false, reason: "matched" };
 }

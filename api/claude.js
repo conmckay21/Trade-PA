@@ -212,7 +212,7 @@ async function handler(req, res) {
     // Tell Anthropic we want streaming when the client asked for it
     if (isStreaming) body.stream = true;
 
-    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+    const sendUpstream = () => fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -222,6 +222,22 @@ async function handler(req, res) {
       },
       body: JSON.stringify(body),
     });
+
+    // Fire the request, retrying ONCE on a 429. The org input-token-per-minute
+    // limit occasionally spikes when two cold requests (full tool catalogue +
+    // system prompt, written to cache) land in the same minute. These are
+    // transient, so we wait out the Retry-After and try again rather than
+    // surfacing a rate-limit error to the user. The wait is capped so we stay
+    // inside the function budget; if it still 429s we fall through and return
+    // the error exactly as before, so this is never worse than today.
+    let upstream = await sendUpstream();
+    if (upstream.status === 429) {
+      const ra = parseInt(upstream.headers.get('retry-after') || '', 10);
+      const waitMs = Math.min(Number.isFinite(ra) ? ra * 1000 : 3000, 8000);
+      console.warn('[claude] upstream 429, retrying once after', waitMs, 'ms');
+      await new Promise((r) => setTimeout(r, waitMs));
+      upstream = await sendUpstream();
+    }
 
     // ─── NON-STREAMING PATH (unchanged) ──────────────────────────────────
     if (!isStreaming) {

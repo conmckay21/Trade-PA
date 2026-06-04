@@ -6,6 +6,10 @@
 
 ⚡ **The assistant is faster and lighter on busy accounts.** Behind the scenes we trimmed how much of your data Eve carries around on every message and made better use of caching, so things stay quick even once you have stacked up loads of jobs, invoices and customers.
 
+🛡️ **The assistant shrugs off busy moments.** If our AI provider is briefly at capacity, Eve now waits a beat and tries again on her own instead of throwing an error at you. Most of the time you will not notice a thing.
+
+🧰 **Eve only reaches for the tools she needs.** For each thing you ask, she now picks up just the handful of tools relevant to it rather than sifting her whole kit every time. Quicker replies, and it keeps her snappy as the app grows.
+
 ## 2026-06-02
 
 📥 **You can now import your data from Settings.** Moving over from another app? Head to Settings and tap Import data to bring your customers, jobs and invoices in from a CSV. It used to be tucked away in setup only, now it is there whenever you need it.
