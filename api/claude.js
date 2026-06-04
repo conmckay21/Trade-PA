@@ -178,6 +178,20 @@ async function handler(req, res) {
             }
             return out;
           });
+
+        // Auto-cache the FINAL system block. This runs server-side so it
+        // applies to every caller, including the native app, with no rebuild.
+        // Callers split `system` into a stable cache:true prefix plus a
+        // volatile suffix (today's date + the user's business data). That
+        // suffix is rebuilt each send but stays byte-identical across every
+        // iteration of the agentic loop within a single send. Caching it lets
+        // iterations 2..N read it from cache instead of paying full input-token
+        // cost, and cache_read tokens do not count toward the Sonnet ITPM
+        // limit. The volatile suffix re-sent up to 8 times per message was the
+        // dominant input-token driver, so this is the main relief.
+        if (body.system.length && !body.system[body.system.length - 1].cache_control) {
+          body.system[body.system.length - 1].cache_control = { type: 'ephemeral' };
+        }
       }
     }
 

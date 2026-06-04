@@ -197,6 +197,17 @@ function esc(s) {
 }
 
 const fmtGBP = (n) => `£${(parseFloat(n) || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Render a line-item description as HTML. Turns explicit newlines, and
+// sentence/point boundaries (a full stop followed by a space then a capital
+// letter or number), into line breaks so a list of points shows one per line
+// instead of one long paragraph. Decimals (no space after the dot, e.g. 3.5)
+// and capitalised initials are left intact by the lower-case/digit guard.
+function descHTML(s) {
+  return esc(String(s == null ? "" : s))
+    .replace(/\r?\n/g, "<br>")
+    .replace(/([a-z0-9)\]])\.\s+(?=[A-Z0-9£])/g, "$1.<br>");
+}
 const fmtDate = (d) => {
   try { return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); }
   catch { return ""; }
@@ -224,7 +235,7 @@ function parseLineItems(inv) {
 
   items = (items || []).map(l => ({
     description: l.description || l.desc || "",
-    amount: l.amount != null && l.amount !== "" && !isNaN(parseFloat(l.amount)) ? parseFloat(l.amount) : null,
+    amount: l.amount != null && l.amount !== "" && !isNaN(parseFloat(l.amount)) && parseFloat(l.amount) !== 0 ? parseFloat(l.amount) : null,
   })).filter(l => l.description);
 
   // Fallback: parse the description field with pipe separator
@@ -388,7 +399,7 @@ async function renderQuoteView(req, token, paidParam = null) {
       <tbody>
         ${lineItems.map(li => `
           <tr>
-            <td>${esc(li.description)}</td>
+            <td>${descHTML(li.description)}</td>
             ${anyAmounts ? `<td>${li.amount != null ? fmtGBP(li.amount) : ""}</td>` : ""}
           </tr>
         `).join("")}

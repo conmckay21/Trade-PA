@@ -4972,12 +4972,25 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
 
   // VOLATILE block: rebuilt every render. This part varies per call so we
   // deliberately keep it out of the cache block above.
+  // Cap how many records get inlined into the volatile context block. The full
+  // dataset used to be stringified on every call and re-sent on every agentic
+  // iteration, which is the main driver of API input-token usage as a user's
+  // data grows. The assistant has find_/list_ tools to look up anything not
+  // shown here, so capping the ambient list costs no capability, just tokens.
+  const CTX_MAX = 25;
+  const capJoin = (arr, render) => {
+    const a = arr || [];
+    const shown = a.slice(0, CTX_MAX).map(render).join(", ");
+    const extra = a.length > CTX_MAX ? ` (+${a.length - CTX_MAX} more, use the find_/list_ tools to look any of these up)` : "";
+    return shown + extra;
+  };
+
   const SYSTEM_VOLATILE = `Today is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.\n\n` + onboardingBlock
     + "\n\nCurrent business data:\n"
-    + "- Jobs: " + ((jobs||[]).length === 0 ? "none" : (jobs||[]).map(j => j.customer + " (" + (j.type||j.title||"") + ", " + j.status + ")").join(", ")) + "\n"
-    + "- Invoices: " + ((invoices||[]).filter(i=>!i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>!i.isQuote).map(i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")").join(", ")) + "\n"
-    + "- Quotes: " + ((invoices||[]).filter(i=>i.isQuote).length === 0 ? "none" : (invoices||[]).filter(i=>i.isQuote).map(i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")").join(", ")) + "\n"
-    + "- Materials: " + ((materials||[]).length === 0 ? "none" : (materials||[]).map(m=> m.item + " x" + m.qty + " (" + m.status + ")").join(", ")) + "\n"
+    + "- Jobs: " + ((jobs||[]).length === 0 ? "none" : capJoin(jobs, j => j.customer + " (" + (j.type||j.title||"") + ", " + j.status + ")")) + "\n"
+    + "- Invoices: " + ((invoices||[]).filter(i=>!i.isQuote).length === 0 ? "none" : capJoin((invoices||[]).filter(i=>!i.isQuote), i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")")) + "\n"
+    + "- Quotes: " + ((invoices||[]).filter(i=>i.isQuote).length === 0 ? "none" : capJoin((invoices||[]).filter(i=>i.isQuote), i=> i.id + " " + i.customer + " £" + i.amount + " (" + i.status + ")")) + "\n"
+    + "- Materials: " + ((materials||[]).length === 0 ? "none" : capJoin(materials, m=> m.item + " x" + m.qty + " (" + m.status + ")")) + "\n"
     + "- Customers: " + (() => {
       const cs = customers || [];
       if (cs.length === 0) return "none";
@@ -4986,14 +4999,17 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
       cs.forEach(c => { const k = (c.name || "").toLowerCase().trim(); nameCounts[k] = (nameCounts[k] || 0) + 1; });
       // For customers whose name is shared with at least one other, include email + phone
       // so the AI can disambiguate. For unique names, just the name (saves tokens).
-      return cs.map(c => {
+      const rendered = cs.map(c => {
         const isDup = nameCounts[(c.name || "").toLowerCase().trim()] > 1;
         if (!isDup) return c.name;
         const bits = [];
         if (c.email) bits.push(c.email);
         if (c.phone) bits.push(c.phone);
         return c.name + (bits.length ? ` [${bits.join(" · ")}]` : "");
-      }).join(", ");
+      });
+      const shown = rendered.slice(0, CTX_MAX).join(", ");
+      const extra = rendered.length > CTX_MAX ? ` (+${rendered.length - CTX_MAX} more, use the find_/list_ tools to look any of these up)` : "";
+      return shown + extra;
     })() + "\n"
     + "- Enquiries: " + ((enquiries||[]).length === 0 ? "none" : (enquiries||[]).map(e=>e.name).join(", ")) + "\n"
     + "- Inbox actions pending approval: " + (pendingInboxCount === 0 ? "none" : `${pendingInboxCount} waiting — tell the user if they ask, or call list_inbox_actions to show them`) + "\n"

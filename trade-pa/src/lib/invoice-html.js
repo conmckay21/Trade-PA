@@ -11,6 +11,17 @@
 import { fmtCurrency, vatLabel } from "./format.js";
 import { openHtmlPreview } from "./files.js";
 
+// Escape + break a line-item description into lines, matching the customer
+// portal renderer (api/portal.js). Explicit newlines, and sentence/point
+// boundaries (full stop + space + capital or number), become line breaks so a
+// list of points shows one per line instead of one paragraph. Decimals and
+// capitalised initials are left intact by the lower-case/digit guard.
+const escHtml = (s) => String(s == null ? "" : s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const descLines = (s) => escHtml(s)
+  .replace(/\r?\n/g, "<br>")
+  .replace(/([a-z0-9)\]])\.\s+(?=[A-Z0-9£])/g, "$1.<br>");
+
 export function buildEmailHTML(brand, { heading, body, showBacs = false, invoiceId = "" }) {
   const accent = brand?.accentColor || "#f59e0b";
   const name = brand?.tradingName || "";
@@ -137,7 +148,7 @@ export function buildInvoiceHTML(brand, inv) {
   } else if (rawLineItems && rawLineItems.length > 0) {
     lineItems = rawLineItems.map(l => ({
       description: l.description || l.desc || "",
-      amount: l.amount !== "" && l.amount != null && !isNaN(parseFloat(l.amount)) ? parseFloat(l.amount) : null,
+      amount: l.amount !== "" && l.amount != null && !isNaN(parseFloat(l.amount)) && parseFloat(l.amount) !== 0 ? parseFloat(l.amount) : null,
     })).filter(l => l.description);
   } else {
     lineItems = rawDesc
@@ -279,14 +290,14 @@ export function buildInvoiceHTML(brand, inv) {
           const lineVat = !cisEnabled && vatEnabled && lineAmt !== null ? parseFloat((lineAmt - lineNet).toFixed(2)) : null;
           return `
         <tr>
-          <td style="color:#1a1a1a;">${line.description || line}</td>
+          <td style="color:#1a1a1a;">${descLines(line.description || "")}</td>
           ${cisEnabled
-            ? `<td class="right" style="color:#1a1a1a;">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
+            ? `<td class="right" style="color:#1a1a1a;">${lineAmt !== null ? fmtCurrency(lineAmt) : ""}</td>`
             : vatEnabled
-              ? `<td class="right" style="color:#1a1a1a;">${lineNet !== null ? fmtCurrency(lineNet) : "—"}</td>
-                 <td class="right" style="color:#1a1a1a;">${lineVat !== null ? fmtCurrency(lineVat) : "—"}</td>
-                 <td class="right" style="color:#1a1a1a;">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
-              : `<td class="right" style="color:#1a1a1a;">${lineAmt !== null ? fmtCurrency(lineAmt) : "—"}</td>`
+              ? `<td class="right" style="color:#1a1a1a;">${lineNet !== null ? fmtCurrency(lineNet) : ""}</td>
+                 <td class="right" style="color:#1a1a1a;">${lineVat !== null ? fmtCurrency(lineVat) : ""}</td>
+                 <td class="right" style="color:#1a1a1a;">${lineAmt !== null ? fmtCurrency(lineAmt) : ""}</td>`
+              : `<td class="right" style="color:#1a1a1a;">${lineAmt !== null ? fmtCurrency(lineAmt) : ""}</td>`
           }
         </tr>`;
         }).join("")}

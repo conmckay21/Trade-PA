@@ -1,3 +1,11 @@
+## 2026-06-04
+
+🧾 **Quotes and invoices read cleaner.** When a line is a list of bits of work, each point now drops onto its own line instead of running together as one long paragraph. Much easier for your customer to skim.
+
+💷 **No more £0.00 on lines with no price.** If you have not put a price against a line, it now shows blank instead of £0.00. So you can list out the work and only price the lines you want to.
+
+⚡ **The assistant is faster and lighter on busy accounts.** Behind the scenes we trimmed how much of your data Eve carries around on every message and made better use of caching, so things stay quick even once you have stacked up loads of jobs, invoices and customers.
+
 ## 2026-06-02
 
 📥 **You can now import your data from Settings.** Moving over from another app? Head to Settings and tap Import data to bring your customers, jobs and invoices in from a CSV. It used to be tucked away in setup only, now it is there whenever you need it.
