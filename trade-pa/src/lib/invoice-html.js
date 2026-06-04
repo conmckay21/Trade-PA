@@ -166,8 +166,10 @@ export function buildInvoiceHTML(brand, inv) {
       });
   }
 
-  // If only one item with no price, use the total
-  if (!cisEnabled && lineItems.length === 1 && lineItems[0].amount === null) {
+  // If only one item with no price, use the total — but only when there is a
+  // real total. A genuinely priceless single line (total 0) stays blank rather
+  // than printing £0.00.
+  if (!cisEnabled && lineItems.length === 1 && lineItems[0].amount === null && grossAmount > 0) {
     lineItems[0].amount = grossAmount;
   }
 
@@ -285,7 +287,7 @@ export function buildInvoiceHTML(brand, inv) {
       <tbody>
         ${lineItems.map((line, i) => {
           const isLast = i === lineItems.length - 1;
-          const lineAmt = line.amount !== null && line.amount !== undefined ? Number(line.amount) : (isLast && !hasIndividualPrices ? grossAmount : null);
+          const lineAmt = line.amount !== null && line.amount !== undefined ? Number(line.amount) : (isLast && !hasIndividualPrices && grossAmount > 0 ? grossAmount : null);
           const lineNet = !cisEnabled && vatEnabled && lineAmt !== null ? parseFloat((lineAmt / (1 + vatRate / 100)).toFixed(2)) : null;
           const lineVat = !cisEnabled && vatEnabled && lineAmt !== null ? parseFloat((lineAmt - lineNet).toFixed(2)) : null;
           return `

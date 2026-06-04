@@ -10,6 +10,10 @@
 
 🧰 **Eve only reaches for the tools she needs.** For each thing you ask, she now picks up just the handful of tools relevant to it rather than sifting her whole kit every time. Quicker replies, and it keeps her snappy as the app grows.
 
+🛠️ **Editing a quote or invoice saves properly now.** Amending one, removing a line, or changing the total keeps everything else intact (line items, VAT, CIS) instead of getting muddled.
+
+🧾 **Lines without a price are fine.** Add a line with just a description and no figure and it shows blank on the quote or invoice, no more forced £0.00.
+
 ## 2026-06-02
 
 📥 **You can now import your data from Settings.** Moving over from another app? Head to Settings and tap Import data to bring your customers, jobs and invoices in from a CSV. It used to be tucked away in setup only, now it is there whenever you need it.

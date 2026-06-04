@@ -28,6 +28,73 @@ import { useWhisper } from "../hooks/useWhisper.js";
 import { HAZARD_LIBRARY, METHOD_LIBRARY } from "../views/RAMS.jsx";
 import { executeEmailAction, updateEmailAIContext, logEmailFeedback } from "../views/Inbox.jsx";
 
+// ─── Invoice/quote line-item helpers ──────────────────────────────────────
+// Shared by the create_invoice/create_quote and update_invoice/update_quote
+// tool handlers so quotes and invoices behave identically.
+//
+// rowToCamelInvoice: map a raw Supabase invoices row (snake_case) into the
+// camelCase shape the app holds in state and that the setInvoices save-wrapper
+// reads when it writes back. Mapping in full stops edits from defaulting
+// is_quote / line_items / VAT / CIS and corrupting the record on save.
+function rowToCamelInvoice(r) {
+  if (!r) return r;
+  const parseArr = (v) => {
+    if (Array.isArray(v)) return v;
+    if (!v) return [];
+    try { return JSON.parse(v); } catch { return []; }
+  };
+  return {
+    ...r,
+    isQuote: r.is_quote === true,
+    status: r.status,
+    due: r.due,
+    customer: r.customer || "",
+    description: r.description || "",
+    address: r.address || "",
+    email: r.email || "",
+    amount: parseFloat(r.amount) || 0,
+    grossAmount: parseFloat(r.gross_amount || r.amount) || 0,
+    vatEnabled: r.vat_enabled || false,
+    vatRate: parseFloat(r.vat_rate) || 20,
+    vatType: r.vat_type || "",
+    vatZeroRated: r.vat_zero_rated || false,
+    paymentMethod: r.payment_method || "both",
+    jobRef: r.job_ref || "",
+    cisEnabled: r.cis_enabled || false,
+    cisRate: parseFloat(r.cis_rate) || 20,
+    cisLabour: parseFloat(r.cis_labour) || 0,
+    cisMaterials: parseFloat(r.cis_materials) || 0,
+    cisDeduction: parseFloat(r.cis_deduction) || 0,
+    cisNetPayable: parseFloat(r.cis_net_payable) || 0,
+    lineItems: parseArr(r.line_items),
+    materialItems: parseArr(r.material_items),
+    chaseCount: r.chase_count || 0,
+    lastChased: r.last_chased_at || null,
+  };
+}
+
+// normalizeLineItem: one line item with a tolerant amount. A missing or blank
+// price becomes null (no price) rather than being dropped or forced to 0, so a
+// description-only line is allowed. Renderers already show null/0 as blank.
+function normalizeLineItem(li) {
+  if (!li) return { description: "", amount: null };
+  const description = String(li.description != null ? li.description : (li.desc != null ? li.desc : "")).trim();
+  const raw = li.amount;
+  const hasAmount = raw !== undefined && raw !== null && String(raw).trim() !== "" && !isNaN(parseFloat(raw));
+  return { description, amount: hasAmount ? parseFloat(raw) : null };
+}
+
+// sumLineItems: total of line items, treating a null/blank price as 0.
+function sumLineItems(items) {
+  return (items || []).reduce((s, l) => s + (parseFloat(l && l.amount) || 0), 0);
+}
+
+// encodeLineItemsDesc: legacy "description|amount" string for the description
+// column. A null price encodes as a trailing pipe with nothing after it.
+function encodeLineItemsDesc(items) {
+  return (items || []).map(l => `${l.description}|${l.amount == null ? "" : l.amount}`).join("\n");
+}
+
 export function AIAssistant({ isVisible = true, isTablet = false, brand, setBrand, jobs, setJobs, invoices, setInvoices, enquiries, setEnquiries, materials, setMaterials, setMaterialsRaw, customers, setCustomers, onAddReminder, setView, user, companyId, refreshJobs, onShowPdf, onScanReceipt, sendPush, assistantName = "Trade PA", assistantWakeWords = ["hey trade pa", "trade pa", "trade pay"], assistantPersona = "", assistantSignoff = "", assistantVoice = "eve", userCommands = [], usageData = {}, setUsageData, usageCaps = { convos: 100, hf_hours: 1 }, currentMonth = "", voiceHandle = null, onHandsFreeChange = null, overlayContext = null, onCloseOverlay = null, onboardingStep = 99, advanceOnboarding = () => {}, pendingInboxCount = 0 }) {
   const [messages, setMessages] = useState([]);
   const [hasGreeted, setHasGreeted] = useState(false);
@@ -1100,9 +1167,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               type: "object",
               properties: {
                 description: { type: "string", description: "What this line item is e.g. Boiler Service, Call Out Charge" },
-                amount: { type: "number", description: "Price for this line item in pounds" },
+                amount: { type: "number", description: "Price for this line item in pounds. OPTIONAL — omit it entirely if the user gave no price for this line (it will show blank, not £0). Never put 0 as a placeholder." },
               },
-              required: ["description", "amount"],
+              required: ["description"],
             },
           },
           due_days: { type: "number", description: "Days until payment due, default 30" },
@@ -1125,9 +1192,9 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               type: "object",
               properties: {
                 description: { type: "string", description: "What this line item is e.g. Supply and fit boiler, Labour" },
-                amount: { type: "number", description: "Price for this line item in pounds" },
+                amount: { type: "number", description: "Price for this line item in pounds. OPTIONAL — omit it entirely if the user gave no price for this line (it will show blank, not £0). Never put 0 as a placeholder." },
               },
-              required: ["description", "amount"],
+              required: ["description"],
             },
           },
           valid_days: { type: "number", description: "Days quote is valid for, default 30" },
@@ -1571,7 +1638,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     { name: "reject_inbox_action", description: "Reject/dismiss a pending inbox action. Triggers: \"no\", \"dismiss that\", \"reject it\", \"not needed\" when context is an inbox action. If the user gives a reason in their utterance — e.g. \"that's spam\", \"wrong customer\", \"already handled\", \"not relevant\" — map it to one of the reason IDs so the email classifier learns and stops suggesting the same kind of action. AFTER: \"Dismissed. I'll [stop suggesting that kind / remember not to / tune my filter].\"", input_schema: { type: "object", properties: { action_id: { type: "string" }, reason: { type: "string", enum: ["wrong_type","not_relevant","wrong_customer","already_done","spam"], description: "Why the user dismissed — pick the best match. wrong_type: wrong action category. not_relevant: not a real action. wrong_customer: matched the wrong customer. already_done: user already handled it. spam: junk/marketing/noise." } } } },
     { name: "generate_subcontractor_statement", description: "Generate a CIS statement PDF for a subcontractor for a given tax month. Triggers: \"generate [name]'s CIS statement\", \"send [subbie] their CIS for [month]\". MONTH NORMALISATION: user says \"March\" → YYYY-03 (current year). User says \"last month\" → previous month's YYYY-MM. User says nothing about month → default to LAST month's YYYY-MM (CIS statements are usually issued for the previous month). User says \"March 2024\" → 2024-03. Always normalise to YYYY-MM before calling the tool. ASK IF MISSING: subbie name. AFTER: \"Statement generated for [name] — [month label]. Email or download?\"", input_schema: { type: "object", properties: { name: { type: "string" }, month: { type: "string", description: "YYYY-MM format — normalise user's spoken month before passing (see description)." } }, required: ["name"] } },
     { name: "update_job_card", description: "Update any field on a job card — title, customer, address, value, status, scope, PO number. Triggers: \"change the value on [job] to £X\", \"update the address on the [customer] job\", \"set the PO number to ABC123\". ASK IF MISSING: which field to update, if unclear. For repeat customers with multiple jobs, always confirm which job. AFTER: \"[Customer]'s [job] updated — [field] now [new value].\"", input_schema: { type: "object", properties: { customer: { type: "string", description: "Current customer name to find the job" }, title: { type: "string", description: "Current job title to find the job" }, new_title: { type: "string" }, new_customer: { type: "string" }, new_address: { type: "string" }, new_value: { type: "string" }, new_status: { type: "string", enum: ["enquiry","quoted","accepted","in_progress","on_hold","completed","cancelled"] }, new_notes: { type: "string" }, new_scope: { type: "string" }, new_po_number: { type: "string" } } } },
-    { name: "update_invoice", description: "Update an invoice — change customer, amount, due date, status, payment method, VAT, or add/remove line items. Triggers: \"change the [customer] invoice to £X\", \"update the due date on [customer]'s invoice\", \"add a line to [customer]'s bill\". ASK IF MISSING: which field to change. LINE ITEMS: prefer the add_line_items array for adding 1-or-more line items at once — each as {description, amount}. AFTER: \"Invoice [id] updated — [what changed].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_due: { type: "string" }, new_status: { type: "string" }, new_address: { type: "string" }, new_payment_method: { type: "string", enum: ["bacs","card","both"], description: "bacs = bank transfer only, card = Stripe only, both = show both options" }, new_vat_enabled: { type: "string", description: "true or false" }, add_line_items: { type: "array", description: "Add one or more line items — each {description, amount}. Prefer this over add_line_item.", items: { type: "object", properties: { description: { type: "string" }, amount: { type: "number" } }, required: ["description","amount"] } }, add_line_item: { type: "string", description: "DEPRECATED — legacy single-line format 'description|amount'. Prefer add_line_items." }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
+    { name: "update_invoice", description: "Update an invoice — change customer, amount, due date, status, payment method, VAT, or add/remove line items. Triggers: \"change the [customer] invoice to £X\", \"update the due date on [customer]'s invoice\", \"add a line to [customer]'s bill\". ASK IF MISSING: which field to change. LINE ITEMS: prefer the add_line_items array for adding 1-or-more line items at once — each as {description, amount}. AFTER: \"Invoice [id] updated — [what changed].\"", input_schema: { type: "object", properties: { customer: { type: "string" }, invoice_id: { type: "string" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_due: { type: "string" }, new_status: { type: "string" }, new_address: { type: "string" }, new_payment_method: { type: "string", enum: ["bacs","card","both"], description: "bacs = bank transfer only, card = Stripe only, both = show both options" }, new_vat_enabled: { type: "string", description: "true or false" }, add_line_items: { type: "array", description: "Add one or more line items — each {description, amount}. Amount is OPTIONAL: omit it for a line the user gave no price for (shows blank, never 0). Prefer this over add_line_item.", items: { type: "object", properties: { description: { type: "string" }, amount: { type: "number" } }, required: ["description"] } }, add_line_item: { type: "string", description: "DEPRECATED — legacy single-line format 'description|amount'. Prefer add_line_items." }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
     { name: "list_quotes", description: "Show a list of quotes inline. Triggers: \"show my quotes\", \"what quotes are out\", \"list all estimates\", \"what's awaiting approval\". Filter by status if mentioned. AFTER: \"[N] quotes[, £total awaiting approval].\"", input_schema: { type: "object", properties: {} } },
     { name: "delete_expense", description: "Delete an expense. Triggers: \"delete that expense\", \"remove the £[X] [category]\", \"scrap that fuel claim\". If multiple match, list them. CONFIRM FIRST. AFTER: \"Expense deleted — £[amount] [category] gone.\"", input_schema: { type: "object", properties: { description: { type: "string" } }, required: ["description"] } },
     { name: "delete_cis_statement", description: "Delete a CIS statement. Triggers: \"delete that CIS\", \"remove the [contractor] CIS from [month]\". If multiple match, list them. CONFIRM FIRST. AFTER: \"CIS statement deleted — £[gross]/[deduction] from [contractor] removed.\"", input_schema: { type: "object", properties: { contractor_name: { type: "string" } }, required: ["contractor_name"] } },
@@ -1629,7 +1696,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         required: ["supplier_name", "kind", "items"]
       }
     },
-    { name: "update_quote", description: "Update an existing quote — change customer, amount, validity date, status, address, VAT, or add/remove line items. Use INSTEAD OF deleting and re-creating when the user wants to amend a quote. Triggers: \"change the [customer] quote to £X\", \"add another line to [customer]'s quote\", \"update validity on [customer]'s estimate\", \"mark [customer]'s quote as accepted\". ASK IF MISSING: which field to change. LINE ITEMS: prefer add_line_items as a structured array — each {description, amount}. Status enum is quote-specific (draft/sent/accepted/declined/expired) — DO NOT use invoice statuses (paid/overdue). AFTER: \"Quote [id] updated — [what changed].\"", input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name to find the quote" }, quote_id: { type: "string", description: "Quote ID — use if customer disambiguation needed" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_valid_until: { type: "string", description: "New validity date YYYY-MM-DD — when the quote expires" }, new_status: { type: "string", enum: ["draft","sent","accepted","declined","expired"] }, new_address: { type: "string" }, new_vat_enabled: { type: "string", description: "true or false" }, add_line_items: { type: "array", description: "Add one or more line items — each {description, amount}.", items: { type: "object", properties: { description: { type: "string" }, amount: { type: "number" } }, required: ["description","amount"] } }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
+    { name: "update_quote", description: "Update an existing quote — change customer, amount, validity date, status, address, VAT, or add/remove line items. Use INSTEAD OF deleting and re-creating when the user wants to amend a quote. Triggers: \"change the [customer] quote to £X\", \"add another line to [customer]'s quote\", \"update validity on [customer]'s estimate\", \"mark [customer]'s quote as accepted\". ASK IF MISSING: which field to change. LINE ITEMS: prefer add_line_items as a structured array — each {description, amount}. Status enum is quote-specific (draft/sent/accepted/declined/expired) — DO NOT use invoice statuses (paid/overdue). AFTER: \"Quote [id] updated — [what changed].\"", input_schema: { type: "object", properties: { customer: { type: "string", description: "Customer name to find the quote" }, quote_id: { type: "string", description: "Quote ID — use if customer disambiguation needed" }, new_customer: { type: "string" }, new_amount: { type: "string" }, new_valid_until: { type: "string", description: "New validity date YYYY-MM-DD — when the quote expires" }, new_status: { type: "string", enum: ["draft","sent","accepted","declined","expired"] }, new_address: { type: "string" }, new_vat_enabled: { type: "string", description: "true or false" }, add_line_items: { type: "array", description: "Add one or more line items — each {description, amount}. Amount is OPTIONAL: omit it for a line the user gave no price for (shows blank, never 0).", items: { type: "object", properties: { description: { type: "string" }, amount: { type: "number" } }, required: ["description"] } }, remove_line_item: { type: "string", description: "Remove line item by number (1-based)" } } } },
 ];
 
   // ── Execute tool calls ────────────────────────────────────────────────────
@@ -1983,8 +2050,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "create_invoice": {
           const id = nextInvoiceId(invoices);
-          const lineItems = input.line_items || [{ description: input.description || "Services", amount: input.amount || 0 }];
-          const totalAmount = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
+          const lineItems = (input.line_items || [{ description: input.description || "Services", amount: input.amount }]).map(normalizeLineItem);
+          const totalAmount = sumLineItems(lineItems);
           // Auto-pull customer details from customer record if not provided.
           // Prefer exact (case-insensitive) match, fall back to substring match.
           // Also merge in customers created within THIS turn (via the
@@ -2015,7 +2082,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             amount: totalAmount,
             due: `Due in ${input.due_days || 30} days`,
             status: "sent",
-            description: lineItems.map(l => `${l.description}|${l.amount}`).join("\n"),
+            description: encodeLineItemsDesc(lineItems),
             lineItems,
             isQuote: false,
             // Honor brand defaults — VAT-registered tradies above the £85k
@@ -2062,8 +2129,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
         }
         case "create_quote": {
           const id = nextQuoteId(invoices);
-          const lineItems = input.line_items || [{ description: input.description || "Services", amount: input.amount || 0 }];
-          const totalAmount = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
+          const lineItems = (input.line_items || [{ description: input.description || "Services", amount: input.amount }]).map(normalizeLineItem);
+          const totalAmount = sumLineItems(lineItems);
           // Auto-pull customer details from customer record if not provided.
           // Also merge in customers created within THIS turn — same reason as
           // create_invoice (back-to-back create_customer → create_quote).
@@ -2092,7 +2159,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             amount: totalAmount,
             due: `Valid for ${input.valid_days || 30} days`,
             status: "sent",
-            description: lineItems.map(l => `${l.description}|${l.amount}`).join("\n"),
+            description: encodeLineItemsDesc(lineItems),
             lineItems,
             isQuote: true,
             // Honor brand defaults — see matching change in create_invoice.
@@ -4163,36 +4230,38 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             (i.customer || "").toLowerCase().includes(term)
           );
           if (!inv) return `Couldn't find an invoice for "${input.customer || input.invoice_id}". Try: list_invoices to see all invoices.`;
-          const updates = { ...inv };
+          // Same snake_case -> camelCase mapping as update_quote. inv is a fresh
+          // DB row; without this the save-wrapper would default the camelCase
+          // fields and wipe line_items / VAT / CIS on every invoice edit.
+          const updates = rowToCamelInvoice(inv);
+          updates.isQuote = false; // update_invoice only ever edits invoices
           if (input.new_customer !== undefined) updates.customer = input.new_customer;
-          if (input.new_amount !== undefined) { updates.amount = parseFloat(input.new_amount); updates.grossAmount = parseFloat(input.new_amount); }
+          if (input.new_amount !== undefined) { updates.amount = parseFloat(input.new_amount) || 0; updates.grossAmount = updates.amount; }
           if (input.new_due !== undefined) updates.due = input.new_due;
           if (input.new_status !== undefined) updates.status = input.new_status;
           if (input.new_address !== undefined) updates.address = input.new_address;
           if (input.new_payment_method !== undefined) updates.paymentMethod = input.new_payment_method;
           if (input.new_vat_enabled !== undefined) updates.vatEnabled = input.new_vat_enabled === true || input.new_vat_enabled === "true";
           if (input.add_line_item !== undefined) {
-            const parts = input.add_line_item.split("|");
-            const newLine = { description: parts[0].trim(), amount: parseFloat(parts[1]) || 0 };
-            updates.lineItems = [...(inv.lineItems || []), newLine];
-            updates.amount = updates.lineItems.reduce((s, l) => s + l.amount, 0);
+            const parts = String(input.add_line_item).split("|");
+            const newLine = normalizeLineItem({ description: parts[0], amount: parts[1] });
+            updates.lineItems = [...(updates.lineItems || []), newLine];
+            updates.amount = sumLineItems(updates.lineItems);
             updates.grossAmount = updates.amount;
           }
           if (Array.isArray(input.add_line_items) && input.add_line_items.length) {
             // Preferred path — one or more line items as structured objects
-            const newLines = input.add_line_items
-              .filter(li => li && li.description && typeof li.amount === "number")
-              .map(li => ({ description: String(li.description).trim(), amount: parseFloat(li.amount) || 0 }));
+            const newLines = input.add_line_items.filter(li => li && li.description).map(normalizeLineItem);
             if (newLines.length) {
-              updates.lineItems = [...(updates.lineItems || inv.lineItems || []), ...newLines];
-              updates.amount = updates.lineItems.reduce((s, l) => s + l.amount, 0);
+              updates.lineItems = [...(updates.lineItems || []), ...newLines];
+              updates.amount = sumLineItems(updates.lineItems);
               updates.grossAmount = updates.amount;
             }
           }
           if (input.remove_line_item !== undefined) {
             const removeIdx = parseInt(input.remove_line_item) - 1;
-            updates.lineItems = (inv.lineItems || []).filter((_, i) => i !== removeIdx);
-            updates.amount = updates.lineItems.reduce((s, l) => s + l.amount, 0);
+            updates.lineItems = (updates.lineItems || []).filter((_, i) => i !== removeIdx);
+            updates.amount = sumLineItems(updates.lineItems);
             updates.grossAmount = updates.amount;
           }
           setInvoices(prev => (prev || []).map(i => i.id === inv.id ? updates : i));
@@ -4211,29 +4280,35 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             (i.customer || "").toLowerCase().includes(term)
           );
           if (!q) return `Couldn't find a quote for "${input.customer || input.quote_id}". Try: list_quotes to see all quotes.`;
-          const updates = { ...q };
+          // Map the freshly-fetched DB row (snake_case) into the camelCase shape
+          // the app holds invoices in. The setInvoices save-wrapper writes back
+          // by reading camelCase fields (inv.isQuote, inv.lineItems, etc.); the
+          // old `{ ...q }` left them snake_case only, so saving an edit defaulted
+          // is_quote -> false, line_items -> [] and amount -> 0, flipping the
+          // quote into an empty invoice. Mapping in full prevents that and gives
+          // the line add/remove logic the real existing lines.
+          const updates = rowToCamelInvoice(q);
+          updates.isQuote = true; // update_quote only ever edits quotes
           const changed = [];
           if (input.new_customer !== undefined) { updates.customer = input.new_customer; changed.push("customer"); }
-          if (input.new_amount !== undefined) { updates.amount = parseFloat(input.new_amount); updates.grossAmount = parseFloat(input.new_amount); changed.push("amount"); }
+          if (input.new_amount !== undefined) { updates.amount = parseFloat(input.new_amount) || 0; updates.grossAmount = updates.amount; changed.push("amount"); }
           if (input.new_valid_until !== undefined) { updates.due = input.new_valid_until; changed.push("validity"); }
           if (input.new_status !== undefined) { updates.status = input.new_status; changed.push("status"); }
           if (input.new_address !== undefined) { updates.address = input.new_address; changed.push("address"); }
           if (input.new_vat_enabled !== undefined) { updates.vatEnabled = input.new_vat_enabled === true || input.new_vat_enabled === "true"; changed.push("VAT"); }
           if (Array.isArray(input.add_line_items) && input.add_line_items.length) {
-            const newLines = input.add_line_items
-              .filter(li => li && li.description && typeof li.amount === "number")
-              .map(li => ({ description: String(li.description).trim(), amount: parseFloat(li.amount) || 0 }));
+            const newLines = input.add_line_items.filter(li => li && li.description).map(normalizeLineItem);
             if (newLines.length) {
-              updates.lineItems = [...(updates.lineItems || q.lineItems || []), ...newLines];
-              updates.amount = updates.lineItems.reduce((s, l) => s + l.amount, 0);
+              updates.lineItems = [...(updates.lineItems || []), ...newLines];
+              updates.amount = sumLineItems(updates.lineItems);
               updates.grossAmount = updates.amount;
               changed.push(`${newLines.length} line item${newLines.length === 1 ? "" : "s"} added`);
             }
           }
           if (input.remove_line_item !== undefined) {
             const removeIdx = parseInt(input.remove_line_item) - 1;
-            updates.lineItems = (q.lineItems || []).filter((_, i) => i !== removeIdx);
-            updates.amount = updates.lineItems.reduce((s, l) => s + l.amount, 0);
+            updates.lineItems = (updates.lineItems || []).filter((_, i) => i !== removeIdx);
+            updates.amount = sumLineItems(updates.lineItems);
             updates.grossAmount = updates.amount;
             changed.push("line item removed");
           }
@@ -4903,7 +4978,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
   + "\nRules:\n"
   + "- create_job = scheduled with date+time. create_job_card = job tracking card without a date.\n"
   + "- REPEAT CUSTOMERS: When a customer has multiple jobs, ALWAYS include job_title in tool calls (log_time, add_job_note, assign_material_to_job, get_job_profit, get_job_full, add_variation_order, log_daywork, add_compliance_cert). If the user says 'the extension' or 'the boiler service' — use that as job_title. Never guess — if ambiguous, list their jobs and ask which one.\n"
-  + "- For invoices/quotes: use line_items array — one object per item with description and amount.\n- list_invoices filter: unpaid = outstanding/due/awaiting payment. paid = settled/collected. ALWAYS match what the user asked for.\n"
+  + "- For invoices/quotes: use line_items array — one object per item with description and amount. If the user gives no price for a line, OMIT amount for that line (it shows blank, never use 0).\n- list_invoices filter: unpaid = outstanding/due/awaiting payment. paid = settled/collected. ALWAYS match what the user asked for.\n"
   + "- After tool use: confirm naturally in 1-2 sentences.\n"
   + "- For mileage: HMRC rate is 45p/mile for first 10,000 miles.\n"
   + "- When user says show me or what are my anything — use a list_ or find_ tool, never tell them to go somewhere.\n"
