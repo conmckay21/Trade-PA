@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trade PA vs ServiceM8 (2026): the comparison for UK trades</title>
+<meta name="description" content="An honest, side-by-side comparison of Trade PA and ServiceM8 for UK tradespeople: Android support, job caps, voice AI, CIS, RAMS and pricing.">
+<meta name="theme-color" content="#f59e0b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0A0A0A;--amber:#F59E0B;--amber-dark:#FBBF24;--paper:#0A0A0A;--white:#161616;--ink:#F0F0F0;--steel:#9CA3AF;--line:#2A2A2A;--green:#10B981;--red:#ef4444;--mono:'Plus Jakarta Sans',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',sans-serif;color:var(--ink);background:var(--paper);font-size:17px;line-height:1.6}
+.wrap{max-width:1020px;margin:0 auto;padding:0 24px}
+a{color:inherit;text-decoration:none}
+h1{font-size:clamp(2.1rem,5vw,3.4rem);font-weight:700;letter-spacing:-0.02em;line-height:1.1}
+h2{font-size:clamp(1.5rem,3vw,2rem);font-weight:700;letter-spacing:-0.02em;margin-bottom:10px}
+.lead{font-size:1.13rem;color:var(--steel);max-width:38em}
+.eyebrow{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--amber-dark);display:inline-flex;align-items:center;gap:8px;margin-bottom:14px}
+.eyebrow::before{content:"";width:14px;height:14px;border:2px solid var(--amber)}
+.btn{display:inline-block;font-weight:700;padding:14px 24px;border-radius:10px;background:var(--amber);color:var(--navy)}
+.btn:hover{background:#FFAD1F}
+header{position:sticky;top:0;z-index:50;background:rgba(10,10,10,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+.logo{font-weight:700;font-size:1.2rem;display:flex;align-items:center;gap:10px}
+.logo .mark{width:30px;height:30px;background:var(--amber);border-radius:8px;display:grid;place-items:center;color:var(--navy);font-size:.8rem;font-weight:700}
+.nav-links{display:flex;gap:26px;align-items:center;font-weight:600;font-size:.95rem}
+@media(max-width:820px){.nav-links a:not(.btn){display:none}}
+.hero{padding:64px 0 36px}
+.note{font-family:var(--mono);font-size:13px;color:var(--steel);margin-top:14px}
+section{padding:48px 0}
+.tbl{width:100%;border-collapse:separate;border-spacing:0;background:var(--white);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-top:28px;font-size:.95rem}
+.tbl th,.tbl td{padding:13px 16px;text-align:left;border-bottom:1px solid var(--line)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl thead th{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;background:var(--navy);color:#fff}
+.tbl thead th:nth-child(2){background:var(--amber);color:var(--navy)}
+.tbl td:nth-child(2){background:rgba(245,158,11,.06);font-weight:600}
+.yes{color:var(--green);font-weight:700}
+.no{color:var(--red);font-weight:700}
+.part{color:var(--steel)}
+.caveat{font-family:var(--mono);font-size:12px;color:var(--steel);margin-top:12px;line-height:1.7}
+.price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:24px}
+@media(max-width:760px){.price-grid{grid-template-columns:1fr 1fr}}
+.pcell{background:var(--white);border:1px solid var(--line);border-radius:13px;padding:18px;text-align:center}
+.pcell .t{font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--steel)}
+.pcell .a{font-size:1.5rem;font-weight:700;color:var(--green);margin-top:6px}
+.pcell .b{font-size:1rem;color:var(--steel);text-decoration:line-through}
+.fair{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px}
+@media(max-width:760px){.fair{grid-template-columns:1fr}}
+.fcard{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:24px}
+.fcard h3{font-size:1.02rem;font-weight:700;margin-bottom:10px}
+.fcard ul{list-style:none;display:grid;gap:8px;font-size:.93rem;color:var(--steel)}
+.fcard.win ul li::before{content:"✓ ";color:var(--green);font-weight:700}
+.fcard.them ul li::before{content:"• ";color:var(--steel)}
+.final{background:var(--navy);color:#fff;text-align:center;padding:80px 24px;border-radius:0}
+.final p{color:#A1A1AA;margin:12px auto 26px;max-width:32em}
+footer{background:#050505;color:#9CA3AF;padding:34px 0;font-size:.85rem}
+footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
+details{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin-bottom:12px}
+details summary{font-weight:700;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+details summary::after{content:"+";font-size:1.3rem;color:var(--amber-dark)}
+details[open] summary::after{content:"–"}
+details p{margin-top:12px;color:var(--steel);font-size:.95rem}
+
+/* Trade PA brand retheme: #0A0A0A / amber / cream, Plus Jakarta Sans */
+h1,h2,h3{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;letter-spacing:-0.02em}
+body{font-family:'Plus Jakarta Sans',sans-serif}
+.logo{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800}
+.btn{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;color:#0A0A0A}
+.btn-ghost{background:#161616;color:var(--ink)}
+.pr,.pcell .a{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700}
+.plan .nm,.f h3,.card h3,.val h3,.fcard h3,.step h3,.uk-card h3,.min b,.addon h3{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700}
+.dark{background:#141414;border-top:1px solid #2A2A2A;border-bottom:1px solid #2A2A2A}
+.final{background:#141414;border-top:1px solid #2A2A2A}
+.phone{background:#141414;border:1px solid #2A2A2A}
+.phonebar{background:#141414;border:1px solid #2A2A2A}
+.company{background:#161616;border:1px solid #2A2A2A}
+.strip{background:#111111}
+.uk{background:#111111}
+.tbl thead th{background:#1F1F1F}
+.tbl thead th:nth-child(2){background:var(--amber);color:#0A0A0A}
+.plan .flag{color:#0A0A0A}
+.logo .mark,.eve-row .tick{color:#0A0A0A}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="/"><span class="mark">TP</span>TRADE PA</a>
+    <nav class="nav-links">
+      <a href="/features.html">Features</a><a href="/pricing.html">Pricing</a><a href="/vs-tradify.html">Compare</a><a href="/about.html">About</a>
+      <a class="btn" href="/signup.html">Start free trial</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Comparison · updated June 2026</span>
+    <h1>Trade PA vs ServiceM8: the honest comparison.</h1>
+    <p class="lead">The short version: ServiceM8’s field app runs on Apple devices only and its plans cap how many jobs you can do each month. Trade PA runs on iPhone and Android, never counts your jobs, and gives you Eve, an AI assistant who does the admin by voice. Here’s the detail, sourced from both companies’ published pricing and features.</p>
+    <div style="margin-top:26px"><a class="btn" href="/signup.html">Try Trade PA free for 30 days</a></div>
+    <p class="note">No card needed. Cancel anytime.</p>
+  </div>
+</div>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2>Side by side.</h2>
+    <table class="tbl">
+      <thead><tr><th>What matters on the tools</th><th>Trade PA</th><th>ServiceM8</th></tr></thead>
+      <tbody>
+        <tr><td>AI voice assistant</td><td><span class="yes">✓</span> Eve, full assistant</td><td><span class="part">Text “AI Assists” only</span></td></tr>
+        <tr><td>Hands-free mode for driving</td><td><span class="yes">✓</span></td><td><span class="no">✗</span></td></tr>
+        <tr><td>Android field app</td><td><span class="yes">✓</span> Full app, both stores</td><td><span class="no">✗</span> Apple devices only</td></tr>
+        <tr><td>Jobs per month</td><td><span class="yes">✓</span> Never capped</td><td><span class="part">Capped per plan tier</span></td></tr>
+        <tr><td>AI email agent reads &amp; files your inbox</td><td><span class="yes">✓</span> Supplier invoices auto-filed</td><td><span class="no">✗</span></td></tr>
+        <tr><td>AI payment chasing</td><td><span class="yes">✓</span> Drafted &amp; sent for you</td><td><span class="part">Manual reminders</span></td></tr>
+        <tr><td>Native CIS deductions &amp; statements</td><td><span class="yes">✓</span> Built in</td><td><span class="no">✗</span></td></tr>
+        <tr><td>AI-drafted RAMS</td><td><span class="yes">✓</span></td><td><span class="no">✗</span></td></tr>
+        <tr><td>HMRC mileage by voice</td><td><span class="yes">✓</span></td><td><span class="no">✗</span></td></tr>
+        <tr><td>Built for the UK</td><td><span class="yes">✓</span> Portsmouth-built</td><td><span class="part">Australian, UK features adapted</span></td></tr>
+        <tr><td>Xero &amp; QuickBooks sync</td><td><span class="yes">✓</span></td><td><span class="yes">✓</span></td></tr>
+        <tr><td>Users per plan</td><td>1 to 10 by plan, flat rate</td><td><span class="yes">✓</span> Unlimited users</td></tr>
+        <tr><td>Free trial</td><td>30 days, no card</td><td>Free tier (job-capped)</td></tr>
+      </tbody>
+    </table>
+    <p class="caveat">Comparison based on publicly listed features and pricing as of June 2026. Sources: servicem8.com pricing and feature pages. ServiceM8 is a trade mark of its owner; Trade PA is not affiliated with ServiceM8. Spotted something out of date? Email hello@tradespa.co.uk and we’ll fix it.</p>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2>The job-cap problem.</h2>
+    <p class="lead">ServiceM8 prices by how many jobs you do each month. A good month moves you up a tier. Trade PA never counts your jobs on any plan.</p>
+    <div class="price-grid">
+      <div class="pcell"><div class="t">ServiceM8 Starter</div><div class="a" style="color:var(--steel)">50 jobs/mo</div><p class="caveat">Then you need the next tier up</p></div>
+      <div class="pcell"><div class="t">ServiceM8 Growing</div><div class="a" style="color:var(--steel)">150 jobs/mo</div><p class="caveat">Plus metered SMS credits</p></div>
+      <div class="pcell"><div class="t">ServiceM8 Premium</div><div class="a" style="color:var(--steel)">500 jobs/mo</div><p class="caveat">Their listed cap structure</p></div>
+      <div class="pcell"><div class="t">Trade PA, any plan</div><div class="a">Unlimited</div><p class="caveat">Jobs and invoices never counted</p></div>
+    </div>
+    <p class="caveat">Job caps from ServiceM8’s listed plan structure, June 2026 (pricing listed in AUD/USD; UK pricing varies by region, check servicem8.com for current figures). Trade PA plans differ by users and AI capacity only.</p>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2>A fair fight.</h2>
+    <div class="fair">
+      <div class="fcard them">
+        <h3>Where ServiceM8 is genuinely good</h3>
+        <ul>
+          <li>A polished, mature product on iPhone and iPad</li>
+          <li>Unlimited users on every plan</li>
+          <li>A free tier to get started on small job volumes</li>
+        </ul>
+        <p class="caveat">If your whole team is on Apple devices and your job volume is steady, ServiceM8 is a capable system with a long track record. We’d rather say that than pretend otherwise.</p>
+      </div>
+      <div class="fcard win">
+        <h3>What only Trade PA does</h3>
+        <ul>
+          <li>Eve: quotes, invoices, bookings and chases by voice</li>
+          <li>Full app on Android as well as iPhone</li>
+          <li>AI inbox: supplier invoices file themselves onto the right job</li>
+          <li>Native CIS, AI-drafted RAMS and HMRC mileage, UK-built</li>
+          <li>No job caps, ever, on any plan</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap" style="max-width:760px">
+    <h2>Switching from ServiceM8?</h2>
+    <p class="lead">Moving over takes an afternoon, not a weekend. Export your customers, import them into Trade PA, set your rates, and Eve learns how you work from day one. Need a hand? Email hello@tradespa.co.uk and we’ll walk you through it on a call.</p>
+    <div style="margin-top:26px">
+      <details><summary>Half my team is on Android. Does that matter here?</summary><p>Not any more. Trade PA’s apps on the App Store and Google Play have the same features, so a mixed iPhone-and-Android team all works from the same system.</p></details>
+      <details><summary>Can I bring my customer list?</summary><p>Yes. Export your customers from ServiceM8 and import them into Trade PA, or send us the file and we’ll load it for you during your trial.</p></details>
+      <details><summary>Do I have to commit before I’ve tried it?</summary><p>No. The trial is 30 days with no card needed, long enough to run real jobs through it alongside your current setup before you decide.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <span class="eyebrow" style="color:var(--amber)">Free for 30 days · No card needed</span>
+  <h2 style="color:#fff;font-size:clamp(1.9rem,4vw,2.8rem)">Run your next five jobs through Trade PA and see.</h2>
+  <p>Keep ServiceM8 running while you try it. If Eve doesn’t save you an evening in week one, stay where you are.</p>
+  <a class="btn" href="/signup.html">Start free trial</a>
+  <div class="badges" style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:22px">
+    <a href="https://apps.apple.com/gb/app/trade-pa/id6769395416"><img src="/img/app-store-badge.svg" alt="Download on the App Store" style="height:44px;width:auto"></a>
+    <a href="https://play.google.com/store/apps/details?id=uk.co.tradespa.app"><img src="/img/google-play-badge.png" alt="Get it on Google Play" style="height:44px;width:auto"></a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 TRADEPA LTD · Company No. 17176983 · ICO ZC132378</span>
+    <span><a href="/pricing.html">Pricing</a> · <a href="/features.html">Features</a> · <a href="/privacy-policy.html">Privacy</a> · <a href="/terms.html">Terms</a></span>
+  </div>
+</footer>
+</body>
+</html>

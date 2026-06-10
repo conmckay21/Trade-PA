@@ -1,552 +1,204 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-GB">
 <head>
-    <meta name="apple-itunes-app" content="app-id=6769395416">
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Pricing | Trade PA | AI-powered PA for UK tradespeople from £39/mo</title>
-  <meta name="description" content="Simple, honest pricing for Trade PA. Solo (£39/mo), Pro Solo (£59/mo), Team (£89/mo), Business (£129/mo). All plans: 30-day free trial, every feature included, cancel anytime." />
-  <link rel="canonical" href="https://www.tradespa.co.uk/pricing.html" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing | Trade PA | From £39/mo, flat team rates</title>
+<meta name="description" content="Simple, honest pricing. Solo £39, Pro Solo £59, Team £89 (5 users), Business £129 (10 users). Every feature on every plan. Free for 30 days, no card needed.">
+<meta name="theme-color" content="#f59e0b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0A0A0A;--amber:#F59E0B;--amber-dark:#FBBF24;--paper:#0A0A0A;--white:#161616;--ink:#F0F0F0;--steel:#9CA3AF;--line:#2A2A2A;--green:#10B981;--mono:'Plus Jakarta Sans',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',sans-serif;color:var(--ink);background:var(--paper);font-size:17px;line-height:1.6}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+a{color:inherit;text-decoration:none}
+h1{font-size:clamp(2.2rem,5vw,3.6rem);font-weight:700;letter-spacing:-0.02em;line-height:1.08}
+h2{font-size:clamp(1.5rem,3vw,2.1rem);font-weight:700;letter-spacing:-0.02em;margin-bottom:10px}
+.lead{font-size:1.15rem;color:var(--steel);max-width:36em}
+.eyebrow{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--amber-dark);display:inline-flex;align-items:center;gap:8px;margin-bottom:14px}
+.eyebrow::before{content:"";width:14px;height:14px;border:2px solid var(--amber)}
+.btn{display:inline-block;font-weight:700;padding:13px 22px;border-radius:10px;background:var(--amber);color:var(--navy)}
+.btn:hover{background:#FFAD1F}
+.btn-ghost{background:var(--white);border:2px solid var(--line);color:var(--ink)}
+header{position:sticky;top:0;z-index:50;background:rgba(10,10,10,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+.logo{font-weight:700;font-size:1.2rem;display:flex;align-items:center;gap:10px}
+.logo .mark{width:30px;height:30px;background:var(--amber);border-radius:8px;display:grid;place-items:center;color:var(--navy);font-size:.8rem;font-weight:700}
+.nav-links{display:flex;gap:26px;align-items:center;font-weight:600;font-size:.95rem}
+@media(max-width:820px){.nav-links a:not(.btn){display:none}}
+.hero{padding:64px 0 30px;text-align:center}
+.hero .lead{margin:14px auto 0}
+.note{font-family:var(--mono);font-size:13px;color:var(--steel);margin-top:14px}
+section{padding:50px 0}
+.plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:36px}
+@media(max-width:980px){.plans{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.plans{grid-template-columns:1fr}}
+.plan{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:26px;position:relative;display:flex;flex-direction:column}
+.plan.pop{border:2px solid var(--amber);box-shadow:0 16px 36px rgba(245,158,11,.12)}
+.plan .flag{position:absolute;top:-12px;left:20px;background:var(--amber);color:var(--navy);font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.08em;padding:4px 10px;border-radius:6px;text-transform:uppercase}
+.plan .nm{font-weight:700;font-size:1.1rem}
+.plan .pr{font-size:2.3rem;font-weight:700;letter-spacing:-0.03em;margin:6px 0 0}
+.plan .pr small{font-size:.95rem;font-weight:600;color:var(--steel)}
+.plan .us{font-family:var(--mono);font-size:12px;color:var(--steel);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px}
+.plan ul{list-style:none;display:grid;gap:8px;font-size:.93rem;color:var(--steel);flex:1}
+.plan ul li::before{content:"✓ ";color:var(--green);font-weight:700}
+.plan .btn{margin-top:18px;text-align:center}
+.addons{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px}
+@media(max-width:880px){.addons{grid-template-columns:1fr}}
+.addon{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:22px;text-align:center}
+.addon .pr{font-size:1.7rem;font-weight:700}
+.addon p{font-size:.9rem;color:var(--steel)}
+.phonebar{background:var(--navy);color:#F0F0F0;border-radius:18px;padding:34px;display:grid;grid-template-columns:1.2fr 1fr;gap:30px;align-items:center;margin-top:50px}
+@media(max-width:880px){.phonebar{grid-template-columns:1fr}}
+.phonebar h2{color:#fff}
+.phonebar p{color:#A1A1AA;font-size:.98rem}
+.minutes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.min{background:#1A1A1A;border:1px solid #2A2A2A;border-radius:11px;padding:14px;text-align:center}
+.min b{display:block;font-size:1.2rem;color:#fff}
+.min span{font-family:var(--mono);font-size:11.5px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em}
+details{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin-bottom:12px}
+details summary{font-weight:700;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+details summary::after{content:"+";font-size:1.3rem;color:var(--amber-dark)}
+details[open] summary::after{content:"–"}
+details p{margin-top:12px;color:var(--steel);font-size:.96rem}
+.final{background:var(--navy);color:#fff;text-align:center;padding:80px 24px}
+.final p{color:#A1A1AA;margin:12px auto 26px;max-width:30em}
+footer{background:#050505;color:#9CA3AF;padding:34px 0;font-size:.85rem}
+footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
 
-  <!-- Open Graph / Twitter -->
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="Trade PA" />
-  <meta property="og:title" content="Pricing | Trade PA" />
-  <meta property="og:description" content="AI-powered admin for UK tradespeople. From £39/mo. 30-day free trial, no card needed." />
-  <meta property="og:url" content="https://www.tradespa.co.uk/pricing.html" />
-  <meta property="og:image" content="https://www.tradespa.co.uk/og-card.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:locale" content="en_GB" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Pricing | Trade PA" />
-  <meta name="twitter:description" content="Voice-first PA for UK tradespeople. From £39/mo. 30-day free trial." />
-  <meta name="twitter:image" content="https://www.tradespa.co.uk/og-card.png" />
+/* Trade PA brand retheme: #0A0A0A / amber / cream, Plus Jakarta Sans */
+h1,h2,h3{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;letter-spacing:-0.02em}
+body{font-family:'Plus Jakarta Sans',sans-serif}
+.logo{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800}
+.btn{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;color:#0A0A0A}
+.btn-ghost{background:#161616;color:var(--ink)}
+.pr,.pcell .a{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700}
+.plan .nm,.f h3,.card h3,.val h3,.fcard h3,.step h3,.uk-card h3,.min b,.addon h3{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700}
+.dark{background:#141414;border-top:1px solid #2A2A2A;border-bottom:1px solid #2A2A2A}
+.final{background:#141414;border-top:1px solid #2A2A2A}
+.phone{background:#141414;border:1px solid #2A2A2A}
+.phonebar{background:#141414;border:1px solid #2A2A2A}
+.company{background:#161616;border:1px solid #2A2A2A}
+.strip{background:#111111}
+.uk{background:#111111}
+.tbl thead th{background:#1F1F1F}
+.tbl thead th:nth-child(2){background:var(--amber);color:#0A0A0A}
+.plan .flag{color:#0A0A0A}
+.logo .mark,.eve-row .tick{color:#0A0A0A}
+</style>
 
-  <!-- Favicons / theme -->
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png" />
-  <meta name="theme-color" content="#f59e0b" />
-
-  <!-- Schema.org Product markup: helps Google understand the pricing structure -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    "name": "Trade PA",
-    "description": "AI-powered personal assistant for UK tradespeople. Voice-first job management, invoicing, call handling and inbox automation.",
-    "brand": { "@type": "Brand", "name": "Trade PA" },
-    "url": "https://www.tradespa.co.uk/pricing.html",
-    "offers": [
-      {
-        "@type": "Offer",
-        "name": "Solo",
-        "price": "39.00",
-        "priceCurrency": "GBP",
-        "url": "https://www.tradespa.co.uk/signup.html?plan=solo_monthly",
-        "priceSpecification": {
-          "@type": "UnitPriceSpecification",
-          "price": "39.00",
-          "priceCurrency": "GBP",
-          "unitText": "month"
-        },
-        "availability": "https://schema.org/InStock"
-      },
-      {
-        "@type": "Offer",
-        "name": "Pro Solo",
-        "price": "59.00",
-        "priceCurrency": "GBP",
-        "url": "https://www.tradespa.co.uk/signup.html?plan=pro_solo_monthly",
-        "priceSpecification": {
-          "@type": "UnitPriceSpecification",
-          "price": "59.00",
-          "priceCurrency": "GBP",
-          "unitText": "month"
-        },
-        "availability": "https://schema.org/InStock"
-      },
-      {
-        "@type": "Offer",
-        "name": "Team",
-        "price": "89.00",
-        "priceCurrency": "GBP",
-        "url": "https://www.tradespa.co.uk/signup.html?plan=team_monthly",
-        "priceSpecification": {
-          "@type": "UnitPriceSpecification",
-          "price": "89.00",
-          "priceCurrency": "GBP",
-          "unitText": "month"
-        },
-        "availability": "https://schema.org/InStock"
-      },
-      {
-        "@type": "Offer",
-        "name": "Business",
-        "price": "129.00",
-        "priceCurrency": "GBP",
-        "url": "https://www.tradespa.co.uk/signup.html?plan=business_monthly",
-        "priceSpecification": {
-          "@type": "UnitPriceSpecification",
-          "price": "129.00",
-          "priceCurrency": "GBP",
-          "unitText": "month"
-        },
-        "availability": "https://schema.org/InStock"
-      }
-    ]
-  }
-  </script>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
-
-  <style>
-    :root {
-      --bg: #0a0a0a; --surface: #141414; --surface-high: #1a1a1a;
-      --border: #222; --border-high: #2a2a2a;
-      --text: #f0f0f0; --text-dim: #ccc; --muted: #666; --muted-low: #555;
-      --amber: #f59e0b; --amber-dim: #92400e; --green: #10b981; --red: #ef4444;
-      --mono: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      --sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { background: var(--bg); color: var(--text); }
-    body {
-      font-family: var(--sans);
-      min-height: 100vh; line-height: 1.6;
-      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-    }
-    a { color: inherit; text-decoration: none; }
-
-    /* Nav */
-    .nav {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 18px 24px; border-bottom: 1px solid var(--border);
-      position: sticky; top: 0; background: rgba(10,10,10,0.92);
-      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-      z-index: 100;
-    }
-    .nav .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--amber); }
-    .nav .brand-accent { color: var(--amber); }
-    .nav-links { display: flex; gap: 20px; font-size: 13px; color: var(--text-dim); }
-    .nav-links a:hover { color: var(--amber); }
-    .nav-cta {
-      background: var(--amber); color: #000; padding: 8px 14px;
-      border-radius: 8px; font-weight: 700; font-size: 13px;
-    }
-    .nav-cta:hover { opacity: 0.9; }
-
-    /* Hero */
-    .hero { padding: 72px 24px 40px; text-align: center; }
-    .hero-label {
-      font-family: var(--mono); font-size: 11px; color: var(--amber);
-      text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 16px;
-    }
-    .hero h1 {
-      font-size: clamp(32px, 5vw, 48px); font-weight: 800;
-      letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 16px;
-    }
-    .hero .sub {
-      font-size: 17px; color: var(--muted); max-width: 560px;
-      margin: 0 auto; line-height: 1.7;
-    }
-
-    /* Sections */
-    .section { padding: 64px 24px; }
-    .section-label {
-      font-family: var(--mono); font-size: 11px; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 10px;
-    }
-    .section h2 {
-      font-size: clamp(26px, 4vw, 36px); font-weight: 800;
-      letter-spacing: -0.02em; line-height: 1.15;
-    }
-    .section-head { text-align: center; margin-bottom: 48px; }
-    .section-head .sub {
-      font-size: 15px; color: var(--muted); max-width: 520px;
-      margin: 14px auto 0; line-height: 1.7;
-    }
-
-    /* Plan cards */
-    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; max-width: 1100px; margin: 0 auto; }
-    .plan {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 20px; padding: 44px 32px 36px; position: relative;
-      overflow: hidden; display: flex; flex-direction: column;
-    }
-    .plan.popular { border: 2px solid var(--amber); }
-    .plan-top-stripe { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--amber); }
-    .plan-popular-badge {
-      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-      background: var(--amber); color: #000; font-family: var(--mono);
-      font-size: 10px; font-weight: 700; padding: 3px 14px;
-      border-radius: 100px; letter-spacing: 0.08em; white-space: nowrap;
-    }
-    .plan-name {
-      font-family: var(--mono); font-size: 11px; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;
-    }
-    .plan-price {
-      font-family: var(--mono); font-size: 52px; font-weight: 700;
-      line-height: 1; letter-spacing: -0.03em; color: var(--amber); margin-bottom: 4px;
-    }
-    .plan-price .period { font-size: 16px; color: var(--muted); font-weight: 400; }
-    .plan-annual { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
-    .plan-users { color: var(--amber); font-size: 12px; font-family: var(--mono); margin-bottom: 20px; }
-    .plan-features { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; flex: 1; }
-    .plan-features li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
-    .plan-features .check { color: var(--green); font-weight: 700; flex-shrink: 0; }
-    .plan-cta {
-      background: var(--amber); color: #000; padding: 14px; border-radius: 8px;
-      font-weight: 700; font-size: 14px; text-align: center; display: block;
-    }
-    .plan-cta:hover { opacity: 0.9; }
-
-    /* Add-on / phone cards */
-    .addon-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 16px; padding: 32px 28px; max-width: 1040px; margin: 0 auto 16px;
-      text-align: center;
-    }
-    .addon-label {
-      font-family: var(--mono); font-size: 11px; color: var(--amber);
-      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;
-    }
-    .addon-heading { font-family: var(--mono); font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-    .addon-blurb { color: var(--muted); font-size: 14px; max-width: 560px; margin: 0 auto 24px; line-height: 1.7; }
-    .addon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; max-width: 700px; margin: 0 auto 16px; }
-    .addon-item {
-      background: var(--surface-high); border: 1px solid var(--border-high);
-      border-radius: 10px; padding: 14px 14px; text-align: left;
-    }
-    .addon-item-label { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-    .addon-item-price { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--amber); }
-    .addon-item-desc { font-size: 11px; color: var(--muted-low); margin-top: 4px; }
-    .addon-footnote { font-family: var(--mono); font-size: 11px; color: var(--muted-low); }
-
-    /* Phone plans */
-    .phone-icon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; max-width: 700px; margin: 0 auto 24px; }
-    .phone-icon-item {
-      background: var(--surface-high); border: 1px solid var(--border-high);
-      border-radius: 10px; padding: 14px; text-align: left;
-    }
-    .phone-icon { font-size: 20px; margin-bottom: 6px; }
-    .phone-icon-label { font-family: var(--mono); font-size: 11px; font-weight: 700; margin-bottom: 3px; }
-    .phone-icon-desc { font-size: 11px; color: var(--muted-low); }
-    .phone-tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; max-width: 640px; margin: 0 auto 16px; }
-    .phone-tier {
-      background: var(--surface-high); border: 1px solid var(--border-high);
-      border-radius: 10px; padding: 14px;
-    }
-    .phone-tier-mins { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 6px; }
-    .phone-tier-price { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--amber); }
-    .phone-tier-period { font-size: 11px; color: var(--muted-low); margin-top: 2px; }
-
-    /* FAQ */
-    .faq { max-width: 760px; margin: 0 auto; }
-    .faq-item { border-bottom: 1px solid var(--border); padding: 20px 4px; }
-    .faq-item summary {
-      cursor: pointer; font-size: 15px; font-weight: 600; list-style: none;
-      display: flex; justify-content: space-between; align-items: center; gap: 12px;
-      padding-right: 4px;
-    }
-    .faq-item summary::-webkit-details-marker { display: none; }
-    .faq-item summary::after {
-      content: "+"; color: var(--amber); font-size: 20px; font-weight: 400;
-      transition: transform 0.2s;
-    }
-    .faq-item[open] summary::after { transform: rotate(45deg); }
-    .faq-item summary:hover { color: var(--amber); }
-    .faq-answer { color: var(--text-dim); font-size: 14px; line-height: 1.8; margin-top: 12px; }
-    .faq-answer a { color: var(--amber); text-decoration: underline; }
-
-    /* Final CTA */
-    .final-cta { padding: 72px 24px; text-align: center; border-top: 1px solid var(--border); }
-    .final-cta h2 { font-size: clamp(26px, 4vw, 36px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 16px; }
-    .final-cta p { color: var(--muted); max-width: 500px; margin: 0 auto 32px; line-height: 1.7; }
-    .final-cta .cta {
-      background: var(--amber); color: #000; padding: 16px 36px;
-      border-radius: 10px; font-weight: 700; font-size: 15px; display: inline-block;
-    }
-    .final-cta .cta:hover { opacity: 0.9; }
-
-    /* Footer */
-    footer {
-      padding: 32px 24px; border-top: 1px solid var(--border);
-      text-align: center; color: var(--muted); font-size: 12px;
-    }
-    footer a { color: var(--muted); margin: 0 8px; }
-    footer a:hover { color: var(--amber); }
-
-    @media (max-width: 640px) {
-      .nav { padding: 14px 16px; }
-      .nav-links { display: none; }
-      .hero { padding: 48px 20px 24px; }
-      .section { padding: 48px 20px; }
-      .plans, .addon-grid, .phone-tiers, .phone-icon-grid { grid-template-columns: 1fr; }
-      .plan { padding: 36px 24px 28px; }
-    }
-  </style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "How does the 30-day free trial work?", "acceptedAnswer": {"@type": "Answer", "text": "Sign up with your email, no card needed. You get 30 days with everything unlocked. To keep going after day 30, add a card and pick your plan. You'll never be charged without adding a card yourself."}}, {"@type": "Question", "name": "Can I cancel anytime?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Subscriptions are monthly rolling. Cancel and you keep access until the end of the billing period, with no further charges."}}, {"@type": "Question", "name": "Are there any hidden fees?", "acceptedAnswer": {"@type": "Answer", "text": "No. Your plan fee includes all 43 features, your AI allowance and hands-free time. The only extras are optional usage top-ups and the Business Phone add-on."}}, {"@type": "Question", "name": "Do you integrate with Xero or QuickBooks?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, both. Invoices and supplier bills sync automatically once connected."}}, {"@type": "Question", "name": "Does Trade PA work on iPhone and Android?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, natively on both, from the App Store and Google Play, plus a web app for desktop."}}]}</script>
 </head>
 <body>
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="/"><span class="mark">TP</span>TRADE PA</a>
+    <nav class="nav-links">
+      <a href="/features.html">Features</a><a href="/pricing.html">Pricing</a><a href="/vs-tradify.html">Compare</a><a href="/about.html">About</a><a href="/help.html">Help</a>
+      <a class="btn" href="/signup.html">Start free trial</a>
+    </nav>
+  </div>
+</header>
 
-  <nav class="nav">
-    <a href="/" class="brand">Trade <span class="brand-accent">PA</span></a>
-    <div class="nav-links">
-      <a href="/">Home</a>
-      <a href="/about.html">About</a>
-      <a href="/pricing.html">Pricing</a>
-      <a href="/help.html">Help</a>
-      <a href="/blog/">Blog</a>
-      <a href="/signup.html">Sign up</a>
-    </div>
-    <a href="/signup.html" class="nav-cta">Start free trial →</a>
-  </nav>
-
-  <header class="hero">
-    <div class="hero-label">Pricing</div>
-    <h1>Every feature. Every plan. No hidden tiers.</h1>
-    <p class="sub">Start with a 30-day free trial on any plan. No charge until day 31. Cancel anytime.</p>
-  </header>
-
-  <section class="section" style="padding-top:32px;">
-    <div class="section-head">
-      <div class="section-label">Plans</div>
-      <h2>Solo, Pro Solo, Team or Business.</h2>
-      <p class="sub">Every plan includes every feature. The difference is users and monthly AI capacity.</p>
-    </div>
-
-    <div class="plans">
-      <div class="plan">
-        <div class="plan-top-stripe"></div>
-        <div class="plan-name">Solo</div>
-        <div class="plan-price">£39<span class="period">/mo</span></div>
-        <p class="plan-users">1 user</p>
-        <ul class="plan-features">
-          <li><span class="check">✓</span> 100 AI conversations per month</li>
-          <li><span class="check">✓</span> 1 hour hands-free per month</li>
-          <li><span class="check">✓</span> Tap-to-talk voice, never capped</li>
-          <li><span class="check">✓</span> All 43 features included</li>
-          <li><span class="check">✓</span> Allowance resets 1st of month</li>
-        </ul>
-        <a href="/signup.html?plan=solo_monthly" class="plan-cta">Start free trial →</a>
-      </div>
-
-      <div class="plan popular">
-        <div class="plan-popular-badge">MOST POPULAR</div>
-        <div class="plan-top-stripe"></div>
-        <div class="plan-name">Pro Solo</div>
-        <div class="plan-price">£59<span class="period">/mo</span></div>
-        <p class="plan-users">1 user</p>
-        <ul class="plan-features">
-          <li><span class="check">✓</span> 200 AI conversations per month</li>
-          <li><span class="check">✓</span> 3 hours hands-free per month</li>
-          <li><span class="check">✓</span> Tap-to-talk voice, never capped</li>
-          <li><span class="check">✓</span> All 43 features included</li>
-          <li><span class="check">✓</span> Priority for new features</li>
-        </ul>
-        <a href="/signup.html?plan=pro_solo_monthly" class="plan-cta">Start free trial →</a>
-      </div>
-
-      <div class="plan">
-        <div class="plan-top-stripe"></div>
-        <div class="plan-name">Team</div>
-        <div class="plan-price">£89<span class="period">/mo</span></div>
-        <p class="plan-users">Up to 5 users</p>
-        <ul class="plan-features">
-          <li><span class="check">✓</span> 400 AI conversations per month</li>
-          <li><span class="check">✓</span> 4 hours hands-free per month</li>
-          <li><span class="check">✓</span> Team scheduling &amp; per-user permissions</li>
-          <li><span class="check">✓</span> Staff timesheets &amp; GPS tracking</li>
-          <li><span class="check">✓</span> All 43 features included</li>
-        </ul>
-        <a href="/signup.html?plan=team_monthly" class="plan-cta">Start free trial →</a>
-      </div>
-
-      <div class="plan">
-        <div class="plan-top-stripe"></div>
-        <div class="plan-name">Business</div>
-        <div class="plan-price">£129<span class="period">/mo</span></div>
-        <p class="plan-users">Up to 10 users</p>
-        <ul class="plan-features">
-          <li><span class="check">✓</span> 800 AI conversations per month</li>
-          <li><span class="check">✓</span> 8 hours hands-free per month</li>
-          <li><span class="check">✓</span> Priority support</li>
-          <li><span class="check">✓</span> Everything in Team, more capacity</li>
-          <li><span class="check">✓</span> All 43 features included</li>
-        </ul>
-        <a href="/signup.html?plan=business_monthly" class="plan-cta">Start free trial →</a>
-      </div>
-    </div>
-  </section>
-
-  <section class="section" style="padding-top:0;">
-    <div class="addon-card">
-      <div class="addon-label">⚡ Add-on · Any Plan</div>
-      <div class="addon-heading">Need more mid-month?</div>
-      <p class="addon-blurb">Busy month? Top up any plan with one-off usage add-ons. No subscription change, no commitment. Just a boost for the current billing period.</p>
-      <div class="addon-grid">
-        <div class="addon-item">
-          <div class="addon-item-label">+200 AI conversations</div>
-          <div class="addon-item-price">£39</div>
-          <div class="addon-item-desc">Extra allowance for a busy month</div>
-        </div>
-        <div class="addon-item">
-          <div class="addon-item-label">+2 hours hands-free</div>
-          <div class="addon-item-price">£19</div>
-          <div class="addon-item-desc">Extra hands-free time, top-up only</div>
-        </div>
-        <div class="addon-item">
-          <div class="addon-item-label">+200 conv &amp; +2h combo</div>
-          <div class="addon-item-price">£55</div>
-          <div class="addon-item-desc">Save £3 vs buying both separately</div>
-        </div>
-      </div>
-      <p class="addon-footnote">One-off · Available to all plans · Expires at billing rollover</p>
-    </div>
-  </section>
-
-  <section class="section" style="padding-top:0;">
-    <div class="addon-card">
-      <div class="addon-label">📞 Add-on · Any Plan</div>
-      <div class="addon-heading">Business Phone, Built In</div>
-      <p class="addon-blurb">Get a dedicated business number that rings directly inside the Trade PA app. No second SIM, no extra hardware. Every call from a known customer is recorded, transcribed and automatically logged against their job. Missed a call? It falls back to your mobile so you never lose a lead.</p>
-      <div class="phone-icon-grid">
-        <div class="phone-icon-item">
-          <div class="phone-icon">📱</div>
-          <div class="phone-icon-label">Rings in Trade PA app</div>
-          <div class="phone-icon-desc">Answer without a second SIM</div>
-        </div>
-        <div class="phone-icon-item">
-          <div class="phone-icon">🎙️</div>
-          <div class="phone-icon-label">Auto-recorded & transcribed</div>
-          <div class="phone-icon-desc">AI logs every conversation</div>
-        </div>
-        <div class="phone-icon-item">
-          <div class="phone-icon">🔗</div>
-          <div class="phone-icon-label">Linked to jobs & customers</div>
-          <div class="phone-icon-desc">Full call history in one place</div>
-        </div>
-        <div class="phone-icon-item">
-          <div class="phone-icon">📲</div>
-          <div class="phone-icon-label">30s mobile fallback</div>
-          <div class="phone-icon-desc">Never miss a call on site</div>
-        </div>
-      </div>
-      <div class="phone-tiers">
-        <div class="phone-tier"><div class="phone-tier-mins">100 mins/month</div><div class="phone-tier-price">£20</div><div class="phone-tier-period">per month</div></div>
-        <div class="phone-tier"><div class="phone-tier-mins">300 mins/month</div><div class="phone-tier-price">£40</div><div class="phone-tier-period">per month</div></div>
-        <div class="phone-tier"><div class="phone-tier-mins">600 mins/month</div><div class="phone-tier-price">£65</div><div class="phone-tier-period">per month</div></div>
-        <div class="phone-tier"><div class="phone-tier-mins">Unlimited</div><div class="phone-tier-price">£104</div><div class="phone-tier-period">per month</div></div>
-      </div>
-      <p class="addon-footnote">Dedicated UK number included · Want to keep your existing number? We support porting · UK GDPR compliant</p>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="section-head">
-      <div class="section-label">FAQ</div>
-      <h2>Common questions.</h2>
-    </div>
-
-    <div class="faq">
-      <details class="faq-item">
-        <summary>How does the 30-day free trial work?</summary>
-        <div class="faq-answer">
-          Pick any plan, enter your card, and use the app as normal for 30 days. Everything's unlocked. Your card is saved but not charged. On day 31 the first payment is taken automatically, unless you cancel before then. During the trial you get a generous taster allowance (50 conversations, 30 minutes hands-free) regardless of which plan you picked. Your full plan caps kick in the moment your first payment is taken.
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary>Can I cancel anytime?</summary>
-        <div class="faq-answer">
-          Yes. Cancel any time before day 31 and you won't be charged. Cancel after day 31 and your subscription ends at the next billing date. You keep access until then, no prorated refunds. Cancellation is one tap inside the app, via Settings → Plan & billing → Manage subscription.
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary>What happens if I hit my monthly AI conversation limit?</summary>
-        <div class="faq-answer">
-          You have three options: upgrade your plan, buy a one-off top-up add-on (+200 conversations for £39, or combo pack for £55), or wait until your monthly reset. The app shows your usage in the AI Assistant and under Settings → Plan & billing, so you'll see it coming. Add-ons are charged to your saved card and activate instantly.
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary>Are there any hidden fees or usage charges?</summary>
-        <div class="faq-answer">
-          No. Your monthly plan fee includes everything. AI conversations, hands-free time, all 43 features. The only extras are optional: one-off usage add-ons if you go over, and the Business Phone add-on if you want a dedicated UK number. Everything is transparent in the app.
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary>Do you integrate with Xero or QuickBooks?</summary>
-        <div class="faq-answer">
-          Yes, both. Invoices and supplier bills sync automatically once you connect your accounting provider under Settings → Integrations. No double entry. Your accountant gets clean books.
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary>Can I switch plans later?</summary>
-        <div class="faq-answer">
-          Any time, either direction. Switches are prorated automatically. No penalties, no lock-ins. Change plans under Settings → Plan & billing → Manage subscription. The Stripe billing portal handles the change and your Trade PA access updates immediately.
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary>Is my data private? What about GDPR?</summary>
-        <div class="faq-answer">
-          Your business data is yours. We never sell it or share it with third parties. Trade PA is UK GDPR compliant. Data is encrypted at rest and in transit, hosted in the EU, and deletable on request. Full details in our <a href="/privacy-policy.html">Privacy Policy</a>.
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary>I'm VAT registered, can I reclaim VAT on the subscription?</summary>
-        <div class="faq-answer">
-          Yes. VAT-compliant invoices are downloadable from the Stripe billing portal (Settings → Plan & billing → Manage subscription → Invoices). Send them straight to your accountant for your VAT return.
-        </div>
-      </details>
-
-      <details class="faq-item">
-        <summary>Does this work on iPhone and Android?</summary>
-        <div class="faq-answer">
-          Trade PA is available on both the Apple App Store and Google Play. Works natively on iPhone and Android, and as a web app on desktop or any modern browser.
-        </div>
-      </details>
-    </div>
-  </section>
-
-  <section class="final-cta">
-    <h2>Stop doing admin<br/>after hours.</h2>
-    <p>30 days free. No charge until day 31. Cancel anytime.</p>
-    <a href="/signup.html" class="cta">Start 30-day free trial →</a>
-  </section>
-
-  <footer>
-    <div style="margin-bottom:8px;">
-      <a href="/">Home</a> ·
-      <a href="/pricing.html">Pricing</a> ·
-      <a href="/signup.html">Sign up</a> ·
-      <a href="/terms.html">Terms</a> ·
-      <a href="/privacy-policy.html">Privacy</a>
-    </div>
-    <div>© Trade PA Ltd · Company No. 17176983 · Registered in England &amp; Wales · ICO Ref ZC132378</div>
-  </footer>
-
-
-<!-- App Store badge bar -->
-<div style="text-align: center; padding: 40px 24px; border-top: 1px solid #2a2a2a; background: #0a0a0a;">
-  <p style="font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b7280; margin-bottom: 12px; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">Get the app</p>
-  <div style="display: inline-flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center;">
-    <a href="https://apps.apple.com/gb/app/trade-pa/id6769395416" target="_blank" rel="noopener" style="display: inline-block;">
-      <img src="/img/app-store-badge.svg" alt="Download on the App Store" height="40" style="display: block; height: 40px; width: auto;">
-    </a>
-    <a href="https://play.google.com/store/apps/details?id=uk.co.tradespa.app" target="_blank" rel="noopener" style="display: inline-block; height: 40px; overflow: hidden;">
-      <img src="/img/google-play-badge.png" alt="Get it on Google Play" style="display: block; height: 60px; width: auto; margin-top: -10px;">
-    </a>
+<div class="hero">
+  <div class="wrap">
+    <span class="eyebrow" style="justify-content:center">Pricing</span>
+    <h1>Every feature. Every plan.<br>No tier games.</h1>
+    <p class="lead">Plans differ by users and monthly AI capacity, never by features. Flat rates for teams. Monthly rolling, cancel anytime.</p>
+    <p class="note">Free for 30 days. No card needed to start.</p>
   </div>
 </div>
 
+<section>
+  <div class="wrap">
+    <div class="plans">
+      <div class="plan">
+        <div class="nm">Solo</div><div class="pr">£39<small>/mo</small></div><div class="us">1 user</div>
+        <ul><li>100 AI conversations/mo</li><li>1 hour hands-free/mo</li><li>Tap-to-talk never capped</li><li>All 43 features</li><li>Allowance resets monthly</li></ul>
+        <a class="btn" href="/signup.html?plan=solo_monthly">Start free trial</a>
+      </div>
+      <div class="plan pop">
+        <span class="flag">Most popular</span>
+        <div class="nm">Pro Solo</div><div class="pr">£59<small>/mo</small></div><div class="us">1 user</div>
+        <ul><li>200 AI conversations/mo</li><li>3 hours hands-free/mo</li><li>Tap-to-talk never capped</li><li>All 43 features</li><li>Priority for new features</li></ul>
+        <a class="btn" href="/signup.html?plan=pro_solo_monthly">Start free trial</a>
+      </div>
+      <div class="plan">
+        <div class="nm">Team</div><div class="pr">£89<small>/mo</small></div><div class="us">Up to 5 users · flat rate</div>
+        <ul><li>400 AI conversations/mo</li><li>4 hours hands-free/mo</li><li>Team scheduling &amp; permissions</li><li>Timesheets &amp; GPS tracking</li><li>All 43 features</li></ul>
+        <a class="btn" href="/signup.html?plan=team_monthly">Start free trial</a>
+      </div>
+      <div class="plan">
+        <div class="nm">Business</div><div class="pr">£129<small>/mo</small></div><div class="us">Up to 10 users · flat rate</div>
+        <ul><li>800 AI conversations/mo</li><li>8 hours hands-free/mo</li><li>Priority support</li><li>Everything in Team, more capacity</li><li>All 43 features</li></ul>
+        <a class="btn" href="/signup.html?plan=business_monthly">Start free trial</a>
+      </div>
+    </div>
+    <p class="note" style="text-align:center">A 5-person team on Trade PA is £89 flat. On per-user apps the same team can cost £135 to £170+ a month. <a href="/vs-tradify.html" style="color:var(--amber-dark);font-weight:600">See the comparison →</a></p>
+  </div>
+</section>
+
+<section style="padding-top:10px">
+  <div class="wrap">
+    <span class="eyebrow">One-off top-ups · any plan</span>
+    <h2>Busy month? Top up, don't upgrade.</h2>
+    <p class="lead">One-off add-ons for the current billing period. No subscription change, no commitment.</p>
+    <div class="addons">
+      <div class="addon"><div class="pr">£39</div><h3>+200 AI conversations</h3><p>Extra allowance for a heavy month</p></div>
+      <div class="addon"><div class="pr">£19</div><h3>+2 hours hands-free</h3><p>More talk time on the road</p></div>
+      <div class="addon"><div class="pr">£55</div><h3>Combo: both together</h3><p>Save £3 vs buying separately</p></div>
+    </div>
+
+    <div class="phonebar">
+      <div>
+        <span class="eyebrow" style="color:var(--amber)">Add-on · any plan</span>
+        <h2>Business Phone, built in.</h2>
+        <p>A dedicated UK number that rings inside the Trade PA app. Calls from known customers are recorded, transcribed and logged against their job. 30-second fallback to your mobile so you never lose a lead. Keep your existing number, we support porting.</p>
+      </div>
+      <div class="minutes">
+        <div class="min"><b>£20/mo</b><span>100 mins</span></div>
+        <div class="min"><b>£40/mo</b><span>300 mins</span></div>
+        <div class="min"><b>£65/mo</b><span>600 mins</span></div>
+        <div class="min"><b>£104/mo</b><span>Unlimited</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="max-width:780px">
+    <span class="eyebrow">Common questions</span>
+    <h2>Straight answers.</h2>
+    <details open><summary>How does the 30-day free trial work?</summary><p>Sign up with your email, no card needed. You get 30 days with everything unlocked and a taster allowance of 50 conversations and 30 minutes hands-free. To keep going after day 30, add a card and pick your plan. Don't, and your trial simply ends. You'll never be charged without adding a card yourself.</p></details>
+    <details><summary>Can I cancel anytime?</summary><p>Yes. Subscriptions are monthly rolling. Cancel and you keep access until the end of the billing period, with no further charges. Cancellation is one tap in the app under Settings, Plan &amp; billing.</p></details>
+    <details><summary>What happens if I hit my monthly AI limit?</summary><p>Three options: upgrade, buy a one-off top-up, or wait for your monthly reset. The app shows your usage so you'll see it coming. Tap-to-talk voice fill on forms is never capped.</p></details>
+    <details><summary>Any hidden fees?</summary><p>No. Your plan fee includes everything: all 43 features, your AI allowance and your hands-free time. The only extras are optional: usage top-ups and the Business Phone add-on.</p></details>
+    <details><summary>Do you integrate with Xero or QuickBooks?</summary><p>Yes, both. Invoices and supplier bills sync automatically once connected. No double entry, clean books for your accountant.</p></details>
+    <details><summary>Can I switch plans later?</summary><p>Any time, either direction, prorated automatically. No penalties, no lock-ins.</p></details>
+    <details><summary>I'm VAT registered. Can I reclaim VAT on the subscription?</summary><p>Yes. VAT invoices are downloadable from the billing portal, ready for your accountant.</p></details>
+    <details><summary>iPhone or Android?</summary><p>Both, natively, from the App Store and Google Play, plus a web app for desktop. Same features everywhere.</p></details>
+    <details><summary>Is my data private?</summary><p>Yes. UK GDPR compliant, encrypted at rest and in transit, never sold or shared, deletable on request. Details in our <a href="/privacy-policy.html" style="color:var(--amber-dark)">privacy policy</a>.</p></details>
+  </div>
+</section>
+
+<section class="final">
+  <span class="eyebrow" style="color:var(--amber)">Free for 30 days · No card needed</span>
+  <h2 style="color:#fff;font-size:clamp(1.9rem,4vw,2.8rem)">Stop doing admin after hours.</h2>
+  <p>Pick a plan, try the whole assistant, and only pay if Eve earns her keep.</p>
+  <a class="btn" href="/signup.html">Start free trial</a>
+  <div class="badges" style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:22px">
+    <a href="https://apps.apple.com/gb/app/trade-pa/id6769395416"><img src="/img/app-store-badge.svg" alt="Download on the App Store" style="height:44px;width:auto"></a>
+    <a href="https://play.google.com/store/apps/details?id=uk.co.tradespa.app"><img src="/img/google-play-badge.png" alt="Get it on Google Play" style="height:44px;width:auto"></a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 TRADEPA LTD · Company No. 17176983 · ICO ZC132378</span>
+    <span><a href="/features.html">Features</a> · <a href="/about.html">About</a> · <a href="/privacy-policy.html">Privacy</a> · <a href="/terms.html">Terms</a></span>
+  </div>
+</footer>
 </body>
 </html>

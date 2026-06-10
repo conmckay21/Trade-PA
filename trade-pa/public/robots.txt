@@ -1,5 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /signup.html?*
 
-# Tell crawlers where the map lives
 Sitemap: https://www.tradespa.co.uk/sitemap.xml
