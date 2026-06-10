@@ -401,12 +401,12 @@ export function LandingPage({ onAuth }) {
       <nav style={LP.nav}>
         <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
         <div className="lp-nav-content">
-          <a href="/features.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Features</a>
-          <a href="/pricing.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Pricing</a>
-          <a href="/vs-tradify.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Compare</a>
-          <a href="/about.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>About</a>
-          <a href="/help.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Help</a>
-          <a href="/blog/" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Blog</a>
+          <a href="/features.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Features</a>
+          <a href="/pricing.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Pricing</a>
+          <a href="/vs-tradify.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Compare</a>
+          <a href="/about.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>About</a>
+          <a href="/help.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Help</a>
+          <a href="/blog/" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Blog</a>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => setScreen("login")} style={{ ...LP.btnGhost, padding: "8px 18px", fontSize: 13 }} className="lp-btn-ghost">Log in</button>
@@ -425,7 +425,7 @@ export function LandingPage({ onAuth }) {
                 <div style={{ width: 6, height: 6, background: "#f59e0b", borderRadius: "50%", animation: "pulse 2s infinite" }} />
                 Voice-first · Inbox-monitored · UK-built
               </div>
-              <h1 style={LP.h1}>Meet Eve. Your PA<br/><span style={{ color: "#f59e0b" }}>works when you can't.</span></h1>
+              <h1 style={LP.h1}>Meet Eve.<br/><span style={{ color: "#f59e0b" }}>She works when you can't.</span></h1>
               <p style={{ ...LP.sub, margin: "0 0 40px" }}>Eve reads every email 24/7, drafts every action, chases every unpaid invoice, and waits for your one tap to approve. Voice-controlled for when you're on the tools. The AI assistant that runs your business while you run the jobs.</p>
               <div className="lp-hero-ctas" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
                 <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Start 30-day free trial →</button>
