@@ -1,3 +1,7 @@
+## 2026-06-10
+
+👋 Meet Eve! Our assistant now introduces herself properly on the website. We've also tidied the trial wording (free for 30 days, no card needed), finished the font refresh on the landing page, and added quick links to our new comparison pages.
+
 ## 2026-06-04
 
 🧾 **Quotes and invoices read cleaner.** When a line is a list of bits of work, each point now drops onto its own line instead of running together as one long paragraph. Much easier for your customer to skim.

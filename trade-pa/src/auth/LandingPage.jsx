@@ -25,41 +25,41 @@ function VoiceHeroCard() {
         { t: " job.", entity: false },
       ],
       actions: [
-        ["Booked Lisa Thompson", "Thursday 11:30 — boiler service"],
+        ["Booked Lisa Thompson", "Thursday 11:30 · boiler service"],
         ["Materials added", "£59.40 of 22mm copper to Maple Ave quote"],
-        ["Chase email sent", "Maple Ave — gentle reminder"],
+        ["Chase email sent", "Maple Ave · gentle reminder"],
       ],
     },
     {
       segments: [
         { t: "Raise an invoice for the ", entity: false },
         { t: "Wilson bathroom refit", entity: true },
-        { t: " — ", entity: false },
+        { t: " · ", entity: false },
         { t: "£2,400 labour", entity: true },
         { t: ", materials off the receipts, and send ", entity: false },
         { t: "Dave", entity: true },
         { t: " a gentle chase on last week's quote.", entity: false },
       ],
       actions: [
-        ["Invoice #INV-091 raised", "Wilson bathroom refit — £2,712.40"],
+        ["Invoice #INV-091 raised", "Wilson bathroom refit · £2,712.40"],
         ["Materials matched", "£312.40 pulled from receipts"],
-        ["Chase sent to Dave", "Gentle reminder — 3 days since quote"],
+        ["Chase sent to Dave", "Gentle reminder · 3 days since quote"],
       ],
     },
     {
       segments: [
         { t: "Draft a ", entity: false },
         { t: "RAMS", entity: true },
-        { t: " for tomorrow — ", entity: false },
+        { t: " for tomorrow · ", entity: false },
         { t: "working at height", entity: true },
-        { t: ", pitched roof, scaffold tower — and send the ", entity: false },
+        { t: ", pitched roof, scaffold tower · and send the ", entity: false },
         { t: "CP12", entity: true },
         { t: " for the Patel job.", entity: false },
       ],
       actions: [
-        ["RAMS drafted", "Working at height — 7 hazards, 6 steps"],
+        ["RAMS drafted", "Working at height · 7 hazards, 6 steps"],
         ["PDF generated", "Ready to share with client"],
-        ["CP12 sent to Patel", "Branded PDF — Gmail"],
+        ["CP12 sent to Patel", "Branded PDF · Gmail"],
       ],
     },
   ];
@@ -176,7 +176,7 @@ function VoiceHeroCard() {
             <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, animation: "vc-reveal 0.4s cubic-bezier(0.2,0.7,0.2,1) both" }}>
               <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#10b981", color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>✓</div>
               <div style={{ fontSize: 11.5, lineHeight: 1.45, color: "#ccc" }}>
-                <span style={{ color: "#f0f0f0", fontWeight: 700 }}>{a[0]}</span> — {a[1]}
+                <span style={{ color: "#f0f0f0", fontWeight: 700 }}>{a[0]}</span> · {a[1]}
               </div>
             </div>
           ))}
@@ -194,16 +194,16 @@ function InboxDemoCard() {
 
   const scenarios = [
     [
-      { e: "📧", t: "New booking — Mrs. Patel", color: "#3b82f6", d: "Hi, please book me in for the boiler service on Thursday morning.", state: "pending" },
-      { e: "🧾", t: "Invoice paid — Wilson Job #084", color: "#f59e0b", d: "BACS £1,240.00 received. Reference: INV-084-WILSON.", state: "done" },
-      { e: "🔧", t: "Material receipt — Plumbase", color: "#10b981", d: "2× 22mm elbow, 1× PTFE tape — £17.88 inc VAT.", state: "pending" },
-      { e: "📋", t: "Quote request — 14 Grange Rd", color: "#3b82f6", d: "Looking for a new combi install quote, gas safe required.", state: "pending" },
+      { e: "📧", t: "New booking · Mrs. Patel", color: "#3b82f6", d: "Hi, please book me in for the boiler service on Thursday morning.", state: "pending" },
+      { e: "🧾", t: "Invoice paid · Wilson Job #084", color: "#f59e0b", d: "BACS £1,240.00 received. Reference: INV-084-WILSON.", state: "done" },
+      { e: "🔧", t: "Material receipt · Plumbase", color: "#10b981", d: "2× 22mm elbow, 1× PTFE tape · £17.88 inc VAT.", state: "pending" },
+      { e: "📋", t: "Quote request · 14 Grange Rd", color: "#3b82f6", d: "Looking for a new combi install quote, gas safe required.", state: "pending" },
     ],
     [
-      { e: "🏗", t: "CIS statement — ABC Construction", color: "#10b981", d: "Gross £4,200 · Deduction £840 · Net £3,360 — PDF attached.", state: "pending" },
-      { e: "📅", t: "Reschedule — Mr. Davies", color: "#f59e0b", d: "Can we push Tuesday's appointment to next Friday morning instead?", state: "pending" },
-      { e: "💬", t: "Review request sent — Burns job", color: "#3b82f6", d: "Auto-sent 24h after completion. Awaiting response.", state: "done" },
-      { e: "⛽", t: "Quote chase — 22 Linden Close", color: "#f59e0b", d: "Gentle reminder auto-drafted — 3 days since initial quote.", state: "pending" },
+      { e: "🏗", t: "CIS statement · ABC Construction", color: "#10b981", d: "Gross £4,200 · Deduction £840 · Net £3,360 · PDF attached.", state: "pending" },
+      { e: "📅", t: "Reschedule · Mr. Davies", color: "#f59e0b", d: "Can we push Tuesday's appointment to next Friday morning instead?", state: "pending" },
+      { e: "💬", t: "Review request sent · Burns job", color: "#3b82f6", d: "Auto-sent 24h after completion. Awaiting response.", state: "done" },
+      { e: "⛽", t: "Quote chase · 22 Linden Close", color: "#f59e0b", d: "Gentle reminder auto-drafted · 3 days since initial quote.", state: "pending" },
     ],
   ];
 
@@ -244,7 +244,7 @@ function InboxDemoCard() {
         <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444" }} />
         <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#f59e0b" }} />
         <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#10b981" }} />
-        <span style={{ fontSize: 10, color: "#888", marginLeft: 8 }}>Trade PA — AI Actions</span>
+        <span style={{ fontSize: 10, color: "#888", marginLeft: 8 }}>Trade PA · AI Actions</span>
         <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 9, letterSpacing: "0.14em", color: "#f59e0b" }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#f59e0b", animation: "vc-pulse 2s ease-in-out infinite" }} /> LIVE
         </span>
@@ -318,7 +318,7 @@ export function LandingPage({ onAuth }) {
   }, []);
  // landing | login | signup
   const LP = {
-    wrap: { minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0", fontFamily: "'DM Sans','Helvetica Neue',sans-serif", overflowX: "hidden" },
+    wrap: { minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0", fontFamily: "'Plus Jakarta Sans', sans-serif", overflowX: "hidden" },
     nav: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 28px", paddingTop: "max(20px, env(safe-area-inset-top, 20px))", borderBottom: "1px solid #1a1a1a", position: "sticky", top: 0, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(8px)", zIndex: 100 },
     logo: { display: "flex", alignItems: "center", gap: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "#f59e0b", letterSpacing: "0.06em" },
     logoIcon: { width: 30, height: 30, background: "#f59e0b", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: "#000" },
@@ -342,7 +342,7 @@ export function LandingPage({ onAuth }) {
   }
 
   // NATIVE: branded hero replaces the web marketing landing page.
-  // App Store Guideline 3.1.3(b) — no subscribe CTAs / pricing UI in native.
+  // App Store Guideline 3.1.3(b) · no subscribe CTAs / pricing UI in native.
   if (isNative()) {
     return <NativeWelcome onSignIn={() => setScreen("login")} />;
   }
@@ -350,7 +350,7 @@ export function LandingPage({ onAuth }) {
   return (
     <div style={LP.wrap}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+        /* fonts load globally via index.html (Plus Jakarta Sans) */
         *{box-sizing:border-box;margin:0;padding:0;}
         .lp-btn-primary:hover{background:#fbbf24!important;transform:translateY(-2px);box-shadow:0 12px 32px rgba(245,158,11,0.3);}
         .lp-btn-ghost:hover{border-color:#f59e0b!important;color:#f59e0b!important;}
@@ -405,6 +405,7 @@ export function LandingPage({ onAuth }) {
           <a href="/pricing.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Pricing</a>
           <a href="/help.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Help</a>
           <a href="/blog/" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Blog</a>
+          <a href="/vs-tradify.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Compare</a>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => setScreen("login")} style={{ ...LP.btnGhost, padding: "8px 18px", fontSize: 13 }} className="lp-btn-ghost">Log in</button>
@@ -423,8 +424,8 @@ export function LandingPage({ onAuth }) {
                 <div style={{ width: 6, height: 6, background: "#f59e0b", borderRadius: "50%", animation: "pulse 2s infinite" }} />
                 Voice-first · Inbox-monitored · UK-built
               </div>
-              <h1 style={LP.h1}>Your PA works<br/><span style={{ color: "#f59e0b" }}>when you can't.</span></h1>
-              <p style={{ ...LP.sub, margin: "0 0 40px" }}>Trade PA reads every email 24/7, drafts every action, chases every unpaid invoice — and waits for one tap to approve. Voice-controlled for when you're on the tools. The admin assistant that runs your business while you run the jobs.</p>
+              <h1 style={LP.h1}>Meet Eve. Your PA<br/><span style={{ color: "#f59e0b" }}>works when you can't.</span></h1>
+              <p style={{ ...LP.sub, margin: "0 0 40px" }}>Eve reads every email 24/7, drafts every action, chases every unpaid invoice, and waits for your one tap to approve. Voice-controlled for when you're on the tools. The AI assistant that runs your business while you run the jobs.</p>
               <div className="lp-hero-ctas" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
                 <button onClick={() => window.location.href="/signup.html"} style={LP.btnPrimary} className="lp-btn-primary">Start 30-day free trial →</button>
                 <button onClick={() => setScreen("login")} style={LP.btnGhost} className="lp-btn-ghost">Log in</button>
@@ -440,7 +441,7 @@ export function LandingPage({ onAuth }) {
                   </a>
                 </div>
               </div>
-              <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
+              <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Free for 30 days · No card needed · Cancel anytime</p>
               <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#888", letterSpacing: "0.06em" }}>Works with Gmail &amp; Outlook · Built for UK Trades</p>
             </div>
             <div>
@@ -470,14 +471,14 @@ export function LandingPage({ onAuth }) {
               {
                 tag: "Path 1",
                 title: "Voice or chat → instant send",
-                body: "Say \"Send Glenn his invoice.\" Fires immediately — branded PDF from your Gmail or Outlook.",
+                body: "Say \"Send Glenn his invoice.\" Fires immediately · branded PDF from your Gmail or Outlook.",
                 examples: ["Invoice & quote send", "Chase (gentle → firm → final)", "Review request", "Compliance certificate"],
                 highlight: false,
               },
               {
                 tag: "Path 2",
                 title: "Inbox monitoring → approve",
-                body: "Checks inbox hourly. Analyses every email against 10 pattern rules. Drafts an action. Tap approve — executes + auto-replies.",
+                body: "Checks inbox hourly. Analyses every email against 10 pattern rules. Drafts an action. Tap approve · executes + auto-replies.",
                 examples: ["Job booking (new or existing)", "Quote acceptance reply", "Reschedule / cancellation", "Completion confirmation"],
                 highlight: true,
               },
@@ -508,7 +509,7 @@ export function LandingPage({ onAuth }) {
           {/* Learning loop callout */}
           <div style={{ textAlign: "center", padding: "20px 28px", background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 14, marginBottom: 72 }}>
             <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#f59e0b", fontWeight: 700 }}>↻ Learning loop:</span>
-            <span style={{ fontSize: 13, color: "#888", marginLeft: 10, lineHeight: 1.7 }}>every approved action teaches the system — known suppliers, customers, job types. Rejected actions teach it harder. Sharper with every tap.</span>
+            <span style={{ fontSize: 13, color: "#888", marginLeft: 10, lineHeight: 1.7 }}>every approved action teaches the system · known suppliers, customers, job types. Rejected actions teach it harder. Sharper with every tap.</span>
           </div>
         </div>
       </div>
@@ -519,7 +520,7 @@ export function LandingPage({ onAuth }) {
           <div style={{ textAlign: "center", marginBottom: 40 }}>
             <div style={LP.sectionLabel}>Voice that thinks like a PA</div>
             <h2 style={LP.h2}>Talk once. Done.<br/>Next job.</h2>
-            <p style={{ fontSize: 16, color: "#888", maxWidth: 560, margin: "16px auto 0", lineHeight: 1.7 }}>Not dictation. Direction. One spoken sentence, multiple actions completed — while you carry the tools, not the phone.</p>
+            <p style={{ fontSize: 16, color: "#888", maxWidth: 560, margin: "16px auto 0", lineHeight: 1.7 }}>Not dictation. Direction. One spoken sentence, multiple actions completed · while you carry the tools, not the phone.</p>
           </div>
 
           {/* Example conversation */}
@@ -533,9 +534,9 @@ export function LandingPage({ onAuth }) {
             <div style={{ paddingLeft: 42 }}>
               <div style={{ background: "#141414", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
                 {[
-                  "Booked Lisa Thompson — Thursday 11:30, boiler service",
+                  "Booked Lisa Thompson · Thursday 11:30, boiler service",
                   "Added £59.40 of materials to the Maple Ave quote",
-                  "Chase email sent to Maple Ave — gentle reminder",
+                  "Chase email sent to Maple Ave · gentle reminder",
                 ].map((line, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#ccc" }}>
                     <span style={{ color: "#10b981", fontWeight: 700, flexShrink: 0 }}>✓</span>{line}
@@ -548,7 +549,7 @@ export function LandingPage({ onAuth }) {
           {/* 3 Voice capability cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
             {[
-              { title: "Wake word + hands-free loop", body: "\"Hey Trade PA\" wakes it. Continuous voice loop with silence detection. Phase-aware safety timers — never dies silently. Built for vans, roofs, lofts and plant rooms." },
+              { title: "Wake word + hands-free loop", body: "\"Hey Trade PA\" wakes it. Continuous voice loop with silence detection. Phase-aware safety timers · never dies silently. Built for vans, roofs, lofts and plant rooms." },
               { title: "Voice on every form", body: "43 features accept voice dictation. Quotes, invoices, certificates, RAMS, time logs. Tuned for UK, Irish and regional accents. No menus. Just talk." },
               { title: "Multi-action conversational AI", body: "Several actions per spoken sentence. Conversational RAMS builder. Asks follow-ups only when it needs to." },
             ].map((f) => (
@@ -595,7 +596,7 @@ export function LandingPage({ onAuth }) {
               { icon: "💷", title: "Quotes & invoices", body: "Professional branded documents sent from your Gmail or Outlook. Xero and QuickBooks sync built in." },
               { icon: "📅", title: "Jobs & scheduling", body: "Full job cards with notes, photos, time logs, variation orders, daywork sheets and customer sign-off." },
               { icon: "📞", title: "Business phone, built in", body: "A dedicated business number that rings inside the app. Every call recorded, transcribed and AI-logged against the job. No second SIM needed.", badge: "Add-on · Any plan", badgeColor: "#f59e0b", badgeBg: "rgba(245,158,11,0.1)", badgeBorder: "rgba(245,158,11,0.2)" },
-              { icon: "📍", title: "GPS job tracking", body: "Auto-arrives when you reach site, auto-logs your departure. Time tracked in the background while you work — no timesheets to fill in.", badge: "Team & Pro", badgeColor: "#3b82f6", badgeBg: "rgba(59,130,246,0.1)", badgeBorder: "rgba(59,130,246,0.2)" },
+              { icon: "📍", title: "GPS job tracking", body: "Auto-arrives when you reach site, auto-logs your departure. Time tracked in the background while you work · no timesheets to fill in.", badge: "Team & Pro", badgeColor: "#3b82f6", badgeBg: "rgba(59,130,246,0.1)", badgeBorder: "rgba(59,130,246,0.2)" },
             ].map((f, i) => (
               <div key={i} style={{ ...LP.feature }} className="lp-feature">
                 <div style={LP.featureIcon}>{f.icon}</div>
@@ -612,7 +613,7 @@ export function LandingPage({ onAuth }) {
       <div style={{ ...LP.section }}>
         <div style={LP.sectionLabel}>How we compare</div>
         <h2 style={LP.h2}>More intelligent.<br/>Better value.</h2>
-        <p style={{ fontSize: 16, color: "#aaa", marginBottom: 40, lineHeight: 1.7, maxWidth: 560 }}>Tradify is £34/month with no AI. Trade PA Solo is £39/month — with an AI that runs your entire inbox, answers calls and tracks jobs for you.</p>
+        <p style={{ fontSize: 16, color: "#aaa", marginBottom: 40, lineHeight: 1.7, maxWidth: 560 }}>Tradify is £34/month with no AI. Trade PA Solo is £39/month, with Eve: an AI that runs your entire inbox, answers calls and tracks jobs for you.</p>
         <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 14, overflow: "hidden" }}>
           {/* Header */}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", borderBottom: "1px solid #222" }}>
@@ -646,6 +647,8 @@ export function LandingPage({ onAuth }) {
         </div>
       </div>
 
+      <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#888", marginTop: 16 }}>Want the detail? Honest, dated comparisons: <a href="/vs-tradify.html" style={{ color: "#f59e0b", textDecoration: "none" }}>vs Tradify</a> · <a href="/vs-servicem8.html" style={{ color: "#f59e0b", textDecoration: "none" }}>vs ServiceM8</a> · <a href="/vs-powered-now.html" style={{ color: "#f59e0b", textDecoration: "none" }}>vs Powered Now</a></p>
+
       {/* TRADES */}
       <div style={LP.section}>
         <div style={LP.sectionLabel}>Every trade welcome</div>
@@ -657,7 +660,7 @@ export function LandingPage({ onAuth }) {
         </div>
       </div>
 
-      {/* PRICING — full three-tier + mid-month add-ons + business phone add-on.
+      {/* PRICING · full three-tier + mid-month add-ons + business phone add-on.
           Source of truth matches /pricing.html; FAQ lives on that page. */}
       <div style={{ padding: "72px 24px", background: "#0d0d0d", borderTop: "1px solid #1a1a1a", borderBottom: "1px solid #1a1a1a" }}>
         <div style={{ maxWidth: 1040, margin: "0 auto" }}>
@@ -667,15 +670,15 @@ export function LandingPage({ onAuth }) {
             <div style={{ ...LP.sectionLabel, textAlign: "center" }}>Pricing</div>
             <h2 style={{ ...LP.h2, textAlign: "center" }}>Plans for every<br/>tradesperson.</h2>
             <p style={{ fontSize: 16, color: "#888", maxWidth: 540, margin: "16px auto 0", lineHeight: 1.7 }}>
-              Start with a 30-day free trial on any plan. No charge until day 31. Cancel anytime. All plans include every feature.
+              Start with a 30-day free trial on any plan. No card needed. Cancel anytime. All plans include every feature.
             </p>
           </div>
 
           {/* Plan cards */}
           <div className="lp-pricing-grid">
             {[
-              { name: "Solo", price: "£39", period: "/mo", users: "1 user", popular: false, plan: "solo_monthly", features: ["100 AI conversations per month", "1 hour hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Allowance resets 1st of month"] },
-              { name: "Pro Solo", price: "£59", period: "/mo", users: "1 user", popular: true, plan: "pro_solo_monthly", features: ["200 AI conversations per month", "3 hours hands-free per month", "Tap-to-talk voice — never capped", "All 43 features included", "Priority for new features"] },
+              { name: "Solo", price: "£39", period: "/mo", users: "1 user", popular: false, plan: "solo_monthly", features: ["100 AI conversations per month", "1 hour hands-free per month", "Tap-to-talk voice · never capped", "All 43 features included", "Allowance resets 1st of month"] },
+              { name: "Pro Solo", price: "£59", period: "/mo", users: "1 user", popular: true, plan: "pro_solo_monthly", features: ["200 AI conversations per month", "3 hours hands-free per month", "Tap-to-talk voice · never capped", "All 43 features included", "Priority for new features"] },
               { name: "Team", price: "£89", period: "/mo", users: "Up to 5 users", popular: false, plan: "team_monthly", features: ["400 AI conversations per month", "4 hours hands-free per month", "Team scheduling & per-user permissions", "Staff timesheets & GPS tracking", "All 43 features included"] },
               { name: "Business", price: "£129", period: "/mo", users: "Up to 10 users", popular: false, plan: "business_monthly", features: ["800 AI conversations per month", "8 hours hands-free per month", "Priority support", "Everything in Team, more capacity", "All 43 features included"] },
             ].map(p => (
@@ -705,7 +708,7 @@ export function LandingPage({ onAuth }) {
           <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: "32px 28px", margin: "32px auto 16px", textAlign: "center" }}>
             <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>⚡ Add-on · Any Plan</div>
             <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Need more mid-month?</div>
-            <p style={{ color: "#888", fontSize: 14, maxWidth: 560, margin: "0 auto 24px", lineHeight: 1.7 }}>Busy month? Top up any plan with one-off usage add-ons. No subscription change, no commitment — just a boost for the current billing period.</p>
+            <p style={{ color: "#888", fontSize: 14, maxWidth: 560, margin: "0 auto 24px", lineHeight: 1.7 }}>Busy month? Top up any plan with one-off usage add-ons. No subscription change, no commitment · just a boost for the current billing period.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, maxWidth: 700, margin: "0 auto 16px" }}>
               {[
                 { label: "+200 AI conversations", price: "£39", desc: "Extra allowance for a busy month" },
@@ -726,7 +729,7 @@ export function LandingPage({ onAuth }) {
           <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 16, padding: "32px 28px", textAlign: "center" }}>
             <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>📞 Add-on · Any Plan</div>
             <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Business Phone, Built In</div>
-            <p style={{ color: "#888", fontSize: 14, maxWidth: 620, margin: "0 auto 24px", lineHeight: 1.7 }}>Get a dedicated business number that rings directly inside the Trade PA app — no second SIM, no extra hardware. Every call from a known customer is recorded, transcribed and automatically logged against their job. Missed a call? It falls back to your mobile so you never lose a lead.</p>
+            <p style={{ color: "#888", fontSize: 14, maxWidth: 620, margin: "0 auto 24px", lineHeight: 1.7 }}>Get a dedicated business number that rings directly inside the Trade PA app · no second SIM, no extra hardware. Every call from a known customer is recorded, transcribed and automatically logged against their job. Missed a call? It falls back to your mobile so you never lose a lead.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, maxWidth: 700, margin: "0 auto 24px" }}>
               {[
                 { icon: "📱", label: "Rings in Trade PA app", desc: "Answer without a second SIM" },
@@ -771,9 +774,9 @@ export function LandingPage({ onAuth }) {
         <div style={{ position: "absolute", width: 400, height: 400, background: "radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)", top: "50%", left: "50%", transform: "translate(-50%,-50%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
           <h2 style={{ ...LP.h2, marginBottom: 20 }}>Stop doing admin<br/>after hours.</h2>
-          <p style={{ fontSize: 17, color: "#888", marginBottom: 40, maxWidth: 500, margin: "0 auto 40px", lineHeight: 1.7 }}>Trade PA runs your inbox while you're on the tools, and chases your money while you sleep. One tap to approve. That's it.</p>
+          <p style={{ fontSize: 17, color: "#888", marginBottom: 40, maxWidth: 500, margin: "0 auto 40px", lineHeight: 1.7 }}>Eve runs your inbox while you're on the tools, and chases your money while you sleep. One tap to approve. That's it.</p>
           <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, fontSize: 16, padding: "16px 40px" }} className="lp-btn-primary">Start 30-day free trial →</button>
-          <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#f59e0b", marginTop: 16, letterSpacing: "0.06em" }}>✓ Free for 30 days · No charge until day 31 · Cancel anytime</p>
+          <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#f59e0b", marginTop: 16, letterSpacing: "0.06em" }}>✓ Free for 30 days · No card needed · Cancel anytime</p>
           <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 11, color: "#888", marginTop: 8 }}>Works with Gmail · Works with Outlook · Built-in business phone · UK-built for UK trades</p>
         </div>
       </div>
@@ -782,7 +785,7 @@ export function LandingPage({ onAuth }) {
       <div style={{ padding: "28px 28px", borderTop: "1px solid #1a1a1a", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
         <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
         <div style={{ display: "flex", gap: 24 }}>
-          {[["About","/about.html"],["Pricing","/pricing.html"],["Help","/help.html"],["Blog","/blog/"],["Privacy Policy","/privacy-policy.html"],["Terms of Service","/terms.html"],["Contact","mailto:hello@tradespa.co.uk"]].map(([l,h]) => (
+          {[["About","/about.html"],["Features","/features.html"],["Pricing","/pricing.html"],["Compare","/vs-tradify.html"],["Help","/help.html"],["Blog","/blog/"],["Privacy Policy","/privacy-policy.html"],["Terms of Service","/terms.html"],["Contact","mailto:hello@tradespa.co.uk"]].map(([l,h]) => (
             <a key={l} href={h} style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, color: "#888", textDecoration: "none" }}>{l}</a>
           ))}
         </div>
