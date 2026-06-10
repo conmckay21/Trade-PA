@@ -647,7 +647,7 @@ export function LandingPage({ onAuth }) {
         </div>
       </div>
 
-      <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#888", marginTop: 16 }}>Want the detail? Honest, dated comparisons: <a href="/vs-tradify.html" style={{ color: "#f59e0b", textDecoration: "none" }}>vs Tradify</a> · <a href="/vs-servicem8.html" style={{ color: "#f59e0b", textDecoration: "none" }}>vs ServiceM8</a> · <a href="/vs-powered-now.html" style={{ color: "#f59e0b", textDecoration: "none" }}>vs Powered Now</a></p>
+      <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#888", marginTop: 16, textAlign: "center" }}>Want the detail? Honest, dated comparisons: <a href="/vs-tradify.html" style={{ color: "#f59e0b", textDecoration: "none" }}>vs Tradify</a> · <a href="/vs-servicem8.html" style={{ color: "#f59e0b", textDecoration: "none" }}>vs ServiceM8</a> · <a href="/vs-powered-now.html" style={{ color: "#f59e0b", textDecoration: "none" }}>vs Powered Now</a></p>
 
       {/* TRADES */}
       <div style={LP.section}>
