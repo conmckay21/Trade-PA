@@ -320,7 +320,7 @@ export function LandingPage({ onAuth }) {
   const LP = {
     wrap: { minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0", fontFamily: "'Plus Jakarta Sans', sans-serif", overflowX: "hidden" },
     nav: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 28px", paddingTop: "max(20px, env(safe-area-inset-top, 20px))", borderBottom: "1px solid #1a1a1a", position: "sticky", top: 0, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(8px)", zIndex: 100 },
-    logo: { display: "flex", alignItems: "center", gap: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "#f59e0b", letterSpacing: "0.06em" },
+    logo: { display: "flex", alignItems: "center", gap: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 800, color: "#f0f0f0", letterSpacing: "0.04em" },
     logoIcon: { width: 30, height: 30, background: "#f59e0b", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: "#000" },
     hero: { textAlign: "center", padding: "80px 24px 60px", position: "relative" },
     h1: { fontSize: "clamp(36px, 7vw, 72px)", fontWeight: 800, lineHeight: 1.05, letterSpacing: "-0.03em", marginBottom: 24, fontFamily: "'Plus Jakarta Sans', sans-serif" },
@@ -401,11 +401,12 @@ export function LandingPage({ onAuth }) {
       <nav style={LP.nav}>
         <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
         <div className="lp-nav-content">
-          <a href="/about.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>About</a>
+          <a href="/features.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Features</a>
           <a href="/pricing.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Pricing</a>
+          <a href="/vs-tradify.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Compare</a>
+          <a href="/about.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>About</a>
           <a href="/help.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Help</a>
           <a href="/blog/" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Blog</a>
-          <a href="/vs-tradify.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "#ccc", textDecoration: "none" }}>Compare</a>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => setScreen("login")} style={{ ...LP.btnGhost, padding: "8px 18px", fontSize: 13 }} className="lp-btn-ghost">Log in</button>
