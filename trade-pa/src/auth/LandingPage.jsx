@@ -319,9 +319,10 @@ export function LandingPage({ onAuth }) {
  // landing | login | signup
   const LP = {
     wrap: { minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0", fontFamily: "'Plus Jakarta Sans', sans-serif", overflowX: "hidden" },
-    nav: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 28px", paddingTop: "max(20px, env(safe-area-inset-top, 20px))", borderBottom: "1px solid #1a1a1a", position: "sticky", top: 0, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(8px)", zIndex: 100 },
-    logo: { display: "flex", alignItems: "center", gap: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 800, color: "#f0f0f0", letterSpacing: "0.04em" },
-    logoIcon: { width: 30, height: 30, background: "#f59e0b", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: "#000" },
+    nav: { borderBottom: "1px solid #2a2a2a", position: "sticky", top: 0, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(10px)", zIndex: 100, paddingTop: "env(safe-area-inset-top, 0px)" },
+    navInner: { display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 68 },
+    logo: { display: "flex", alignItems: "center", gap: 10, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 19, fontWeight: 800, color: "#f0f0f0", letterSpacing: "0.04em" },
+    logoIcon: { width: 30, height: 30, background: "#f59e0b", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#000" },
     hero: { textAlign: "center", padding: "80px 24px 60px", position: "relative" },
     h1: { fontSize: "clamp(36px, 7vw, 72px)", fontWeight: 800, lineHeight: 1.05, letterSpacing: "-0.03em", marginBottom: 24, fontFamily: "'Plus Jakarta Sans', sans-serif" },
     sub: { fontSize: "clamp(15px, 2.5vw, 19px)", color: "#888", maxWidth: 540, margin: "0 auto 40px", lineHeight: 1.7 },
@@ -361,7 +362,7 @@ export function LandingPage({ onAuth }) {
         /* Nav content links */
         .lp-nav-link{transition:color 0.15s;}
         .lp-nav-link:hover{color:#f59e0b!important;}
-        .lp-nav-content{display:flex;align-items:center;gap:28px;}
+        .lp-nav-content{display:flex;align-items:center;gap:26px;}
         @media (max-width: 880px){.lp-nav-content{display:none;}}
 
         /* Responsive hero two-column grid */
@@ -399,18 +400,20 @@ export function LandingPage({ onAuth }) {
 
       {/* NAV */}
       <nav style={LP.nav}>
+        <div style={LP.navInner}>
         <div style={LP.logo}><div style={LP.logoIcon}>TP</div>TRADE PA</div>
         <div className="lp-nav-content">
-          <a href="/features.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Features</a>
-          <a href="/pricing.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Pricing</a>
-          <a href="/vs-tradify.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Compare</a>
-          <a href="/about.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>About</a>
-          <a href="/help.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Help</a>
-          <a href="/blog/" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Blog</a>
+          <a href="/features.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Features</a>
+          <a href="/pricing.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Pricing</a>
+          <a href="/vs-tradify.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Compare</a>
+          <a href="/about.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>About</a>
+          <a href="/help.html" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Help</a>
+          <a href="/blog/" className="lp-nav-link" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 600, color: "#f0f0f0", textDecoration: "none" }}>Blog</a>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => setScreen("login")} style={{ ...LP.btnGhost, padding: "8px 18px", fontSize: 13 }} className="lp-btn-ghost">Log in</button>
-          <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, padding: "8px 20px", fontSize: 13 }} className="lp-btn-primary">Start free trial →</button>
+          <button onClick={() => setScreen("login")} style={{ ...LP.btnGhost, padding: "10px 18px", fontSize: 14 }} className="lp-btn-ghost">Log in</button>
+          <button onClick={() => window.location.href="/signup.html"} style={{ ...LP.btnPrimary, padding: "10px 18px", fontSize: 14 }} className="lp-btn-primary">Start free trial →</button>
+        </div>
         </div>
       </nav>
 
