@@ -7,7 +7,7 @@ export function AuthScreen({ onAuth, initialMode = "login", onBack }) {
   // no in-app purchases, web-only signup pattern). Force login mode on native
   // regardless of what initialMode says.
   const [mode, setMode] = useState(isNative() ? "login" : initialMode); // login | signup | reset
-  const [form, setForm] = useState({ email: "", password: "", name: "", confirm: "" });
+  const [form, setForm] = useState({ email: "", password: "", name: "", confirm: "", phone: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [resetSent, setResetSent] = useState(false);
@@ -43,6 +43,7 @@ export function AuthScreen({ onAuth, initialMode = "login", onBack }) {
 
   const handleSignup = async () => {
     if (!form.name) { setError("Please enter your name."); return; }
+    if (!form.phone || !/^\+?\d{10,15}$/.test(form.phone.replace(/[\s()-]/g, ""))) { setError("Please enter a valid contact number so we can reach you if needed."); return; }
     if (!form.email) { setError("Please enter your email."); return; }
     if (form.password.length < 6) { setError("Password must be at least 6 characters."); return; }
     if (form.password !== form.confirm) { setError("Passwords don't match."); return; }
@@ -50,7 +51,7 @@ export function AuthScreen({ onAuth, initialMode = "login", onBack }) {
     const { data, error } = await db.auth.signUp({
       email: form.email,
       password: form.password,
-      options: { data: { full_name: form.name } }
+      options: { data: { full_name: form.name, phone: form.phone.trim() } }
     });
     if (error) setError(error.message);
     else if (data.user && !data.session) setError("Check your email to confirm your account, then log in.");
@@ -115,6 +116,8 @@ export function AuthScreen({ onAuth, initialMode = "login", onBack }) {
             {error && <div style={error.includes("Check your email") ? authStyles.success : authStyles.error}>{error}</div>}
             <label style={authStyles.label}>Your Name</label>
             <input style={authStyles.input} placeholder="Dave Hughes" value={form.name} onChange={set("name")} autoComplete="name" />
+            <label style={authStyles.label}>Contact Number</label>
+            <input style={authStyles.input} type="tel" placeholder="07700 900123" value={form.phone} onChange={set("phone")} autoComplete="tel" />
             <label style={authStyles.label}>Email Address</label>
             <input style={authStyles.input} type="email" placeholder="dave@davesplumbing.co.uk" value={form.email} onChange={set("email")} autoComplete="email" />
             <label style={authStyles.label}>Password</label>
