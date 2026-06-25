@@ -66,110 +66,83 @@
   }
   </script>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
-
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0a0a0a; --surface: #141414; --surface-high: #1a1a1a;
-      --border: #2a2a2a; --text: #f5f5f5; --text-dim: #c8c8c8;
-      --muted: #888; --amber: #f59e0b;
-    }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--bg); color: var(--text); line-height: 1.7;
-      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-    }
-
-    nav {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(10,10,10,0.85); backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      height: 56px; padding: 0 24px;
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; letter-spacing: 0.05em; color: var(--amber); text-decoration: none; }
-    .logo-icon { width: 28px; height: 28px; background: var(--amber); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #000; font-size: 10px; font-weight: 900; letter-spacing: -0.02em; }
-    .nav-links { display: flex; gap: 22px; font-size: 13px; color: var(--text-dim); align-items: center; }
-    .nav-links a { color: inherit; text-decoration: none; }
-    .nav-links a:hover { color: var(--amber); }
-    .nav-cta { background: var(--amber); color: #000 !important; padding: 7px 14px; border-radius: 6px; font-weight: 600; }
-    @media (max-width: 700px) { .nav-links a:not(.nav-cta) { display: none; } }
-
-    main { max-width: 720px; margin: 0 auto; padding: 64px 24px 48px; }
-
-    .kicker { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--amber); margin-bottom: 20px; }
-    h1 { font-size: 40px; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 18px; }
-    @media (max-width: 600px) { h1 { font-size: 30px; } }
-    .meta { color: var(--muted); font-size: 13px; margin-bottom: 48px; padding-bottom: 32px; border-bottom: 1px solid var(--border); }
-
-    .prose p { margin-bottom: 22px; font-size: 17px; color: var(--text-dim); }
-    .prose p strong { color: var(--text); font-weight: 600; }
-    .prose h2 { font-size: 26px; font-weight: 700; color: var(--text); margin: 56px 0 18px; letter-spacing: -0.01em; }
-    .prose h3 { font-size: 20px; font-weight: 600; color: var(--text); margin: 36px 0 14px; }
-    .prose blockquote { border-left: 3px solid var(--amber); padding: 4px 0 4px 20px; margin: 32px 0; color: var(--text); font-style: italic; font-size: 16px; }
-    .prose blockquote p { margin-bottom: 8px; }
-    .prose blockquote p:last-child { margin-bottom: 0; }
-    .prose ul, .prose ol { margin: 0 0 22px 24px; }
-    .prose li { margin-bottom: 8px; font-size: 17px; color: var(--text-dim); }
-    .prose li strong { color: var(--text); }
-    .prose a { color: var(--amber); text-decoration: none; }
-    .prose a:hover { text-decoration: underline; }
-    .prose code { background: var(--surface-high); padding: 2px 7px; border-radius: 4px; font-size: 15px; color: var(--amber); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; }
-    .prose .callout { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--amber); padding: 18px 22px; margin: 28px 0; border-radius: 6px; }
-    .prose .callout p { margin-bottom: 8px; font-size: 15px; }
-    .prose .callout p:last-child { margin-bottom: 0; }
-    .prose .callout strong { color: var(--amber); }
-    .signoff { margin-top: 40px; font-weight: 600; color: var(--text); }
-
-    .cta-block { margin: 64px auto; max-width: 720px; padding: 32px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; text-align: center; }
-    .cta-block h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
-    .cta-block p { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; }
-    .cta-btn { display: inline-block; background: var(--amber); color: #000; padding: 12px 22px; border-radius: 8px; font-weight: 700; font-size: 14px; text-decoration: none; }
-    .cta-btn:hover { opacity: 0.88; }
-    .cta-note { display: block; margin-top: 10px; font-size: 12px; color: var(--muted); }
-
-    .more { max-width: 720px; margin: 0 auto; padding: 48px 24px 0; border-top: 1px solid var(--border); }
-    .more h3 { font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--amber); margin-bottom: 20px; }
-    .more-grid { display: grid; gap: 16px; }
-    .more-card { display: block; padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; text-decoration: none; transition: border-color 0.15s; }
-    .more-card:hover { border-color: var(--amber); }
-    .more-card h4 { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
-    .more-card p { font-size: 13px; color: var(--muted); }
-
-    footer { max-width: 720px; margin: 64px auto 32px; padding: 24px; text-align: center; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
-    footer a { color: var(--text-dim); text-decoration: none; margin: 0 10px; }
-    footer a:hover { color: var(--amber); }
-  </style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0A0A0A;--surface:#161616;--surface2:#141414;--amber:#F59E0B;--amber-2:#FBBF24;--cream:#F0F0F0;--steel:#9CA3AF;--line:#2A2A2A;--green:#10B981;--sans:'Plus Jakarta Sans',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--sans);color:var(--cream);background:var(--bg);font-size:17.5px;line-height:1.7}
+.wrap{max-width:760px;margin:0 auto;padding:0 24px}
+a{color:var(--amber-2);text-decoration:none}
+a:hover{text-decoration:underline}
+h1{font-weight:800;font-size:clamp(1.9rem,4.6vw,2.8rem);letter-spacing:-0.02em;line-height:1.15;color:var(--cream)}
+h2{font-weight:700;font-size:1.45rem;letter-spacing:-0.01em;margin:40px 0 12px;color:var(--cream)}
+h3{font-weight:700;font-size:1.13rem;letter-spacing:-0.01em;margin:26px 0 8px;color:var(--cream)}
+p{margin-bottom:16px;color:#D4D4D8}
+p b,p strong,li b,li strong{color:var(--cream)}
+em{color:#D4D4D8}
+ul,ol{margin:0 0 16px 22px;color:#D4D4D8}
+li{margin-bottom:7px;color:#D4D4D8}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--amber-2);display:inline-flex;align-items:center;gap:8px;margin-bottom:14px}
+.eyebrow::before{content:"";width:14px;height:14px;border:2px solid var(--amber)}
+.btn{display:inline-block;font-weight:700;padding:14px 24px;border-radius:10px;background:var(--amber);color:#0A0A0A}
+.btn:hover{background:#FFAD1F;text-decoration:none}
+header{position:sticky;top:0;z-index:50;background:rgba(10,10,10,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav{max-width:1120px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:68px}
+.logo{font-weight:800;font-size:1.2rem;display:flex;align-items:center;gap:10px;color:var(--cream)}
+.logo:hover{text-decoration:none}
+.logo .mark{width:30px;height:30px;background:var(--amber);border-radius:8px;display:grid;place-items:center;color:#0A0A0A;font-size:.8rem;font-weight:700}
+.nav-links{display:flex;gap:26px;align-items:center;font-weight:600;font-size:.95rem}
+.nav-links a{color:var(--cream)}
+.nav-links a:hover{color:var(--amber-2);text-decoration:none}
+.nav .btn{padding:10px 18px;font-size:.92rem;color:#0A0A0A}
+@media(max-width:820px){.nav-links a:not(.btn){display:none}}
+.hero{padding:60px 0 10px}
+.meta{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--steel);margin-top:16px}
+article{padding:28px 0 50px}
+.callout{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:0 12px 12px 0;padding:18px 22px;margin:22px 0}
+.callout p{margin:0;color:#D4D4D8}
+.callout p+p{margin-top:10px}
+.signoff{margin-top:32px;font-weight:700;color:var(--cream)}
+.more{border-top:1px solid var(--line);margin-top:44px;padding-top:30px}
+.more>h3{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber-2);margin:0 0 16px}
+.more-grid{display:grid;gap:14px}
+.more-card{display:block;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.more-card:hover{border-color:var(--amber);text-decoration:none}
+.more-card h4{font-size:1.02rem;font-weight:700;color:var(--cream);margin-bottom:5px}
+.more-card p{font-size:.88rem;color:var(--steel);margin:0}
+.final{background:var(--surface2);border-top:1px solid var(--line);text-align:center;padding:64px 24px}
+.final h2{margin-top:0}
+.final p{color:var(--steel);margin:12px auto 24px;max-width:30em}
+footer{background:#050505;color:var(--steel);padding:34px 0;font-size:.85rem}
+footer .wrap{max-width:1120px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
+footer a{color:var(--steel)}
+footer a:hover{color:var(--amber-2)}
+</style>
 </head>
 <body>
+<header>
+  <div class="nav">
+    <a class="logo" href="/"><span class="mark">TP</span>TRADE PA</a>
+    <nav class="nav-links">
+      <a href="/features.html">Features</a><a href="/pricing.html">Pricing</a><a href="/vs-tradify.html">Compare</a><a href="/blog/">Blog</a><a href="/help.html">Help</a>
+      <a class="btn" href="/signup.html">Start free trial</a>
+    </nav>
+  </div>
+</header>
 
-  <nav>
-    <a href="/" class="logo">
-      <div class="logo-icon">TP</div>
-      TRADE PA
-    </a>
-    <div class="nav-links">
-      <a href="/about.html">About</a>
-      <a href="/pricing.html">Pricing</a>
-      <a href="/help.html">Help</a>
-      <a href="/blog/">Blog</a>
-      <a href="/signup.html" class="nav-cta">Start free trial →</a>
-    </div>
-  </nav>
+<div class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Making Tax Digital · Construction · UK</span>
+    <h1>Making Tax Digital is here: what it actually means for tradespeople, and how to stop it eating your evenings</h1>
+    <div class="meta">Trade PA · 25 June 2026 · 12 min read</div>
+  </div>
+</div>
 
-  <main>
-    <article>
-      <p class="kicker">Making Tax Digital · Construction · UK</p>
-      <h1>Making Tax Digital is here: what it actually means for tradespeople, and how to stop it eating your evenings</h1>
-      <p class="meta">Trade PA · 25 June 2026 · 12 min read</p>
-
-      <div class="prose">
-
-        <p>Here's a situation that's true for a lot of subbies right now and most of them don't know it yet. You turn over, say, £55,000 a year on the tools. You've always done your tax the same way: bag of receipts in the van, an evening in January wrestling with HMRC's website, one return, done, forget about it. As of <strong>6 April 2026</strong>, that's no longer allowed. You're legally required to keep digital records of every bit of income and expense, and to file with HMRC <strong>four times a year</strong> instead of once.</p>
+<article>
+  <div class="wrap">
+<p>Here's a situation that's true for a lot of subbies right now and most of them don't know it yet. You turn over, say, £55,000 a year on the tools. You've always done your tax the same way: bag of receipts in the van, an evening in January wrestling with HMRC's website, one return, done, forget about it. As of <strong>6 April 2026</strong>, that's no longer allowed. You're legally required to keep digital records of every bit of income and expense, and to file with HMRC <strong>four times a year</strong> instead of once.</p>
 
         <p>That's Making Tax Digital for Income Tax, and the first wave is already live. HMRC reckons around <strong>780,000 sole traders and landlords</strong> are in scope from this April, with hundreds of thousands more joining each year after. A lot of them are tradespeople, and a fair few still think it's a thing that happens "at some point in the future." It started this tax year.</p>
 
@@ -269,21 +242,11 @@
         <p>For the official detail and to check your own start date, HMRC's <a href="https://www.gov.uk/guidance/use-making-tax-digital-for-income-tax" target="_blank" rel="noopener">Making Tax Digital for Income Tax guidance</a> is the primary source, and the <a href="https://www.fsb.org.uk/resources/article/making-tax-digital-2026-deadlines-rules-and-more-MCQVRXUNIJC5EQRAZBQ7DFJNGYMA" target="_blank" rel="noopener">FSB's MTD 2026 rundown</a> is a clear plain-English read on the deadlines and rules.</p>
 
         <p class="signoff">Trade PA</p>
-      </div>
-    </article>
-  </main>
 
-  <section class="cta-block">
-    <h2>Walk into Making Tax Digital already on top of your records.</h2>
-    <p>Capture income, expenses, mileage and CIS by voice as you work, so every figure is a clean digital record the moment it happens. MTD-ready, without the evening admin. Voice-first, built for UK trades.</p>
-    <a href="/signup.html" class="cta-btn">Start free trial →</a>
-    <span class="cta-note">Free for 30 days. No card needed.</span>
-  </section>
-
-  <section class="more">
-    <h3>More from the blog</h3>
-    <div class="more-grid">
-      <a href="/blog/cis-for-subbies.html" class="more-card">
+    <div class="more">
+      <h3>More from the blog</h3>
+      <div class="more-grid">
+<a href="/blog/cis-for-subbies.html" class="more-card">
         <h4>CIS for subbies in 2026</h4>
         <p>The scheme that runs alongside MTD, not within it. Real HMRC cases, the enforcement crackdown, and the money subbies lose without realising.</p>
       </a>
@@ -295,16 +258,23 @@
         <h4>Tradies don't get paid for evenings</h4>
         <p>Your day rate covers tools-down time, not the laptop hours afterward. The maths nobody talks about.</p>
       </a>
+      </div>
     </div>
-  </section>
+  </div>
+</article>
 
-  <footer>
-    © 2026 TRADEPA LTD · Company No. 17176983 ·
-    <a href="/privacy-policy.html">Privacy</a> ·
-    <a href="/terms.html">Terms</a> ·
-    <a href="/blog/">Blog</a> ·
-    <a href="/">Home</a>
-  </footer>
+<div class="final">
+  <span class="eyebrow" style="justify-content:center">Free for 30 days · No card needed</span>
+  <h2>Walk into Making Tax Digital already on top of your records.</h2>
+  <p>Capture income, expenses, mileage and CIS by voice as you work, so every figure is a clean digital record the moment it happens. MTD-ready, without the evening admin. Voice-first, built for UK trades.</p>
+  <a class="btn" href="/signup.html">Start free trial</a>
+</div>
 
+<footer>
+  <div class="wrap">
+    <span>© 2026 TRADEPA LTD · Company No. 17176983 · ICO ZC132378</span>
+    <span><a href="/blog/">Blog</a> · <a href="/pricing.html">Pricing</a> · <a href="/help.html">Help</a> · <a href="/privacy-policy.html">Privacy</a> · <a href="/terms.html">Terms</a></span>
+  </div>
+</footer>
 </body>
 </html>
