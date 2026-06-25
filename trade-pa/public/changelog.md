@@ -1,3 +1,11 @@
+## 2026-06-24
+
+🛟 **Your work has a safety net.** Behind the scenes, Eve now keeps a private record of the actions she takes, so if something ever does not save, your details can be recovered instead of lost. This record is private to your account and never shared.
+
+🧾 **Quotes, invoices and jobs save reliably now.** A behind-the-scenes permissions issue meant new quotes, invoices, jobs, customers and materials were not always saving on solo accounts, even though Eve said they were. That is fixed: everything you create now saves properly and is there when you come back.
+
+✅ **No more silent slip-ups.** If a save ever does fail, Eve now tells you straight away instead of confirming it as done, so nothing goes missing without you knowing.
+
 ## 2026-06-10
 
 👋 Meet Eve! Our assistant now introduces herself properly on the website. We've also tidied the trial wording (free for 30 days, no card needed), finished the font refresh on the landing page, and added quick links to our new comparison pages.

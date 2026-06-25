@@ -320,6 +320,11 @@ export function AIAssistant({ isVisible = true, isTablet = false, brand, setBran
   const [paMemories, setPaMemories] = useState([]);
   const paMemoriesRef = useRef([]);
   const sessionActionsRef = useRef([]); // tracks successful action tool calls this session
+  /* PATCH:eve_recorder_session — stable id to group this Eve session's tool calls in the recorder */
+  const eveSessionIdRef = useRef(null);
+  if (eveSessionIdRef.current === null) {
+    eveSessionIdRef.current = (globalThis.crypto?.randomUUID?.() || (String(Date.now()) + "-" + Math.random().toString(36).slice(2)));
+  }
   useEffect(() => { paMemoriesRef.current = paMemories; }, [paMemories]);
 
   // Load memories from Supabase on mount: active only, always include corrections
@@ -2044,6 +2049,15 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             j.dateObj && Math.abs(new Date(j.dateObj) - dateObj) < 60000 // within 1 min
           );
           if (dupJob) return ""; // Silent dedup
+          /* PATCH:create_job_persist — was state-only; now writes to Supabase (awaited + error surfaced) */
+          const { error: jobErr } = await db.from("jobs").insert({
+            id: String(job.id), user_id: user?.id,
+            customer: job.customer, address: job.address || "",
+            type: job.type, date: job.date, date_obj: job.dateObj,
+            status: job.status, value: job.value || 0,
+            created_at: new Date().toISOString(),
+          });
+          if (jobErr) return `That job couldn't be saved: ${jobErr.message}. Please try again, or add it from the Schedule tab.`;
           setJobs(prev => [...(prev || []), job]);
           setLastAction({ type: "job", label: `${input.type} — ${input.customer}`, view: "Schedule" });
           return `Job created: ${input.type} for ${input.customer} on ${dateObj.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} at ${input.time}.`;
@@ -2101,7 +2115,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           setInvoices(prev => [inv, ...(prev || [])]);
           syncInvoiceToAccounting(user?.id, inv);
           // Persist to Supabase so send/chase can retrieve full line items
-          db.from("invoices").upsert({
+          /* PATCH:invoice_persist_await — awaited + error surfaced (was silent .catch) */
+          const { error: invErr } = await db.from("invoices").upsert({
             id: inv.id, user_id: user?.id,
             customer: inv.customer, address: inv.address || "",
             email: inv.email || "", phone: inv.phone || "",
@@ -2113,7 +2128,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             job_ref: input.job_ref || "",
             created_at: new Date().toISOString(),
             portal_token: inv.portalToken,
-          }).then(() => {}).catch(() => {});
+          });
+          if (invErr) {
+            setInvoices(prev => (prev || []).filter(x => x.id !== inv.id));
+            return `That invoice couldn't be saved: ${invErr.message}. Please try again.`;
+          }
           setLastAction({ type: "invoice", label: `${id} — ${fmtAmount(totalAmount)} — ${input.customer}`, view: "Invoices" });
           pendingWidgetRef.current = { type: "invoice", data: inv };
           // Tell the AI what was auto-filled so it can mention it in the response
@@ -2173,7 +2192,8 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             portalToken: generatePortalToken(),
           };
           setInvoices(prev => [quote, ...(prev || [])]);
-          db.from("invoices").upsert({
+          /* PATCH:quote_persist_await — awaited + error surfaced (was silent .catch) */
+          const { error: quoteErr } = await db.from("invoices").upsert({
             id: quote.id, user_id: user?.id,
             customer: quote.customer, address: quote.address || "",
             email: quote.email || "", phone: quote.phone || "",
@@ -2185,7 +2205,11 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
             job_ref: input.job_ref || "",
             created_at: new Date().toISOString(),
             portal_token: quote.portalToken,
-          }).then(() => {}).catch(() => {});
+          });
+          if (quoteErr) {
+            setInvoices(prev => (prev || []).filter(x => x.id !== quote.id));
+            return `That quote couldn't be saved: ${quoteErr.message}. Please try again.`;
+          }
           setLastAction({ type: "invoice", label: `${id} — ${fmtAmount(totalAmount)} — ${input.customer}`, view: "Quotes" });
           pendingWidgetRef.current = { type: "quote", data: quote };
           // Tell the AI what was auto-filled from the customer record
@@ -5614,6 +5638,19 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
               success: !!result,
               duration_ms: toolDurationMs,
             });
+            /* PATCH:eve_recorder_write — durable capture of the FULL tool input for recovery (separate, PII-aware store) */
+            Promise.resolve(
+              db.from("eve_tool_calls").insert({
+                user_id: user?.id,
+                company_id: companyId,
+                session_id: eveSessionIdRef.current,
+                tool_name: block.name,
+                input: block.input ?? {},
+                result: result == null ? null : String(result).slice(0, 4000),
+                success: !!result,
+                duration_ms: toolDurationMs,
+              })
+            ).catch((e) => { try { console.warn("[eve recorder]", e?.message || e); } catch (_) {} });
             if (result) allToolResults.push(result);
             if (result && ACTION_TOOLS.includes(block.name)) {
               sessionActionsRef.current = [...sessionActionsRef.current.slice(-9), `${block.name}(${JSON.stringify(block.input).slice(0,60)})`];
