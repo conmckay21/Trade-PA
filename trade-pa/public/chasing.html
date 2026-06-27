@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invoice chasing that gets you paid | Trade PA</title>
+<meta name="description" content="Trade PA chases your unpaid invoices automatically, from a polite reminder to a formal final notice and a letter before action. It stops the moment you are paid. Built for UK tradespeople.">
+<meta name="theme-color" content="#f59e0b">
+<link rel="canonical" href="https://www.tradespa.co.uk/chasing.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Invoice chasing that gets you paid | Trade PA">
+<meta property="og:description" content="Automatic invoice chasing for trades. Reminder, second reminder, final notice, then a letter before action. It stops the moment you are paid.">
+<meta property="og:image" content="https://www.tradespa.co.uk/og-card.png">
+<meta property="og:url" content="https://www.tradespa.co.uk/chasing.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0A0A0A;--amber:#F59E0B;--amber-dark:#FBBF24;--paper:#0A0A0A;--white:#161616;
+    --ink:#F0F0F0;--steel:#9CA3AF;--line:#2A2A2A;--green:#10B981;--red:#ef4444;
+    --mono:'Plus Jakarta Sans',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Plus Jakarta Sans',sans-serif;color:var(--ink);background:var(--paper);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1020px;margin:0 auto;padding:0 24px}
+  a{color:inherit;text-decoration:none}
+  h1{font-size:clamp(2.2rem,5.4vw,3.5rem);font-weight:800;letter-spacing:-.025em;line-height:1.05}
+  h2{font-size:clamp(1.55rem,3vw,2.1rem);font-weight:800;letter-spacing:-.02em;margin-bottom:10px}
+  h3{font-weight:800;letter-spacing:-.01em}
+  .lead{font-size:1.15rem;color:var(--steel);max-width:42em;font-weight:500}
+  .amber{color:var(--amber)}
+  .eyebrow{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--amber-dark);display:inline-flex;align-items:center;gap:9px;margin-bottom:15px}
+  .eyebrow::before{content:"";width:13px;height:13px;border:2px solid var(--amber);border-radius:3px}
+  .btn{display:inline-block;font-weight:700;padding:14px 26px;border-radius:11px;background:var(--amber);color:var(--navy);font-size:1rem}
+  .btn:hover{background:#FFAD1F}
+  .btn2{display:inline-block;font-weight:700;padding:13px 22px;border-radius:11px;border:1px solid var(--line);color:var(--ink);font-size:1rem}
+  .btn2:hover{border-color:var(--steel);background:#141414}
+  .note{font-family:var(--mono);font-size:13px;color:var(--steel);margin-top:14px;font-weight:600}
+  header{position:sticky;top:0;z-index:50;background:rgba(10,10,10,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+  .logo{font-weight:800;font-size:1.2rem;display:flex;align-items:center;gap:10px}
+  .logo .mark{width:30px;height:30px;background:var(--amber);border-radius:8px;display:grid;place-items:center;color:var(--navy);font-size:.8rem;font-weight:800}
+  .nav-links{display:flex;gap:26px;align-items:center;font-weight:600;font-size:.95rem}
+  @media(max-width:820px){.nav-links a:not(.btn){display:none}}
+  .hero{padding:62px 0 30px}
+  .hero h1{max-width:14ch}
+  .hero .lead{margin-top:18px}
+  .hero .cta-row{margin-top:26px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .ladder{display:flex;margin-top:34px;border:1px solid var(--line);border-radius:13px;overflow:hidden}
+  .ladder .lp{flex:1;padding:14px 15px;border-right:1px solid var(--line)}
+  .ladder .lp:last-child{border-right:none}
+  .ladder .lp .n{font-size:10px;font-weight:700;color:var(--steel);letter-spacing:.05em}
+  .ladder .lp .l{font-size:13.5px;font-weight:700;margin-top:5px}
+  .ladder .lp.hot{background:var(--amber)}
+  .ladder .lp.hot .n{color:#5a3500}
+  .ladder .lp.hot .l{color:#1a1206}
+  @media(max-width:680px){.ladder{flex-wrap:wrap}.ladder .lp{flex:1 1 50%;border-bottom:1px solid var(--line)}.ladder .lp:nth-child(2){border-right:none}}
+  section{padding:50px 0;border-top:1px solid var(--line)}
+  .sec-eye{margin-bottom:8px}
+  .sec-intro{margin-top:12px;max-width:46em}
+  .mock{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,.35);color:#1a1a1a}
+  .mock .bar{padding:11px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #0a0a0a14}
+  .mock .bar .from{font-size:11px;color:#8c887f;font-weight:600}
+  .mock .bar .from b{color:#1a1a1a;font-weight:700}
+  .mock .tag{font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#8c887f;border:1px solid #0a0a0a1f;border-radius:999px;padding:3px 9px}
+  .mock .heading{padding:13px 16px 0;font-size:13px;font-weight:800;letter-spacing:.14em;color:#A35C06}
+  .mock .body2{padding:9px 16px 15px}
+  .mock .hi{font-size:13px;font-weight:600;margin-bottom:7px}
+  .mock p{font-size:12.5px;color:#555;line-height:1.5;margin-bottom:10px}
+  .invbox{border:1px solid #0a0a0a14;border-radius:9px;padding:11px 13px;margin:3px 0 11px;display:flex;justify-content:space-between;align-items:center;background:#FAF8F2;gap:10px}
+  .invbox .ref{font-size:11px;color:#6b6b6b;font-weight:600}
+  .invbox .ref b{display:block;color:#1a1a1a;font-size:12.5px;margin-top:2px}
+  .invbox .amt{font-size:22px;font-weight:800;letter-spacing:-.02em;white-space:nowrap}
+  .dated{font-size:11.5px;font-weight:600;color:#A35C06;background:#fbe6c8;border-radius:7px;padding:9px 12px;margin-bottom:11px;line-height:1.45}
+  .cta-btn{display:block;text-align:center;background:var(--amber);color:#fff;font-weight:700;font-size:13px;padding:11px;border-radius:8px}
+  .cta-sub{text-align:center;font-size:10.5px;color:#888;margin-top:6px}
+  .sign{font-size:11.5px;color:#666;margin-top:11px;line-height:1.5}
+  .sign b{color:#1a1a1a}
+  .mock.final{background:#0A0A0A;border-color:#000;color:#fff}
+  .mock.final .bar{border-bottom-color:#ffffff1f}
+  .mock.final .bar .from{color:#9c968a}
+  .mock.final .bar .from b{color:#fff}
+  .mock.final .tag{color:#9c968a;border-color:#ffffff2a}
+  .mock.final .heading{color:var(--amber);letter-spacing:.16em;font-size:15px}
+  .mock.final .hi{color:#fff}
+  .mock.final p{color:#c8c3b6}
+  .mock.final .invbox{background:#171512;border-color:#ffffff1f}
+  .mock.final .invbox .ref{color:#9c968a}
+  .mock.final .invbox .ref b{color:#fff}
+  .mock.final .invbox .amt{color:#fff}
+  .mock.final .dated{background:#2a1d07;color:#f3c155}
+  .mock.final .cta-sub{color:#9c968a}
+  .mock.final .sign{color:#9c968a}
+  .mock.final .sign b{color:#efe9db}
+  .steps2{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:30px;align-items:start}
+  @media(max-width:780px){.steps2{grid-template-columns:1fr;gap:28px}}
+  .stepcap{margin-bottom:14px;display:flex;gap:13px;align-items:flex-start}
+  .stepcap .snum{width:30px;height:30px;border-radius:8px;background:#fff;color:#0A0A0A;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex:none}
+  .stepcap h3{font-size:1.15rem;margin-bottom:4px}
+  .stepcap p{font-size:.92rem;color:var(--steel);font-weight:500;line-height:1.5}
+  .spot{display:grid;grid-template-columns:1.1fr .9fr;gap:30px;margin-top:30px;align-items:center}
+  @media(max-width:820px){.spot{grid-template-columns:1fr;gap:24px}}
+  .callout h3{font-size:1.35rem;margin-bottom:10px}
+  .callout p{color:var(--steel);font-weight:500;font-size:1.02rem}
+  .callout p .hl{color:var(--amber-dark);font-weight:700}
+  .control{display:grid;grid-template-columns:280px 1fr;gap:36px;align-items:center;margin-top:30px}
+  @media(max-width:820px){.control{grid-template-columns:1fr;gap:26px;justify-items:start}}
+  .phone{width:268px;border:9px solid #000;border-radius:36px;background:#000;padding:8px;box-shadow:0 18px 44px rgba(0,0,0,.5);margin:0 auto}
+  .phone .screen{background:#f6f5f1;border-radius:26px;overflow:hidden;padding:16px 14px;color:#1a1a1a}
+  .phone .scr-title{font-size:12px;font-weight:700;margin-bottom:13px;display:flex;align-items:center;gap:7px}
+  .phone .scr-title .d{width:7px;height:7px;border-radius:2px;background:var(--amber)}
+  .panel{background:#fff;border:1px solid #0a0a0a14;border-radius:12px;padding:13px}
+  .panel .ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .panel .ph .lab{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b6b6b}
+  .panel .ph .cnt{font-size:11px;color:#6b6b6b;font-weight:600}
+  .panel .row{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0}
+  .panel .row span:last-child{color:#6b6b6b;white-space:nowrap}
+  .panel .ready{margin-top:8px;font-size:11px;font-weight:700;color:#A35C06}
+  .panel .ctrl{display:flex;justify-content:space-between;align-items:center;margin-top:11px;padding-top:11px;border-top:1px solid #0a0a0a14}
+  .panel .ctrl .st{font-size:11px;color:#6b6b6b}
+  .panel .ctrl .pill{font-size:11px;font-weight:700;color:#0A0A0A;border:1px solid #0a0a0a1f;border-radius:999px;padding:5px 12px}
+  .control-copy p{color:var(--steel);font-weight:500;margin-bottom:14px;max-width:46ch}
+  .control-copy p b{color:var(--ink);font-weight:700}
+  .lba-row{display:grid;grid-template-columns:.92fr 1.08fr;gap:30px;align-items:start;margin-top:30px}
+  @media(max-width:820px){.lba-row{grid-template-columns:1fr;gap:24px}}
+  .feats{margin-top:18px;display:flex;flex-direction:column;gap:12px}
+  .feat{display:flex;gap:11px;align-items:flex-start;font-size:.98rem;color:var(--steel);font-weight:500}
+  .feat .ck{color:var(--green);font-weight:800;flex:none}
+  .footnote{margin-top:18px;font-family:var(--mono);font-size:12px;color:var(--steel);line-height:1.6;font-weight:500;max-width:46ch}
+  .lba{border:1px solid var(--line);border-radius:14px;background:#fff;padding:22px 22px;box-shadow:0 16px 40px rgba(0,0,0,.35);color:#1a1a1a}
+  .lba .lba-head{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0A0A0A;padding-bottom:12px;margin-bottom:14px}
+  .lba .lba-head .t{font-size:15px;font-weight:800;letter-spacing:.05em}
+  .lba .lba-head .tag{font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#8c887f;border:1px solid #0a0a0a1f;border-radius:999px;padding:3px 9px}
+  .lba .meta{font-size:11.5px;color:#6b6b6b;line-height:1.6;margin-bottom:13px}
+  .lba .meta b{color:#1a1a1a}
+  .lba p{font-size:12px;color:#444;line-height:1.55;margin-bottom:12px}
+  .charge{border:1px solid #0a0a0a14;border-radius:9px;overflow:hidden;margin:4px 0 13px}
+  .charge .cr{display:flex;justify-content:space-between;padding:9px 13px;font-size:12.5px;border-bottom:1px solid #0a0a0a14}
+  .charge .cr span:first-child{color:#555}
+  .charge .cr span:last-child{font-weight:600}
+  .charge .cr.total{background:#0A0A0A;border-bottom:none;padding:12px 13px}
+  .charge .cr.total span{color:#fff;font-weight:800;font-size:14px}
+  .lba .warn{font-size:12px;color:#1a1a1a;font-weight:600;background:#fbe6c8;border-radius:7px;padding:10px 12px;line-height:1.5}
+  .recap{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:30px}
+  @media(max-width:780px){.recap{grid-template-columns:1fr 1fr}}
+  @media(max-width:460px){.recap{grid-template-columns:1fr}}
+  .rc{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .rc .ico{width:36px;height:36px;border-radius:9px;background:#1f1c16;display:flex;align-items:center;justify-content:center;margin-bottom:13px;font-size:17px}
+  .rc h3{font-size:1.02rem;margin-bottom:6px}
+  .rc p{font-size:.9rem;color:var(--steel);font-weight:500;line-height:1.5}
+  .final{background:linear-gradient(180deg,#141414,#0A0A0A);border:1px solid var(--line);border-radius:20px;text-align:center;padding:64px 28px;margin:54px 0}
+  .final h2{font-size:clamp(1.8rem,4vw,2.5rem)}
+  .final p{color:var(--steel);margin:12px auto 26px;max-width:34em;font-weight:500}
+  .final .note{margin-top:16px}
+  footer{background:#050505;color:#9CA3AF;padding:34px 0;font-size:.85rem;border-top:1px solid var(--line)}
+  footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="/"><span class="mark">TP</span>TRADE PA</a>
+    <nav class="nav-links">
+      <a href="/features.html">Features</a><a href="/pricing.html">Pricing</a><a href="/vs-tradify.html">Compare</a><a href="/about.html">About</a>
+      <a class="btn" href="/signup.html">Start free trial</a>
+    </nav>
+  </div>
+</header>
+<div class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Automatic invoice chasing</span>
+    <h1>Get paid. Without the <span class="amber">awkward chase.</span></h1>
+    <p class="lead">Trade PA chases every unpaid invoice for you. A polite reminder first, then a firmer one, then a formal final notice, and a letter before action if it comes to that. It stops the second you are paid. You never have to send the "just checking in" text again.</p>
+    <div class="cta-row">
+      <a class="btn" href="/signup.html">Start free trial</a>
+      <a class="btn2" href="/chasing-brochure.pdf" target="_blank" rel="noopener">Download the brochure</a>
+      <span class="note">Free for 30 days. No card needed.</span>
+    </div>
+    <div class="ladder">
+      <div class="lp"><div class="n">STEP 1</div><div class="l">Payment reminder</div></div>
+      <div class="lp"><div class="n">STEP 2</div><div class="l">Second reminder</div></div>
+      <div class="lp hot"><div class="n">STEP 3</div><div class="l">Final notice</div></div>
+      <div class="lp"><div class="n">STEP 4</div><div class="l">Letter before action</div></div>
+    </div>
+  </div>
+</div>
+<section>
+  <div class="wrap">
+    <span class="eyebrow sec-eye">How it works</span>
+    <h2>Four steps. You lift a finger for none of them.</h2>
+    <p class="lead sec-intro">The day an invoice falls overdue, Trade PA starts chasing from your own email address, in your business name. Each message is more serious than the last. Here is exactly what your customer receives.</p>
+    <div class="steps2">
+      <div>
+        <div class="stepcap"><span class="snum">1</span><div><h3>The friendly nudge</h3><p>Sent the day it falls due. Polite, professional, easy to pay from. Most invoices get settled right here.</p></div></div>
+        <div class="mock">
+          <div class="bar"><span class="from"><b>Halliday Building</b> to Wilkinson Developments Ltd</span><span class="tag">Example</span></div>
+          <div class="heading">PAYMENT REMINDER</div>
+          <div class="body2">
+            <div class="hi">Hi Dave,</div>
+            <p>I hope you are well. This is a friendly reminder that the following invoice remains outstanding:</p>
+            <div class="invbox"><div class="ref">Invoice<b>INV-0231 &middot; due 22 May 2026</b></div><div class="amt">£1,840.00</div></div>
+            <a class="cta-btn" href="#">View &amp; Pay Online &rarr;</a>
+            <div class="cta-sub">No login required &middot; pay by card or bank transfer</div>
+            <p class="sign">If payment has already been sent, please disregard this message.<br><br>Many thanks,<br><b>Halliday Building</b></p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="stepcap"><span class="snum">2</span><div><h3>The firm follow-up</h3><p>A week later if it is still unpaid. Firmer, and now it shows the date you already reminded them.</p></div></div>
+        <div class="mock">
+          <div class="bar"><span class="from"><b>Halliday Building</b> to Wilkinson Developments Ltd</span><span class="tag">Example</span></div>
+          <div class="heading">SECOND REMINDER</div>
+          <div class="body2">
+            <div class="hi">Hi Dave,</div>
+            <p>I'm writing to follow up on my previous reminder regarding the outstanding balance below. I would appreciate your prompt attention to this matter.</p>
+            <div class="invbox"><div class="ref">Invoice<b>INV-0231 &middot; due 22 May 2026</b></div><div class="amt">£1,840.00</div></div>
+            <div class="dated">You were previously reminded about this invoice on 29 May 2026.</div>
+            <a class="cta-btn" href="#">View &amp; Pay Online &rarr;</a>
+            <div class="cta-sub">No login required &middot; pay by card or bank transfer</div>
+            <p class="sign">Please arrange payment at your earliest convenience.<br><br>Many thanks,<br><b>Halliday Building</b></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="wrap">
+    <span class="eyebrow sec-eye">Step 3 &middot; the one that gets wallets open</span>
+    <h2>The final notice.</h2>
+    <div class="spot">
+      <div class="mock final">
+        <div class="bar"><span class="from"><b>Halliday Building</b> to Wilkinson Developments Ltd</span><span class="tag">Example</span></div>
+        <div class="heading">FINAL NOTICE</div>
+        <div class="body2">
+          <div class="hi">Hi Dave,</div>
+          <p>Despite previous reminders, the following invoice remains unpaid. Please treat this as a matter of urgency.</p>
+          <div class="invbox"><div class="ref">Invoice<b>INV-0231 &middot; due 22 May 2026</b></div><div class="amt">£1,840.00</div></div>
+          <div class="dated">This invoice has already been followed up on 29 May and 5 June 2026.</div>
+          <a class="cta-btn" href="#">View &amp; Pay Online &rarr;</a>
+          <div class="cta-sub">No login required &middot; pay by card or bank transfer</div>
+          <p class="sign">If payment is not received within 7 days, I may need to consider further action to recover this debt.<br><br>Many thanks,<br><b>Halliday Building</b></p>
+        </div>
+      </div>
+      <div class="callout">
+        <h3>"I never got the first one" stops working</h3>
+        <p>The final notice lists <span class="hl">exactly when</span> the earlier reminders went out, taken from the real send dates. No more he-said-she-said, no more polite excuses. It is on the record, and your customer can see that you have it on the record.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="wrap">
+    <span class="eyebrow sec-eye">You stay in charge</span>
+    <h2>It chases. You decide.</h2>
+    <div class="control">
+      <div class="phone">
+        <div class="screen">
+          <div class="scr-title"><span class="d"></span>Invoice INV-0231</div>
+          <div class="panel">
+            <div class="ph"><span class="lab">Chase history</span><span class="cnt">3/3 sent</span></div>
+            <div class="row"><span>Payment reminder</span><span>29 May 2026</span></div>
+            <div class="row"><span>Second reminder</span><span>5 Jun 2026</span></div>
+            <div class="row"><span>Final notice</span><span>12 Jun 2026</span></div>
+            <div class="ready">Final notice sent. Ready for a letter before action.</div>
+            <div class="ctrl"><span class="st">Auto-chasing on</span><span class="pill">Pause chasing</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="control-copy">
+        <p>Open any invoice and see every reminder that has gone out, and the day it sent. <b>Pause chasing on anyone in one tap</b> for a dispute or an agreed payment plan, then switch it back on whenever you like.</p>
+        <p>Sorted it over the phone? <b>Mark the invoice paid and the chasing stops on its own.</b> No customer ever gets a reminder for a bill they have already cleared.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="wrap">
+    <span class="eyebrow sec-eye">Step 4 &middot; when they still will not pay</span>
+    <h2>Trade PA writes the letter before action.</h2>
+    <div class="lba-row">
+      <div>
+        <p class="lead" style="font-size:1.05rem">A letter before action is the formal, recognised step before a small claim. Instead of paying a solicitor to draft one, Trade PA builds it for you in seconds, with the money you are owed already worked out.</p>
+        <div class="feats">
+          <div class="feat"><span class="ck">&#10003;</span><span>Statutory interest and late-payment compensation calculated for you</span></div>
+          <div class="feat"><span class="ck">&#10003;</span><span>Every earlier reminder listed by date, so the history is watertight</span></div>
+          <div class="feat"><span class="ck">&#10003;</span><span>Clear deadline before court action, in plain, firm wording</span></div>
+        </div>
+        <p class="footnote">Statutory interest and fixed compensation shown apply to commercial, business to business debts under the Late Payment of Commercial Debts legislation. For consumer customers the letter is adjusted accordingly.</p>
+      </div>
+      <div class="lba">
+        <div class="lba-head"><span class="t">LETTER BEFORE ACTION</span><span class="tag">Example</span></div>
+        <div class="meta">12 June 2026<br><b>To:</b> Wilkinson Developments Ltd<br><b>Re:</b> Invoice INV-0231</div>
+        <p>We have written to you on a number of occasions regarding the invoice below, which remains unpaid. Please treat this as a letter before action.</p>
+        <div class="charge">
+          <div class="cr"><span>Invoice INV-0231</span><span>£1,840.00</span></div>
+          <div class="cr"><span>Statutory interest (11.75%)</span><span>£26.65</span></div>
+          <div class="cr"><span>Compensation</span><span>£70.00</span></div>
+          <div class="cr total"><span>Total now due</span><span>£1,936.65</span></div>
+        </div>
+        <p>Reminders were sent on 29 May 2026, 5 June 2026 and 12 June 2026.</p>
+        <div class="warn">If payment of the total above is not received within 14 days, we may begin court proceedings to recover the debt without further notice.</div>
+      </div>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="wrap">
+    <span class="eyebrow sec-eye">Why trades pick it</span>
+    <h2>Less chasing. More cash in the bank.</h2>
+    <div class="recap">
+      <div class="rc"><div class="ico">&#9889;</div><h3>Runs on autopilot</h3><p>Chases the moment an invoice is overdue, from your own email, in your name.</p></div>
+      <div class="rc"><div class="ico">&#8599;&#65039;</div><h3>Escalates properly</h3><p>From a friendly nudge to a firm final notice, then a letter before action.</p></div>
+      <div class="rc"><div class="ico">&#128197;</div><h3>Every reminder dated</h3><p>Real send dates on the record. "I never got it" stops working as an excuse.</p></div>
+      <div class="rc"><div class="ico">&#10004;&#65039;</div><h3>You stay in control</h3><p>Pause any customer, anytime. Mark it paid and the chasing stops on its own.</p></div>
+    </div>
+  </div>
+</section>
+<div class="wrap">
+  <div class="final">
+    <h2>Stop chasing. Start getting paid.</h2>
+    <p>Set up your invoice chasing in minutes and let Trade PA handle the rest, from the first reminder to the letter before action.</p>
+    <a class="btn" href="/signup.html">Start free trial</a>
+    <div class="note">Free for 30 days. No card needed.</div>
+  </div>
+</div>
+<footer>
+  <div class="wrap">
+    <span>© 2026 TRADEPA LTD &middot; Company No. 17176983 &middot; ICO ZC132378</span>
+    <span><a href="/pricing.html">Pricing</a> &middot; <a href="/features.html">Features</a> &middot; <a href="/privacy-policy.html">Privacy</a> &middot; <a href="/terms.html">Terms</a></span>
+  </div>
+</footer>
+</body>
+</html>
