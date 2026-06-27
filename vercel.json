@@ -63,6 +63,14 @@
     {
       "path": "/api/cron/pending-actions-digest",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/check-overdue",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/chase-digest",
+      "schedule": "0 5 * * *"
     }
   ],
   "rewrites": [

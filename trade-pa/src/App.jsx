@@ -5111,6 +5111,8 @@ function AppInner() {
         // See chase_invoice tool handler for the write side.
         chaseCount: r.chase_count || 0,
         lastChased: r.last_chased_at || null,
+        chaseHistory: Array.isArray(r.chase_history) ? r.chase_history : [],
+        chasePaused: r.chase_paused || false,
       })));
       if (enq.data) setEnquiriesRaw(enq.data);
       if (subbie.data) setSubbiePaymentsRaw(subbie.data);

@@ -512,6 +512,69 @@ export function InvoicePreview({ brand, invoice }) {
   );
 }
 
+// Chase history panel. Shows the real dated log of reminders sent on an
+// invoice (each date written at the moment that chase was sent), flags when a
+// final notice has gone out so the invoice is ready for a letter before action,
+// and lets the tradesperson pause or resume AUTOMATIC chasing on this one
+// invoice. Rendered in both the Payments and Invoices detail views so the two
+// never drift. Manual chasing is never affected by pause; it is a deliberate tap.
+// The pause flag is persisted with a direct, targeted update so it cannot be
+// clobbered by the invoice write-back (which whitelists columns and omits it).
+function ChaseHistoryPanel({ inv, user, onPausedChange }) {
+  const [busy, setBusy] = useState(false);
+  if (!inv || inv.isQuote) return null;
+  const hist = Array.isArray(inv.chaseHistory) ? inv.chaseHistory : [];
+  const count = inv.chaseCount || 0;
+  const paused = !!inv.chasePaused;
+  if (!hist.length && inv.status !== "overdue" && count === 0) return null;
+  const fmt = (at) => { try { return new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { return ""; } };
+  const labelFor = (h) => h.label || (h.n >= 3 ? "Final notice" : h.n === 2 ? "Second reminder" : "Payment reminder");
+  const readyForLetter = count >= 3 && inv.status === "overdue";
+  const sub = "#6b7280";
+  const line = "#00000014";
+  return (
+    <div style={{ marginTop: 12, padding: 12, background: "#00000008", border: `1px solid ${line}`, borderRadius: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: hist.length ? 8 : 0 }}>
+        <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.05em", color: sub, textTransform: "uppercase" }}>Chase history</span>
+        {count > 0 && <span style={{ fontSize: 12, color: sub }}>{Math.min(count, 3)}/3 sent</span>}
+      </div>
+      {hist.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {hist.map((h, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+              <span>{labelFor(h)}</span>
+              <span style={{ color: sub }}>{fmt(h.at)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: 13, color: sub }}>No reminders sent yet.</div>
+      )}
+      {readyForLetter && (
+        <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: C.amber }}>Final notice sent. Ready for a letter before action.</div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${line}` }}>
+        <span style={{ fontSize: 12, color: sub }}>{paused ? "Auto-chasing paused" : "Auto-chasing on"}</span>
+        <button disabled={busy} onClick={async () => {
+          const next = !paused;
+          setBusy(true);
+          onPausedChange(next);
+          try {
+            await db.from("invoices").update({ chase_paused: next }).eq("id", inv.id).eq("user_id", user.id);
+          } catch (e) {
+            onPausedChange(!next);
+            alert("Couldn't update chasing just now. Try again.");
+          } finally {
+            setBusy(false);
+          }
+        }} style={{ ...S.btn("ghost"), fontSize: 12, padding: "6px 12px", color: paused ? "#10B981" : sub }}>
+          {paused ? "Resume chasing" : "Pause chasing"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Payments({ brand, invoices, setInvoices, customers, user, sendPush, setContextHint }) {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
@@ -851,6 +914,13 @@ export function Payments({ brand, invoices, setInvoices, customers, user, sendPu
             {/* Secondary */}
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
+              {selected.status === "overdue" && (selected.portalToken || selected.portal_token) && (
+                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.amber }} onClick={() => {
+                  const __t = selected.portalToken || selected.portal_token;
+                  const __url = `https://www.tradespa.co.uk/api/invoices/letter-before-action?token=${encodeURIComponent(__t)}`;
+                  if (window.Capacitor?.isNativePlatform?.()) { window.open(__url, "_system"); } else { window.open(__url, "_blank"); }
+                }}>⚖ Letter</button>
+              )}
               {!selected.isQuote && (selected.status === "overdue" || selected.status === "sent") && (
                 <button style={{ ...S.btn("danger") }} disabled={chasingId === selected.id} onClick={async () => {
                   // Direct-send via the shared chase helper exposed by the AI
@@ -875,6 +945,9 @@ export function Payments({ brand, invoices, setInvoices, customers, user, sendPu
               )}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteDoc(selected.id)}>Delete</button>
             </div>
+
+            {/* chase-history: payments */}
+            <ChaseHistoryPanel key={selected.id} inv={selected} user={user} onPausedChange={(next) => { setSelected(s => s ? { ...s, chasePaused: next } : s); setInvoices(prev => (prev || []).map(i => i.id === selected.id ? { ...i, chasePaused: next } : i)); }} />
 
             {/* Accounting sync — invoice only */}
             {!selected.isQuote && (
@@ -1279,6 +1352,13 @@ export function InvoicesView({ brand, invoices, setInvoices, user, customers, cu
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => downloadInvoicePDF(brand, selected)}>⬇ PDF</button>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.blue }} onClick={() => sendDocumentEmail(selected, brand, customers, user?.id, setSendingId, customerContacts)} disabled={sendingId === selected?.id}>{sendingId === selected?.id ? "Sending..." : "✉ Send"}</button>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center" }} onClick={() => setEditingInvoice(selected)}>✏ Edit</button>
+              {selected.status === "overdue" && (selected.portalToken || selected.portal_token) && (
+                <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: C.amber }} onClick={() => {
+                  const __t = selected.portalToken || selected.portal_token;
+                  const __url = `https://www.tradespa.co.uk/api/invoices/letter-before-action?token=${encodeURIComponent(__t)}`;
+                  if (window.Capacitor?.isNativePlatform?.()) { window.open(__url, "_system"); } else { window.open(__url, "_blank"); }
+                }}>⚖ Letter</button>
+              )}
               {(selected.status === "overdue" || selected.status === "sent") && (
                 <button style={S.btn("danger")} disabled={chasingInvId === selected.id} onClick={async () => {
                   if (typeof window._tradePaChase !== "function") {
@@ -1300,6 +1380,8 @@ export function InvoicesView({ brand, invoices, setInvoices, user, customers, cu
               )}
               <button style={{ ...S.btn("ghost"), color: C.red }} onClick={() => deleteInvoice(selected.id)}>Delete</button>
             </div>
+            {/* chase-history: invoices */}
+            <ChaseHistoryPanel key={selected.id} inv={selected} user={user} onPausedChange={(next) => { setSelected(s => s ? { ...s, chasePaused: next } : s); setInvoices(prev => (prev || []).map(i => i.id === selected.id ? { ...i, chasePaused: next } : i)); }} />
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button style={{ ...S.btn("ghost"), flex: 1, justifyContent: "center", color: "#13B5EA", borderColor: "#13B5EA44", fontSize: 11 }}
                 onClick={() => {

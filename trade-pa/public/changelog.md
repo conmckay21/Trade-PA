@@ -1,3 +1,13 @@
+## 2026-06-27
+
+📋 **See every reminder, and pause chasing when you need to.** Open any invoice and you will now see its full chase history: which reminders went out and exactly when. Once a final notice has been sent, Trade PA flags the invoice as ready for a letter before action, so you know when it is time to step things up. And if you would rather not chase a particular customer, say for a dispute or an agreed payment plan, you can pause chasing on that invoice in one tap and switch it back on whenever you like.
+
+🧾 **"I never got the first one" stops working.** Every reminder Trade PA sends is now stamped with the date it went out. So your final notice spells it out in black and white, for example "this invoice was previously followed up on 29 May and 5 June", and your Letter Before Action lists every date you contacted them. No more customers pretending the first they heard of it was the final demand. The dates are recorded the moment each reminder sends, so they are real and they are yours if it ever goes to court.
+
+⚖️ **Chase right up to a letter before action.** On any overdue invoice you can now generate a formal Letter Before Action in one tap, ready to read, print or send. If the customer is a business, Trade PA works out the statutory interest and the fixed compensation you are entitled to claim under the Late Payment of Commercial Debts Act and puts it in the letter for you. It also points to the government's Money Claim Online service if it ever comes to that. Always your call, never automatic.
+
+⏰ **Overdue invoices now flag themselves.** Trade PA now tracks the due date on every invoice and moves it to Overdue automatically the day it lapses. Your Overdue list and the red count on the Invoices screen stay spot on without you checking dates yourself. Chasing is still one tap when you want it: open an overdue invoice and tap Chase for a gentle, then firm, then final reminder, or just ask Eve to chase it for you.
+
 ## 2026-06-24
 
 🛟 **Your work has a safety net.** Behind the scenes, Eve now keeps a private record of the actions she takes, so if something ever does not save, your details can be recovered instead of lost. This record is private to your account and never shared.

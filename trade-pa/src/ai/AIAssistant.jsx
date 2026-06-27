@@ -70,6 +70,7 @@ function rowToCamelInvoice(r) {
     materialItems: parseArr(r.material_items),
     chaseCount: r.chase_count || 0,
     lastChased: r.last_chased_at || null,
+    chaseHistory: Array.isArray(r.chase_history) ? r.chase_history : [],
   };
 }
 
@@ -1823,10 +1824,18 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     const existingCount = inv.chaseCount ?? inv.chase_count ?? 0;
     const chaseNum = existingCount + 1;
     const chasedAtIso = new Date().toISOString();
-    setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, chaseCount: chaseNum, lastChased: chasedAtIso, chase_count: chaseNum, last_chased_at: chasedAtIso } : i));
+    // Chase history: the real send dates, written at the moment each chase
+    // goes out, so the final notice and any letter can list every prior
+    // contact and a customer cannot claim this was the first they heard.
+    // priorHistory is the log BEFORE this send; newHistory adds this one.
+    const priorHistory = Array.isArray(inv.chaseHistory) ? inv.chaseHistory
+      : (Array.isArray(inv.chase_history) ? inv.chase_history : []);
+    const thisChaseLabel = chaseNum <= 1 ? "Payment reminder" : (chaseNum === 2 ? "Second reminder" : "Final notice");
+    const newHistory = [...priorHistory, { n: chaseNum, label: thisChaseLabel, at: chasedAtIso }];
+    setInvoices(prev => (prev || []).map(i => i.id === inv.id ? { ...i, chaseCount: chaseNum, lastChased: chasedAtIso, chaseHistory: newHistory, chase_count: chaseNum, last_chased_at: chasedAtIso, chase_history: newHistory } : i));
     if (user?.id) {
       db.from("invoices")
-        .update({ chase_count: chaseNum, last_chased_at: chasedAtIso })
+        .update({ chase_count: chaseNum, last_chased_at: chasedAtIso, chase_history: newHistory })
         .eq("id", inv.id).eq("user_id", user.id)
         .then(({ error }) => { if (error) console.warn("chase count persist failed:", error.message); })
         .catch(err => console.warn("chase count persist threw:", err?.message || err));
@@ -1835,21 +1844,34 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
     const accent = brand?.accentColor || "#f59e0b";
     let chaseIntro, chaseClose, chaseHeading, subject;
     if (chaseNum <= 1) {
-      subject = `Payment reminder — Invoice ${inv.id}`;
+      subject = `Payment reminder: Invoice ${inv.id}`;
       chaseHeading = "PAYMENT REMINDER";
       chaseIntro = `<p style="color:#555;">I hope you are well. This is a friendly reminder that the following invoice remains outstanding:</p>`;
       chaseClose = `<p style="color:#555;font-size:13px;">If payment has already been sent, please disregard this message. If you have any queries, please don't hesitate to get in touch.</p>`;
     } else if (chaseNum === 2) {
-      subject = `Second reminder — Invoice ${inv.id}`;
+      subject = `Second reminder: Invoice ${inv.id}`;
       chaseHeading = "SECOND REMINDER";
       chaseIntro = `<p style="color:#555;">I'm writing to follow up on my previous reminder regarding the outstanding balance below. I would appreciate your prompt attention to this matter.</p>`;
       chaseClose = `<p style="color:#555;font-size:13px;">Please arrange payment at your earliest convenience. If there is an issue with the invoice or you would like to discuss payment terms, please get in touch.</p>`;
     } else {
-      subject = `Final notice — Invoice ${inv.id} overdue`;
+      subject = `Final notice: Invoice ${inv.id} overdue`;
       chaseHeading = "FINAL NOTICE";
       chaseIntro = `<p style="color:#555;">Despite previous reminders, the following invoice remains unpaid. Please treat this as a matter of urgency.</p>`;
       chaseClose = `<p style="color:#555;font-size:13px;">If payment is not received within 7 days, I may need to consider further action to recover this debt. If you have already made payment, please let me know so I can update my records.</p>`;
     }
+    // List the real dates of any earlier chases on this escalation. From the
+    // second reminder onward there is at least one. Day and month is enough
+    // in an email; the letter before action uses the full date with year.
+    const priorChaseDates = priorHistory.map(h => {
+      try { return new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "Europe/London" }); }
+      catch { return null; }
+    }).filter(Boolean);
+    const priorDatesPhrase = priorChaseDates.length > 1
+      ? priorChaseDates.slice(0, -1).join(", ") + " and " + priorChaseDates[priorChaseDates.length - 1]
+      : (priorChaseDates[0] || "");
+    const chaseHistoryNote = priorChaseDates.length
+      ? `<p style="color:#555;font-size:13px;">For our records, this invoice was previously followed up on ${priorDatesPhrase}.</p>`
+      : "";
     const body = buildEmailHTML(brand, {
       heading: chaseHeading,
       showBacs: true,
@@ -1862,6 +1884,7 @@ Return ONLY JSON: {"correction": null, "memories": [{"content": "...", "category
           <div style="font-size:12px;color:#888;margin-top:4px;">${chaseNum >= 3 ? "OVERDUE" : "Currently outstanding"}</div>
         </div>
         ${portalCtaBlock({ token: inv.portalToken || inv.portal_token, isQuote: false, stripeReady: !!brand?.stripeAccountId, accent })}
+        ${chaseHistoryNote}
         ${chaseClose}`,
     });
     try {

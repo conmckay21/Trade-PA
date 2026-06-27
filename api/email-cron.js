@@ -398,17 +398,81 @@ async function cleanupStalePendingActions() {
 // Build a chase email using the user's own brand (trading name, phone, email, accent)
 // rather than Trade PA defaults. Sends via the user's own Gmail/Outlook so the reply
 // address is theirs, not ours.
+// --- Escalating chase tiers -------------------------------------------------
+// Gentle -> firm -> final, keyed off chase_count. Copy is kept in sync with
+// chaseInvoiceSend in trade-pa/src/ai/AIAssistant.jsx so the in-app/Eve chase
+// and this automatic chaser read identically to the customer. Update both
+// together if either changes.
+function chaseTier(chaseNum, invId) {
+  if (chaseNum <= 1) {
+    return {
+      subject: `Payment reminder: Invoice ${invId}`,
+      heading: "PAYMENT REMINDER",
+      intro: `<p style="color:#555;">I hope you are well. This is a friendly reminder that the following invoice remains outstanding:</p>`,
+      close: `<p style="color:#555;font-size:13px;">If payment has already been sent, please disregard this message. If you have any queries, please don't hesitate to get in touch.</p>`,
+    };
+  }
+  if (chaseNum === 2) {
+    return {
+      subject: `Second reminder: Invoice ${invId}`,
+      heading: "SECOND REMINDER",
+      intro: `<p style="color:#555;">I'm writing to follow up on my previous reminder regarding the outstanding balance below. I would appreciate your prompt attention to this matter.</p>`,
+      close: `<p style="color:#555;font-size:13px;">Please arrange payment at your earliest convenience. If there is an issue with the invoice or you would like to discuss payment terms, please get in touch.</p>`,
+    };
+  }
+  return {
+    subject: `Final notice: Invoice ${invId} overdue`,
+    heading: "FINAL NOTICE",
+    intro: `<p style="color:#555;">Despite previous reminders, the following invoice remains unpaid. Please treat this as a matter of urgency.</p>`,
+    close: `<p style="color:#555;font-size:13px;">If payment is not received within 7 days, I may need to consider further action to recover this debt. If you have already made payment, please let me know so I can update my records.</p>`,
+  };
+}
+
+function chaseFormatGBP(n) {
+  const v = Number(n || 0);
+  return `£${v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Server-side mirror of portalCtaBlock (invoice variant) from
+// trade-pa/src/lib/portal-extras.js. View + pay link to the customer portal.
+function chasePortalCta(token, stripeReady, accent) {
+  if (!token) return "";
+  const url = `https://view.tradespa.co.uk/quote/${token}`;
+  const label = stripeReady ? "View &amp; Pay Online &rarr;" : "View Online &rarr;";
+  const subtext = stripeReady
+    ? "No login required &middot; pay by card or bank transfer"
+    : "No login required &middot; view invoice and bank details";
+  return `
+      <p style="text-align:center;margin:20px 0 4px;">
+        <a href="${url}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.02em;">${label}</a>
+      </p>
+      <p style="text-align:center;color:#666;font-size:12px;margin:0 0 10px;">${subtext}</p>
+      <p style="text-align:center;color:#888;font-size:11px;margin:0 0 20px;word-break:break-all;">Or paste this link into your browser:<br/><a href="${url}" style="color:#666;text-decoration:underline;">${url}</a></p>`;
+}
+
+// Automatic overdue chaser. Sends the escalating reminder above via the user's
+// own connected inbox, throttled to one per invoice per 7 days, advancing
+// chase_count so manual (in-app/Eve) and automatic chasing share one ladder.
+//
+// Gated twice for safety: a global AUTO_CHASE_SEND env switch (master, default
+// off) and a per-user opt-in flag (brand.autoChase) so a user's customers are
+// only ever emailed automatically once that user has turned it on.
 async function chaseOverdueInvoices(conn, token) {
+  if (process.env.AUTO_CHASE_SEND !== "true") return 0;
+
+  const brands = await supabaseFetch(`/companies?owner_id=eq.${conn.user_id}&select=settings&limit=1`) || [];
+  const brand = brands?.[0]?.settings || {};
+  if (brand.autoChase !== true) return 0;
+
   const invoices = await supabaseFetch(`/invoices?user_id=eq.${conn.user_id}&status=eq.overdue&select=*`) || [];
   if (!invoices.length) return 0;
 
   const customers = await supabaseFetch(`/customers?user_id=eq.${conn.user_id}&select=name,email`) || [];
-  const brands = await supabaseFetch(`/companies?owner_id=eq.${conn.user_id}&select=settings&limit=1`) || [];
-  const brand = brands?.[0]?.settings || {};
   const tradingName = brand.tradingName || "";
   const phone = brand.phone || "";
   const email = brand.email || "";
   const accent = brand.accentColor || "#f59e0b";
+  const stripeReady = !!brand.stripeAccountId;
   const sig = `Many thanks,<br>${tradingName}${phone ? `<br>${phone}` : ""}${email ? `<br>${email}` : ""}`;
 
   const isOutlook = conn.provider === "outlook";
@@ -416,16 +480,50 @@ async function chaseOverdueInvoices(conn, token) {
 
   for (const inv of invoices) {
     const customer = customers.find(c => c.name?.toLowerCase() === inv.customer?.toLowerCase());
-    if (!customer?.email) continue;
-    if (inv.last_chased && (Date.now() - new Date(inv.last_chased)) / 86400000 < 7) continue;
+    const toEmail = customer?.email || inv.email;
+    if (!toEmail) continue;
+    if (inv.last_chased_at && (Date.now() - new Date(inv.last_chased_at)) / 86400000 < 7) continue;
+    // Guardrail: stop after the final notice. Once three chases have gone
+    // out we do not keep nagging weekly; the invoice is surfaced in-app as
+    // ready for a letter before action instead.
+    if ((inv.chase_count || 0) >= 3) continue;
+    // Guardrail: per-invoice pause. Skips automatic chasing for disputes,
+    // payment plans, or anyone the tradesperson would rather not auto-chase.
+    // Manual chasing from the app is unaffected.
+    if (inv.chase_paused) continue;
 
-    const subject = `Payment Reminder — Invoice ${inv.id}${tradingName ? ` — ${tradingName}` : ""}`;
+    const chaseNum = (inv.chase_count || 0) + 1;
+    const tier = chaseTier(chaseNum, inv.id);
+    const amount = chaseFormatGBP(inv.gross_amount ?? inv.amount);
+    const cta = chasePortalCta(inv.portal_token, stripeReady, accent);
+    // Real send dates of earlier chases (written at send time), listed from
+    // the second reminder onward so the customer cannot claim this was the
+    // first contact about the debt.
+    const priorHistory = Array.isArray(inv.chase_history) ? inv.chase_history : [];
+    const priorChaseDates = priorHistory.map(h => {
+      try { return new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "Europe/London" }); }
+      catch { return null; }
+    }).filter(Boolean);
+    const priorDatesPhrase = priorChaseDates.length > 1
+      ? priorChaseDates.slice(0, -1).join(", ") + " and " + priorChaseDates[priorChaseDates.length - 1]
+      : (priorChaseDates[0] || "");
+    const chaseHistoryNote = priorChaseDates.length
+      ? `<p style="color:#555;font-size:13px;">For our records, this invoice was previously followed up on ${priorDatesPhrase}.</p>`
+      : "";
+
     const body = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
-      ${tradingName ? `<div style="background:${accent};padding:20px 24px;border-radius:8px 8px 0 0;"><h2 style="color:#fff;margin:0;font-size:20px;">${tradingName}</h2><div style="color:rgba(255,255,255,0.85);font-size:12px;margin-top:2px;">PAYMENT REMINDER</div></div>` : ""}
+      ${tradingName ? `<div style="background:${accent};padding:20px 24px;border-radius:8px 8px 0 0;"><h2 style="color:#fff;margin:0;font-size:20px;">${tradingName}</h2><div style="color:rgba(255,255,255,0.85);font-size:12px;margin-top:2px;">${tier.heading}</div></div>` : ""}
       <div style="padding:20px 24px;background:#fff;${tradingName ? "border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px;" : ""}">
-        <p style="font-size:15px;">Dear ${inv.customer},</p>
-        <p style="color:#555;">I hope you are well. I'm following up on invoice <strong>${inv.id}</strong> for <strong>£${inv.amount}</strong>, which is now overdue.</p>
-        <p style="color:#555;">Please arrange payment at your earliest convenience. If you have already paid, please disregard this message.</p>
+        <p style="font-size:15px;">Dear ${inv.customer || "customer"},</p>
+        ${tier.intro}
+        <div style="background:${accent}18;border-radius:6px;padding:16px;margin:16px 0;border-left:4px solid ${accent};">
+          <div style="font-size:13px;color:#666;margin-bottom:4px;">Invoice ${inv.id}</div>
+          <div style="font-size:22px;font-weight:700;color:${accent};">${amount}</div>
+          <div style="font-size:12px;color:#888;margin-top:4px;">${chaseNum >= 3 ? "OVERDUE" : "Currently outstanding"}</div>
+        </div>
+        ${cta}
+        ${chaseHistoryNote}
+        ${tier.close}
         <p style="margin-top:20px;">${sig}</p>
       </div>
     </div>`;
@@ -435,18 +533,21 @@ async function chaseOverdueInvoices(conn, token) {
         await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ message: { subject, body: { contentType: "HTML", content: body }, toRecipients: [{ emailAddress: { address: customer.email } }] }, saveToSentItems: true }),
+          body: JSON.stringify({ message: { subject: tier.subject, body: { contentType: "HTML", content: body }, toRecipients: [{ emailAddress: { address: toEmail } }] }, saveToSentItems: true }),
         });
       } else {
-        const encSubject = `=?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`;
-        const raw = Buffer.from(`To: ${customer.email}\r\nSubject: ${encSubject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${body}`).toString("base64").replace(/\+/g, "-").replace(/\//g, "_");
+        const encSubject = `=?UTF-8?B?${Buffer.from(tier.subject).toString("base64")}?=`;
+        const raw = Buffer.from(`To: ${toEmail}\r\nSubject: ${encSubject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${body}`).toString("base64").replace(/\+/g, "-").replace(/\//g, "_");
         await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ raw }),
         });
       }
-      await supabaseFetch(`/invoices?id=eq.${inv.id}`, { method: "PATCH", body: JSON.stringify({ last_chased: new Date().toISOString() }) });
+      const chaseSentAt = new Date().toISOString();
+      const thisChaseLabel = chaseNum <= 1 ? "Payment reminder" : (chaseNum === 2 ? "Second reminder" : "Final notice");
+      const newHistory = [...priorHistory, { n: chaseNum, label: thisChaseLabel, at: chaseSentAt }];
+      await supabaseFetch(`/invoices?id=eq.${inv.id}`, { method: "PATCH", body: JSON.stringify({ chase_count: chaseNum, last_chased_at: chaseSentAt, chase_history: newHistory }) });
       chased++;
     } catch (err) {
       console.error(`Chase failed for ${inv.id}:`, err.message);
